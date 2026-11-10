@@ -21,3 +21,8 @@
   color: var(--plt-color-contrast-high);
   -webkit-font-smoothing: antialiased;
 }
+
+/* Selected text anywhere in Pilot (search field, editable values). */
+.root ::selection {
+  background: hsl(from var(--plt-color-accent) h s l / 20%);
+}

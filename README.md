@@ -30,9 +30,27 @@ Pilot is a design tool that lives inside your codebase, not on a separate canvas
    - **Send:** sends the collected edits to the agent.
    - **Quit:** closes Pilot.
 3. **Search.** Selecting an element opens the property dialog next to it. At first the dialog holds only the search field. Type a property (`opacity`, `padding`, `radius`…) and the dialog adds the editor for the best-matching property, and only that one, below the search.
-4. **Tweak.** Each change is applied live as an **inline style** on the selected element, so you see the result right away. Nothing touches your source yet.
+4. **Tweak.** Each change is applied live as an **inline style** on the selected element, so you see the result right away. Nothing touches your source yet. **Cmd+Z** (Ctrl+Z on Windows/Linux) undoes the last change, and **Cmd+Shift+Z** (Ctrl+Shift+Z or Ctrl+Y) redoes it. This works for every property, across selections, and a whole drag counts as one step.
 5. **Hand off.** Click **Send**. The edits go to the agent through Pilot's local bridge and MCP server. When no agent is connected, Send copies them to the clipboard as a Markdown prompt you can paste into any agent.
 6. **Apply.** The agent translates the plain-CSS intent into your stack. For example, `border-radius: 12px` becomes `rounded-xl` in a Tailwind project, an existing `--radius-lg` token, or a CSS-module rule.
+
+**Keyboard: as fast as typing Tailwind classes.** Figma makes you hunt for a property in a sidebar. Tailwind is fast to type but gives no visual help. Pilot aims to beat both: you type, and you get a visual editor for exactly that property.
+
+```
+pt ⇥ 24 ⏎    px ⏎ 6 ⏎    …
+```
+
+| Key | Where | Does |
+| --- | --- | --- |
+| type | search | Finds the property. Tailwind aliases work: `p`, `pt`, `px`… The search only finds properties: values are always set in the editor. |
+| **Tab** or **Enter** | search | Jumps into the matched editor. What you typed decides the focus: `pt` → top, `pl` → left |
+| type a number | editor | `12` or `12px`. ↑/↓ change it by 1, by 10 with Shift |
+| **Enter** | editor | Applies the value and returns to the search, text selected, ready for the next property |
+| **Tab / Shift+Tab** | editor | Next/previous field (padding: top → right → bottom → left). Past either end, back to the search |
+| **Esc** | anywhere in the dialog | One level back: editor → search (discards typed text) → clears the search → closes the dialog |
+| **Cmd/Ctrl+Z**, **Cmd/Ctrl+Shift+Z** | anywhere | Undo / redo |
+
+Linked values follow Tailwind's meaning: `px` links left and right, `py` top and bottom, and `p` all four, so one number sets them all, as one undo step.
 
 **Launching and quitting.** `/pilot` is the only way to launch Pilot, and the toolbar's **Quit** button is the only way to quit it. There's no keyboard shortcut for now. Pilot remembers whether it's running for the current browser tab, so the reloads a dev session triggers all the time (the agent editing files, HMR) don't open or close it on their own.
 
@@ -91,14 +109,24 @@ A property editor is a Preact component plus metadata ([packages/overlay/src/edi
   id: "opacity",
   label: "Opacity",
   properties: ["opacity"],          // CSS it writes
+  aliases: ["o"],                     // Tailwind-style short codes, exact match, ranked first
   keywords: ["transparency", "fade"], // extra search terms
-  component: OpacityEditor,          // receives element, values, onChange
+  component: OpacityEditor,          // receives element, values, onChange, focusRequest, onReturnToSearch
 }
 ```
 
-Each editor lives in its own folder, `src/editors/<name>/`, with its `.tsx` and `.css` side by side. It's registered in [packages/overlay/src/editors/registry.ts](packages/overlay/src/editors/registry.ts), and its CSS is imported in `ui/styles/index.css`. `searchEditors()` ranks them by exact, prefix, then keyword match. A single editor can cover several related properties (e.g. one **Spacing** editor for `padding-*`).
+Each editor lives in its own folder, `src/editors/<name>/`, with its `.tsx` and `.css` side by side. It's registered in [packages/overlay/src/editors/registry.ts](packages/overlay/src/editors/registry.ts), and its CSS is imported in `ui/styles/index.css`. `searchEditors()` ranks them, best first: an exact **alias**, then an exact label or property name, then a prefix (`pad`), then a substring or keyword. Aliases borrow Tailwind's utility names, so a designer who knows them gets there in a keystroke or two. Typing `p`, `pt`, `pr`, `pb`, `pl`, `px` or `py` brings up the padding editor, and so do `pad`, `padding` and `spacing`. A single editor can cover several related properties (e.g. one **Spacing** editor for `padding-*`).
 
-The dialog takes the top result of `searchEditors()` and renders that editor inside an `.editor` wrapper. It passes the element's current computed values for the editor's `properties`, and `onChange` writes the new value to the element's inline style. Recording each `from → to` change for the change set comes with the inline-style engine.
+The dialog takes the top result of `searchEditors()` and renders that editor inside an `.editor` wrapper. It passes the element's current computed values for the editor's `properties`, and `onChange` applies the new value. For the keyboard loop, editors also get `focusRequest`: a new object, `{ query }`, each time the designer tabs or enters in from the search, so the editor can focus the part the query names (`pt` → top). They call `onReturnToSearch()` when a value is done (Enter) or when Tab moves past their last field. Esc is handled by the dialog.
+
+**Every property change goes through the edit history** ([src/edits/history.ts](packages/overlay/src/edits/history.ts)). Editors never write `element.style` themselves; they call `onChange(property, value, { gesture })`. The history then:
+
+- sets the value as an inline style and records the inline value it replaced, so undo restores it exactly (or removes the property if there was none),
+- groups a continuous interaction into one undo step: every change made with the same `gesture` object is one step, so a drag passes the same token on each move,
+- skips no-op changes (re-applying the current value),
+- handles **Cmd/Ctrl+Z** and **Cmd/Ctrl+Shift+Z** / **Ctrl+Y** in `App`, unless there's nothing to undo or redo, or the user is typing in one of the page's own fields.
+
+The same records will provide the change set's `from → to` values.
 
 ### Agent handoff ("Send to agent")
 
@@ -142,10 +170,10 @@ pnpm dev
 **Designing the dialog.** Saving a CSS file reloads the page, which normally closes everything. To keep the dialog on screen while you style it, the playground mounts Pilot with a `dev` option ([apps/playground/src/main.ts](apps/playground/src/main.ts)):
 
 ```ts
-mountPilot({ dev: { select: ".button--primary", query: "padding" } });
+mountPilot({ dev: { select: ".button--primary" } });
 ```
 
-On every load this launches Pilot (even after a Quit), turns on select mode, selects the first element matching `select`, and pre-fills the search with `query`, so the dialog opens showing that editor. Remove `dev` to get the real flow back.
+On every load this launches Pilot (even after a Quit), turns on select mode, and selects the first element matching `select`, so the dialog opens with an empty search. Add `query: "padding"` to pre-fill the search and open that editor directly. Remove `dev` to get the real flow back.
 
 | Script | What it does |
 | --- | --- |
@@ -194,6 +222,7 @@ Conventions:
 - **Tokens are protected from the page.** CSS variables inherit into a Shadow DOM, and page CSS can set them on the `<pilot-root>` host element, which beats `:host` declarations. So tokens are declared on `.root` instead, which page CSS can't reach. The short `--plt-` prefix (in the spirit of Tailwind's `--tw-`) also means no site variable shares a name with them, so a missing token can't silently pick up a page value.
 - **Sizes are in px, not rem.** Inside a Shadow DOM, `rem` still follows the host page's `<html>` font size, which Pilot doesn't control.
 - **Native CSS nesting** (`&:hover`) is fine. The build flattens it.
+- **Text selection** anywhere in Pilot uses the accent at 20% (`.root ::selection` in `base.css`).
 - **Typography is set once on `.root`.** That covers font family, size, line height and OpenType features, and every Pilot element inherits them. Components only change what differs, e.g. the highlight label's smaller size.
 
 #### Font
@@ -203,7 +232,7 @@ Pilot's main font is **Geist Mono** (variable, weights 100–900):
 - **No network request.** The woff2 is vendored in [packages/overlay/src/assets/fonts](packages/overlay/src/assets/fonts) and inlined into the bundle as a data URL. There's no Google Fonts or CDN request. It comes from Vercel's `geist` npm package v1.9.2 under the SIL Open Font License, and the license file sits next to the font.
 - **Registered from JavaScript, not CSS.** [ui/fonts.ts](packages/overlay/src/ui/fonts.ts) registers the font with the FontFace API (`document.fonts`). Browsers don't reliably apply `@font-face` rules declared inside a Shadow DOM, and this way Pilot doesn't have to add a `<style>` to the host page.
 - **It has its own family name.** It's registered as `"PLT Geist Mono"`, so it never collides with a Geist Mono the host app loads, which might be a different version or subset.
-- **OpenType features.** `--plt-font-features` holds them and is set to `"ss09" 1`. That's Geist Mono's non-slashed zero, the font's only alternate digit style (the default zero is slashed). The other stylistic sets are listed in `tokens.css`.
+- **OpenType features.** `--plt-font-features` holds them and is set to `normal`, so every number uses Geist Mono's default **slashed zero**. Don't enable `ss09`: it's the font's non-slashed zero, its only alternate digit style. The other stylistic sets are listed in `tokens.css`.
 
 We decided against Tailwind for now. If we revisit it: Tailwind v4's `@property` rules are ignored inside a Shadow DOM, so shadow, ring and transform utilities need a workaround.
 
@@ -222,11 +251,19 @@ We decided against Tailwind for now. If we revisit it: Tailwind v4's `@property`
 - [x] Element selection: the cursor button enters select mode, with a hover highlight and label, click to select (page clicks blocked), Esc to clear
 - [x] Property dialog anchored next to the selected element (right side, flips left, follows scroll/resize, stays on screen as it grows)
 - [x] Dialog = search field + only the best-matching editor as you type
+- [x] Keyboard loop: Tab/Enter from the search into the editor (focus picked from the alias), Enter back to the search, Tab between fields, Esc one level at a time
+- [ ] Typing a letter in a fully selected value jumps back to the search (experiment)
 - [x] `describeElement()`: unique selector, DOM path, text snippet
 - [ ] Parent/child navigation for the selection (e.g. picking the wrapper instead of the text inside it)
-- [ ] Inline-style preview engine: apply, track `from → to`, revert per property/element
+- [x] Undo/redo for every property change (Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z, Ctrl+Y), with drags grouped into one step
+- [ ] Inline-style preview engine: track `from → to` per element for the change set, revert per property/element
+- [ ] Keep pending edits across page reloads. Today a reload (including the dev server's full reloads) drops every preview edit and the undo history, because they only live in the page's DOM and memory.
 - [ ] First property editors (opacity, spacing, radius, color, typography…)
-  - [ ] Padding: registered, static structure in progress ([editors/padding](packages/overlay/src/editors/padding)), behavior to wire next
+  - [x] Padding ([editors/padding](packages/overlay/src/editors/padding)): a box-model diagram with an editable number per side. Each number is a `contenteditable` span sized to its content (12px tall, up to 32px wide), so the text cursor only appears right over the number. Each side is a trapezoid between the label and the edge, and it's highlighted on hover.
+    - **Type:** click the number (text cursor) or anywhere else on a side, type a number (`12` or `12px`), then press Enter.
+    - **Arrow keys:** ↑/↓ change the value by 1, or by 10 with Shift.
+    - **Drag:** drag over a side, outside its number, to scrub. Dragging outward from the label increases the value: up for top, right for right, and so on. Values never go below 0.
+    - **From the search:** `pt`/`pr`/`pb`/`pl` (or `padding-top`…) focus that side, `px`/`py`/`p` link sides (marked with `data-linked`, unstyled for now), and `padding` focuses top. Linked sides mirror the edit as you type: they show the same text and, while the value is fully selected, the same selection highlight (`data-mirror-selected`, since a page can only hold one real selection). Nothing is applied until Enter or Tab, and then all linked sides change as one undo step.
 - [ ] Change list in the panel (review and undo before handoff)
 - [ ] Designer note field
 
@@ -246,6 +283,7 @@ We decided against Tailwind for now. If we revisit it: Tailwind v4's `@property`
 - Should Pilot handle hover, focus and responsive states (edit at a breakpoint or in a pseudo-state)?
 - How should multi-element edits work (e.g. "all cards")?
 - Do we want a keyboard shortcut to launch Pilot later? (Removed for now: `/pilot` only.)
+- Values typed in the search (`pt-4` + Enter, Tailwind-style) are deliberately left out for now: the search only finds properties. Revisit once more editors exist.
 - Does Send also quit Pilot (hand control back), or keep it running for more edits?
 - Should the toolbar be draggable, or have a fixed position (bottom center for now)?
 - After a click selects an element, should select mode stay on (current behavior) or switch off so the page is interactive again?

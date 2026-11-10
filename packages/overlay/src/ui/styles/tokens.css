@@ -20,10 +20,11 @@
   /* Typography */
   /* Main font: Geist Mono, bundled and registered by ui/fonts.ts. */
   --plt-font-main: "PLT Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  /* OpenType features. ss09 = Geist Mono's non-slashed zero (its only
-     alternate digit style). Other sets: ss01 no-tail a, ss02 alt a,
-     ss03 alt l, ss04 alt R, ss06 alt G, ss07 alt arrows, ss08 rounded dots. */
-  --plt-font-features: "ss09" 1;
+  /* OpenType features. Geist Mono's zero is slashed by default, so keep ss09
+     off: ss09 = non-slashed zero (its only alternate digit style). Other sets:
+     ss01 no-tail a, ss02 alt a, ss03 alt l, ss04 alt R, ss06 alt G,
+     ss07 alt arrows, ss08 rounded dots. */
+  --plt-font-features: normal;
 
   --plt-text-base: 11px;
 

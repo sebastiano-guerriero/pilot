@@ -2,17 +2,25 @@
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { EditHistory } from "../../../edits/history.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../../../editors/types.ts";
 import { PropertyDialog } from "./PropertyDialog.tsx";
 
-// Stub editors: render their id and the values they receive, and expose onChange.
+// Stub editors: render their id and the values they receive, expose onChange,
+// record the focus requests they get, and can hand focus back to the search.
+let focusRequests: Array<{ query: string } | undefined>;
 const stub = (id: string, properties: string[], keywords?: string[]): PropertyEditor => ({
   id,
   label: id,
   properties,
   keywords,
-  component: ({ values, onChange }: PropertyEditorProps) =>
-    h("button", { class: "stub", onClick: () => onChange(properties[0] as string, "0.5") }, `${id}:${JSON.stringify(values)}`),
+  component: ({ values, onChange, focusRequest, onReturnToSearch }: PropertyEditorProps) => {
+    focusRequests.push(focusRequest);
+    return h("div", {}, [
+      h("button", { class: "stub", onClick: () => onChange(properties[0] as string, "0.5") }, `${id}:${JSON.stringify(values)}`),
+      h("button", { class: "back", onClick: () => onReturnToSearch?.() }, "back"),
+    ]);
+  },
 });
 
 const editors = [stub("opacity", ["opacity"], ["fade"]), stub("padding", ["padding"]), stub("gap", ["gap"])];
@@ -20,7 +28,11 @@ const editors = [stub("opacity", ["opacity"], ["fade"]), stub("padding", ["paddi
 let container: HTMLElement;
 let element: HTMLElement;
 
+let closed: number;
+
 beforeEach(() => {
+  focusRequests = [];
+  closed = 0;
   container = document.createElement("div");
   element = document.createElement("div");
   document.body.append(container, element);
@@ -34,8 +46,18 @@ afterEach(() => {
 
 const mount = () =>
   act(() => {
-    render(h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors }), container);
+    render(
+      h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors, onClose: () => closed++ }),
+      container,
+    );
   });
+
+const search = () => container.querySelector(".property-search input") as HTMLInputElement;
+const key = (target: Element, key: string, init: KeyboardEventInit = {}) =>
+  act(() => {
+    target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init }));
+  });
+const lastFocusRequest = () => focusRequests.at(-1);
 
 const type = (text: string) =>
   act(() => {
@@ -71,10 +93,71 @@ describe("PropertyDialog", () => {
     expect(editorIds()).toEqual([]);
   });
 
+  it("records changes in the shared history, so they can be undone", () => {
+    const history = new EditHistory();
+    act(() => {
+      render(h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors, history }), container);
+    });
+    type("opacity");
+    act(() => (container.querySelector(".stub") as HTMLButtonElement).click());
+    expect(element.style.getPropertyValue("opacity")).toBe("0.5");
+    expect(history.undo()).toBe(true);
+    expect(element.style.getPropertyValue("opacity")).toBe("");
+  });
+
   it("applies editor changes as inline styles on the element", () => {
     mount();
     type("opacity");
     act(() => (container.querySelector(".stub") as HTMLButtonElement).click());
     expect(element.style.getPropertyValue("opacity")).toBe("0.5");
+  });
+
+  describe("keyboard", () => {
+    it("Tab or Enter moves into the matched editor, telling it what was typed", () => {
+      mount();
+      type(" Pad ");
+      key(search(), "Tab");
+      expect(lastFocusRequest()).toEqual({ query: "pad" });
+      const first = lastFocusRequest();
+      key(search(), "Enter");
+      expect(lastFocusRequest()).toEqual({ query: "pad" });
+      expect(lastFocusRequest()).not.toBe(first); // a new request each time
+    });
+
+    it("does nothing on Tab/Enter without a match, and keeps focus in the search", () => {
+      mount();
+      type("zzz");
+      key(search(), "Tab");
+      expect(editorIds()).toEqual([]);
+    });
+
+    it("drops the focus request as soon as the query changes", () => {
+      mount();
+      type("opacity");
+      key(search(), "Enter");
+      type("gap");
+      expect(lastFocusRequest()).toBeUndefined();
+    });
+
+    it("returns to the search, text selected, when the editor asks", () => {
+      mount();
+      type("opacity");
+      act(() => (container.querySelector(".back") as HTMLButtonElement).click());
+      expect(document.activeElement).toBe(search());
+      expect([search().selectionStart, search().selectionEnd]).toEqual([0, "opacity".length]);
+    });
+
+    it("Esc steps back: editor → search → clear search → close", () => {
+      mount();
+      type("opacity");
+      key(container.querySelector(".stub") as Element, "Escape");
+      expect(document.activeElement).toBe(search());
+      expect(closed).toBe(0);
+      key(search(), "Escape");
+      expect(search().value).toBe("");
+      expect(closed).toBe(0);
+      key(search(), "Escape");
+      expect(closed).toBe(1);
+    });
   });
 });

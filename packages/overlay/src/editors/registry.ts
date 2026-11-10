@@ -8,11 +8,18 @@ import type { PropertyEditor } from "./types.ts";
  */
 export const editors: PropertyEditor[] = [paddingEditor];
 
-/** Rank editors for a search query: exact/prefix matches on label or property first, then keywords. */
+/**
+ * Rank editors for a search query, best first:
+ * 4. exact alias (`pt` → padding)
+ * 3. exact label or property name
+ * 2. label/property starting with the query (`pad`, `padding-t`)
+ * 1. label/property/keyword containing it
+ */
 export function searchEditors(query: string, list: PropertyEditor[] = editors): PropertyEditor[] {
   const q = query.trim().toLowerCase();
   if (!q) return list;
   const score = (e: PropertyEditor): number => {
+    if (e.aliases?.includes(q)) return 4;
     const names = [e.label.toLowerCase(), ...e.properties];
     if (names.some((n) => n === q)) return 3;
     if (names.some((n) => n.startsWith(q))) return 2;
