@@ -1,0 +1,95 @@
+/* Pilot UI styles. Scoped to the Shadow DOM, so plain selectors are safe. */
+:host {
+  all: initial;
+}
+
+.panel {
+  --pilot-bg: #ffffff;
+  --pilot-fg: #18181b;
+  --pilot-muted: #71717a;
+  --pilot-border: #e4e4e7;
+  --pilot-field: #f4f4f5;
+  --pilot-accent: #2563eb;
+  --pilot-radius: 12px;
+
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 2147483647;
+  width: 300px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--pilot-bg);
+  color: var(--pilot-fg);
+  border: 1px solid var(--pilot-border);
+  border-radius: var(--pilot-radius);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.12);
+  font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  .panel {
+    --pilot-bg: #18181b;
+    --pilot-fg: #fafafa;
+    --pilot-muted: #a1a1aa;
+    --pilot-border: #27272a;
+    --pilot-field: #27272a;
+  }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  font-weight: 600;
+}
+
+.icon-button {
+  all: unset;
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--pilot-muted);
+}
+
+.icon-button:hover {
+  background: var(--pilot-field);
+  color: var(--pilot-fg);
+}
+
+.search {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--pilot-field);
+  border-radius: 8px;
+}
+
+.search:focus-visible {
+  outline: 2px solid var(--pilot-accent);
+}
+
+.results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.result {
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+.empty {
+  margin: 0;
+  color: var(--pilot-muted);
+}

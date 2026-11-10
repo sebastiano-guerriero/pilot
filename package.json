@@ -1,0 +1,23 @@
+{
+  "name": "pilot-monorepo",
+  "private": true,
+  "description": "Pilot: take the controls from your coding agent and edit your UI in the browser.",
+  "type": "module",
+  "packageManager": "pnpm@10.8.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter playground dev",
+    "build": "pnpm -r --filter './packages/*' build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.6",
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.7",
+    "vitest": "^5.1.0"
+  }
+}

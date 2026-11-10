@@ -1,0 +1,17 @@
+{
+  "name": "playground",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A plain page to develop and try Pilot against.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@pilot/overlay": "workspace:^"
+  },
+  "devDependencies": {
+    "preact": "^11.2.0"
+  }
+}
