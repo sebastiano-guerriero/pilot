@@ -15,6 +15,7 @@
 .root {
   font-family: var(--plt-font-main);
   font-size: var(--plt-text-base);
+  font-weight: 500;
   line-height: 1;
   font-feature-settings: var(--plt-font-features);
   color: var(--plt-color-contrast-high);

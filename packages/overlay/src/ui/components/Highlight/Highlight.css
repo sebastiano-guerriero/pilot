@@ -4,27 +4,27 @@
     position: fixed;
     z-index: var(--plt-z-highlight);
     pointer-events: none;
-    border: 1px solid var(--plt-color-highlight);
+    border: 1px solid var(--plt-color-accent);
   }
 
   :scope[data-variant="hover"] {
-    background: color-mix(in srgb, var(--plt-color-highlight) 6%, transparent);
+    background: hsl(from var(--plt-color-accent) h s l / 6%);
   }
 
   :scope[data-variant="selected"] {
-    border-width: 2px;
+    /* border-width: 2px; */
   }
 
   .label {
     position: absolute;
     left: -1px;
     bottom: 100%;
-    margin-bottom: var(--plt-space-1);
-    padding: var(--plt-space-0-5) var(--plt-space-1-5);
-    border-radius: var(--plt-radius-sm);
-    background: var(--plt-color-highlight);
-    color: var(--plt-color-on-accent);
-    font-size: var(--plt-text-xs);
+    margin-bottom: 4px;
+    padding: 4px;
+    border-radius: 4px;
+    background: var(--plt-color-accent);
+    color: var(--plt-color-background);
+    font-size: var(--plt-text-base);
     white-space: nowrap;
 
     /* Element touches the top of the viewport: label goes inside the box. */
