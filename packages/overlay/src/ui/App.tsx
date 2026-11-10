@@ -3,7 +3,7 @@ import type { EditableElement } from "../dom/target.ts";
 import { useElementPicker } from "../select/useElementPicker.ts";
 import { useElementRect } from "../select/useElementRect.ts";
 import { Highlight } from "./components/Highlight/Highlight.tsx";
-import { PropertySearch } from "./components/PropertySearch/PropertySearch.tsx";
+import { PropertyDialog } from "./components/PropertyDialog/PropertyDialog.tsx";
 import { Toolbar } from "./components/Toolbar/Toolbar.tsx";
 
 interface AppProps {
@@ -15,7 +15,7 @@ interface AppProps {
 /**
  * Pilot while running.
  * - Cursor on: Pilot owns page clicks. Hover shows an outline, a click selects,
- *   and the property search opens next to the selected element. Clicking
+ *   and the property dialog opens next to the selected element. Clicking
  *   another element re-selects; Esc clears the selection.
  * - Cursor off: the page behaves normally again and the selection is cleared.
  */
@@ -59,7 +59,7 @@ export function App({ host, onQuit }: AppProps) {
       {selected && selectedRect && (
         <>
           <Highlight element={selected.element} rect={selectedRect} variant="selected" />
-          <PropertySearch key={selected.key} anchor={selectedRect} />
+          <PropertyDialog key={selected.key} element={selected.element} anchor={selectedRect} />
         </>
       )}
       <Toolbar selecting={selecting} onToggleSelect={toggleSelect} canSend={false} onSend={() => {}} onQuit={onQuit} />

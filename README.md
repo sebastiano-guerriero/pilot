@@ -29,7 +29,7 @@ Pilot is a design tool that lives inside your codebase, not on a separate canvas
      - Clicking the cursor again turns select mode off. The selection is cleared and the page behaves normally again.
    - **Send:** sends the collected edits to the agent.
    - **Quit:** closes Pilot.
-3. **Search.** The property search appears only when an element is selected, next to that element. Type a property (`opacity`, `padding`, `radius`…). As you type, Pilot shows the matching editor.
+3. **Search.** Selecting an element opens the property dialog next to it. At first the dialog holds only the search field. Type a property (`opacity`, `padding`, `radius`…) and the dialog adds the editor for the best-matching property, and only that one, below the search.
 4. **Tweak.** Each change is applied live as an **inline style** on the selected element, so you see the result right away. Nothing touches your source yet.
 5. **Hand off.** Click **Send**. The edits go to the agent through Pilot's local bridge and MCP server. When no agent is connected, Send copies them to the clipboard as a Markdown prompt you can paste into any agent.
 6. **Apply.** The agent translates the plain-CSS intent into your stack. For example, `border-radius: 12px` becomes `rounded-xl` in a Tailwind project, an existing `--radius-lg` token, or a CSS-module rule.
@@ -98,6 +98,8 @@ A property editor is a Preact component plus metadata ([packages/overlay/src/edi
 
 Editors are registered in [packages/overlay/src/editors/registry.ts](packages/overlay/src/editors/registry.ts), and `searchEditors()` ranks them by exact, prefix, then keyword match. A single editor can cover several related properties (e.g. one **Spacing** editor for `padding-*`).
 
+The dialog takes the top result of `searchEditors()` and renders that editor inside an `.editor` wrapper. It passes the element's current computed values for the editor's `properties`, and `onChange` writes the new value to the element's inline style. Recording each `from → to` change for the change set comes with the inline-style engine.
+
 ### Agent handoff ("Send to agent")
 
 The plan for one-click handoff:
@@ -161,7 +163,8 @@ packages/overlay/src/ui/
     base.css                 resets + shared building blocks
   components/
     Toolbar/                 Toolbar.tsx + Toolbar.css
-    PropertySearch/          PropertySearch.tsx + PropertySearch.css
+    PropertyDialog/          the dialog next to the selection: search + matched editor
+    PropertySearch/          the search field
     Highlight/               Highlight.tsx + Highlight.css
 ```
 
@@ -172,14 +175,14 @@ To add a component, create `components/<Name>/<Name>.tsx` and `<Name>.css`, then
 | [styles/index.css](packages/overlay/src/ui/styles/index.css) | Entry point. It declares the layer order and `@import`s every file. Add new component files here. |
 | [styles/tokens.css](packages/overlay/src/ui/styles/tokens.css) | All design tokens as `--plt-*` custom properties, declared on `.root` (Pilot's container inside the Shadow DOM): color themes (light, plus dark via `prefers-color-scheme`), typography scale, spacing, radius, shadow, sizes, z-index. |
 | [styles/base.css](packages/overlay/src/ui/styles/base.css) | Resets (cuts inheritance from the host page) and shared building blocks like `.surface`, the floating-panel look used by the toolbar and search. |
-| `components/<Name>/<Name>.css` | That component's rules: [Toolbar](packages/overlay/src/ui/components/Toolbar/Toolbar.css), [PropertySearch](packages/overlay/src/ui/components/PropertySearch/PropertySearch.css), [Highlight](packages/overlay/src/ui/components/Highlight/Highlight.css). |
+| `components/<Name>/<Name>.css` | That component's rules: [Toolbar](packages/overlay/src/ui/components/Toolbar/Toolbar.css), [PropertyDialog](packages/overlay/src/ui/components/PropertyDialog/PropertyDialog.css), [PropertySearch](packages/overlay/src/ui/components/PropertySearch/PropertySearch.css), [Highlight](packages/overlay/src/ui/components/Highlight/Highlight.css). |
 
 Conventions:
 
 - **Layers decide which rule wins.** The order is `@layer tokens, base, components`, and later layers win. A component rule always beats a base rule, whatever the selector specificity.
 - **`@scope` isolates components.** Each component file wraps its rules in `@scope (.component-root) { … }`. Inner class names can stay short and generic (`.button`, `.label`, `.input`), because they only match inside that component. Containers that will host property editors stop at the editor boundary with `@scope (.property-search) to (.editor)`, so their rules never leak into an editor.
 - **Variants are attributes**, e.g. `data-variant="hover"` or `aria-pressed="true"`, styled as `:scope[data-variant="hover"]`.
-- **Use only tokens.** Components use `var(--plt-*)` instead of raw values.
+- **Use only defined tokens, otherwise raw values.** A component may use a `var(--plt-*)` only if [tokens.css](packages/overlay/src/ui/styles/tokens.css) defines it. When no token fits, write the raw value (`8px`) instead of inventing a token. New tokens go into `tokens.css` deliberately, never as a side effect of a component change. An undefined token doesn't cause any error; the property just silently gets no value. So `pnpm test` includes a check ([tokens.test.ts](packages/overlay/src/ui/styles/tokens.test.ts)) that fails and lists every `var(--plt-…)` that `tokens.css` doesn't define.
 - **Tokens are protected from the page.** CSS variables inherit into a Shadow DOM, and page CSS can set them on the `<pilot-root>` host element, which beats `:host` declarations. So tokens are declared on `.root` instead, which page CSS can't reach. The short `--plt-` prefix (in the spirit of Tailwind's `--tw-`) also means no site variable shares a name with them, so a missing token can't silently pick up a page value.
 - **Sizes are in px, not rem.** Inside a Shadow DOM, `rem` still follows the host page's `<html>` font size, which Pilot doesn't control.
 - **Native CSS nesting** (`&:hover`) is fine. The build flattens it.
@@ -209,7 +212,8 @@ We decided against Tailwind for now. If we revisit it: Tailwind v4's `@property`
 
 **Editing**
 - [x] Element selection: the cursor button enters select mode, with a hover highlight and label, click to select (page clicks blocked), Esc to clear
-- [x] Property search anchored next to the selected element (right side, flips left, follows scroll/resize)
+- [x] Property dialog anchored next to the selected element (right side, flips left, follows scroll/resize, stays on screen as it grows)
+- [x] Dialog = search field + only the best-matching editor as you type
 - [x] `describeElement()`: unique selector, DOM path, text snippet
 - [ ] Parent/child navigation for the selection (e.g. picking the wrapper instead of the text inside it)
 - [ ] Inline-style preview engine: apply, track `from → to`, revert per property/element

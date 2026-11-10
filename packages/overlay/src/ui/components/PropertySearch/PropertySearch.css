@@ -1,41 +1,16 @@
-/* Position and width are set inline by PropertySearch.tsx (next to the selection).
-   `to (.editor)`: property editors render inside `.editor` and own their styles;
-   these rules stop at that boundary. */
-@scope (.property-search) to (.editor) {
-  :scope {
-    position: fixed;
-    z-index: var(--plt-z-ui);
-    padding: var(--plt-space-2);
-    display: flex;
-    flex-direction: column;
-    gap: var(--plt-space-2);
-  }
-
+@scope (.property-search) {
   .input {
     all: unset;
     width: 100%;
-    padding: var(--plt-space-2) var(--plt-space-2-5);
-    background: var(--plt-color-field);
-    border-radius: var(--plt-radius-md);
+    height: 40px;
+    padding-inline: 16px;
 
     &:focus-visible {
-      outline: 2px solid var(--plt-color-focus);
+      outline: none;
     }
-  }
 
-  .results {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-
-  .result {
-    padding: var(--plt-space-1-5) var(--plt-space-2-5);
-    border-radius: var(--plt-radius-sm);
-  }
-
-  .empty {
-    margin: 0;
-    color: var(--plt-color-text-muted);
+    &::placeholder {
+      color: var(--plt-color-contrast-low);
+    }
   }
 }

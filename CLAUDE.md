@@ -20,7 +20,11 @@ The README is the project's living spec. Update it in the same change whenever y
 ## Repo conventions
 
 - pnpm workspace (`packages/*`, `apps/*`), TypeScript strict, ESM, `.ts` extensions in relative imports.
-- Overlay components: one folder per component, `ui/components/<Name>/` with `<Name>.tsx` + `<Name>.css`. The CSS is wrapped in `@scope (.component-root)` and imported in `ui/styles/index.css` into `layer(components)`. Use `--plt-*` tokens from `ui/styles/tokens.css` (declared on `.root`, not `:host`), never raw values, and px rather than rem. See README, "Styling".
+- Overlay components: one folder per component, `ui/components/<Name>/` with `<Name>.tsx` + `<Name>.css`. The CSS is wrapped in `@scope (.component-root)` and imported in `ui/styles/index.css` into `layer(components)`. Use px rather than rem. See README, "Styling".
+- **Tokens: use only the `--plt-*` tokens that are actually defined in `ui/styles/tokens.css`.** The project owner maintains that file, and its contents change.
+  - Read the file before writing CSS. Don't rely on memory, older versions, or other components, which may still reference tokens that were removed.
+  - If no token fits, use a raw value (e.g. `8px`). Don't invent a token, and don't add one to `tokens.css` unless asked.
+  - `pnpm test` fails on any `var(--plt-…)` that `tokens.css` doesn't define (`ui/styles/tokens.test.ts`).
 - Preact 11 doesn't add `px` to numeric inline styles. Pass strings, using the `px()` helper in `ui/px.ts`.
 - Tests are `*.test.ts` next to the source and run with Vitest from the root (`pnpm test`).
 - Before finishing a change, run `pnpm typecheck` and `pnpm test`.

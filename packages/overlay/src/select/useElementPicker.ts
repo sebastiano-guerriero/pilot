@@ -66,10 +66,14 @@ export function useElementPicker(
     for (const type of BLOCKED_EVENTS) window.addEventListener(type, onBlocked, true);
 
     // The only thing Pilot adds to the page outside its Shadow DOM, and only
-    // while select mode is on. Pilot's own UI resets it (`:host { all: initial }`).
+    // while select mode is on. Pilot's host element is excluded: `cursor` is
+    // inherited, so matching the host would put the crosshair on all of
+    // Pilot's UI too (and `:host` can't override a page `!important`). Pilot's
+    // UI then shows its own cursors: arrow on panels, text in inputs,
+    // pointer on buttons.
     const cursor = document.createElement("style");
     cursor.id = CURSOR_STYLE_ID;
-    cursor.textContent = "html, html * { cursor: crosshair !important; }";
+    cursor.textContent = `html, html *:not(${host.localName}) { cursor: crosshair !important; }`;
     document.head.append(cursor);
 
     return () => {

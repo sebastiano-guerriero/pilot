@@ -11,16 +11,6 @@
  */
 
 .root {
-  /* Color: light theme */
-  --plt-color-surface: #ffffff;
-  --plt-color-text: #18181b;
-  --plt-color-text-muted: #71717a;
-  --plt-color-border: #e4e4e7;
-  --plt-color-field: #f4f4f5;
-  --plt-color-on-accent: #ffffff;
-  --plt-color-focus: var(--plt-color-accent);
-  --plt-color-highlight: var(--plt-color-accent);
-  
   --plt-color-background: #171717;
   --plt-color-contrast-low: #737373;
   --plt-color-contrast-high: #E5E5E5;
