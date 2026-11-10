@@ -1,36 +1,32 @@
-/* Pilot UI styles. Scoped to the Shadow DOM, so plain selectors are safe. */
+/* Pilot UI styles. Scoped to the Shadow DOM, so plain selectors are safe.
+   Placeholder look: to be replaced by the real design. */
 :host {
   all: initial;
 }
 
-.panel {
+.toolbar,
+.search-panel {
   --pilot-bg: #ffffff;
   --pilot-fg: #18181b;
   --pilot-muted: #71717a;
   --pilot-border: #e4e4e7;
   --pilot-field: #f4f4f5;
   --pilot-accent: #2563eb;
-  --pilot-radius: 12px;
+  --pilot-accent-fg: #ffffff;
 
   position: fixed;
-  top: 16px;
-  right: 16px;
   z-index: 2147483647;
-  width: 300px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  box-sizing: border-box;
   background: var(--pilot-bg);
   color: var(--pilot-fg);
   border: 1px solid var(--pilot-border);
-  border-radius: var(--pilot-radius);
   box-shadow: 0 12px 32px rgb(0 0 0 / 0.12);
   font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
-  .panel {
+  .toolbar,
+  .search-panel {
     --pilot-bg: #18181b;
     --pilot-fg: #fafafa;
     --pilot-muted: #a1a1aa;
@@ -39,30 +35,70 @@
   }
 }
 
-.header {
+/* Toolbar */
+
+.toolbar {
+  bottom: 20px;
+  left: 50%;
+  translate: -50% 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
 }
 
-.title {
-  font-weight: 600;
-}
-
-.icon-button {
+.tool {
   all: unset;
   cursor: pointer;
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   display: grid;
   place-items: center;
-  border-radius: 6px;
-  color: var(--pilot-muted);
+  border-radius: 8px;
+  color: var(--pilot-fg);
 }
 
-.icon-button:hover {
+.tool svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.tool:hover:not(:disabled) {
   background: var(--pilot-field);
-  color: var(--pilot-fg);
+}
+
+.tool:focus-visible {
+  outline: 2px solid var(--pilot-accent);
+}
+
+.tool[aria-pressed="true"] {
+  background: var(--pilot-accent);
+  color: var(--pilot-accent-fg);
+}
+
+.tool:disabled {
+  cursor: default;
+  color: var(--pilot-muted);
+  opacity: 0.5;
+}
+
+.divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 2px;
+  background: var(--pilot-border);
+}
+
+/* Property search (shown next to the selected element) */
+
+.search-panel {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-radius: 12px;
 }
 
 .search {
@@ -92,4 +128,48 @@
 .empty {
   margin: 0;
   color: var(--pilot-muted);
+}
+
+/* Selection highlights */
+
+.highlight {
+  --pilot-accent: #2563eb;
+
+  position: fixed;
+  z-index: 2147483646;
+  box-sizing: border-box;
+  pointer-events: none;
+  border: 1px solid var(--pilot-accent);
+}
+
+.highlight--hover {
+  background: rgb(37 99 235 / 0.06);
+}
+
+.highlight--selected {
+  border-width: 2px;
+}
+
+.highlight-label {
+  position: absolute;
+  left: -1px;
+  bottom: 100%;
+  margin-bottom: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--pilot-accent);
+  color: #ffffff;
+  font: 11px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif;
+  white-space: nowrap;
+}
+
+.highlight-label--inside {
+  bottom: auto;
+  top: 2px;
+  left: 2px;
+  margin: 0;
+}
+
+.highlight-size {
+  opacity: 0.75;
 }

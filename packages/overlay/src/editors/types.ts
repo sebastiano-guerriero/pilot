@@ -1,4 +1,5 @@
 import type { ComponentType } from "preact";
+import type { EditableElement } from "../dom/target.ts";
 
 /**
  * A property editor: the control shown when the designer searches for a CSS
@@ -21,7 +22,7 @@ export interface PropertyEditor {
 
 export interface PropertyEditorProps {
   /** The element being edited. */
-  element: HTMLElement;
+  element: EditableElement;
   /** Current values (computed style, or the pending edit) for `properties`. */
   values: Record<string, string>;
   /** Preview a value: Pilot applies it as an inline style and records the change. */

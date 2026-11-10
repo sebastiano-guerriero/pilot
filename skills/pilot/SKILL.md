@@ -12,7 +12,7 @@ Pilot lets the designer edit the running app in the browser. They select element
 ## When the user runs /pilot
 
 1. Make sure the app's dev server is running and Pilot is installed (the overlay is imported in dev).
-2. Tell the user Pilot is ready. They can press **Option+P** in the browser to open it.
+2. Call `pilot_launch` so the Pilot toolbar appears in the open page, then tell the user Pilot is ready.
 3. Call `pilot_wait_for_edits`. It returns when the designer clicks **Send to agent**.
 4. Apply the change set (below), then summarize what you changed.
 

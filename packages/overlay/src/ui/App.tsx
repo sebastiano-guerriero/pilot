@@ -1,54 +1,68 @@
-import { useEffect, useRef, useState } from "preact/hooks";
-import { editors, searchEditors } from "../editors/registry.ts";
+import { useCallback, useEffect, useState } from "preact/hooks";
+import type { EditableElement } from "../dom/target.ts";
+import { useElementPicker } from "../select/useElementPicker.ts";
+import { useElementRect } from "../select/useElementRect.ts";
+import { Highlight } from "./Highlight.tsx";
+import { PropertySearch } from "./PropertySearch.tsx";
+import { Toolbar } from "./Toolbar.tsx";
 
 interface AppProps {
-  open: boolean;
-  onClose(): void;
+  /** Pilot's Shadow DOM host, so the picker can ignore events from Pilot's own UI. */
+  host: HTMLElement;
+  onQuit(): void;
 }
 
 /**
- * Placeholder shell: a floating panel with the property search box.
- * Element selection, editors and the change list plug in here next.
+ * Pilot while running.
+ * - Cursor on: Pilot owns page clicks. Hover shows an outline, a click selects,
+ *   and the property search opens next to the selected element. Clicking
+ *   another element re-selects; Esc clears the selection.
+ * - Cursor off: the page behaves normally again and the selection is cleared.
  */
-export function App({ open, onClose }: AppProps) {
-  const [query, setQuery] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+export function App({ host, onQuit }: AppProps) {
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<{ element: EditableElement; key: number } | null>(null);
+
+  const onPick = useCallback((element: EditableElement) => {
+    setSelected((prev) => (prev?.element === element ? prev : { element, key: (prev?.key ?? 0) + 1 }));
+  }, []);
+
+  const hovered = useElementPicker(selecting, host, onPick);
+  const hoverRect = useElementRect(hovered !== selected?.element ? hovered : null);
+  const selectedRect = useElementRect(selected?.element ?? null);
+
+  // The selected element disappeared (re-render, HMR): drop the selection.
+  useEffect(() => {
+    if (selected && !selected.element.isConnected) setSelected(null);
+  }, [selected, selectedRect]);
 
   useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
+    if (!selected) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setSelected(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [selected]);
 
-  if (!open) return null;
-
-  const results = searchEditors(query);
+  const toggleSelect = () => {
+    if (selecting) setSelected(null);
+    setSelecting(!selecting);
+  };
 
   return (
-    <div class="panel" role="dialog" aria-label="Pilot">
-      <header class="header">
-        <span class="title">Pilot</span>
-        <button type="button" class="icon-button" onClick={onClose} aria-label="Close Pilot">
-          ×
-        </button>
-      </header>
-      <input
-        ref={inputRef}
-        class="search"
-        type="search"
-        placeholder="Search a property… (opacity, padding, radius)"
-        value={query}
-        onInput={(e) => setQuery(e.currentTarget.value)}
-        onKeyDown={(e) => e.key === "Escape" && onClose()}
-      />
-      <ul class="results">
-        {results.map((editor) => (
-          <li key={editor.id} class="result">
-            {editor.label}
-          </li>
-        ))}
-      </ul>
-      {results.length === 0 && (
-        <p class="empty">{editors.length === 0 ? "No property editors yet." : "No matching property."}</p>
+    <>
+      {hovered && hoverRect && <Highlight element={hovered} rect={hoverRect} variant="hover" />}
+      {selected && selectedRect && (
+        <>
+          <Highlight element={selected.element} rect={selectedRect} variant="selected" />
+          <PropertySearch key={selected.key} anchor={selectedRect} />
+        </>
       )}
-    </div>
+      <Toolbar selecting={selecting} onToggleSelect={toggleSelect} canSend={false} onSend={() => {}} onQuit={onQuit} />
+    </>
   );
 }

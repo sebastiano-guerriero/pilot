@@ -4,7 +4,7 @@
 
 Pilot is a design tool that lives inside your codebase, not on a separate canvas. You're building with an agent. When you want to experiment or make a few precise edits yourself, you launch Pilot and your running app becomes editable. You select an element, search for the property you want to change, and tweak it with a purpose-built control. When the result looks right, you hand the edits back to the agent, and the agent writes them into the source using your project's conventions.
 
-> Status: **early scaffolding**. The overlay mounts and toggles. Selection, property editors and the agent handoff are next. See the [Roadmap](#roadmap).
+> Status: **early scaffolding**. The toolbar (cursor, send, quit) and element selection work with placeholder styling, and the playground launches Pilot with a stand-in for `/pilot`. The inline-style engine, property editors and the agent handoff are next. See the [Roadmap](#roadmap).
 
 ---
 
@@ -14,20 +14,27 @@ Pilot is a design tool that lives inside your codebase, not on a separate canvas
  you + agent working            you take the controls                  agent takes them back
 ┌──────────────────┐     ┌───────────────────────────────────┐     ┌──────────────────────────┐
 │ "/pilot"         │ ──▶ │ select element                    │ ──▶ │ reads the change set     │
-│  (or Option+P)   │     │ search "opa" → opacity editor     │     │ translates plain CSS to  │
+│                  │     │ search "opa" → opacity editor     │     │ translates plain CSS to  │
 │                  │     │ drag → inline CSS preview         │     │ Tailwind / modules /     │
 │                  │     │ Send to agent  ·  Copy prompt     │     │ tokens, edits source     │
 └──────────────────┘     └───────────────────────────────────┘     └──────────────────────────┘
 ```
 
-1. **Launch.** Run `/pilot` in your agent, or press **Option+P** (Alt+P) in the browser.
-2. **Select.** Click any element on the page.
-3. **Search.** Type a property (`opacity`, `padding`, `radius`…). As you type, Pilot shows the matching editor.
+1. **Launch.** Run `/pilot` in your agent. Pilot is loaded in dev but stays invisible until `/pilot` launches it.
+2. **The toolbar.** While Pilot runs, a small toolbar is always visible. It has three buttons:
+   - **Cursor:** turns on select mode. Then click any element on the page.
+     - Hovering outlines the element and labels it with its name and size, e.g. `a.button 122 × 41`.
+     - A click selects the element. Pilot catches the click, so the page's own handlers and links don't fire.
+     - Select mode stays on, so you can click another element to switch to it. **Esc** clears the selection.
+     - Clicking the cursor again turns select mode off. The selection is cleared and the page behaves normally again.
+   - **Send:** sends the collected edits to the agent.
+   - **Quit:** closes Pilot.
+3. **Search.** The property search appears only when an element is selected, next to that element. Type a property (`opacity`, `padding`, `radius`…). As you type, Pilot shows the matching editor.
 4. **Tweak.** Each change is applied live as an **inline style** on the selected element, so you see the result right away. Nothing touches your source yet.
-5. **Hand off.**
-   - **Send to agent** (one click): the edits go to the agent through Pilot's local bridge and MCP server.
-   - **Copy prompt** (always works): copies a Markdown change list that you can paste into any agent.
+5. **Hand off.** Click **Send**. The edits go to the agent through Pilot's local bridge and MCP server. When no agent is connected, Send copies them to the clipboard as a Markdown prompt you can paste into any agent.
 6. **Apply.** The agent translates the plain-CSS intent into your stack. For example, `border-radius: 12px` becomes `rounded-xl` in a Tailwind project, an existing `--radius-lg` token, or a CSS-module rule.
+
+**Launching and quitting.** `/pilot` is the only way to launch Pilot, and the toolbar's **Quit** button is the only way to quit it. There's no keyboard shortcut for now. Pilot remembers whether it's running for the current browser tab, so the reloads a dev session triggers all the time (the agent editing files, HMR) don't open or close it on their own.
 
 ## Principles
 
@@ -35,16 +42,16 @@ Pilot is a design tool that lives inside your codebase, not on a separate canvas
 - **Captures intent, never edits source.** Pilot records `property: from → to` on identifiable elements. The agent decides how that maps onto your setup.
 - **Framework-agnostic.** It works on any page because it only deals with the DOM and CSS. Framework hints (like a component name) may be added to the hand-off when available, but nothing depends on them.
 - **First-party editors.** Every property editor is designed and shipped with Pilot. Users find editors through search. They don't assemble or customize them. Pilot is meant as an alternative to Figma, not a component kit.
-- **Isolated.** The UI renders in a Shadow DOM, so your app's CSS doesn't leak into Pilot and Pilot's CSS doesn't leak into your app.
+- **Isolated.** The UI renders in a Shadow DOM, so your app's CSS doesn't leak into Pilot and Pilot's CSS doesn't leak into your app. Outside that, Pilot adds only one thing to your page: a crosshair-cursor `<style>` tag, and only while select mode is on.
 
 ## Architecture
 
 ```
 ┌──────────────────────── browser (your app, dev mode) ────────────────────────┐
 │  @pilot/overlay  (Shadow DOM, Preact)                                        │
-│    selection · property search · property editors · inline-style preview    │
-│    change set ──▶ Copy prompt (clipboard)                                    │
-│               ──▶ Send to agent ──HTTP──┐                                    │
+│    toolbar · selection · property search · editors · inline-style preview   │
+│    change set ──▶ Send ──HTTP──┐   (no agent connected → clipboard prompt)  │
+│                                └────────┐                                    │
 └─────────────────────────────────────────┼────────────────────────────────────┘
                                           ▼
                      @pilot/cli   `pilot mcp`  (local process, started by the agent)
@@ -57,15 +64,19 @@ Pilot is a design tool that lives inside your codebase, not on a separate canvas
 
 | Package | Path | Role |
 | --- | --- | --- |
-| `@pilot/overlay` | [packages/overlay](packages/overlay) | The in-page editor: Shadow DOM mount, toggle shortcut, property search, editor registry. Builds `pilot.js` (API) and `pilot-auto.js` (self-mounting). |
-| `@pilot/protocol` | [packages/protocol](packages/protocol) | Shared `ChangeSet` types and `formatPrompt()`. Copy prompt and the MCP tools produce identical text. |
+| `@pilot/overlay` | [packages/overlay](packages/overlay) | The in-page editor: Shadow DOM mount, launch/quit, toolbar, property search, editor registry. Builds `pilot.js` (API) and `pilot-auto.js` (self-mounting). |
+| `@pilot/protocol` | [packages/protocol](packages/protocol) | Shared `ChangeSet` types and `formatPrompt()`. The clipboard prompt and the MCP tools produce identical text. |
 | `@pilot/cli` | [packages/cli](packages/cli) | The `pilot` command: `init`, `bridge`, `mcp` (placeholders for now). |
 | `playground` | [apps/playground](apps/playground) | A plain Vite page for developing Pilot. |
 | `/pilot` skill | [skills/pilot](skills/pilot) | Instructions the agent follows to launch Pilot and apply change sets. |
 
 ### The change set
 
-The overlay records a `ChangeSet`: page URL, viewport, an optional designer note, and per element a selector, DOM path, text snippet, and the `{ property, from, to }` changes. See [packages/protocol/src/types.ts](packages/protocol/src/types.ts). `formatPrompt()` turns it into a Markdown brief that tells the agent to:
+The overlay records a `ChangeSet`: page URL, viewport, an optional designer note, and per element a selector, DOM path, text snippet, and the `{ property, from, to }` changes. See [packages/protocol/src/types.ts](packages/protocol/src/types.ts). `describeElement()` ([packages/overlay/src/dom/target.ts](packages/overlay/src/dom/target.ts)) builds the element part:
+
+- A selector guaranteed to match only that element. It prefers ids and adds `:nth-of-type()` only where siblings would be ambiguous.
+- A readable path like `main > section.hero > h1`.
+- A trimmed text snippet the agent can grep for. `formatPrompt()` turns it into a Markdown brief that tells the agent to:
 
 - map the values to the project's conventions (no inline styles),
 - prefer existing tokens and utilities, and report any value it had to approximate,
@@ -94,7 +105,8 @@ The plan for one-click handoff:
 1. The user runs `/pilot` in the agent. The skill tells the agent to call `pilot_wait_for_edits`. That tool blocks until the designer clicks **Send**, which effectively hands control back.
 2. The agent starts `pilot mcp` as a regular MCP server (stdio). The same process listens on `localhost` for change sets posted by the overlay.
 3. When the designer clicks **Send**, the tool returns the formatted change set, and the agent applies it.
-4. If no agent is connected (bridge unreachable), **Send** falls back to **Copy prompt**.
+4. If no agent is connected (bridge unreachable), **Send** copies the same text to the clipboard instead.
+5. `/pilot` is also what launches Pilot in the open page: the bridge tells the overlay to call `launch()`.
 
 ## Installing Pilot in a project (planned)
 
@@ -123,7 +135,7 @@ pnpm install
 pnpm dev
 ```
 
-`pnpm dev` starts the playground at http://localhost:5173. Press **Option+P** to toggle the panel.
+`pnpm dev` starts the playground at http://localhost:5173. Until the bridge exists, the playground has a dashed **Simulate /pilot** button that launches Pilot. Use the toolbar's Quit button to close it.
 
 | Script | What it does |
 | --- | --- |
@@ -138,23 +150,28 @@ Stack: TypeScript, Preact (small, bundled into the overlay, so it never conflict
 
 **Foundation**
 - [x] pnpm monorepo, TypeScript, Vite, Vitest
-- [x] Overlay mounts in Shadow DOM, toggles with Option+P / Escape
+- [x] Overlay mounts in Shadow DOM, dormant until launched
+- [x] `launch()` / Quit button, running state kept per tab (playground simulates `/pilot`)
+- [x] Toolbar: cursor, send, quit (placeholder styling)
 - [x] `ChangeSet` model and `formatPrompt()`
 - [x] Property search ranking
-- [ ] Panel design (look and feel of the shell, search and results)
+- [ ] Visual design: toolbar, property search, selection highlight
 
 **Editing**
-- [ ] Element selection: hover highlight, click to select, parent/child navigation
+- [x] Element selection: the cursor button enters select mode, with a hover highlight and label, click to select (page clicks blocked), Esc to clear
+- [x] Property search anchored next to the selected element (right side, flips left, follows scroll/resize)
+- [x] `describeElement()`: unique selector, DOM path, text snippet
+- [ ] Parent/child navigation for the selection (e.g. picking the wrapper instead of the text inside it)
 - [ ] Inline-style preview engine: apply, track `from → to`, revert per property/element
 - [ ] First property editors (opacity, spacing, radius, color, typography…)
 - [ ] Change list in the panel (review and undo before handoff)
 - [ ] Designer note field
 
 **Handoff**
-- [ ] Copy prompt
+- [ ] Send: clipboard prompt when no agent is connected
 - [ ] `pilot mcp`: MCP server and localhost bridge in one process
-- [ ] `pilot_wait_for_edits` and the `/pilot` skill flow
-- [ ] Send to agent, with Copy fallback
+- [ ] `pilot_wait_for_edits` and the `/pilot` skill flow (including launching Pilot from the agent)
+- [ ] Send to agent through the bridge
 
 **Distribution**
 - [ ] `npx pilot init` (detect framework entry, add the dev import, register MCP and skill)
@@ -165,5 +182,8 @@ Stack: TypeScript, Preact (small, bundled into the overlay, so it never conflict
 - Which property editors ship in v1, and how should related properties be grouped?
 - Should Pilot handle hover, focus and responsive states (edit at a breakpoint or in a pseudo-state)?
 - How should multi-element edits work (e.g. "all cards")?
-- Should the shortcut be configurable per project? (It's already an option on `mountPilot`.)
+- Do we want a keyboard shortcut to launch Pilot later? (Removed for now: `/pilot` only.)
+- Does Send also quit Pilot (hand control back), or keep it running for more edits?
+- Should the toolbar be draggable, or have a fixed position (bottom center for now)?
+- After a click selects an element, should select mode stay on (current behavior) or switch off so the page is interactive again?
 - License.
