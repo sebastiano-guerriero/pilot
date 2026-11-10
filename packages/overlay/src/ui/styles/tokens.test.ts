@@ -8,7 +8,8 @@ import { describe, expect, it } from "vitest";
  * value. So this check is the only thing that catches it.
  */
 
-const uiDir = join(import.meta.dirname, "..");
+// All of the overlay source: ui/ and editors/ both have CSS.
+const srcDir = join(import.meta.dirname, "../..");
 const tokensFile = join(import.meta.dirname, "tokens.css");
 
 function cssFiles(dir: string): string[] {
@@ -28,11 +29,11 @@ describe("design tokens", () => {
     );
 
     const undefinedUses: string[] = [];
-    for (const file of cssFiles(uiDir)) {
+    for (const file of cssFiles(srcDir)) {
       const lines = stripComments(readFileSync(file, "utf8")).split("\n");
       lines.forEach((line, i) => {
         for (const [, token] of line.matchAll(/var\(\s*(--plt-[\w-]+)/g)) {
-          if (!defined.has(token as string)) undefinedUses.push(`${relative(uiDir, file)}:${i + 1} ${token}`);
+          if (!defined.has(token as string)) undefinedUses.push(`${relative(srcDir, file)}:${i + 1} ${token}`);
         }
       });
     }

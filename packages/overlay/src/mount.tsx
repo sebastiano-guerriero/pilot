@@ -10,6 +10,19 @@ export interface PilotOptions {
    * takes precedence, so reloads keep whatever the user chose.
    */
   launch?: boolean;
+  /** Development aids for working on Pilot itself (e.g. in the playground). */
+  dev?: PilotDevOptions;
+}
+
+export interface PilotDevOptions {
+  /**
+   * Keep the property dialog on screen while designing it: on every page load
+   * Pilot launches (ignoring a previous Quit), turns select mode on, selects
+   * the first element matching this selector and opens the dialog next to it.
+   */
+  select: string;
+  /** Pre-fill the dialog's search, e.g. "padding" to show that editor. */
+  query?: string;
 }
 
 export interface PilotInstance {
@@ -47,7 +60,7 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
   document.documentElement.append(host);
   const unregisterFonts = registerFonts();
 
-  let running = readStoredRunning() ?? options.launch ?? false;
+  let running = options.dev ? true : (readStoredRunning() ?? options.launch ?? false);
 
   const setRunning = (next: boolean) => {
     if (running === next) return;
@@ -56,7 +69,7 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
     draw();
   };
 
-  const draw = () => render(running ? <App host={host} onQuit={() => instance.quit()} /> : null, container);
+  const draw = () => render(running ? <App host={host} dev={options.dev} onQuit={() => instance.quit()} /> : null, container);
 
   const instance: PilotInstance = {
     launch: () => setRunning(true),

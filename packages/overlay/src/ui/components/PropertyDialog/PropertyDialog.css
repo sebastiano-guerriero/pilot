@@ -1,15 +1,21 @@
-/* Position and width are set inline by PropertyDialog.tsx (next to the selection).
+/* Position is set inline by PropertyDialog.tsx (next to the selection); the
+   width is set here and measured by the component for placement.
    `to (.editor)`: the matched property editor renders inside `.editor` and owns
    its styles; these rules stop at that boundary. */
 @scope (.property-dialog) to (.editor) {
   :scope {
     position: fixed;
     z-index: var(--plt-z-ui);
-    display: flex;
-    flex-direction: column;
     background: var(--plt-color-background);
     border-radius: 12px;
     box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.1), var(--plt-shadow-lg);
     overflow: hidden;
+    width: 248px;
+  }
+
+  /* Wrapper for the property editors below the search. */
+  .properties {
+    padding: 12px 16px;
+    border-top: 1px solid var(--plt-color-border);
   }
 }

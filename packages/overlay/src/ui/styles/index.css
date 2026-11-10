@@ -16,3 +16,6 @@
 @import "../components/PropertyDialog/PropertyDialog.css" layer(components);
 @import "../components/PropertySearch/PropertySearch.css" layer(components);
 @import "../components/Highlight/Highlight.css" layer(components);
+
+/* Property editors */
+@import "../../editors/padding/PaddingEditor.css" layer(components);

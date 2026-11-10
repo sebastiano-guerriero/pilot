@@ -96,7 +96,7 @@ A property editor is a Preact component plus metadata ([packages/overlay/src/edi
 }
 ```
 
-Editors are registered in [packages/overlay/src/editors/registry.ts](packages/overlay/src/editors/registry.ts), and `searchEditors()` ranks them by exact, prefix, then keyword match. A single editor can cover several related properties (e.g. one **Spacing** editor for `padding-*`).
+Each editor lives in its own folder, `src/editors/<name>/`, with its `.tsx` and `.css` side by side. It's registered in [packages/overlay/src/editors/registry.ts](packages/overlay/src/editors/registry.ts), and its CSS is imported in `ui/styles/index.css`. `searchEditors()` ranks them by exact, prefix, then keyword match. A single editor can cover several related properties (e.g. one **Spacing** editor for `padding-*`).
 
 The dialog takes the top result of `searchEditors()` and renders that editor inside an `.editor` wrapper. It passes the element's current computed values for the editor's `properties`, and `onChange` writes the new value to the element's inline style. Recording each `from → to` change for the change set comes with the inline-style engine.
 
@@ -138,6 +138,14 @@ pnpm dev
 ```
 
 `pnpm dev` starts the playground at http://localhost:5173. Until the bridge exists, the playground has a dashed **Simulate /pilot** button that launches Pilot. Use the toolbar's Quit button to close it.
+
+**Designing the dialog.** Saving a CSS file reloads the page, which normally closes everything. To keep the dialog on screen while you style it, the playground mounts Pilot with a `dev` option ([apps/playground/src/main.ts](apps/playground/src/main.ts)):
+
+```ts
+mountPilot({ dev: { select: ".button--primary", query: "padding" } });
+```
+
+On every load this launches Pilot (even after a Quit), turns on select mode, selects the first element matching `select`, and pre-fills the search with `query`, so the dialog opens showing that editor. Remove `dev` to get the real flow back.
 
 | Script | What it does |
 | --- | --- |
@@ -218,6 +226,7 @@ We decided against Tailwind for now. If we revisit it: Tailwind v4's `@property`
 - [ ] Parent/child navigation for the selection (e.g. picking the wrapper instead of the text inside it)
 - [ ] Inline-style preview engine: apply, track `from → to`, revert per property/element
 - [ ] First property editors (opacity, spacing, radius, color, typography…)
+  - [ ] Padding: registered, static structure in progress ([editors/padding](packages/overlay/src/editors/padding)), behavior to wire next
 - [ ] Change list in the panel (review and undo before handoff)
 - [ ] Designer note field
 

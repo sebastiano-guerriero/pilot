@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
-import type { EditableElement } from "../dom/target.ts";
+import { type EditableElement, isEditable } from "../dom/target.ts";
+import type { PilotDevOptions } from "../mount.tsx";
 import { useElementPicker } from "../select/useElementPicker.ts";
 import { useElementRect } from "../select/useElementRect.ts";
 import { Highlight } from "./components/Highlight/Highlight.tsx";
@@ -9,6 +10,8 @@ import { Toolbar } from "./components/Toolbar/Toolbar.tsx";
 interface AppProps {
   /** Pilot's Shadow DOM host, so the picker can ignore events from Pilot's own UI. */
   host: HTMLElement;
+  /** See `PilotOptions.dev`: start with an element selected and the dialog open. */
+  dev?: PilotDevOptions;
   onQuit(): void;
 }
 
@@ -19,9 +22,15 @@ interface AppProps {
  *   another element re-selects; Esc clears the selection.
  * - Cursor off: the page behaves normally again and the selection is cleared.
  */
-export function App({ host, onQuit }: AppProps) {
-  const [selecting, setSelecting] = useState(false);
-  const [selected, setSelected] = useState<{ element: EditableElement; key: number } | null>(null);
+export function App({ host, dev, onQuit }: AppProps) {
+  const [selecting, setSelecting] = useState(!!dev);
+  const [selected, setSelected] = useState<{ element: EditableElement; key: number } | null>(() => {
+    if (!dev) return null;
+    const element = document.querySelector(dev.select);
+    if (isEditable(element)) return { element, key: 1 };
+    console.warn(`[pilot] dev.select "${dev.select}" matched no element.`);
+    return null;
+  });
 
   const onPick = useCallback((element: EditableElement) => {
     setSelected((prev) => (prev?.element === element ? prev : { element, key: (prev?.key ?? 0) + 1 }));
@@ -59,7 +68,13 @@ export function App({ host, onQuit }: AppProps) {
       {selected && selectedRect && (
         <>
           <Highlight element={selected.element} rect={selectedRect} variant="selected" />
-          <PropertyDialog key={selected.key} element={selected.element} anchor={selectedRect} />
+          <PropertyDialog
+            key={selected.key}
+            element={selected.element}
+            anchor={selectedRect}
+            // Only the dev-pinned first selection gets the pre-filled query.
+            initialQuery={dev && selected.key === 1 ? dev.query : undefined}
+          />
         </>
       )}
       <Toolbar selecting={selecting} onToggleSelect={toggleSelect} canSend={false} onSend={() => {}} onQuit={onQuit} />

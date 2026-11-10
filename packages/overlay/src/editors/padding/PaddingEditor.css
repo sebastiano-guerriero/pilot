@@ -1,0 +1,27 @@
+/* Padding editor. Renders inside the dialog's `.editor` wrapper, outside the
+   dialog's own @scope, so everything here is owned by this file. */
+@scope (.padding-editor) {
+  :scope {
+    padding-block: 4px;
+  }
+
+  .wrapper {
+    position: relative;
+    height: 80px;
+    width: 216px;
+    background: hsl(from var(--plt-color-contrast-high) h s l / 12%);
+    border-radius: 2px;
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.1), 0 1px 0 black;
+  }
+
+  .label {
+    width: 136px;
+    height: 32px;
+    background: var(--plt-color-background);
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    box-shadow: 0 1px 0 hsl(0 0% 100% / 0.1);
+  }
+}

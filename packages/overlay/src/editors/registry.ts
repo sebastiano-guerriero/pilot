@@ -1,7 +1,12 @@
+import { paddingEditor } from "./padding/PaddingEditor.tsx";
 import type { PropertyEditor } from "./types.ts";
 
-/** All built-in property editors. Empty for now: editors are added one by one. */
-export const editors: PropertyEditor[] = [];
+/**
+ * All built-in property editors. Each lives in `editors/<name>/` with its
+ * component (.tsx) and styles (.css); register it here and import its CSS in
+ * `ui/styles/index.css`.
+ */
+export const editors: PropertyEditor[] = [paddingEditor];
 
 /** Rank editors for a search query: exact/prefix matches on label or property first, then keywords. */
 export function searchEditors(query: string, list: PropertyEditor[] = editors): PropertyEditor[] {
