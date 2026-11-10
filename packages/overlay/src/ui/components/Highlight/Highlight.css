@@ -8,11 +8,7 @@
   }
 
   :scope[data-variant="hover"] {
-    background: hsl(from var(--plt-color-accent) h s l / 6%);
-  }
-
-  :scope[data-variant="selected"] {
-    /* border-width: 2px; */
+    background: hsl(from var(--plt-color-accent) h s l / 7%);
   }
 
   .label {
@@ -30,13 +26,47 @@
     /* Element touches the top of the viewport: label goes inside the box. */
     &[data-inside] {
       bottom: auto;
-      top: var(--plt-space-0-5);
-      left: var(--plt-space-0-5);
+      top: 4px;
+      left: 4px;
       margin: 0;
     }
   }
 
   .size {
-    opacity: 0.75;
+    opacity: 0.4;
+  }
+
+  /* Round markers on the selected element's corners, centered on the 1px
+     outline (-0.5px = half the border width). */
+  .handle {
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--plt-color-accent);
+
+    &[data-corner="top-left"] {
+      top: -0.5px;
+      left: -0.5px;
+      translate: -50% -50%;
+    }
+
+    &[data-corner="top-right"] {
+      top: -0.5px;
+      right: -0.5px;
+      translate: 50% -50%;
+    }
+
+    &[data-corner="bottom-left"] {
+      bottom: -0.5px;
+      left: -0.5px;
+      translate: -50% 50%;
+    }
+
+    &[data-corner="bottom-right"] {
+      bottom: -0.5px;
+      right: -0.5px;
+      translate: 50% 50%;
+    }
   }
 }

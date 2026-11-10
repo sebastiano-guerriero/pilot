@@ -7,9 +7,15 @@ interface HighlightProps {
   variant: "hover" | "selected";
 }
 
-/** Outline + label drawn over an element. Purely visual: never receives events. */
+/** Corner markers drawn on the selected element. */
+const CORNERS = ["top-left", "top-right", "bottom-left", "bottom-right"] as const;
+
+/**
+ * Outline + label drawn over an element; the selected one also gets a round
+ * handle on each corner. Purely visual: never receives events.
+ */
 export function Highlight({ element, rect, variant }: HighlightProps) {
-  const size = `${Math.round(rect.width)} × ${Math.round(rect.height)}`;
+  const size = `${Math.round(rect.width)}×${Math.round(rect.height)}`;
   // Put the label above the box, or inside it when the element touches the top edge.
   const labelInside = rect.top < 22;
   return (
@@ -22,6 +28,8 @@ export function Highlight({ element, rect, variant }: HighlightProps) {
       <span class="label" data-inside={labelInside || undefined}>
         {shortName(element)} <span class="size">{size}</span>
       </span>
+      {variant === "selected" &&
+        CORNERS.map((corner) => <span key={corner} class="handle" data-corner={corner} />)}
     </div>
   );
 }

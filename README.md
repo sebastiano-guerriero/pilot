@@ -23,8 +23,8 @@ Pilot is a design tool that lives inside your codebase, not on a separate canvas
 1. **Launch.** Run `/pilot` in your agent. Pilot is loaded in dev but stays invisible until `/pilot` launches it.
 2. **The toolbar.** While Pilot runs, a small toolbar is always visible. It has three buttons:
    - **Cursor:** turns on select mode. Then click any element on the page.
-     - Hovering outlines the element and labels it with its name and size, e.g. `a.button 122 × 41`.
-     - A click selects the element. Pilot catches the click, so the page's own handlers and links don't fire.
+     - Hovering outlines the element and labels it with its name and size, e.g. `a.button 122×41`.
+     - A click selects the element. Pilot catches the click, so the page's own handlers and links don't fire. The selected element gets an outline with a round 4px accent handle on each corner.
      - Select mode stays on, so you can click another element to switch to it. **Esc** clears the selection.
      - Clicking the cursor again turns select mode off. The selection is cleared and the page behaves normally again.
    - **Send:** sends the collected edits to the agent.
