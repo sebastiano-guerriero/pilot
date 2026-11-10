@@ -1,0 +1,57 @@
+@scope (.toolbar) {
+  :scope {
+    position: fixed;
+    z-index: var(--pilot-z-ui);
+    bottom: var(--pilot-space-5);
+    left: 50%;
+    translate: -50% 0;
+    display: flex;
+    align-items: center;
+    gap: var(--pilot-space-1);
+    padding: var(--pilot-space-1);
+  }
+
+  .button {
+    all: unset;
+    cursor: pointer;
+    width: var(--pilot-control-size);
+    height: var(--pilot-control-size);
+    display: grid;
+    place-items: center;
+    border-radius: var(--pilot-radius-md);
+    color: var(--pilot-color-text);
+
+    & svg {
+      width: var(--pilot-icon-size);
+      height: var(--pilot-icon-size);
+      fill: currentColor;
+    }
+
+    &:hover:not(:disabled) {
+      background: var(--pilot-color-field);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--pilot-color-focus);
+    }
+
+    /* Cursor button while select mode is on. */
+    &[aria-pressed="true"] {
+      background: var(--pilot-color-accent);
+      color: var(--pilot-color-on-accent);
+    }
+
+    &:disabled {
+      cursor: default;
+      color: var(--pilot-color-text-muted);
+      opacity: 0.5;
+    }
+  }
+
+  .divider {
+    width: 1px;
+    height: 20px;
+    margin: 0 var(--pilot-space-0-5);
+    background: var(--pilot-color-border);
+  }
+}

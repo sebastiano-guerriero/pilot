@@ -14,10 +14,10 @@ interface ToolbarProps {
  */
 export function Toolbar({ selecting, onToggleSelect, canSend, onSend, onQuit }: ToolbarProps) {
   return (
-    <div class="toolbar" role="toolbar" aria-label="Pilot">
+    <div class="toolbar surface" role="toolbar" aria-label="Pilot">
       <button
         type="button"
-        class="tool"
+        class="button"
         aria-pressed={selecting}
         aria-label="Select an element"
         title="Select an element"
@@ -29,7 +29,7 @@ export function Toolbar({ selecting, onToggleSelect, canSend, onSend, onQuit }: 
       </button>
       <button
         type="button"
-        class="tool"
+        class="button"
         aria-label="Send to agent"
         title={canSend ? "Send to agent" : "No edits to send yet"}
         disabled={!canSend}
@@ -40,7 +40,7 @@ export function Toolbar({ selecting, onToggleSelect, canSend, onSend, onQuit }: 
         </svg>
       </button>
       <span class="divider" aria-hidden="true" />
-      <button type="button" class="tool" aria-label="Quit Pilot" title="Quit Pilot" onClick={onQuit}>
+      <button type="button" class="button" aria-label="Quit Pilot" title="Quit Pilot" onClick={onQuit}>
         <svg viewBox="0 0 16 16" aria-hidden="true">
           <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" />
         </svg>

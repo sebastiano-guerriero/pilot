@@ -1,0 +1,74 @@
+/*
+ * Pilot design tokens. The single source for colors, type, spacing, radii,
+ * shadows and stacking. Components only use these variables.
+ *
+ * Sizes are in px on purpose: inside a Shadow DOM, `rem` still resolves
+ * against the host page's <html> font size, which Pilot doesn't control.
+ */
+
+:host {
+  /* Color: light theme */
+  --pilot-color-surface: #ffffff;
+  --pilot-color-text: #18181b;
+  --pilot-color-text-muted: #71717a;
+  --pilot-color-border: #e4e4e7;
+  --pilot-color-field: #f4f4f5;
+  --pilot-color-accent: #2563eb;
+  --pilot-color-on-accent: #ffffff;
+  --pilot-color-focus: var(--pilot-color-accent);
+  --pilot-color-highlight: var(--pilot-color-accent);
+
+  /* Typography */
+  --pilot-font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --pilot-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --pilot-text-xs: 11px;
+  --pilot-text-sm: 12px;
+  --pilot-text-md: 13px;
+  --pilot-text-lg: 15px;
+
+  --pilot-leading-tight: 1.2;
+  --pilot-leading-normal: 1.4;
+
+  --pilot-weight-regular: 400;
+  --pilot-weight-medium: 500;
+  --pilot-weight-semibold: 600;
+
+  /* Spacing (4px grid) */
+  --pilot-space-0-5: 2px;
+  --pilot-space-1: 4px;
+  --pilot-space-1-5: 6px;
+  --pilot-space-2: 8px;
+  --pilot-space-2-5: 10px;
+  --pilot-space-3: 12px;
+  --pilot-space-4: 16px;
+  --pilot-space-5: 20px;
+  --pilot-space-6: 24px;
+
+  /* Radius */
+  --pilot-radius-sm: 4px;
+  --pilot-radius-md: 8px;
+  --pilot-radius-lg: 12px;
+
+  /* Elevation */
+  --pilot-shadow-surface: 0 12px 32px rgb(0 0 0 / 0.12);
+
+  /* Sizes */
+  --pilot-control-size: 32px;
+  --pilot-icon-size: 16px;
+
+  /* Stacking: highlights sit just under Pilot's UI, both above the page. */
+  --pilot-z-highlight: 2147483646;
+  --pilot-z-ui: 2147483647;
+}
+
+/* Color: dark theme */
+@media (prefers-color-scheme: dark) {
+  :host {
+    --pilot-color-surface: #18181b;
+    --pilot-color-text: #fafafa;
+    --pilot-color-text-muted: #a1a1aa;
+    --pilot-color-border: #27272a;
+    --pilot-color-field: #27272a;
+  }
+}

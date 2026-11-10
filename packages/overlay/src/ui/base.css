@@ -1,0 +1,24 @@
+/* Resets and shared building blocks for all Pilot UI. */
+
+/* Cut every inherited style coming from the host page. */
+:host {
+  all: initial;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* A floating panel: the toolbar and the property search both use it. */
+.surface {
+  background: var(--pilot-color-surface);
+  color: var(--pilot-color-text);
+  border: 1px solid var(--pilot-color-border);
+  border-radius: var(--pilot-radius-lg);
+  box-shadow: var(--pilot-shadow-surface);
+  font-family: var(--pilot-font-sans);
+  font-size: var(--pilot-text-md);
+  line-height: var(--pilot-leading-normal);
+}

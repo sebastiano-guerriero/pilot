@@ -37,10 +37,10 @@ export function PropertySearch({ anchor }: PropertySearchProps) {
   const top = Math.min(Math.max(GAP, anchor.top), Math.max(GAP, vh - GAP - 160));
 
   return (
-    <div class="search-panel" style={{ left: px(left), top: px(top), width: px(WIDTH) }} role="dialog" aria-label="Edit properties">
+    <div class="property-search surface" style={{ left: px(left), top: px(top), width: px(WIDTH) }} role="dialog" aria-label="Edit properties">
       <input
         ref={inputRef}
-        class="search"
+        class="input"
         type="search"
         placeholder="Search a property… (opacity, padding, radius)"
         value={query}
