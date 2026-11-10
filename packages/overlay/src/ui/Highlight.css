@@ -2,13 +2,13 @@
 @scope (.highlight) {
   :scope {
     position: fixed;
-    z-index: var(--pilot-z-highlight);
+    z-index: var(--plt-z-highlight);
     pointer-events: none;
-    border: 1px solid var(--pilot-color-highlight);
+    border: 1px solid var(--plt-color-highlight);
   }
 
   :scope[data-variant="hover"] {
-    background: color-mix(in srgb, var(--pilot-color-highlight) 6%, transparent);
+    background: color-mix(in srgb, var(--plt-color-highlight) 6%, transparent);
   }
 
   :scope[data-variant="selected"] {
@@ -19,21 +19,21 @@
     position: absolute;
     left: -1px;
     bottom: 100%;
-    margin-bottom: var(--pilot-space-1);
-    padding: var(--pilot-space-0-5) var(--pilot-space-1-5);
-    border-radius: var(--pilot-radius-sm);
-    background: var(--pilot-color-highlight);
-    color: var(--pilot-color-on-accent);
-    font-family: var(--pilot-font-sans);
-    font-size: var(--pilot-text-xs);
-    line-height: var(--pilot-leading-normal);
+    margin-bottom: var(--plt-space-1);
+    padding: var(--plt-space-0-5) var(--plt-space-1-5);
+    border-radius: var(--plt-radius-sm);
+    background: var(--plt-color-highlight);
+    color: var(--plt-color-on-accent);
+    font-family: var(--plt-font-sans);
+    font-size: var(--plt-text-xs);
+    line-height: var(--plt-leading-normal);
     white-space: nowrap;
 
     /* Element touches the top of the viewport: label goes inside the box. */
     &[data-inside] {
       bottom: auto;
-      top: var(--pilot-space-0-5);
-      left: var(--pilot-space-0-5);
+      top: var(--plt-space-0-5);
+      left: var(--plt-space-0-5);
       margin: 0;
     }
   }

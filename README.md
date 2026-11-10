@@ -153,7 +153,7 @@ Pilot's styles are plain CSS. There's one file per component, and at build time 
 | File | Purpose |
 | --- | --- |
 | [styles.css](packages/overlay/src/ui/styles.css) | Entry point. It declares the layer order and `@import`s every file. Add new component files here. |
-| [tokens.css](packages/overlay/src/ui/tokens.css) | All design tokens as `--pilot-*` custom properties on `:host`: color themes (light, plus dark via `prefers-color-scheme`), typography scale, spacing, radius, shadow, sizes, z-index. |
+| [tokens.css](packages/overlay/src/ui/tokens.css) | All design tokens as `--plt-*` custom properties, declared on `.root` (Pilot's container inside the Shadow DOM): color themes (light, plus dark via `prefers-color-scheme`), typography scale, spacing, radius, shadow, sizes, z-index. |
 | [base.css](packages/overlay/src/ui/base.css) | Resets (cuts inheritance from the host page) and shared building blocks like `.surface`, the floating-panel look used by the toolbar and search. |
 | `Component.css` next to `Component.tsx` | That component's rules: [Toolbar.css](packages/overlay/src/ui/Toolbar.css), [PropertySearch.css](packages/overlay/src/ui/PropertySearch.css), [Highlight.css](packages/overlay/src/ui/Highlight.css). |
 
@@ -162,7 +162,8 @@ Conventions:
 - **Layers decide which rule wins.** The order is `@layer tokens, base, components`, and later layers win. A component rule always beats a base rule, whatever the selector specificity.
 - **`@scope` isolates components.** Each component file wraps its rules in `@scope (.component-root) { … }`. Inner class names can stay short and generic (`.button`, `.label`, `.input`), because they only match inside that component. Containers that will host property editors stop at the editor boundary with `@scope (.property-search) to (.editor)`, so their rules never leak into an editor.
 - **Variants are attributes**, e.g. `data-variant="hover"` or `aria-pressed="true"`, styled as `:scope[data-variant="hover"]`.
-- **Use only tokens.** Components use `var(--pilot-*)` instead of raw values.
+- **Use only tokens.** Components use `var(--plt-*)` instead of raw values.
+- **Tokens are protected from the page.** CSS variables inherit into a Shadow DOM, and page CSS can set them on the `<pilot-root>` host element, which beats `:host` declarations. So tokens are declared on `.root` instead, which page CSS can't reach. The short `--plt-` prefix (in the spirit of Tailwind's `--tw-`) also means no site variable shares a name with them, so a missing token can't silently pick up a page value.
 - **Sizes are in px, not rem.** Inside a Shadow DOM, `rem` still follows the host page's `<html>` font size, which Pilot doesn't control.
 - **Native CSS nesting** (`&:hover`) is fine. The build flattens it.
 

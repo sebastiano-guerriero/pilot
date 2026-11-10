@@ -4,22 +4,22 @@
 @scope (.property-search) to (.editor) {
   :scope {
     position: fixed;
-    z-index: var(--pilot-z-ui);
-    padding: var(--pilot-space-2);
+    z-index: var(--plt-z-ui);
+    padding: var(--plt-space-2);
     display: flex;
     flex-direction: column;
-    gap: var(--pilot-space-2);
+    gap: var(--plt-space-2);
   }
 
   .input {
     all: unset;
     width: 100%;
-    padding: var(--pilot-space-2) var(--pilot-space-2-5);
-    background: var(--pilot-color-field);
-    border-radius: var(--pilot-radius-md);
+    padding: var(--plt-space-2) var(--plt-space-2-5);
+    background: var(--plt-color-field);
+    border-radius: var(--plt-radius-md);
 
     &:focus-visible {
-      outline: 2px solid var(--pilot-color-focus);
+      outline: 2px solid var(--plt-color-focus);
     }
   }
 
@@ -30,12 +30,12 @@
   }
 
   .result {
-    padding: var(--pilot-space-1-5) var(--pilot-space-2-5);
-    border-radius: var(--pilot-radius-sm);
+    padding: var(--plt-space-1-5) var(--plt-space-2-5);
+    border-radius: var(--plt-radius-sm);
   }
 
   .empty {
     margin: 0;
-    color: var(--pilot-color-text-muted);
+    color: var(--plt-color-text-muted);
   }
 }

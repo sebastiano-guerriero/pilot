@@ -39,7 +39,9 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
   const shadow = host.attachShadow({ mode: "open" });
   const style = document.createElement("style");
   style.textContent = styles;
+  // All Pilot UI renders in here; tokens.css declares the design tokens on it.
   const container = document.createElement("div");
+  container.className = "root";
   shadow.append(style, container);
   document.documentElement.append(host);
 
