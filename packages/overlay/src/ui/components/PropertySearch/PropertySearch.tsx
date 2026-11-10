@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { editors, searchEditors } from "../editors/registry.ts";
-import { px } from "./px.ts";
+import { editors, searchEditors } from "../../../editors/registry.ts";
+import { px } from "../../px.ts";
 
 interface PropertySearchProps {
   /** Bounding box of the selected element; the panel is placed next to it. */

@@ -148,14 +148,31 @@ Stack: TypeScript, Preact (small, bundled into the overlay, so it never conflict
 
 ### Styling
 
-Pilot's styles are plain CSS. There's one file per component, and at build time they're combined into a single `<style>` injected into Pilot's Shadow DOM. All files live in [packages/overlay/src/ui](packages/overlay/src/ui):
+Pilot's styles are plain CSS. There's one file per component, and at build time they're combined into a single `<style>` injected into Pilot's Shadow DOM. Each component has its own folder, with its markup and CSS side by side:
+
+```
+packages/overlay/src/ui/
+  App.tsx                    composes the UI
+  fonts.ts                   registers Geist Mono
+  px.ts                      inline-style unit helper
+  styles/
+    index.css                entry: layer order + @imports
+    tokens.css               design tokens
+    base.css                 resets + shared building blocks
+  components/
+    Toolbar/                 Toolbar.tsx + Toolbar.css
+    PropertySearch/          PropertySearch.tsx + PropertySearch.css
+    Highlight/               Highlight.tsx + Highlight.css
+```
+
+To add a component, create `components/<Name>/<Name>.tsx` and `<Name>.css`, then add one `@import` line to `styles/index.css`. Property editors will follow the same pattern under `src/editors/<name>/`.
 
 | File | Purpose |
 | --- | --- |
-| [styles.css](packages/overlay/src/ui/styles.css) | Entry point. It declares the layer order and `@import`s every file. Add new component files here. |
-| [tokens.css](packages/overlay/src/ui/tokens.css) | All design tokens as `--plt-*` custom properties, declared on `.root` (Pilot's container inside the Shadow DOM): color themes (light, plus dark via `prefers-color-scheme`), typography scale, spacing, radius, shadow, sizes, z-index. |
-| [base.css](packages/overlay/src/ui/base.css) | Resets (cuts inheritance from the host page) and shared building blocks like `.surface`, the floating-panel look used by the toolbar and search. |
-| `Component.css` next to `Component.tsx` | That component's rules: [Toolbar.css](packages/overlay/src/ui/Toolbar.css), [PropertySearch.css](packages/overlay/src/ui/PropertySearch.css), [Highlight.css](packages/overlay/src/ui/Highlight.css). |
+| [styles/index.css](packages/overlay/src/ui/styles/index.css) | Entry point. It declares the layer order and `@import`s every file. Add new component files here. |
+| [styles/tokens.css](packages/overlay/src/ui/styles/tokens.css) | All design tokens as `--plt-*` custom properties, declared on `.root` (Pilot's container inside the Shadow DOM): color themes (light, plus dark via `prefers-color-scheme`), typography scale, spacing, radius, shadow, sizes, z-index. |
+| [styles/base.css](packages/overlay/src/ui/styles/base.css) | Resets (cuts inheritance from the host page) and shared building blocks like `.surface`, the floating-panel look used by the toolbar and search. |
+| `components/<Name>/<Name>.css` | That component's rules: [Toolbar](packages/overlay/src/ui/components/Toolbar/Toolbar.css), [PropertySearch](packages/overlay/src/ui/components/PropertySearch/PropertySearch.css), [Highlight](packages/overlay/src/ui/components/Highlight/Highlight.css). |
 
 Conventions:
 
@@ -166,6 +183,16 @@ Conventions:
 - **Tokens are protected from the page.** CSS variables inherit into a Shadow DOM, and page CSS can set them on the `<pilot-root>` host element, which beats `:host` declarations. So tokens are declared on `.root` instead, which page CSS can't reach. The short `--plt-` prefix (in the spirit of Tailwind's `--tw-`) also means no site variable shares a name with them, so a missing token can't silently pick up a page value.
 - **Sizes are in px, not rem.** Inside a Shadow DOM, `rem` still follows the host page's `<html>` font size, which Pilot doesn't control.
 - **Native CSS nesting** (`&:hover`) is fine. The build flattens it.
+- **Typography is set once on `.root`.** That covers font family, size, line height and OpenType features, and every Pilot element inherits them. Components only change what differs, e.g. the highlight label's smaller size.
+
+#### Font
+
+Pilot's main font is **Geist Mono** (variable, weights 100–900):
+
+- **No network request.** The woff2 is vendored in [packages/overlay/src/assets/fonts](packages/overlay/src/assets/fonts) and inlined into the bundle as a data URL. There's no Google Fonts or CDN request. It comes from Vercel's `geist` npm package v1.9.2 under the SIL Open Font License, and the license file sits next to the font.
+- **Registered from JavaScript, not CSS.** [ui/fonts.ts](packages/overlay/src/ui/fonts.ts) registers the font with the FontFace API (`document.fonts`). Browsers don't reliably apply `@font-face` rules declared inside a Shadow DOM, and this way Pilot doesn't have to add a `<style>` to the host page.
+- **It has its own family name.** It's registered as `"PLT Geist Mono"`, so it never collides with a Geist Mono the host app loads, which might be a different version or subset.
+- **OpenType features.** `--plt-font-features` holds them and is set to `"ss09" 1`. That's Geist Mono's non-slashed zero, the font's only alternate digit style (the default zero is slashed). The other stylistic sets are listed in `tokens.css`.
 
 We decided against Tailwind for now. If we revisit it: Tailwind v4's `@property` rules are ignored inside a Shadow DOM, so shadow, ring and transform utilities need a workaround.
 

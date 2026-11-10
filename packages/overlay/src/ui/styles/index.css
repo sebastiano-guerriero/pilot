@@ -1,6 +1,7 @@
 /*
  * Entry stylesheet: injected as one <style> into Pilot's Shadow DOM.
- * Add new files here. Each component's CSS lives next to its .tsx.
+ * Add new files here. Each component lives in ui/components/<Name>/ with
+ * its <Name>.tsx and <Name>.css side by side.
  *
  * Layers set precedence (later wins): tokens < base < components.
  * Each component file wraps its rules in `@scope (.component-root)`, so class
@@ -11,6 +12,6 @@
 @import "./tokens.css" layer(tokens);
 @import "./base.css" layer(base);
 
-@import "./Toolbar.css" layer(components);
-@import "./PropertySearch.css" layer(components);
-@import "./Highlight.css" layer(components);
+@import "../components/Toolbar/Toolbar.css" layer(components);
+@import "../components/PropertySearch/PropertySearch.css" layer(components);
+@import "../components/Highlight/Highlight.css" layer(components);

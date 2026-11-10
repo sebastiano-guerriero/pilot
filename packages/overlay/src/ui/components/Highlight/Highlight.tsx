@@ -1,5 +1,5 @@
-import { shortName } from "../dom/target.ts";
-import { px } from "./px.ts";
+import { shortName } from "../../../dom/target.ts";
+import { px } from "../../px.ts";
 
 interface HighlightProps {
   element: Element;

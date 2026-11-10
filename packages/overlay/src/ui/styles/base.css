@@ -11,14 +11,12 @@
   box-sizing: border-box;
 }
 
-/* A floating panel: the toolbar and the property search both use it. */
-.surface {
-  background: var(--plt-color-surface);
-  color: var(--plt-color-text);
-  border: 1px solid var(--plt-color-border);
-  border-radius: var(--plt-radius-lg);
-  box-shadow: var(--plt-shadow-surface);
-  font-family: var(--plt-font-sans);
-  font-size: var(--plt-text-md);
-  line-height: var(--plt-leading-normal);
+/* Pilot's container: every Pilot element inherits its type settings from here. */
+.root {
+  font-family: var(--plt-font-main);
+  font-size: var(--plt-text-base);
+  line-height: 1;
+  font-feature-settings: var(--plt-font-features);
+  color: var(--plt-color-contrast-high);
+  -webkit-font-smoothing: antialiased;
 }

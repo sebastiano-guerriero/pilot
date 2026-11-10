@@ -1,34 +1,36 @@
 @scope (.toolbar) {
   :scope {
+    background: var(--plt-color-background);
+    box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.1), var(--plt-shadow-lg);
     position: fixed;
     z-index: var(--plt-z-ui);
-    bottom: var(--plt-space-5);
+    bottom: 24px;
     left: 50%;
     translate: -50% 0;
     display: flex;
     align-items: center;
-    gap: var(--plt-space-1);
-    padding: var(--plt-space-1);
+    width: 120px;
+    height: 48px;
+    padding: 8px;
+    border-radius: 50em;
   }
 
   .button {
     all: unset;
     cursor: pointer;
-    width: var(--plt-control-size);
-    height: var(--plt-control-size);
+    width: 32px;
+    height: 32px;
     display: grid;
     place-items: center;
-    border-radius: var(--plt-radius-md);
-    color: var(--plt-color-text);
+    border-radius: 50em;
 
     & svg {
-      width: var(--plt-icon-size);
-      height: var(--plt-icon-size);
-      fill: currentColor;
+      width: 18px;
+      height: 18px;
     }
 
-    &:hover:not(:disabled) {
-      background: var(--plt-color-field);
+    &:hover {
+      background: hsl(from var(--plt-color-contrast-high) h s l / 0.125);
     }
 
     &:focus-visible {
@@ -37,21 +39,20 @@
 
     /* Cursor button while select mode is on. */
     &[aria-pressed="true"] {
-      background: var(--plt-color-accent);
-      color: var(--plt-color-on-accent);
+      background: var(--plt-color-contrast-high);
+      color: var(--plt-color-background);
     }
 
     &:disabled {
-      cursor: default;
-      color: var(--plt-color-text-muted);
-      opacity: 0.5;
+      pointer-events: none;
+      color: var(--plt-color-contrast-low);
     }
   }
 
   .divider {
     width: 1px;
-    height: 20px;
-    margin: 0 var(--plt-space-0-5);
+    height: 16px;
+    margin: 0 4px;
     background: var(--plt-color-border);
   }
 }

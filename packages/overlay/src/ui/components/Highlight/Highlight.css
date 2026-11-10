@@ -24,9 +24,7 @@
     border-radius: var(--plt-radius-sm);
     background: var(--plt-color-highlight);
     color: var(--plt-color-on-accent);
-    font-family: var(--plt-font-sans);
     font-size: var(--plt-text-xs);
-    line-height: var(--plt-leading-normal);
     white-space: nowrap;
 
     /* Element touches the top of the viewport: label goes inside the box. */

@@ -20,7 +20,7 @@ The README is the project's living spec. Update it in the same change whenever y
 ## Repo conventions
 
 - pnpm workspace (`packages/*`, `apps/*`), TypeScript strict, ESM, `.ts` extensions in relative imports.
-- Overlay CSS: one `Component.css` per component, wrapped in `@scope (.component-root)` and imported in `ui/styles.css` into `layer(components)`. Use `--plt-*` tokens from `ui/tokens.css` (declared on `.root`, not `:host`), never raw values, and px rather than rem. See README, "Styling".
+- Overlay components: one folder per component, `ui/components/<Name>/` with `<Name>.tsx` + `<Name>.css`. The CSS is wrapped in `@scope (.component-root)` and imported in `ui/styles/index.css` into `layer(components)`. Use `--plt-*` tokens from `ui/styles/tokens.css` (declared on `.root`, not `:host`), never raw values, and px rather than rem. See README, "Styling".
 - Preact 11 doesn't add `px` to numeric inline styles. Pass strings, using the `px()` helper in `ui/px.ts`.
 - Tests are `*.test.ts` next to the source and run with Vitest from the root (`pnpm test`).
 - Before finishing a change, run `pnpm typecheck` and `pnpm test`.

@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from "preact/hooks";
 import type { EditableElement } from "../dom/target.ts";
 import { useElementPicker } from "../select/useElementPicker.ts";
 import { useElementRect } from "../select/useElementRect.ts";
-import { Highlight } from "./Highlight.tsx";
-import { PropertySearch } from "./PropertySearch.tsx";
-import { Toolbar } from "./Toolbar.tsx";
+import { Highlight } from "./components/Highlight/Highlight.tsx";
+import { PropertySearch } from "./components/PropertySearch/PropertySearch.tsx";
+import { Toolbar } from "./components/Toolbar/Toolbar.tsx";
 
 interface AppProps {
   /** Pilot's Shadow DOM host, so the picker can ignore events from Pilot's own UI. */

@@ -17,45 +17,28 @@
   --plt-color-text-muted: #71717a;
   --plt-color-border: #e4e4e7;
   --plt-color-field: #f4f4f5;
-  --plt-color-accent: #2563eb;
   --plt-color-on-accent: #ffffff;
   --plt-color-focus: var(--plt-color-accent);
   --plt-color-highlight: var(--plt-color-accent);
+  
+  --plt-color-background: #171717;
+  --plt-color-contrast-low: #737373;
+  --plt-color-contrast-high: #E5E5E5;
+  --plt-color-border: hsl(from var(--plt-color-contrast-high) h s l / 0.125);
+  --plt-color-accent: #1CF69E;
 
   /* Typography */
-  --plt-font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --plt-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Main font: Geist Mono, bundled and registered by ui/fonts.ts. */
+  --plt-font-main: "PLT Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* OpenType features. ss09 = Geist Mono's non-slashed zero (its only
+     alternate digit style). Other sets: ss01 no-tail a, ss02 alt a,
+     ss03 alt l, ss04 alt R, ss06 alt G, ss07 alt arrows, ss08 rounded dots. */
+  --plt-font-features: "ss09" 1;
 
-  --plt-text-xs: 11px;
-  --plt-text-sm: 12px;
-  --plt-text-md: 13px;
-  --plt-text-lg: 15px;
-
-  --plt-leading-tight: 1.2;
-  --plt-leading-normal: 1.4;
-
-  --plt-weight-regular: 400;
-  --plt-weight-medium: 500;
-  --plt-weight-semibold: 600;
-
-  /* Spacing (4px grid) */
-  --plt-space-0-5: 2px;
-  --plt-space-1: 4px;
-  --plt-space-1-5: 6px;
-  --plt-space-2: 8px;
-  --plt-space-2-5: 10px;
-  --plt-space-3: 12px;
-  --plt-space-4: 16px;
-  --plt-space-5: 20px;
-  --plt-space-6: 24px;
-
-  /* Radius */
-  --plt-radius-sm: 4px;
-  --plt-radius-md: 8px;
-  --plt-radius-lg: 12px;
+  --plt-text-base: 11px;
 
   /* Elevation */
-  --plt-shadow-surface: 0 12px 32px rgb(0 0 0 / 0.12);
+  --plt-shadow-lg: 0px 85px 34px rgba(0, 0, 0, 0.01), 0px 48px 29px rgba(0, 0, 0, 0.05), 0px 21px 21px rgba(0, 0, 0, 0.09), 0px 5px 12px rgba(0, 0, 0, 0.1), inset 0px 0px 0px 1px rgba(255, 255, 255, 0.1);
 
   /* Sizes */
   --plt-control-size: 32px;
@@ -64,15 +47,4 @@
   /* Stacking: highlights sit just under Pilot's UI, both above the page. */
   --plt-z-highlight: 2147483646;
   --plt-z-ui: 2147483647;
-}
-
-/* Color: dark theme */
-@media (prefers-color-scheme: dark) {
-  .root {
-    --plt-color-surface: #18181b;
-    --plt-color-text: #fafafa;
-    --plt-color-text-muted: #a1a1aa;
-    --plt-color-border: #27272a;
-    --plt-color-field: #27272a;
-  }
 }

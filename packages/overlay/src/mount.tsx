@@ -1,6 +1,7 @@
 import { render } from "preact";
 import { App } from "./ui/App.tsx";
-import styles from "./ui/styles.css?inline";
+import { registerFonts } from "./ui/fonts.ts";
+import styles from "./ui/styles/index.css?inline";
 
 export interface PilotOptions {
   /**
@@ -44,6 +45,7 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
   container.className = "root";
   shadow.append(style, container);
   document.documentElement.append(host);
+  const unregisterFonts = registerFonts();
 
   let running = readStoredRunning() ?? options.launch ?? false;
 
@@ -65,6 +67,7 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
     destroy() {
       render(null, container);
       host.remove();
+      unregisterFonts();
       delete (window as WindowWithPilot).__pilot;
     },
   };
