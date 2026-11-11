@@ -36,6 +36,23 @@ const FOCUS_TARGETS: Record<string, { focus: SideName; linked?: SideName[] }> = 
   "padding-left": { focus: "left" },
 };
 
+/** Alt-dragging a side also sets the side across from it. */
+const OPPOSITE: Record<SideName, SideName> = { top: "bottom", bottom: "top", left: "right", right: "left" };
+
+/**
+ * Which other sides a drag also changes: none, the opposite one (Alt), or all
+ * of them (Shift; wins over Alt).
+ */
+type Mode = "one" | "both" | "all";
+const modeOf = (e: { altKey: boolean; shiftKey: boolean }): Mode => (e.shiftKey ? "all" : e.altKey ? "both" : "one");
+
+/** The other sides a drag on `side` changes in `mode`. */
+function companions(side: SideName, mode: Mode): SideName[] {
+  if (mode === "all") return SIDES.map((s) => s.side).filter((s) => s !== side);
+  if (mode === "both") return [OPPOSITE[side]];
+  return [];
+}
+
 /** Pointer travel (px) before a press on a side becomes a drag instead of a click. */
 const DRAG_THRESHOLD = 3;
 
@@ -45,7 +62,15 @@ const DRAG_THRESHOLD = 3;
  * its area. From the search, `pt`/`pr`/`pb`/`pl` focus that side and
  * `px`/`py`/`p` link sides so one value sets them all.
  */
-export function PaddingEditor({ values, onChange, focusRequest, onReturnToSearch }: PropertyEditorProps) {
+export function PaddingEditor({
+  values,
+  onChange,
+  onRevert,
+  focusRequest,
+  onReturnToSearch,
+  onHint,
+  onInspect,
+}: PropertyEditorProps) {
   // The editable number of each side, in SIDES order, so focus can move between them.
   const refs = useRef(SIDES.map(() => ({ current: null as HTMLSpanElement | null })));
   // Sides a typed value currently applies to together (set by px/py/p).
@@ -53,6 +78,74 @@ export function PaddingEditor({ values, onChange, focusRequest, onReturnToSearch
   // What's being typed in a linked side, mirrored on the other linked sides so
   // all of them show the edit (text, and the selection while it's all selected).
   const [draft, setDraft] = useState<{ from: SideName } & Draft | null>(null);
+
+  // The side being dragged, and which other sides the drag also changes.
+  const [drag, setDrag] = useState<{ side: SideName; mode: Mode } | null>(null);
+  // The side whose drag area (not its number) is under the pointer, and the
+  // modifiers held: what a drag would do is shown before it starts.
+  const [hover, setHover] = useState<SideName | null>(null);
+  const [keys, setKeys] = useState({ altKey: false, shiftKey: false });
+  const keyMode = modeOf(keys);
+
+  // While a side is hovered or dragged, follow Alt and Shift.
+  const tracking = hover !== null || drag !== null;
+  useEffect(() => {
+    if (!tracking) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Alt" && e.key !== "Shift") return;
+      if (e.key === "Alt") e.preventDefault(); // e.g. Firefox on Windows shows its menu bar on Alt
+      // The key that changed is down on keydown, up on keyup; the other one
+      // comes from the event's modifier state.
+      const down = e.type === "keydown";
+      setKeys({
+        altKey: e.key === "Alt" ? down : e.altKey,
+        shiftKey: e.key === "Shift" ? down : e.shiftKey,
+      });
+    };
+    const onBlur = () => setKeys({ altKey: false, shiftKey: false });
+    window.addEventListener("keydown", onKey, true);
+    window.addEventListener("keyup", onKey, true);
+    window.addEventListener("blur", onBlur);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("keyup", onKey, true);
+      window.removeEventListener("blur", onBlur);
+    };
+  }, [tracking]);
+
+  // The side being worked on, and which other sides come along.
+  const active = drag?.side ?? hover;
+  const mode: Mode = drag ? drag.mode : keyMode;
+  const included = active ? companions(active, mode) : [];
+
+  // Tell the designer about Alt at the moment it's useful: as soon as the
+  // pointer is on a side's drag area, and while dragging. (Shift isn't
+  // advertised, but the message still says what it does while held.) A layout
+  // effect, so the footer changes in the same frame.
+  useLayoutEffect(() => {
+    if (!active) return onHint?.(null);
+    const what = mode === "all" ? "all sides" : mode === "both" ? pairName(active) : null;
+    if (what) onHint?.(drag ? `Changing ${what}` : `Drag to change ${what}`);
+    else
+      onHint?.(
+        <>
+          Hold <kbd>Alt</kbd> to change both sides
+        </>,
+      );
+  }, [active, mode, drag !== null]);
+  // Show the affected padding on the page itself while a side is hovered or
+  // dragged (with Alt/Shift, every side that will change).
+  useLayoutEffect(() => {
+    onInspect?.(active ? [active, ...included].map((side) => ({ box: "padding", side })) : null);
+  }, [active, mode]);
+
+  useEffect(
+    () => () => {
+      onHint?.(null);
+      onInspect?.(null);
+    },
+    [],
+  );
 
   const focusSide = (index: number) => {
     const el = refs.current[index]?.current;
@@ -102,6 +195,18 @@ export function PaddingEditor({ values, onChange, focusRequest, onReturnToSearch
                 else setDraft((current) => (current?.from === s.side ? null : current));
               }}
               value={toNumber(values[s.property])}
+              onCompanion={(name, n, gesture) => {
+                const property = `padding-${name}`;
+                if (n === null) onRevert?.(property, gesture);
+                else onChange(property, `${n}px`, { gesture });
+              }}
+              paired={included.includes(s.side)}
+              mode={keyMode}
+              onHover={(over, e) => {
+                setHover((current) => (over ? s.side : current === s.side ? null : current));
+                setKeys({ altKey: e.altKey, shiftKey: e.shiftKey });
+              }}
+              onDragState={(state) => setDrag(state ? { side: s.side, mode: state.mode } : null)}
               onChange={(n, gesture) => {
                 // Linked sides change together, as one undo step (the edited side first).
                 const others = isLinked && linked ? SIDES.filter((t) => t !== s && linked.includes(t.side)) : [];
@@ -139,6 +244,16 @@ interface PaddingSideProps {
   onDraft(draft: Draft | null): void;
   /** Current padding in px. */
   value: number;
+  /** Set another side along with the drag (Alt/Shift), in the same gesture; null takes it back. */
+  onCompanion(side: SideName, value: number | null, gesture: object): void;
+  /** Another side is hovered or dragged with Alt/Shift and includes this one: highlight it too. */
+  paired: boolean;
+  /** What Alt/Shift currently select (tracked by the editor while a side is hovered or dragged). */
+  mode: Mode;
+  /** The pointer is on this side's drag area (true), or left it / is on the number (false). */
+  onHover(over: boolean, keys: { altKey: boolean; shiftKey: boolean }): void;
+  /** A drag started (or its mode changed), or ended (null). */
+  onDragState(state: { mode: Mode } | null): void;
   /** Apply a new padding in px (already clamped to ≥ 0); `gesture` groups a drag into one undo step. */
   onChange(value: number, gesture?: object): void;
   onFocus(): void;
@@ -148,14 +263,41 @@ interface PaddingSideProps {
   onSubmit(): void;
 }
 
-function PaddingSide({ side, valueRef, linked, mirror, onDraft, value, onChange, onFocus, onNavigate, onSubmit }: PaddingSideProps) {
+function PaddingSide({
+  side,
+  valueRef,
+  linked,
+  mirror,
+  onDraft,
+  value,
+  onCompanion,
+  paired,
+  mode,
+  onHover,
+  onDragState,
+  onChange,
+  onFocus,
+  onNavigate,
+  onSubmit,
+}: PaddingSideProps) {
   // The editable number's text is managed here, not rendered by Preact, so
   // re-renders never reset the caret while typing.
   const editing = useRef(false);
   // Enter commits right away; the blur that follows must not commit again.
   const skipBlurCommit = useRef(false);
   const [dragging, setDragging] = useState(false);
-  const press = useRef<{ x: number; y: number; start: number; moved: boolean } | null>(null);
+  // The current press: where it started, the values it started from, and how
+  // far it has moved along the side's axis. Also the drag's undo gesture.
+  const press = useRef<{
+    x: number;
+    y: number;
+    start: number;
+    delta: number;
+    moved: boolean;
+    mode: Mode;
+    /** Other sides this drag has set so far (to take back if the mode changes). */
+    companions: Set<SideName>;
+  } | null>(null);
 
   const set = (n: number, gesture?: object) => onChange(Math.max(0, n), gesture);
   const text = () => valueRef.current?.textContent ?? "";
@@ -165,24 +307,30 @@ function PaddingSide({ side, valueRef, linked, mirror, onDraft, value, onChange,
 
   // Show the current value, including after an outside change (undo/redo,
   // arrow keys). While editing, keep it selected so typing replaces it.
-  // A linked side being edited elsewhere shows that side's text instead.
+  // A linked side shows the text typed in the side being edited, but only once
+  // something has been typed: until then every side keeps its own value.
+  const mirroredText = mirror?.typed ? mirror.text : null;
   useLayoutEffect(() => {
     const el = valueRef.current;
     if (!el) return;
-    if (mirror) {
-      el.textContent = mirror.text;
+    if (mirroredText !== null) {
+      el.textContent = mirroredText;
       return;
     }
     showValue();
     if (editing.current) selectContents(el);
-  }, [value, mirror?.text]);
+  }, [value, mirroredText]);
+
+  // Whether the designer has typed in this side since focusing it. Focusing
+  // (or stepping with the arrows, which applies right away) doesn't count.
+  const typed = useRef(false);
 
   // While editing, report the text and whether it's all selected, so linked
   // sides can mirror both. `selectionchange` covers select-all, caret moves and
   // arrow-key steps; `input` (below) covers typing.
   const report = () => {
     const el = valueRef.current;
-    if (el && editing.current) onDraft({ text: el.textContent ?? "", selected: isFullySelected(el) });
+    if (el && editing.current) onDraft({ text: el.textContent ?? "", selected: isFullySelected(el), typed: typed.current });
   };
   useEffect(() => {
     document.addEventListener("selectionchange", report);
@@ -198,27 +346,80 @@ function PaddingSide({ side, valueRef, linked, mirror, onDraft, value, onChange,
 
   const onPointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
-    // On the number itself it's a text field (text cursor, native caret).
-    if (e.target === valueRef.current) return;
+    // On the number itself it's a text field. The first click selects all of
+    // it (so typing replaces the value); once it's being edited, clicks place
+    // the caret natively.
+    const number = valueRef.current;
+    if (number && e.target === number) {
+      if (!editing.current) {
+        e.preventDefault();
+        number.focus();
+        selectContents(number);
+      }
+      return;
+    }
     // Elsewhere on the side the press is ours: no focus or text selection
     // until we know whether it's a click (→ type) or a drag (→ scrub).
     e.preventDefault();
-    press.current = { x: e.clientX, y: e.clientY, start: value, moved: false };
+    press.current = {
+      x: e.clientX,
+      y: e.clientY,
+      start: value,
+      delta: 0,
+      moved: false,
+      mode: "one",
+      companions: new Set(),
+    };
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+
+  // Apply the drag: this side follows the pointer; with Alt the opposite side
+  // gets the same value, with Shift all sides do. Sides that drop out when the
+  // key is released are reverted to exactly what they were. Everything uses
+  // the press object as gesture: one undo step per drag.
+  const applyDrag = (p: NonNullable<typeof press.current>, next: Mode) => {
+    const n = Math.max(0, Math.round(p.start + p.delta));
+    set(n, p);
+    const targets = companions(side.side, next);
+    for (const t of targets) {
+      onCompanion(t, n, p);
+      p.companions.add(t);
+    }
+    for (const t of [...p.companions]) {
+      if (targets.includes(t)) continue;
+      onCompanion(t, null, p);
+      p.companions.delete(t);
+    }
+    if (next !== p.mode) {
+      p.mode = next;
+      onDragState({ mode: next });
+    }
   };
 
   const onPointerMove = (e: PointerEvent) => {
     const p = press.current;
-    if (!p) return;
-    const delta = (side.axis === "x" ? e.clientX - p.x : e.clientY - p.y) * side.sign;
+    if (!p) {
+      // Just hovering: the drag area counts, the editable number doesn't.
+      onHover(e.target !== valueRef.current, e);
+      return;
+    }
+    p.delta = (side.axis === "x" ? e.clientX - p.x : e.clientY - p.y) * side.sign;
     if (!p.moved) {
-      if (Math.abs(delta) < DRAG_THRESHOLD) return;
+      if (Math.abs(p.delta) < DRAG_THRESHOLD) return;
       p.moved = true;
       setDragging(true);
+      p.mode = modeOf(e);
+      onDragState({ mode: p.mode });
       valueRef.current?.blur();
     }
-    set(Math.round(p.start + delta), p); // the press object is the gesture: one undo step per drag
+    applyDrag(p, modeOf(e));
   };
+
+  // Alt/Shift pressed or released while dragging, without moving the pointer.
+  useEffect(() => {
+    const p = press.current;
+    if (p?.moved && p.mode !== mode) applyDrag(p, mode);
+  }, [mode]);
 
   const endPress = () => {
     const p = press.current;
@@ -226,6 +427,7 @@ function PaddingSide({ side, valueRef, linked, mirror, onDraft, value, onChange,
     if (!p) return;
     if (p.moved) {
       setDragging(false);
+      onDragState(null);
     } else if (valueRef.current) {
       // A click: start typing, with the current value selected.
       valueRef.current.focus();
@@ -245,11 +447,14 @@ function PaddingSide({ side, valueRef, linked, mirror, onDraft, value, onChange,
       onNavigate(e.shiftKey ? -1 : 1); // commits on blur, like Enter
     } else if (e.key === "Escape") {
       // Discard what was typed; the dialog then returns focus to the search.
+      typed.current = false;
       showValue();
+      report();
     } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
       e.preventDefault();
       const step = (e.shiftKey ? 10 : 1) * (e.key === "ArrowUp" ? 1 : -1);
       const next = Math.max(0, (parseValue(text()) ?? value) + step);
+      typed.current = false; // the step is applied right away, to all linked sides
       if (next !== value) set(next);
       else showValue();
     }
@@ -261,12 +466,17 @@ function PaddingSide({ side, valueRef, linked, mirror, onDraft, value, onChange,
       data-side={side.side}
       data-dragging={dragging || undefined}
       data-linked={linked || undefined}
+      data-paired={paired || undefined}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endPress}
+      onPointerLeave={(e: PointerEvent) => {
+        if (!press.current) onHover(false, e);
+      }}
       onPointerCancel={() => {
         press.current = null;
         setDragging(false);
+        onDragState(null);
       }}
     >
       {/* Highlights the whole side on hover. */}
@@ -282,10 +492,14 @@ function PaddingSide({ side, valueRef, linked, mirror, onDraft, value, onChange,
         data-mirror-selected={mirror?.selected || undefined}
         onFocus={() => {
           editing.current = true;
+          typed.current = false;
           onFocus();
           report();
         }}
-        onInput={report}
+        onInput={() => {
+          typed.current = true;
+          report();
+        }}
         onBlur={() => {
           editing.current = false;
           onDraft(null);
@@ -298,10 +512,16 @@ function PaddingSide({ side, valueRef, linked, mirror, onDraft, value, onChange,
   );
 }
 
-/** Text being typed in a side, and whether all of it is selected. */
+/** "top and bottom" / "left and right", for the dragged side. */
+function pairName(side: SideName): string {
+  return side === "top" || side === "bottom" ? "top and bottom" : "left and right";
+}
+
+/** Text in the side being edited, whether all of it is selected, and whether it was typed (vs. just focused). */
 interface Draft {
   text: string;
   selected: boolean;
+  typed: boolean;
 }
 
 /** All of `el`'s (non-empty) text is selected. */

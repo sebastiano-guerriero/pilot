@@ -11,6 +11,9 @@ let gestures: Array<object | undefined>;
 let setExternal: (property: string, value: string) => void;
 let requestFocus: (query: string) => void;
 let returned: number;
+let hints: unknown[];
+let reverts: string[];
+let inspects: Array<Array<{ box: string; side: string }> | null>;
 function Harness() {
   const [focusRequest, setFocusRequest] = useState<{ query: string } | undefined>(undefined);
   requestFocus = (query) => setFocusRequest({ query });
@@ -31,6 +34,9 @@ function Harness() {
     },
     focusRequest,
     onReturnToSearch: () => returned++,
+    onHint: (hint: unknown) => hints.push(hint),
+    onRevert: (property: string) => reverts.push(property),
+    onInspect: (areas: Array<{ box: string; side: string }> | null) => inspects.push(areas),
   });
 }
 
@@ -39,6 +45,9 @@ beforeEach(() => {
   changes = [];
   gestures = [];
   returned = 0;
+  hints = [];
+  reverts = [];
+  inspects = [];
   container = document.createElement("div");
   document.body.append(container);
   act(() => render(h(Harness, {}), container));
@@ -144,12 +153,241 @@ describe("PaddingEditor", () => {
     expect(number("top").textContent).toBe("4");
   });
 
+  it("selects the whole number on the first click; later clicks place the caret", () => {
+    const down = () => {
+      const e = new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0, pointerId: 1 });
+      act(() => {
+        number("bottom").dispatchEvent(e);
+      });
+      return e;
+    };
+    const first = down();
+    expect(first.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(number("bottom"));
+    expect(document.getSelection()?.toString()).toBe("10");
+    const second = down();
+    expect(second.defaultPrevented).toBe(false); // native caret placement
+  });
+
   it("treats a press without movement as a click: focuses the input, changes nothing", () => {
     pointer(side("right"), "pointerdown", 50, 50);
     pointer(side("right"), "pointermove", 51, 50);
     pointer(side("right"), "pointerup", 51, 50);
     expect(changes).toEqual([]);
     expect(document.activeElement).toBe(number("right"));
+  });
+});
+
+describe("PaddingEditor Alt-drag", () => {
+  const drag = (name: string, type: string, x: number, y: number, altKey = false) =>
+    act(() => {
+      side(name).dispatchEvent(
+        new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, pointerId: 1, clientX: x, clientY: y, altKey }),
+      );
+    });
+  const hintText = () => {
+    const last = hints.at(-1);
+    if (last === null || last === undefined) return last;
+    if (typeof last === "string") return last;
+    const host = document.createElement("div");
+    render(last as never, host);
+    return host.textContent;
+  };
+  const alt = (type: "keydown" | "keyup") =>
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent(type, { key: "Alt", bubbles: true, cancelable: true }));
+    });
+
+  it("with Alt, the opposite side follows: top and bottom change together", () => {
+    drag("top", "pointerdown", 0, 100);
+    drag("top", "pointermove", 0, 90, true);
+    expect(changes).toEqual([
+      ["padding-top", "20px"],
+      ["padding-bottom", "20px"],
+    ]);
+    expect(gestures[1]).toBe(gestures[0]); // one undo step
+    expect(side("bottom").hasAttribute("data-paired")).toBe(true);
+    drag("top", "pointerup", 0, 90, true);
+    expect(side("bottom").hasAttribute("data-paired")).toBe(false);
+  });
+
+  it("releasing Alt mid-drag puts the opposite side back where it started", () => {
+    drag("left", "pointerdown", 100, 0);
+    drag("left", "pointermove", 95, 0, true); // left 20 → 25, right mirrors
+    expect(changes.at(-1)).toEqual(["padding-right", "25px"]);
+    drag("left", "pointermove", 94, 0, false);
+    // Right is reverted to exactly what it was, not re-set to 20px.
+    expect(reverts).toEqual(["padding-right"]);
+    expect(changes.at(-1)).toEqual(["padding-left", "26px"]);
+    expect(side("right").hasAttribute("data-paired")).toBe(false);
+  });
+
+  it("reacts to Alt pressed or released without moving the pointer", () => {
+    drag("bottom", "pointerdown", 0, 0);
+    drag("bottom", "pointermove", 0, 5);
+    expect(changes).toEqual([["padding-bottom", "15px"]]);
+    alt("keydown");
+    expect(changes.at(-1)).toEqual(["padding-top", "15px"]);
+    expect(side("top").hasAttribute("data-paired")).toBe(true);
+    alt("keyup");
+    expect(reverts).toEqual(["padding-top"]);
+  });
+
+  it("puts a hint in the footer at the right time", () => {
+    drag("top", "pointerdown", 0, 100);
+    expect(hintText()).toBeFalsy(); // a press alone isn't a drag
+    drag("top", "pointermove", 0, 90);
+    expect(hintText()).toBe("Hold Alt to change both sides");
+    drag("top", "pointermove", 0, 88, true);
+    expect(hintText()).toBe("Changing top and bottom");
+    drag("top", "pointerup", 0, 88, true);
+    expect(hintText()).toBeNull();
+  });
+
+  describe("before dragging (hover)", () => {
+    const hoverOn = (target: Element, type = "pointermove", altKey = false) =>
+      act(() => {
+        target.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 1, clientX: 0, clientY: 0, altKey }));
+      });
+
+    it("hints at Alt as soon as the pointer is on a side's drag area", () => {
+      hoverOn(side("left"));
+      expect(hintText()).toBe("Hold Alt to change both sides");
+    });
+
+    it("doesn't hint over the editable number", () => {
+      hoverOn(side("left"));
+      hoverOn(number("left"));
+      expect(hintText()).toBeNull();
+    });
+
+    it("holding Alt over a side highlights the opposite side and says what a drag will do", () => {
+      hoverOn(side("left"));
+      alt("keydown");
+      expect(side("right").hasAttribute("data-paired")).toBe(true);
+      expect(side("left").hasAttribute("data-paired")).toBe(false);
+      expect(hintText()).toBe("Drag to change left and right");
+      expect(changes).toEqual([]); // nothing applied by Alt alone
+      alt("keyup");
+      expect(side("right").hasAttribute("data-paired")).toBe(false);
+      expect(hintText()).toBe("Hold Alt to change both sides");
+    });
+
+    it("picks up Alt already held when the pointer arrives", () => {
+      hoverOn(side("top"), "pointermove", true);
+      expect(side("bottom").hasAttribute("data-paired")).toBe(true);
+    });
+
+    it("clears the hint and highlight when the pointer leaves", () => {
+      hoverOn(side("top"), "pointermove", true);
+      hoverOn(side("top"), "pointerleave", true);
+      expect(hintText()).toBeNull();
+      expect(side("bottom").hasAttribute("data-paired")).toBe(false);
+    });
+
+    it("a drag started with Alt held mirrors right away", () => {
+      hoverOn(side("top"));
+      alt("keydown");
+      drag("top", "pointerdown", 0, 100, true);
+      drag("top", "pointermove", 0, 95, true);
+      expect(changes).toEqual([
+        ["padding-top", "15px"],
+        ["padding-bottom", "15px"],
+      ]);
+      expect(hintText()).toBe("Changing top and bottom");
+    });
+  });
+
+  describe("Shift: all sides", () => {
+    const shift = (type: "keydown" | "keyup") =>
+      act(() => {
+        window.dispatchEvent(new KeyboardEvent(type, { key: "Shift", shiftKey: type === "keydown", bubbles: true }));
+      });
+    const paired = () => ["top", "right", "bottom", "left"].filter((n) => side(n).hasAttribute("data-paired"));
+
+    it("hovering with Shift highlights the other three sides; the hint says so without advertising Shift", () => {
+      act(() => {
+        side("top").dispatchEvent(new PointerEvent("pointermove", { bubbles: true, pointerId: 1 }));
+      });
+      expect(hintText()).toBe("Hold Alt to change both sides");
+      shift("keydown");
+      expect(paired()).toEqual(["right", "bottom", "left"]);
+      expect(hintText()).toBe("Drag to change all sides");
+      shift("keyup");
+      expect(paired()).toEqual([]);
+    });
+
+    it("a Shift-drag sets all four sides, as one undo step", () => {
+      drag("top", "pointerdown", 0, 100);
+      drag("top", "pointermove", 0, 90);
+      act(() => {
+        side("top").dispatchEvent(
+          new PointerEvent("pointermove", { bubbles: true, cancelable: true, pointerId: 1, clientX: 0, clientY: 90, shiftKey: true }),
+        );
+      });
+      expect(changes.slice(-4).map(([p]) => p).sort()).toEqual(["padding-bottom", "padding-left", "padding-right", "padding-top"]);
+      expect(new Set(changes.slice(-4).map(([, v]) => v))).toEqual(new Set(["20px"]));
+      expect(new Set(gestures)).toEqual(new Set([gestures[0]]));
+      expect(hintText()).toBe("Changing all sides");
+    });
+
+    it("switching from Shift to Alt mid-drag reverts the sides that drop out", () => {
+      drag("left", "pointerdown", 100, 0);
+      act(() => {
+        side("left").dispatchEvent(
+          new PointerEvent("pointermove", { bubbles: true, cancelable: true, pointerId: 1, clientX: 90, clientY: 0, shiftKey: true }),
+        );
+      });
+      drag("left", "pointermove", 89, 0, true); // Alt only now
+      expect(reverts.sort()).toEqual(["padding-bottom", "padding-top"]);
+      expect(paired()).toEqual(["right"]);
+    });
+
+    it("Shift wins over Alt", () => {
+      act(() => {
+        side("right").dispatchEvent(new PointerEvent("pointermove", { bubbles: true, pointerId: 1, altKey: true, shiftKey: true }));
+      });
+      expect(paired()).toEqual(["top", "bottom", "left"]);
+    });
+  });
+
+  describe("showing the padding on the page", () => {
+    const shown = () => inspects.at(-1)?.map((a) => `${a.box}-${a.side}`).sort() ?? null;
+    const move = (target: Element, init: PointerEventInit = {}) =>
+      act(() => {
+        target.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, pointerId: 1, ...init }));
+      });
+
+    it("shows the hovered side, then what Alt and Shift add, then nothing on leave", () => {
+      move(side("left"));
+      expect(shown()).toEqual(["padding-left"]);
+      move(side("left"), { altKey: true });
+      expect(shown()).toEqual(["padding-left", "padding-right"]);
+      move(side("left"), { shiftKey: true });
+      expect(shown()).toEqual(["padding-bottom", "padding-left", "padding-right", "padding-top"]);
+      act(() => {
+        side("left").dispatchEvent(new PointerEvent("pointerleave", { bubbles: true, pointerId: 1 }));
+      });
+      expect(shown()).toBeNull();
+    });
+
+    it("doesn't show anything while the pointer is on the number", () => {
+      move(side("top"));
+      move(number("top"));
+      expect(shown()).toBeNull();
+    });
+
+    it("keeps showing the dragged side during a drag", () => {
+      drag("bottom", "pointerdown", 0, 0);
+      drag("bottom", "pointermove", 0, 8, true);
+      expect(shown()).toEqual(["padding-bottom", "padding-top"]);
+    });
+  });
+
+  it("keeps the dragged side highlighted during the drag", () => {
+    drag("right", "pointerdown", 0, 0);
+    drag("right", "pointermove", 10, 0);
+    expect(side("right").hasAttribute("data-dragging")).toBe(true);
   });
 });
 
@@ -232,6 +470,28 @@ describe("PaddingEditor keyboard", () => {
     act(() => number("left").blur());
     expect([number("left").textContent, number("right").textContent]).toEqual(["20", "20"]);
     expect(changes).toEqual([]);
+  });
+
+  it("linked sides keep their own values until something is typed", () => {
+    const shown = () => ["top", "right", "bottom", "left"].map((n) => number(n).textContent);
+    act(() => requestFocus("p"));
+    act(() => {
+      document.dispatchEvent(new Event("selectionchange"));
+    });
+    expect(shown()).toEqual(["10", "20", "10", "20"]);
+    expect(changes).toEqual([]);
+    // Only the selection highlight is mirrored before typing.
+    expect(["right", "bottom", "left"].every((n) => number(n).hasAttribute("data-mirror-selected"))).toBe(true);
+
+    act(() => {
+      number("top").textContent = "5";
+      document.getSelection()?.collapse(number("top"), 1);
+      number("top").dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(shown()).toEqual(["5", "5", "5", "5"]);
+
+    press(number("top"), "Escape");
+    expect(shown()).toEqual(["10", "20", "10", "20"]);
   });
 
   it("p links all four sides", () => {

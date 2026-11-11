@@ -1,12 +1,13 @@
 import { paddingEditor } from "./padding/PaddingEditor.tsx";
 import type { PropertyEditor } from "./types.ts";
+import { widthEditor } from "./width/WidthEditor.tsx";
 
 /**
  * All built-in property editors. Each lives in `editors/<name>/` with its
  * component (.tsx) and styles (.css); register it here and import its CSS in
  * `ui/styles/index.css`.
  */
-export const editors: PropertyEditor[] = [paddingEditor];
+export const editors: PropertyEditor[] = [paddingEditor, widthEditor];
 
 /**
  * Rank editors for a search query, best first:

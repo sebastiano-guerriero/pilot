@@ -36,6 +36,13 @@ describe("searchEditors", () => {
     }
   });
 
+  it("finds the built-in width editor by w, width", async () => {
+    const { editors } = await import("./registry.ts");
+    for (const q of ["w", "wid", "width", "size"]) {
+      expect(searchEditors(q, editors)[0]?.id, q).toBe("width");
+    }
+  });
+
   it("returns everything for an empty query", () => {
     expect(searchEditors("  ", list)).toHaveLength(3);
   });

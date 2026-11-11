@@ -1,4 +1,6 @@
-import { useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
+import type { ComponentChildren } from "preact";
+import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
+import type { BoxArea } from "../../../dom/boxModel.ts";
 import type { EditableElement } from "../../../dom/target.ts";
 import { EditHistory } from "../../../edits/history.ts";
 import { editors as allEditors, searchEditors } from "../../../editors/registry.ts";
@@ -19,6 +21,8 @@ interface PropertyDialogProps {
   history?: EditHistory;
   /** Close the dialog (deselect): Esc on an empty search. */
   onClose?(): void;
+  /** The editor wants areas of the element shown on the page (null: back to the highlight). */
+  onInspect?(areas: BoxArea[] | null): void;
 }
 
 const GAP = 8;
@@ -39,6 +43,7 @@ export function PropertyDialog({
   initialQuery = "",
   history: sharedHistory,
   onClose,
+  onInspect,
 }: PropertyDialogProps) {
   const [query, setQueryState] = useState(initialQuery);
   const [ownHistory] = useState(() => new EditHistory());
@@ -53,6 +58,18 @@ export function PropertyDialog({
   const setQuery = (q: string) => {
     setQueryState(q);
     setFocusRequest(null);
+  };
+
+  // Where focus is, for the footer's hint: the search field or the editor.
+  const [focusArea, setFocusArea] = useState<"search" | "editor">("search");
+  // A message the editor puts in the footer for what's happening right now
+  // (e.g. during a drag); it wins over the default hint.
+  const [editorHint, setEditorHint] = useState<ComponentChildren | null>(null);
+  useEffect(() => setEditorHint(null), [match?.id]);
+  const onFocusIn = (e: FocusEvent) => {
+    const target = e.target as Element | null;
+    if (target === searchRef.current) setFocusArea("search");
+    else if (target?.closest(".editor")) setFocusArea("editor");
   };
 
   const returnToSearch = () => {
@@ -112,25 +129,53 @@ export function PropertyDialog({
       role="dialog"
       aria-label="Edit properties"
       onKeyDown={onKeyDown}
+      onFocusIn={onFocusIn}
     >
       <PropertySearch value={query} onChange={setQuery} onKeyDown={onSearchKeyDown} inputRef={searchRef} />
       {match && (
         // Wrapper for the property editors shown below the search. Only
         // rendered when something matches, so the empty dialog is just the search.
-        <div class="properties">
-          {/* Editors own everything inside `.editor` (see the @scope boundary in the CSS). */}
-          <div class="editor" data-editor={match.id} key={match.id}>
-            <MatchedEditor
-              editor={match}
-              element={element}
-              history={history}
-              focusRequest={focusRequest ?? undefined}
-              onReturnToSearch={returnToSearch}
-            />
+        <>
+          <div class="properties">
+            {/* Editors own everything inside `.editor` (see the @scope boundary in the CSS). */}
+            <div class="editor" data-editor={match.id} key={match.id}>
+              <MatchedEditor
+                editor={match}
+                element={element}
+                history={history}
+                focusRequest={focusRequest ?? undefined}
+                onReturnToSearch={returnToSearch}
+                onHint={setEditorHint}
+                onInspect={onInspect}
+              />
+            </div>
           </div>
-        </div>
+          <footer class="footer" data-area={editorHint ? "editor-hint" : focusArea} aria-live="polite">
+            {editorHint ?? <Hint area={focusArea} />}
+          </footer>
+        </>
       )}
     </div>
+  );
+}
+
+/**
+ * The footer's helper message: the keys that matter for what the designer is
+ * doing. Property-agnostic on purpose: every property panel follows the same
+ * keyboard pattern, so the copy never names a property.
+ */
+function Hint({ area }: { area: "search" | "editor" }) {
+  if (area === "editor") {
+    return (
+      <>
+        <kbd>Enter</kbd> to apply, <kbd>Esc</kbd> to go back
+      </>
+    );
+  }
+  return (
+    <>
+      <kbd>Tab</kbd> or <kbd>Enter</kbd> to edit
+    </>
   );
 }
 
@@ -144,12 +189,16 @@ function MatchedEditor({
   history,
   focusRequest,
   onReturnToSearch,
+  onHint,
+  onInspect,
 }: {
   editor: PropertyEditor;
   element: EditableElement;
   history: EditHistory;
   focusRequest?: { query: string };
   onReturnToSearch(): void;
+  onHint(hint: ComponentChildren | null): void;
+  onInspect?(areas: BoxArea[] | null): void;
 }) {
   const [, rerender] = useReducer((n: number) => n + 1, 0);
   const computed = getComputedStyle(element);
@@ -163,8 +212,14 @@ function MatchedEditor({
         history.apply(element, property, value, options?.gesture);
         rerender(0);
       }}
+      onRevert={(property, gesture) => {
+        history.revert(element, property, gesture);
+        rerender(0);
+      }}
       focusRequest={focusRequest}
       onReturnToSearch={onReturnToSearch}
+      onHint={onHint}
+      onInspect={onInspect}
     />
   );
 }

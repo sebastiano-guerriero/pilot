@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useReducer, useState } from "preact/hooks";
+import type { BoxArea } from "../dom/boxModel.ts";
 import { type EditableElement, isEditable } from "../dom/target.ts";
 import { EditHistory, historyShortcut } from "../edits/history.ts";
 import type { PilotDevOptions } from "../mount.tsx";
 import { useElementPicker } from "../select/useElementPicker.ts";
 import { useElementRect } from "../select/useElementRect.ts";
+import { BoxAreas } from "./components/BoxAreas/BoxAreas.tsx";
 import { Highlight } from "./components/Highlight/Highlight.tsx";
 import { PropertyDialog } from "./components/PropertyDialog/PropertyDialog.tsx";
 import { Toolbar } from "./components/Toolbar/Toolbar.tsx";
@@ -37,6 +39,11 @@ export function App({ host, dev, onQuit }: AppProps) {
     setSelected((prev) => (prev?.element === element ? prev : { element, key: (prev?.key ?? 0) + 1 }));
   }, []);
 
+  // Areas of the selected element an editor wants shown (e.g. the padding
+  // being hovered or dragged); while set, they replace the selection highlight.
+  const [inspect, setInspect] = useState<BoxArea[] | null>(null);
+  useEffect(() => setInspect(null), [selected?.key]);
+
   // One history for the whole Pilot session, so undo works across selections.
   const [history] = useState(() => new EditHistory());
   const [, refresh] = useReducer((n: number) => n + 1, 0);
@@ -68,18 +75,26 @@ export function App({ host, dev, onQuit }: AppProps) {
     if (selected && !selected.element.isConnected) setSelected(null);
   }, [selected, selectedRect]);
 
+  // Esc, one level at a time:
+  // - something selected: clear the selection (inside the dialog, the dialog
+  //   handles Esc itself: editor → search → clear → close);
+  // - only the select tool on, nothing selected: turn the tool off.
   useEffect(() => {
-    if (!selected) return;
+    if (!selected && !selecting) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      // Inside Pilot the dialog handles Esc itself (one level at a time).
-      if (e.key === "Escape" && !e.composedPath().includes(host)) {
+      if (e.key !== "Escape") return;
+      if (selected) {
+        if (e.composedPath().includes(host)) return;
         e.preventDefault();
         setSelected(null);
+      } else {
+        e.preventDefault();
+        setSelecting(false);
       }
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [selected, host]);
+  }, [selected, selecting, host]);
 
   const toggleSelect = () => {
     if (selecting) setSelected(null);
@@ -91,7 +106,11 @@ export function App({ host, dev, onQuit }: AppProps) {
       {hovered && hoverRect && <Highlight element={hovered} rect={hoverRect} variant="hover" />}
       {selected && selectedRect && (
         <>
-          <Highlight element={selected.element} rect={selectedRect} variant="selected" />
+          {inspect ? (
+            <BoxAreas element={selected.element} areas={inspect} />
+          ) : (
+            <Highlight element={selected.element} rect={selectedRect} variant="selected" />
+          )}
           <PropertyDialog
             key={selected.key}
             element={selected.element}
@@ -100,6 +119,7 @@ export function App({ host, dev, onQuit }: AppProps) {
             initialQuery={dev && selected.key === 1 ? dev.query : undefined}
             history={history}
             onClose={() => setSelected(null)}
+            onInspect={setInspect}
           />
         </>
       )}

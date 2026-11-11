@@ -1,4 +1,8 @@
 @scope (.property-search) {
+  :scope {
+    position: relative;
+  }
+
   .input {
     all: unset;
     /* `all: unset` also resets box-sizing to content-box: without this the
@@ -9,12 +13,50 @@
     padding-inline: 16px;
     font-size: 12px;
 
+    /* Room for the clear button, which only exists once there is text. */
+    &:not(:placeholder-shown) {
+      padding-inline-end: 36px;
+    }
+
     &:focus-visible {
       outline: none;
     }
 
     &::placeholder {
       color: var(--plt-color-contrast-low);
+    }
+
+    /* Replaced by the `.clear` button below. */
+    &::-webkit-search-cancel-button {
+      -webkit-appearance: none;
+      appearance: none;
+      display: none;
+    }
+  }
+
+  .clear {
+    all: unset;
+    position: absolute;
+    top: 0;
+    right: 4px;
+    width: 36px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    color: var(--plt-color-contrast-low);
+    cursor: pointer;
+
+    & svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    &:hover {
+      color: var(--plt-color-contrast-high);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--plt-color-accent);
     }
   }
 }

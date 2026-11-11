@@ -15,7 +15,7 @@ The README is the project's living spec. Update it in the same change whenever y
 - Pilot never edits source files. It records plain-CSS intent (`ChangeSet` in `packages/protocol`), and the agent translates that intent into the project's conventions.
 - The overlay must stay framework-agnostic and isolated: Shadow DOM, no global CSS, and no dependency on the host app's packages. Preact is bundled into the overlay.
 - Property editors are first-party and are designed by the project owner. Don't invent editor visuals without being asked. Build the plumbing and leave the look for review.
-- **Every property change must be undoable.** Editors change styles only through `onChange(property, value, { gesture })`, which goes through `EditHistory` (`src/edits/history.ts`). Never set `element.style` directly. For continuous interactions (drags, scrubbing), pass the same `gesture` object for the whole interaction so Cmd/Ctrl+Z undoes it in one step. After an undo, inputs must show the restored value.
+- **Every property change must be undoable.** Editors change styles only through `onChange(property, value, { gesture })`, which goes through `EditHistory` (`src/edits/history.ts`). Never set `element.style` directly. For continuous interactions (drags, scrubbing), pass the same `gesture` object for the whole interaction so Cmd/Ctrl+Z undoes it in one step. After an undo, inputs must show the restored value. To take back part of an ongoing gesture (e.g. Alt released mid-drag), use `onRevert(property, gesture)`. Never re-apply the old number: that leaves a fake inline edit.
 - The copy-prompt and MCP paths must produce identical text. Both go through `formatPrompt()`.
 
 ## Repo conventions

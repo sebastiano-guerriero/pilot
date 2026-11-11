@@ -25,7 +25,7 @@ Pilot is a design tool that lives inside your codebase, not on a separate canvas
    - **Cursor:** turns on select mode. Then click any element on the page.
      - Hovering outlines the element and labels it with its name and size, e.g. `a.button 122×41`.
      - A click selects the element. Pilot catches the click, so the page's own handlers and links don't fire. The selected element gets an outline with a round 4px accent handle on each corner.
-     - Select mode stays on, so you can click another element to switch to it. **Esc** clears the selection.
+     - Select mode stays on, so you can click another element to switch to it. **Esc** clears the selection. With nothing selected, **Esc** turns the select tool off.
      - Clicking the cursor again turns select mode off. The selection is cleared and the page behaves normally again.
    - **Send:** sends the collected edits to the agent.
    - **Quit:** closes Pilot.
@@ -48,7 +48,10 @@ pt ⇥ 24 ⏎    px ⏎ 6 ⏎    …
 | **Enter** | editor | Applies the value and returns to the search, text selected, ready for the next property |
 | **Tab / Shift+Tab** | editor | Next/previous field (padding: top → right → bottom → left). Past either end, back to the search |
 | **Esc** | anywhere in the dialog | One level back: editor → search (discards typed text) → clears the search → closes the dialog |
+| **Esc** | page, nothing selected | Turns the select tool off |
 | **Cmd/Ctrl+Z**, **Cmd/Ctrl+Shift+Z** | anywhere | Undo / redo |
+
+A **footer** under the properties always shows the keys for what you're doing: in the search, "**Tab** or **Enter** to edit"; in a property, "**Enter** to apply, **Esc** to go back". The keys are `<kbd>` elements and the footer carries `data-area="search" | "editor"` for styling. The copy never names a property: every panel follows the same keys, so the messages stay the same for all of them.
 
 Linked values follow Tailwind's meaning: `px` links left and right, `py` top and bottom, and `p` all four, so one number sets them all, as one undo step.
 
@@ -117,13 +120,14 @@ A property editor is a Preact component plus metadata ([packages/overlay/src/edi
 
 Each editor lives in its own folder, `src/editors/<name>/`, with its `.tsx` and `.css` side by side. It's registered in [packages/overlay/src/editors/registry.ts](packages/overlay/src/editors/registry.ts), and its CSS is imported in `ui/styles/index.css`. `searchEditors()` ranks them, best first: an exact **alias**, then an exact label or property name, then a prefix (`pad`), then a substring or keyword. Aliases borrow Tailwind's utility names, so a designer who knows them gets there in a keystroke or two. Typing `p`, `pt`, `pr`, `pb`, `pl`, `px` or `py` brings up the padding editor, and so do `pad`, `padding` and `spacing`. A single editor can cover several related properties (e.g. one **Spacing** editor for `padding-*`).
 
-The dialog takes the top result of `searchEditors()` and renders that editor inside an `.editor` wrapper. It passes the element's current computed values for the editor's `properties`, and `onChange` applies the new value. For the keyboard loop, editors also get `focusRequest`: a new object, `{ query }`, each time the designer tabs or enters in from the search, so the editor can focus the part the query names (`pt` → top). They call `onReturnToSearch()` when a value is done (Enter) or when Tab moves past their last field. Esc is handled by the dialog.
+The dialog takes the top result of `searchEditors()` and renders that editor inside an `.editor` wrapper. It passes the element's current computed values for the editor's `properties`, and `onChange` applies the new value. For the keyboard loop, editors also get `focusRequest`: a new object, `{ query }`, each time the designer tabs or enters in from the search, so the editor can focus the part the query names (`pt` → top). They call `onReturnToSearch()` when a value is done (Enter) or when Tab moves past their last field. Esc is handled by the dialog. `onHint(content | null)` replaces the footer message while something editor-specific is going on, such as a drag. `onInspect(areas | null)` shows parts of the element's box model on the page, such as `[{ box: "padding", side: "top" }]`, in place of the selection highlight. `onRevert(property, gesture)` takes back what an ongoing gesture did to one property, restoring its exact earlier value instead of re-applying an old number, which would leave a fake edit in the change set.
 
 **Every property change goes through the edit history** ([src/edits/history.ts](packages/overlay/src/edits/history.ts)). Editors never write `element.style` themselves; they call `onChange(property, value, { gesture })`. The history then:
 
 - sets the value as an inline style and records the inline value it replaced, so undo restores it exactly (or removes the property if there was none),
 - groups a continuous interaction into one undo step: every change made with the same `gesture` object is one step, so a drag passes the same token on each move,
 - skips no-op changes (re-applying the current value),
+- can `revert()` one property of the ongoing gesture to exactly what it was (dropping the step if nothing is left),
 - handles **Cmd/Ctrl+Z** and **Cmd/Ctrl+Shift+Z** / **Ctrl+Y** in `App`, unless there's nothing to undo or redo, or the user is typing in one of the page's own fields.
 
 The same records will provide the change set's `from → to` values.
@@ -202,6 +206,7 @@ packages/overlay/src/ui/
     PropertyDialog/          the dialog next to the selection: search + matched editor
     PropertySearch/          the search field
     Highlight/               Highlight.tsx + Highlight.css
+    BoxAreas/                box-model areas of the selection (e.g. padding being edited)
 ```
 
 To add a component, create `components/<Name>/<Name>.tsx` and `<Name>.css`, then add one `@import` line to `styles/index.css`. Property editors will follow the same pattern under `src/editors/<name>/`.
@@ -211,7 +216,7 @@ To add a component, create `components/<Name>/<Name>.tsx` and `<Name>.css`, then
 | [styles/index.css](packages/overlay/src/ui/styles/index.css) | Entry point. It declares the layer order and `@import`s every file. Add new component files here. |
 | [styles/tokens.css](packages/overlay/src/ui/styles/tokens.css) | All design tokens as `--plt-*` custom properties, declared on `.root` (Pilot's container inside the Shadow DOM): color themes (light, plus dark via `prefers-color-scheme`), typography scale, spacing, radius, shadow, sizes, z-index. |
 | [styles/base.css](packages/overlay/src/ui/styles/base.css) | Resets (cuts inheritance from the host page) and shared building blocks like `.surface`, the floating-panel look used by the toolbar and search. |
-| `components/<Name>/<Name>.css` | That component's rules: [Toolbar](packages/overlay/src/ui/components/Toolbar/Toolbar.css), [PropertyDialog](packages/overlay/src/ui/components/PropertyDialog/PropertyDialog.css), [PropertySearch](packages/overlay/src/ui/components/PropertySearch/PropertySearch.css), [Highlight](packages/overlay/src/ui/components/Highlight/Highlight.css). |
+| `components/<Name>/<Name>.css` | That component's rules: [Toolbar](packages/overlay/src/ui/components/Toolbar/Toolbar.css), [PropertyDialog](packages/overlay/src/ui/components/PropertyDialog/PropertyDialog.css), [PropertySearch](packages/overlay/src/ui/components/PropertySearch/PropertySearch.css), [Highlight](packages/overlay/src/ui/components/Highlight/Highlight.css), [BoxAreas](packages/overlay/src/ui/components/BoxAreas/BoxAreas.css). |
 
 Conventions:
 
@@ -251,6 +256,7 @@ We decided against Tailwind for now. If we revisit it: Tailwind v4's `@property`
 - [x] Element selection: the cursor button enters select mode, with a hover highlight and label, click to select (page clicks blocked), Esc to clear
 - [x] Property dialog anchored next to the selected element (right side, flips left, follows scroll/resize, stays on screen as it grows)
 - [x] Dialog = search field + only the best-matching editor as you type
+- [x] Footer with a contextual key hint (search vs. editing a property)
 - [x] Keyboard loop: Tab/Enter from the search into the editor (focus picked from the alias), Enter back to the search, Tab between fields, Esc one level at a time
 - [ ] Typing a letter in a fully selected value jumps back to the search (experiment)
 - [x] `describeElement()`: unique selector, DOM path, text snippet
@@ -260,10 +266,11 @@ We decided against Tailwind for now. If we revisit it: Tailwind v4's `@property`
 - [ ] Keep pending edits across page reloads. Today a reload (including the dev server's full reloads) drops every preview edit and the undo history, because they only live in the page's DOM and memory.
 - [ ] First property editors (opacity, spacing, radius, color, typography…)
   - [x] Padding ([editors/padding](packages/overlay/src/editors/padding)): a box-model diagram with an editable number per side. Each number is a `contenteditable` span sized to its content (12px tall, up to 32px wide), so the text cursor only appears right over the number. Each side is a trapezoid between the label and the edge, and it's highlighted on hover.
-    - **Type:** click the number (text cursor) or anywhere else on a side, type a number (`12` or `12px`), then press Enter.
+    - **Type:** click the number (text cursor) or anywhere else on a side. The first click selects the whole value, so typing replaces it, and a second click places the caret. Type a number (`12` or `12px`), then press Enter.
     - **Arrow keys:** ↑/↓ change the value by 1, or by 10 with Shift.
-    - **Drag:** drag over a side, outside its number, to scrub. Dragging outward from the label increases the value: up for top, right for right, and so on. Values never go below 0.
-    - **From the search:** `pt`/`pr`/`pb`/`pl` (or `padding-top`…) focus that side, `px`/`py`/`p` link sides (marked with `data-linked`, unstyled for now), and `padding` focuses top. Linked sides mirror the edit as you type: they show the same text and, while the value is fully selected, the same selection highlight (`data-mirror-selected`, since a page can only hold one real selection). Nothing is applied until Enter or Tab, and then all linked sides change as one undo step.
+    - **Drag:** drag over a side, outside its number, to scrub. Dragging outward from the label increases the value: up for top, right for right, and so on. Values never go below 0. **Hold Alt while dragging** to change the opposite side too (top and bottom, or left and right), or **Shift** to change all four sides. Shift wins if both are held. You can press or release either key mid-drag. A side that drops out is reverted to exactly what it was. Alt is shown before it's needed. As soon as the pointer is on a side's drag area (the ↕/↔ cursor, not the number), the footer says "Hold **Alt** to change both sides". Holding Alt there lights up the opposite side too (`data-paired`) and changes the footer to "Drag to change top and bottom", without applying anything. Shift lights up the other three sides ("Drag to change all sides"). Shift isn't advertised in the default hint. During the drag, the dragged side stays highlighted and the footer says "Changing top and bottom". **On the page**, while a side is hovered or dragged, the selection outline and corner dots are replaced by the element's actual padding area for every affected side (Alt and Shift included). It's drawn in the accent at 10% with 1px diagonal accent stripes, and it follows the values live during a drag.
+    - **From the search:** `pt`/`pr`/`pb`/`pl` (or `padding-top`…) focus that side, `px`/`py`/`p` link sides (marked with `data-linked`, unstyled for now), and `padding` focuses top. Linked sides mirror the edit: they keep their own values until you type, then show the same text as you type. While the value is fully selected, they also show the same selection highlight (`data-mirror-selected`, since a page can only hold one real selection). Nothing is applied until Enter or Tab, and then all linked sides change as one undo step.
+  - [ ] Width ([editors/width](packages/overlay/src/editors/width)): registered (`w`, `width`), static structure in progress, behavior to wire next
 - [ ] Change list in the panel (review and undo before handoff)
 - [ ] Designer note field
 

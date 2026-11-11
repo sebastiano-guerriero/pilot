@@ -11,6 +11,18 @@
   box-sizing: border-box;
 }
 
+* {
+  font: inherit;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+img, picture, video, canvas, svg {
+  display: block;
+  max-width: 100%;
+}
+
 /* Pilot's container: every Pilot element inherits its type settings from here. */
 .root {
   font-family: var(--plt-font-main);
@@ -20,6 +32,7 @@
   font-feature-settings: var(--plt-font-features);
   color: var(--plt-color-contrast-high);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Selected text anywhere in Pilot (search field, editable values). */

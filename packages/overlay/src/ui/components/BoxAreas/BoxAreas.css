@@ -1,0 +1,18 @@
+/* Box-model areas of the selected element (e.g. the padding being edited).
+   Position and size are set inline by BoxAreas.tsx. */
+@scope (.box-areas) {
+  .area {
+    position: fixed;
+    z-index: var(--plt-z-highlight);
+    pointer-events: none;
+    background-color: hsl(from var(--plt-color-accent) h s l / 30%);
+    /* 1px oblique accent lines (50%), 4px apart. Anchored to the viewport, so
+       the stripes run continuously across adjacent areas. */
+    background-image: repeating-linear-gradient(
+      -45deg,
+      hsl(from var(--plt-color-accent) h s l / 50%) 0 1px,
+      transparent 1px 4px
+    );
+    background-attachment: fixed;
+  }
+}

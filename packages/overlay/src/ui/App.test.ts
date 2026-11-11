@@ -1,0 +1,58 @@
+// @vitest-environment happy-dom
+import { h, render } from "preact";
+import { act } from "preact/test-utils";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { App } from "./App.tsx";
+
+let host: HTMLElement;
+let page: HTMLElement;
+
+beforeEach(() => {
+  page = document.createElement("button");
+  page.textContent = "Page button";
+  host = document.createElement("div");
+  document.body.append(page, host);
+  act(() => render(h(App, { host, onQuit: () => {} }), host));
+});
+
+afterEach(() => {
+  render(null, host);
+  host.remove();
+  page.remove();
+});
+
+const cursor = () => host.querySelector('[aria-label="Select an element"]') as HTMLButtonElement;
+const selecting = () => cursor().getAttribute("aria-pressed") === "true";
+const dialogOpen = () => host.querySelector(".property-dialog") !== null;
+const esc = (target: EventTarget = document.body) =>
+  act(() => {
+    target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, composed: true }));
+  });
+
+describe("App: Esc", () => {
+  it("turns the select tool off when nothing is selected", () => {
+    act(() => cursor().click());
+    expect(selecting()).toBe(true);
+    esc();
+    expect(selecting()).toBe(false);
+  });
+
+  it("first clears the selection, then turns the tool off", () => {
+    act(() => cursor().click());
+    act(() => page.click()); // select mode: the click selects the element
+    expect(dialogOpen()).toBe(true);
+    esc();
+    expect(dialogOpen()).toBe(false);
+    expect(selecting()).toBe(true);
+    esc();
+    expect(selecting()).toBe(false);
+  });
+
+  it("does nothing when the tool is off", () => {
+    const e = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    act(() => {
+      document.body.dispatchEvent(e);
+    });
+    expect(e.defaultPrevented).toBe(false);
+  });
+});

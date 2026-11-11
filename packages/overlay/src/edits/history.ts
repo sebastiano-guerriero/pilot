@@ -57,6 +57,22 @@ export class EditHistory {
     this.undone = [];
   }
 
+  /**
+   * Take back what `gesture` did to `property` so far, as if it never touched
+   * it: restores the exact earlier inline value (or the stylesheet's) and drops
+   * it from the step. E.g. releasing Alt mid-drag un-mirrors the opposite side.
+   */
+  revert(element: EditableElement, property: string, gesture: object): void {
+    const step = this.done.at(-1);
+    if (!step || step.gesture !== gesture) return;
+    const index = step.entries.findIndex((e) => e.element === element && e.property === property);
+    if (index === -1) return;
+    const [entry] = step.entries.splice(index, 1);
+    if (entry?.before) element.style.setProperty(property, entry.before, entry.beforePriority);
+    else element.style.removeProperty(property);
+    if (step.entries.length === 0) this.done.pop();
+  }
+
   /** Revert the latest step. Returns false when there's nothing to undo. */
   undo(): boolean {
     const step = this.done.pop();

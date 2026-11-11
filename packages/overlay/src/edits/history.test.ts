@@ -58,6 +58,29 @@ describe("EditHistory", () => {
     expect([el.style.paddingLeft, el.style.paddingRight]).toEqual(["8px", "8px"]);
   });
 
+  it("reverts one property of an ongoing gesture to exactly what it was", () => {
+    el.style.paddingBottom = "4px";
+    const drag = {};
+    history.apply(el, "padding-top", "20px", drag);
+    history.apply(el, "padding-bottom", "20px", drag);
+    history.apply(el, "padding-left", "20px", drag);
+    history.revert(el, "padding-bottom", drag);
+    history.revert(el, "padding-left", drag);
+    expect([el.style.paddingTop, el.style.paddingBottom, el.style.paddingLeft]).toEqual(["20px", "4px", ""]);
+    history.undo(); // only padding-top is left in the step
+    expect([el.style.paddingTop, el.style.paddingBottom]).toEqual(["", "4px"]);
+    expect(history.undo()).toBe(false);
+  });
+
+  it("drops a gesture's step entirely when everything in it is reverted", () => {
+    history.apply(el, "padding-top", "1px");
+    const drag = {};
+    history.apply(el, "padding-bottom", "9px", drag);
+    history.revert(el, "padding-bottom", drag);
+    history.undo();
+    expect(el.style.paddingTop).toBe(""); // the earlier change, not an empty step
+  });
+
   it("ignores re-applying the current value", () => {
     history.apply(el, "padding-top", "12px");
     history.apply(el, "padding-top", "12px");

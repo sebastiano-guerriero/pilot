@@ -1,4 +1,5 @@
-import type { ComponentType } from "preact";
+import type { ComponentChildren, ComponentType } from "preact";
+import type { BoxArea } from "../dom/boxModel.ts";
 import type { EditableElement } from "../dom/target.ts";
 
 /**
@@ -39,6 +40,12 @@ export interface PropertyEditorProps {
    */
   onChange(property: string, value: string, options?: { gesture?: object }): void;
   /**
+   * Take back what the ongoing `gesture` did to `property`, restoring exactly
+   * what it was before (e.g. releasing Alt un-mirrors the opposite side).
+   * Better than re-applying the old number, which would leave a fake edit.
+   */
+  onRevert?(property: string, gesture: object): void;
+  /**
    * Set, as a new object each time, when the designer moves from the search
    * into this editor (Tab or Enter). `query` is what they typed (trimmed,
    * lowercase), so the editor can focus the matching part: `pt` → top side.
@@ -50,4 +57,16 @@ export interface PropertyEditorProps {
    * (Esc is handled by the dialog: it always returns to the search.)
    */
   onReturnToSearch?(): void;
+  /**
+   * Replace the dialog footer's helper message while something editor-specific
+   * is going on (e.g. "Hold Alt to change both sides" during a drag). Pass
+   * null to go back to the dialog's default message.
+   */
+  onHint?(hint: ComponentChildren | null): void;
+  /**
+   * Show these areas of the element on the page (e.g. the padding sides being
+   * hovered or dragged) instead of the selection highlight. Pass null to go
+   * back to the normal highlight.
+   */
+  onInspect?(areas: BoxArea[] | null): void;
 }

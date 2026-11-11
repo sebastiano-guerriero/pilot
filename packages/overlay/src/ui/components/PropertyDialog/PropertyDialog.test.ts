@@ -160,4 +160,32 @@ describe("PropertyDialog", () => {
       expect(closed).toBe(1);
     });
   });
+
+  describe("footer", () => {
+    const footer = () => container.querySelector(".footer")?.textContent?.replace(/\s+/g, " ").trim() ?? null;
+
+    it("only appears with a matched property", () => {
+      mount();
+      expect(footer()).toBeNull();
+      type("zzz");
+      expect(footer()).toBeNull();
+      type("opa");
+      expect(footer()).toBe("Tab or Enter to edit");
+    });
+
+    it("switches to the editor's keys while a property is being edited, and back", () => {
+      mount();
+      type("opacity");
+      act(() => (container.querySelector(".stub") as HTMLButtonElement).focus());
+      expect(footer()).toBe("Enter to apply, Esc to go back");
+      key(container.querySelector(".stub") as Element, "Escape");
+      expect(footer()).toBe("Tab or Enter to edit");
+    });
+
+    it("marks the keys up as <kbd>", () => {
+      mount();
+      type("opa");
+      expect([...container.querySelectorAll(".footer kbd")].map((k) => k.textContent)).toEqual(["Tab", "Enter"]);
+    });
+  });
 });

@@ -45,7 +45,8 @@
     }
   }
 
-  /* Side highlight: shown only while the side is hovered. */
+  /* Side highlight: on hover, on the dragged side during a drag, and on the
+     opposite side while Alt is held over (or while dragging) a side. */
   .fill {
     position: absolute;
     inset: 0;
@@ -54,7 +55,9 @@
     pointer-events: none;
   }
 
-  .side:hover .fill {
+  .side:hover .fill,
+  .side[data-dragging] .fill,
+  .side[data-paired] .fill {
     opacity: 0.08;
   }
 
