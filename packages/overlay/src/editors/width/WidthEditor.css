@@ -1,9 +1,0 @@
-/* Width editor. Renders inside the dialog's `.editor` wrapper, outside the
-   dialog's own @scope, so everything here is owned by this file. */
-@scope (.width-editor) {
-  :scope {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-}
