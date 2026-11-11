@@ -24,6 +24,12 @@ export interface PropertyEditor {
   aliases?: string[];
   /** Extra search terms ("transparency", "fade"...), matched anywhere in the word. */
   keywords?: string[];
+  /**
+   * The id of the editor this one belongs with (min-width → "width"). A search
+   * that lands on that editor shows the whole family; a search that lands on
+   * this one shows just it.
+   */
+  family?: string;
   component: ComponentType<PropertyEditorProps>;
 }
 
@@ -35,6 +41,8 @@ export interface PropertyEditorProps {
   /**
    * Apply a value: Pilot sets it as an inline style and records it in the undo
    * history (Cmd/Ctrl+Z). Editors never write `element.style` themselves.
+   * An empty `value` removes the property's inline value: back to the
+   * default / stylesheet (e.g. the designer cleared the field).
    * For a continuous interaction (a drag), pass the same `gesture` object on
    * every change so the whole interaction is undone in one step.
    */
@@ -50,13 +58,18 @@ export interface PropertyEditorProps {
    * into this editor (Tab or Enter). `query` is what they typed (trimmed,
    * lowercase), so the editor can focus the matching part: `pt` → top side.
    */
-  focusRequest?: { query: string };
+  focusRequest?: FocusRequest;
   /**
    * Give focus back to the search so the next property can be typed: after
    * Enter on a value, or Tab/Shift+Tab past the editor's last/first field.
    * (Esc is handled by the dialog: it always returns to the search.)
    */
   onReturnToSearch?(): void;
+  /**
+   * Tab moved past the editor's last field (1) or Shift+Tab before its first
+   * (-1): the dialog moves on to the next/previous editor, or the search.
+   */
+  onTabOut?(direction: 1 | -1): void;
   /**
    * Replace the dialog footer's helper message while something editor-specific
    * is going on (e.g. "Hold Alt to change both sides" during a drag). Pass
@@ -69,4 +82,14 @@ export interface PropertyEditorProps {
    * back to the normal highlight.
    */
   onInspect?(areas: BoxArea[] | null): void;
+}
+
+/**
+ * Why an editor should take focus: the designer moved in from the search
+ * (`query` is what they typed: `pt` → top side), or tabbed in from the
+ * previous/next editor (`edge`: focus the first or last field).
+ */
+export interface FocusRequest {
+  query: string;
+  edge?: "first" | "last";
 }

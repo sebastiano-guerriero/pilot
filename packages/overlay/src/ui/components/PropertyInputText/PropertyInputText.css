@@ -1,0 +1,65 @@
+/* Value control in an editor row. Look is still to be designed. */
+@scope (.property-input-text) {
+  :scope {
+    --_padding: 2px;
+
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    padding-inline: var(--_padding);
+    border-radius: 3px;
+
+    /* A text input that sizes itself to its content. A set value is full
+       contrast; with no value, the dimmed placeholder shows the default. */
+    background: transparent;
+    color: var(--plt-color-contrast-high);
+    outline: none;
+    min-width: 0;
+    /* Containers can set a tighter limit with --_max-width (the box diagram's
+       side bands). Longer values scroll inside the field while editing. */
+    max-width: var(--_max-width, 128px);
+    width: calc(var(--chars) * 1ch + 2 * var(--_padding)); /* fallback: monospaced, so exact */
+    field-sizing: content;
+    cursor: text;
+    /* The field sits at the right of its row and grows leftward as you type,
+       so text, placeholder and the caret of an empty field start on the right. */
+    text-align: right;
+
+    /* Too long for the space: an ellipsis says there's more. Clipped normally
+       while editing, so the whole value can be read and moved through. */
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+
+    &:focus {
+      text-overflow: clip;
+    }
+
+    &::placeholder {
+      color: var(--plt-color-contrast-low);
+      opacity: 1;
+    }
+
+    /* Tight layouts (box diagram). */
+    &[data-compact] {
+      --_padding: 4px;
+    }
+
+    /* Drawn selections, with the same highlight as ::selection in base.css:
+       - a linked field mirroring the one being edited (a page holds only one
+         real selection);
+       - a focused, empty field: its placeholder is "selected", since typing
+         replaces it (::selection can't style placeholders). */
+    &[data-mirror-selected],
+    &[data-placeholder-selected] {
+      background: hsl(from var(--plt-color-accent) h s l / 20%);
+      background-clip: content-box;
+    }
+  }
+
+  @supports (field-sizing: content) {
+    :scope {
+      width: auto;
+    }
+  }
+}

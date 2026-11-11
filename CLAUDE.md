@@ -16,6 +16,8 @@ The README is the project's living spec. Update it in the same change whenever y
 - The overlay must stay framework-agnostic and isolated: Shadow DOM, no global CSS, and no dependency on the host app's packages. Preact is bundled into the overlay.
 - Property editors are first-party and are designed by the project owner. Don't invent editor visuals without being asked. Build the plumbing and leave the look for review.
 - **Every property change must be undoable.** Editors change styles only through `onChange(property, value, { gesture })`, which goes through `EditHistory` (`src/edits/history.ts`). Never set `element.style` directly. For continuous interactions (drags, scrubbing), pass the same `gesture` object for the whole interaction so Cmd/Ctrl+Z undoes it in one step. After an undo, inputs must show the restored value. To take back part of an ongoing gesture (e.g. Alt released mid-drag), use `onRevert(property, gesture)`. Never re-apply the old number: that leaves a fake inline edit.
+- Build editors from the shared pieces: a one-value property is a `lengthEditor({ … })` (`src/editors/length/`), and a four-sided one is a `boxEditor({ … })` (`src/editors/box/`). Value fields are `PropertyInputText`. Don't fork these per property; extend their config instead.
+- Editors parse, display and step values with `src/css/values.ts` (`parseValue`, `displayValue`, `stepValue`), so every field accepts the same things. Don't write per-editor parsers. Add each new property an editor writes to `src/css/properties.ts` (default, keywords, negative allowed).
 - The copy-prompt and MCP paths must produce identical text. Both go through `formatPrompt()`.
 
 ## Repo conventions

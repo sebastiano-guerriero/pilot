@@ -16,14 +16,27 @@
   /* Wrapper for the property editors below the search. */
   .properties {
     padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     border-top: 1px solid var(--plt-color-border);
   }
 
   /* Helper message below the properties: the keys for what the designer is
      doing (`data-area`: "search" or "editor"). Placeholder look. */
   .footer {
-    padding: 0 16px 16px;
+    position: relative;
+    padding: 12px 16px;
     color: var(--plt-color-contrast-low);
+
+    &:after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 16px;
+      width: calc(100% - 32px);
+      border-top: 1px dotted var(--plt-color-border);
+    }
   }
 
   .footer kbd {

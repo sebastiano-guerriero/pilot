@@ -17,7 +17,9 @@
 @import "../components/PropertySearch/PropertySearch.css" layer(components);
 @import "../components/Highlight/Highlight.css" layer(components);
 @import "../components/BoxAreas/BoxAreas.css" layer(components);
+@import "../components/PropertyLabel/PropertyLabel.css" layer(components);
+@import "../components/PropertyInputText/PropertyInputText.css" layer(components);
 
 /* Property editors */
-@import "../../editors/padding/PaddingEditor.css" layer(components);
-@import "../../editors/width/WidthEditor.css" layer(components);
+@import "../../editors/box/BoxEditor.css" layer(components);
+@import "../../editors/length/LengthEditor.css" layer(components);

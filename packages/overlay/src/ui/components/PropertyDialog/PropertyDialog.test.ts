@@ -8,17 +8,21 @@ import { PropertyDialog } from "./PropertyDialog.tsx";
 
 // Stub editors: render their id and the values they receive, expose onChange,
 // record the focus requests they get, and can hand focus back to the search.
-let focusRequests: Array<{ query: string } | undefined>;
+let focusRequests: Array<{ query: string; edge?: string } | undefined>;
+let focusedEditors: string[];
 const stub = (id: string, properties: string[], keywords?: string[]): PropertyEditor => ({
   id,
   label: id,
   properties,
   keywords,
-  component: ({ values, onChange, focusRequest, onReturnToSearch }: PropertyEditorProps) => {
+  component: ({ values, onChange, focusRequest, onReturnToSearch, onTabOut }: PropertyEditorProps) => {
     focusRequests.push(focusRequest);
+    if (focusRequest) focusedEditors.push(`${id}${focusRequest.edge ? `@${focusRequest.edge}` : ""}`);
     return h("div", {}, [
       h("button", { class: "stub", onClick: () => onChange(properties[0] as string, "0.5") }, `${id}:${JSON.stringify(values)}`),
       h("button", { class: "back", onClick: () => onReturnToSearch?.() }, "back"),
+      h("button", { class: "next", onClick: () => onTabOut?.(1) }, "next"),
+      h("button", { class: "prev", onClick: () => onTabOut?.(-1) }, "prev"),
     ]);
   },
 });
@@ -32,6 +36,7 @@ let closed: number;
 
 beforeEach(() => {
   focusRequests = [];
+  focusedEditors = [];
   closed = 0;
   container = document.createElement("div");
   element = document.createElement("div");
@@ -186,6 +191,50 @@ describe("PropertyDialog", () => {
       mount();
       type("opa");
       expect([...container.querySelectorAll(".footer kbd")].map((k) => k.textContent)).toEqual(["Tab", "Enter"]);
+    });
+  });
+
+  describe("several editors", () => {
+    const family = [
+      stub("width", ["width"]),
+      { ...stub("min-width", ["min-width"]), family: "width" },
+      { ...stub("max-width", ["max-width"]), family: "width" },
+    ];
+    const mountFamily = () =>
+      act(() => {
+        render(h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors: family }), container);
+      });
+    const click = (id: string, cls: string) =>
+      act(() => (container.querySelector(`.editor[data-editor="${id}"] .${cls}`) as HTMLButtonElement).click());
+
+    it("shows the whole family for its main property, in order", () => {
+      mountFamily();
+      type("width");
+      expect(editorIds()).toEqual(["width", "min-width", "max-width"]);
+      type("min-width");
+      expect(editorIds()).toEqual(["min-width"]);
+    });
+
+    it("Tab from the search focuses the first; Tab out of each moves to the next, then back to the search", () => {
+      mountFamily();
+      type("width");
+      key(search(), "Tab");
+      click("width", "next");
+      click("min-width", "next");
+      expect(focusedEditors).toEqual(["width", "min-width@first", "max-width@first"]);
+      click("max-width", "next");
+      expect(document.activeElement).toBe(search());
+    });
+
+    it("Shift+Tab out goes to the previous editor's last field, and from the first back to the search", () => {
+      mountFamily();
+      type("width");
+      key(search(), "Tab");
+      click("width", "next");
+      click("min-width", "prev");
+      expect(focusedEditors.at(-1)).toBe("width@last");
+      click("width", "prev");
+      expect(document.activeElement).toBe(search());
     });
   });
 });

@@ -1,0 +1,6 @@
+/* Property name in an editor row. Look is still to be designed. */
+@scope (.property-label) {
+  :scope {
+    user-select: none;
+  }
+}

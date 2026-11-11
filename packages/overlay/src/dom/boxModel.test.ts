@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { type BoxModel, paddingRects } from "./boxModel.ts";
+import { areaRects, type BoxModel, paddingRects } from "./boxModel.ts";
 
 // A 200×100 box at (10, 20) with a 1px border and padding 8/16/12/4.
 const model: BoxModel = {
   rect: { left: 10, top: 20, width: 200, height: 100 },
+  margin: { top: 6, right: 0, bottom: -4, left: 2 },
   border: { top: 1, right: 1, bottom: 1, left: 1 },
   padding: { top: 8, right: 16, bottom: 12, left: 4 },
 };
@@ -31,5 +32,24 @@ describe("paddingRects", () => {
   it("leaves out empty sides", () => {
     const zero: BoxModel = { ...model, padding: { ...model.padding, top: 0 } };
     expect(paddingRects(zero, ["top", "left"]).map((a) => a.side)).toEqual(["left"]);
+  });
+});
+
+describe("areaRects", () => {
+  const sides = (box: "border" | "margin", list: Parameters<typeof areaRects>[2]) =>
+    Object.fromEntries(areaRects(model, box, list).map(({ side, ...r }) => [side, r]));
+
+  it("border: the border itself", () => {
+    expect(sides("border", ["top", "left"])).toEqual({
+      top: { left: 10, top: 20, width: 200, height: 1 },
+      left: { left: 10, top: 21, width: 1, height: 99 },
+    });
+  });
+
+  it("margin: the band outside the border; negative margins show nothing", () => {
+    expect(sides("margin", ["top", "bottom", "left", "right"])).toEqual({
+      top: { left: 8, top: 14, width: 202, height: 6 },
+      left: { left: 8, top: 20, width: 2, height: 100 },
+    });
   });
 });
