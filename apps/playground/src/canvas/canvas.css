@@ -1,0 +1,234 @@
+/* Canvas prototype chrome. Placeholder visuals, not a design proposal. */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #111;
+  color: #e5e5e5;
+  font: 12px ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+#canvas {
+  height: 100%;
+}
+
+.viewport {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  cursor: default;
+  background-color: #111;
+  background-image: radial-gradient(#2a2a2a 1px, transparent 1px);
+  background-size: 24px 24px;
+  touch-action: none;
+}
+
+.viewport[data-dragging] {
+  cursor: grabbing;
+}
+
+/* While dragging, frames must not swallow the pointer. */
+.viewport[data-dragging] iframe {
+  pointer-events: none;
+}
+
+.world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.frame {
+  position: absolute;
+}
+
+.frame-title {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  display: flex;
+  gap: calc(6px / var(--zoom));
+  max-width: 100%;
+  padding-bottom: calc(6px / var(--zoom));
+  font-size: calc(11px / var(--zoom));
+  line-height: 1.2;
+  white-space: nowrap;
+  color: #a3a3a3;
+  cursor: grab;
+  user-select: none;
+}
+
+.frame-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.frame-meta {
+  color: #5c5c5c;
+}
+
+.frame[data-active] .frame-title {
+  color: #1cf69e;
+}
+
+.frame-body {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  box-shadow: 0 0 0 calc(1px / var(--zoom)) #2e2e2e;
+}
+
+.frame[data-component] .frame-body {
+  border-radius: calc(4px / var(--zoom));
+}
+
+.frame:hover .frame-body {
+  box-shadow: 0 0 0 calc(1px / var(--zoom)) #5c5c5c;
+}
+
+.frame[data-active] {
+  z-index: 2;
+}
+
+.frame[data-active] .frame-body {
+  box-shadow: 0 0 0 calc(2px / var(--zoom)) #1cf69e;
+}
+
+.frame iframe {
+  position: absolute;
+  border: 0;
+  display: block;
+  background: transparent;
+}
+
+.shield {
+  position: absolute;
+  inset: 0;
+}
+
+.connections {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.connections path {
+  fill: none;
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+
+.flow path {
+  stroke: #1cf69e;
+}
+
+.flow rect {
+  fill: rgb(28 246 158 / 0.08);
+  stroke: #1cf69e;
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+
+.flow polygon {
+  fill: #1cf69e;
+}
+
+.state path {
+  stroke: #a78bfa;
+  stroke-dasharray: 4 4;
+}
+
+.state polygon {
+  fill: #a78bfa;
+}
+
+.state text {
+  fill: #a78bfa;
+  text-anchor: middle;
+}
+
+.hint {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgb(23 23 23 / 0.9);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+  color: #a3a3a3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.hint b {
+  color: #e5e5e5;
+  font-weight: 500;
+}
+
+.hud {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: #171717;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.08);
+}
+
+.hud .zoom {
+  min-width: 44px;
+  padding: 0 6px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: #a3a3a3;
+}
+
+.hud button {
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #e5e5e5;
+  font: inherit;
+  cursor: pointer;
+}
+
+.hud button:hover {
+  background: rgb(255 255 255 / 0.08);
+}
+
+.hud button[aria-pressed="true"] {
+  background: rgb(28 246 158 / 0.15);
+  color: #1cf69e;
+}
+
+.hud button:disabled {
+  color: #5c5c5c;
+  background: transparent;
+  cursor: default;
+}
+
+.hud kbd {
+  margin-left: 4px;
+  color: #737373;
+  font: inherit;
+}

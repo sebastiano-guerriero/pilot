@@ -224,6 +224,12 @@ mountPilot({ dev: { select: ".button--primary" } });
 
 On every load this launches Pilot (even after a Quit), turns on select mode, and selects the first element matching `select`, so the dialog opens with an empty search. Add `query: "padding"` to pre-fill the search and open that editor directly. Remove `dev` to get the real flow back.
 
+**Canvas (prototype, `canvas-prototype` branch).** http://localhost:5173/canvas.html puts the playground's pages on a pan/zoom canvas, Figma-style: each page as a live iframe frame at three breakpoints (1280, 768, 375), plus isolated component frames (the primary button in its default, `:hover`, `:active` and `:focus-visible` states, and a card). Links between pages are drawn as flow arrows, and state changes as dashed arrows. Double-click a frame to run Pilot in it. Its inline edits are mirrored to every other frame of the same page, by DOM path. The pieces:
+- [apps/playground/src/canvas/](apps/playground/src/canvas/): the canvas (`main.tsx`) and what's on it (`frames.ts`).
+- [apps/playground/src/frame.ts](apps/playground/src/frame.ts): what a page exposes inside a frame (`__pilotFrame`). It mounts and launches Pilot on demand, isolates an element, forces pseudo-states by copying `:hover` rules to `[data-force-hover]`, lists links, and mirrors styles.
+
+This is an exploration only: nothing in `packages/overlay` depends on it.
+
 | Script | What it does |
 | --- | --- |
 | `pnpm dev` | Playground with the overlay loaded from source (HMR) |
