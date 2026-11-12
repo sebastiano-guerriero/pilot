@@ -1,10 +1,37 @@
 /** A side of the box model. */
 export type BoxSide = "top" | "right" | "bottom" | "left";
 
-/** An area of the selected element to visualize, e.g. its top padding. */
-export interface BoxArea {
+/** One side of a box-model area, e.g. the top padding. */
+export interface SideArea {
   box: "padding" | "border" | "margin";
   side: BoxSide;
+}
+
+/** A grid container's gaps: the space between its tracks (see dom/gridLines.ts). */
+export interface GapArea {
+  box: "gap";
+}
+
+/** An area of the selected element to visualize: a box-model side, or the grid's gaps. */
+export type BoxArea = SideArea | GapArea;
+
+/**
+ * Whether showing an area hides the selection's outline, corner dots and
+ * label (and a grid's lines and numbers) while the designer interacts with its
+ * editor. It depends on the
+ * property: the outline sits right on top of padding, border and margin, so
+ * it would hide the change happening live; the gap is inside the element,
+ * where the outline is no trouble. Decide here for every new kind of area.
+ */
+const HIDES_SELECTION: Record<BoxArea["box"], boolean> = {
+  padding: true,
+  border: true,
+  margin: true,
+  gap: false,
+};
+
+export function hidesSelection(area: BoxArea): boolean {
+  return HIDES_SELECTION[area.box];
 }
 
 export interface Edges {
@@ -69,7 +96,7 @@ type Rect = { left: number; top: number; width: number; height: number };
  * shown top/bottom band starts, so corners are never covered twice (and a lone
  * left/right side covers the whole height). Empty (0px) sides are left out.
  */
-export function areaRects(model: BoxModel, box: BoxArea["box"], sides: BoxSide[]): AreaRect[] {
+export function areaRects(model: BoxModel, box: SideArea["box"], sides: BoxSide[]): AreaRect[] {
   const { rect, border, padding } = model;
   const margin = clampEdges(model.margin);
   const outer: Rect =

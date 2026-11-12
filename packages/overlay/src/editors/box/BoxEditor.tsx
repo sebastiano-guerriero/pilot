@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { cssProperty } from "../../css/properties.ts";
 import { displayValue, parseValue, stepValue } from "../../css/values.ts";
-import type { BoxArea } from "../../dom/boxModel.ts";
+import type { SideArea } from "../../dom/boxModel.ts";
 import type { EditableElement } from "../../dom/target.ts";
 import { type InputDraft, PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
 import { PropertyLabel } from "../../ui/components/PropertyLabel/PropertyLabel.tsx";
 import { normalizeQuery } from "../query.ts";
+import { declaredOf } from "../declared.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
 
 export type SideName = "top" | "right" | "bottom" | "left";
@@ -34,7 +35,7 @@ export interface BoxConfig {
   /** The row's label, e.g. "padding". */
   title: string;
   /** The box-model area to show on the page while a side is hovered/dragged. */
-  box: BoxArea["box"];
+  box: SideArea["box"];
   /** The CSS property for a side: `padding-top`, `border-top-width`… */
   property(side: SideName): string;
   /** Tailwind-style aliases: one for all sides, one per side, one per axis. */
@@ -65,13 +66,6 @@ function companions(side: SideName, mode: Mode): SideName[] {
   if (mode === "both") return [OPPOSITE[side]];
   return [];
 }
-
-/**
- * The default every box side shows dimmed: nothing there. It's also what an
- * empty field means (clearing a side resets it), so after deleting a value the
- * field previews the reset rather than repeating the deleted value.
- */
-const DEFAULT_SHOWN = "0";
 
 /** Pointer travel (px) before a press on a side becomes a drag instead of a click. */
 const DRAG_THRESHOLD = 3;
@@ -108,6 +102,7 @@ export function BoxEditor({
   config,
   element,
   values,
+  declared,
   onChange,
   onRevert,
   focusRequest,
@@ -273,15 +268,11 @@ export function BoxEditor({
           // The sides a typed value goes to: this one, plus its linked group.
           const targets = isLinked && linked ? [s.side, ...linked.filter((t) => t !== s.side)] : [s.side];
           const computed = values[property];
-          // Full contrast for any value that's there: set inline by Pilot, or
-          // coming from the page's own CSS. Dimmed (as a placeholder) only at
-          // the default: nothing there, 0.
-          const inline = element.style.getPropertyValue(property);
-          const shown = inline
-            ? compactPx(displayValue(inline))
-            : toNumber(computed) !== 0
-              ? compactPx(formatComputed(computed))
-              : "";
+          // The declared value (from any source), or "" (the field shows the
+          // dimmed dash). Computed values are never shown; they're only where
+          // steps and drags start from.
+          const set = declaredOf({ element, declared }, property);
+          const shown = set ? compactPx(displayValue(set)) : "";
           return (
             <BoxSide
               key={s.side}
@@ -289,7 +280,6 @@ export function BoxEditor({
               property={property}
               inputRef={refs.current[i] as { current: HTMLInputElement | null }}
               shown={shown}
-              placeholder={DEFAULT_SHOWN}
               start={toNumber(computed)}
               negative={cssProperty(property).negative}
               linked={isLinked}
@@ -353,10 +343,8 @@ interface BoxSideProps {
   property: string;
   /** The value field; owned by the editor so it can move focus between sides. */
   inputRef: { current: HTMLInputElement | null };
-  /** The side's value, as shown ("12", "1rem"), or "" when it's at the default. */
+  /** The side's value, as shown ("12", "1rem"), or "" when none is set. */
   shown: string;
-  /** The default, shown dimmed when the side has no value ("0"). */
-  placeholder: string;
   /** The computed value in px: where a drag starts from. */
   start: number;
   /** Negative values are valid (margins), so drags may go below 0. */
@@ -394,7 +382,6 @@ function BoxSide({
   property,
   inputRef,
   shown,
-  placeholder,
   start,
   negative,
   linked,
@@ -527,7 +514,6 @@ function BoxSide({
         <PropertyInputText
           compact
           value={shown}
-          placeholder={placeholder}
           label={property}
           inputRef={inputRef}
           mirror={mirror}
@@ -552,13 +538,6 @@ function pairName(side: SideName): string {
 function toNumber(value: string | undefined): number {
   const n = Number.parseFloat(value ?? "");
   return Number.isFinite(n) ? n : 0;
-}
-
-/** Computed "12.3456px" → "12.35px": readable placeholders. */
-function formatComputed(value: string | undefined): string {
-  const n = Number.parseFloat(value ?? "");
-  if (value?.endsWith("px") && Number.isFinite(n)) return `${Math.round(n * 100) / 100}px`;
-  return value ?? "";
 }
 
 /** In the compact diagram px is implied: "12px" → "12". Other units stay. */

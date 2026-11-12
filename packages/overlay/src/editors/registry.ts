@@ -1,6 +1,7 @@
 import { borderEditor } from "./border/BorderEditor.tsx";
+import { displayEditor } from "./display/DisplayEditor.tsx";
 import { marginEditor } from "./margin/MarginEditor.tsx";
-import { paddingEditor } from "./padding/PaddingEditor.tsx";
+import { paddingBottomEditor, paddingLeftEditor, paddingRightEditor, paddingTopEditor } from "./padding/PaddingEditor.tsx";
 import { normalizeQuery } from "./query.ts";
 import type { PropertyEditor } from "./types.ts";
 import { maxWidthEditor, minWidthEditor, widthEditor } from "./width/WidthEditor.tsx";
@@ -11,12 +12,16 @@ import { maxWidthEditor, minWidthEditor, widthEditor } from "./width/WidthEditor
  * `ui/styles/index.css`.
  */
 export const editors: PropertyEditor[] = [
-  paddingEditor,
+  paddingTopEditor,
+  paddingRightEditor,
+  paddingBottomEditor,
+  paddingLeftEditor,
   marginEditor,
   borderEditor,
   widthEditor,
   minWidthEditor,
   maxWidthEditor,
+  displayEditor,
 ];
 
 /**
@@ -42,8 +47,9 @@ const MAX_SHOWN = 4;
 /**
  * The editors the dialog shows for a query:
  * - every editor tied for the best match, if that match is a prefix or better
- *   (`min` → min-width and, later, min-height); a weaker, substring-only best
- *   match shows just the top one, so a single letter doesn't flood the dialog;
+ *   (`min` → min-width and, later, min-height) or an equally good abbreviation
+ *   (`pdg` → the four padding rows); a substring-only best match shows just
+ *   the top one, so a single letter doesn't flood the dialog;
  * - plus, for each shown editor that heads a family, the family's members
  *   (`w` → width, min-width, max-width). Landing on a member directly
  *   (`min-w`) shows only that member.
@@ -54,7 +60,15 @@ export function matchEditors(query: string, list: PropertyEditor[] = editors): P
   const ranked = rank(q, list);
   const best = ranked[0];
   if (!best) return [];
-  const top = best.score >= 2 ? ranked.filter((x) => x.score === best.score).map((x) => x.editor) : [best.editor];
+  // Ties count for prefix-or-better matches, and for abbreviations skipping
+  // the same number of letters (`pdg` abbreviates every padding row alike;
+  // the name-length tiebreak is ignored here).
+  const tied = (x: (typeof ranked)[number]) =>
+    x.score === best.score &&
+    (best.score >= 2 || (best.score === 0.5 && Math.floor(x.penalty) === Math.floor(best.penalty)));
+  const top = (best.score >= 2 || best.score === 0.5 ? ranked.filter(tied).map((x) => x.editor) : [best.editor])
+    // Equally good matches keep the registry's order (padding: top, right, bottom, left).
+    .sort((a, b) => list.indexOf(a) - list.indexOf(b));
   const shown: PropertyEditor[] = [];
   for (const editor of top) {
     for (const e of [editor, ...list.filter((m) => m.family === editor.id)]) {
@@ -98,8 +112,9 @@ const SEPARATOR = /[\s-]/;
 
 /**
  * How many letters of `name` are skipped to find the query's letters in order,
- * starting at a word start (the beginning, or after a hyphen/space). Null when
- * the query isn't an abbreviation of `name`. `wdt` in "width" skips 1 (the i).
+ * starting at a word start (the beginning, or after a hyphen/space), plus 1
+ * when that start isn't the name's first word. Null when the query isn't an
+ * abbreviation of `name`. `wdt` in "width" skips 1 (the i).
  */
 export function abbreviationPenalty(q: string, name: string): number | null {
   const n = name.toLowerCase();
@@ -115,7 +130,10 @@ export function abbreviationPenalty(q: string, name: string): number | null {
       if (ch === q[matched]) matched++;
       else skipped++;
     }
-    if (matched === q.length && (best === null || skipped < best)) best = skipped;
+    // Starting at a later word ("width" in min-width) is a weaker abbreviation
+    // than starting at the name itself: one extra step, so `wdt` prefers width.
+    const penalty = skipped + (start > 0 ? 1 : 0);
+    if (matched === q.length && (best === null || penalty < best)) best = penalty;
   }
   return best;
 }

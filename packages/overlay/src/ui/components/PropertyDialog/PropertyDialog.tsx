@@ -1,4 +1,5 @@
 import type { ComponentChildren } from "preact";
+import { declaredValues } from "../../../dom/declared.ts";
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
 import type { BoxArea } from "../../../dom/boxModel.ts";
 import type { EditableElement } from "../../../dom/target.ts";
@@ -78,6 +79,24 @@ export function PropertyDialog({
   // (e.g. during a drag); it wins over the default hint.
   const [editorHint, setEditorHint] = useState<ComponentChildren | null>(null);
   useEffect(() => setEditorHint(null), [matchKey]);
+
+  // Areas of the element each shown editor wants on the page (keyed by
+  // editor id), combined: with several rows, one row's "nothing" must not wipe
+  // another row's area, whatever order they report in.
+  const [inspectBy, setInspectBy] = useState<Record<string, BoxArea[]>>({});
+  const inspectFor = (id: string) => (areas: BoxArea[] | null) =>
+    setInspectBy((current) => {
+      if (!areas && !(id in current)) return current;
+      const next = { ...current };
+      if (areas) next[id] = areas;
+      else delete next[id];
+      return next;
+    });
+  const inspected = Object.values(inspectBy).flat();
+  const inspectKey = inspected.map((a) => `${a.box}-${"side" in a ? a.side : ""}`).join(",");
+  useLayoutEffect(() => {
+    onInspect?.(inspected.length ? inspected : null);
+  }, [inspectKey]);
   const onFocusIn = (e: FocusEvent) => {
     const target = e.target as Element | null;
     if (target === searchRef.current) setFocusArea("search");
@@ -160,7 +179,7 @@ export function PropertyDialog({
                   onReturnToSearch={returnToSearch}
                   onTabOut={(direction) => tabOut(index, direction)}
                   onHint={setEditorHint}
-                  onInspect={onInspect}
+                  onInspect={inspectFor(match.id)}
                 />
               </div>
             ))}
@@ -220,11 +239,15 @@ function MatchedEditor({
   const [, rerender] = useReducer((n: number) => n + 1, 0);
   const computed = getComputedStyle(element);
   const values = Object.fromEntries(editor.properties.map((p) => [p, computed.getPropertyValue(p)]));
+  const declared = Object.fromEntries(
+    Object.entries(declaredValues(element, editor.properties)).map(([p, d]) => [p, d?.value ?? ""]),
+  );
   const Editor = editor.component;
   return (
     <Editor
       element={element}
       values={values}
+      declared={declared}
       onChange={(property, value, options) => {
         history.apply(element, property, value, options?.gesture);
         rerender(0);

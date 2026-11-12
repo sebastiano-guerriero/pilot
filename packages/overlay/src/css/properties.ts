@@ -1,6 +1,6 @@
 /**
  * What Pilot knows about the CSS properties its editors write: the default
- * (shown as the placeholder when no value is set), the keywords it accepts
+ * (its initial value; not shown, fields show a dash when unset), the keywords it accepts
  * beyond lengths, and whether negative lengths are valid. Add an entry when an
  * editor starts writing a new property.
  */
@@ -57,7 +57,26 @@ export interface CssPropertyInfo {
 
 const SIZE_KEYWORDS = ["auto", "fit-content", "min-content", "max-content", "stretch"];
 
+/**
+ * The display values Pilot offers, in menu order. Grid shows the grid rows
+ * (columns, gap) in the display editor.
+ */
+export const DISPLAY_VALUES = [
+  "block",
+  "inline-block",
+  "inline",
+  "flex",
+  "inline-flex",
+  "grid",
+  "inline-grid",
+  "contents",
+  "none",
+] as const;
+
 export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
+  display: { initial: "inline", keywords: [...DISPLAY_VALUES], negative: false },
+  "grid-template-columns": { initial: "none", keywords: ["none"], negative: false },
+  gap: { initial: "normal", keywords: ["normal"], negative: false },
   width: { initial: "auto", keywords: SIZE_KEYWORDS, negative: false },
   "min-width": { initial: "auto", keywords: SIZE_KEYWORDS, negative: false },
   "max-width": { initial: "none", keywords: ["none", ...SIZE_KEYWORDS.filter((k) => k !== "auto")], negative: false },

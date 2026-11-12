@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import type { BoxArea } from "../../dom/boxModel.ts";
 import { h, render } from "preact";
 import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
@@ -6,9 +7,20 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EditHistory } from "../../edits/history.ts";
 import { borderEditor } from "../border/BorderEditor.tsx";
 import { marginEditor } from "../margin/MarginEditor.tsx";
-import { paddingEditor } from "../padding/PaddingEditor.tsx";
 import type { PropertyEditor } from "../types.ts";
-import { compactPx } from "./BoxEditor.tsx";
+import { boxEditor, compactPx } from "./BoxEditor.tsx";
+
+// Padding as a box diagram. The real padding editor is now four rows, but
+// padding's values make the clearest test case for the shared box component
+// that margin and border use.
+const paddingEditor = boxEditor({
+  id: "padding",
+  label: "Padding",
+  title: "padding",
+  box: "padding",
+  property: (side) => `padding-${side}`,
+  aliases: { all: "p", top: "pt", right: "pr", bottom: "pb", left: "pl", x: "px", y: "py" },
+});
 
 // Mimics the dialog: computed values come from `computed` (what the stylesheet
 // gives), changes go through a real EditHistory onto a real element.
@@ -43,8 +55,8 @@ function Harness({ editor }: { editor: PropertyEditor }) {
     focusRequest,
     onReturnToSearch: () => returned++,
     onHint: (hint: unknown) => hints.push(hint),
-    onInspect: (areas: Array<{ box: string; side: string }> | null) =>
-      inspects.push(areas ? areas.map((a) => `${a.box}-${a.side}`).sort() : null),
+    onInspect: (areas: BoxArea[] | null) =>
+      inspects.push(areas ? areas.map((a) => `${a.box}-${"side" in a ? a.side : ""}`).sort() : null),
   });
 }
 
@@ -65,6 +77,9 @@ beforeEach(() => {
     "padding-bottom": "10px",
     "padding-left": "20px",
   };
+  // Fields show inline values only, so most tests start from inline padding
+  // matching the computed one.
+  element.style.padding = "10px 20px";
   container = document.createElement("div");
   document.body.append(element, container);
   mount(paddingEditor);
@@ -77,7 +92,7 @@ afterEach(() => {
 
 const side = (name: string) => container.querySelector(`.side[data-side="${name}"]`) as HTMLElement;
 const field = (name: string) => side(name).querySelector("input") as HTMLInputElement;
-/** What a side shows: its value, or the dimmed computed value. */
+/** What a side shows: its value, or the dimmed dash. */
 const shown = (name: string) => field(name).value || field(name).placeholder;
 const focused = () => (document.activeElement as HTMLElement | null)?.getAttribute("aria-label");
 const typeInto = (name: string, text: string) =>
@@ -108,15 +123,15 @@ const hintText = () => {
 };
 
 describe("BoxEditor values", () => {
-  it("a value from the page's CSS is a real value, not dimmed (px implied)", () => {
+  it("an inline value shows at full contrast (px implied)", () => {
     expect(["top", "right", "bottom", "left"].map((n) => field(n).value)).toEqual(["10", "20", "10", "20"]);
   });
 
-  it("only the default (0) is dimmed, as a placeholder", () => {
-    computedStyle["padding-top"] = "0px";
+  it("with no inline value, a side shows a dimmed dash, never the computed value", () => {
+    element.style.removeProperty("padding-top");
     mount(paddingEditor);
     expect(field("top").value).toBe("");
-    expect(field("top").placeholder).toBe("0");
+    expect(field("top").placeholder).toBe("—");
   });
 
   it("an inline value wins over the page's", () => {
@@ -167,13 +182,13 @@ describe("BoxEditor values", () => {
     expect(returned).toBe(3);
   });
 
-  it("deleting a value previews the default (not the deleted value) before Enter", () => {
+  it("deleting a value shows the dash (not the deleted value) before Enter", () => {
     element.style.paddingLeft = "1234px";
     mount(paddingEditor);
     act(() => field("left").focus());
     typeInto("left", "");
     expect(field("left").value).toBe("");
-    expect(field("left").placeholder).toBe("0");
+    expect(field("left").placeholder).toBe("—");
   });
 
   it("clearing a side removes its value", () => {
@@ -183,7 +198,7 @@ describe("BoxEditor values", () => {
     typeInto("top", "");
     press(field("top"), "Enter");
     expect(element.style.paddingTop).toBe("");
-    expect(field("top").value).toBe("10"); // back to the page's value
+    expect(field("top").value).toBe(""); // not set: the dash
   });
 
   it("arrows step from the computed value (Shift = 10), never below 0", () => {
@@ -233,7 +248,7 @@ describe("BoxEditor keyboard", () => {
     act(() => {
       history.undo();
     });
-    expect([element.style.paddingLeft, element.style.paddingRight]).toEqual(["", ""]);
+    expect([element.style.paddingLeft, element.style.paddingRight]).toEqual(["20px", "20px"]);
   });
 
   it("p links all four; linked sides keep their own values until something is typed", () => {
@@ -274,8 +289,8 @@ describe("BoxEditor keyboard", () => {
     expect([side("top").hasAttribute("data-linked"), side("bottom").hasAttribute("data-linked")]).toEqual([true, true]);
   });
 
-  it("with only defaults (empty fields), linked sides still show the selected look", () => {
-    for (const s of ["top", "right", "bottom", "left"]) computedStyle[`padding-${s}`] = "0px";
+  it("with nothing set (empty fields), linked sides still show the selected look", () => {
+    element.style.removeProperty("padding");
     mount(paddingEditor);
     act(() => requestFocus("p"));
     expect(field("top").value).toBe("");
@@ -336,7 +351,8 @@ describe("BoxEditor dragging", () => {
       "30px",
     ]);
     pointer("left", "pointermove", 89, 0, { altKey: true });
-    expect([element.style.paddingTop, element.style.paddingRight, element.style.paddingBottom]).toEqual(["", "31px", ""]);
+    // Back to the exact earlier values, not re-applied numbers.
+    expect([element.style.paddingTop, element.style.paddingRight, element.style.paddingBottom]).toEqual(["10px", "31px", "10px"]);
     pointer("left", "pointerup", 89, 0);
   });
 

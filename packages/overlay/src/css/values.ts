@@ -107,3 +107,15 @@ function normalizeMath(t: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+
+/** Units where 1 is a big jump (font- and print-relative): scrubbing steps them by 0.1. */
+const FINE_UNITS = ["em", "rem", "lh", "rlh", "ex", "ch", "cm", "in", "pc"];
+
+/**
+ * How much one drag step (scrub) changes a value: 0.1 for font-relative
+ * units like rem, where 1 is a big jump, 1 otherwise (px, %, vw…).
+ */
+export function scrubIncrement(text: string): number {
+  const unit = displayValue(text.trim().toLowerCase()).match(/^-?\d*\.?\d+([a-z%]*)$/)?.[1] ?? "";
+  return FINE_UNITS.includes(unit) ? 0.1 : 1;
+}

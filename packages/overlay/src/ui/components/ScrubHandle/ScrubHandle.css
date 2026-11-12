@@ -1,0 +1,35 @@
+/* A field with a scrub handle (PropertyInputText with onScrub): the input
+   fills the wrapper, and the handle sits 8px from its right edge, vertically
+   centered, aligned with a select's chevron. */
+@scope (.scrub-field) {
+  :scope {
+    position: relative;
+    display: block;
+    min-width: 0;
+  }
+
+  .scrub-handle {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    width: 8px;
+    height: 16px;
+    translate: 0 -50%;
+    color: var(--plt-color-contrast-high);
+    cursor: ns-resize;
+    touch-action: none;
+
+    /* A larger target than the 8×16 drawing: the field's full height, from
+       4px left of the wheel to the field's right edge (8px past the wheel). */
+    &::before {
+      content: "";
+      position: absolute;
+      inset: -4px -8px -4px -4px;
+    }
+
+    svg {
+      display: block;
+    }
+
+  }
+}

@@ -1,6 +1,7 @@
-import { useLayoutEffect, useState } from "preact/hooks";
-import { type BoxArea, type BoxModel, areaRects, measureBoxModel } from "../../../dom/boxModel.ts";
+import { type BoxArea, type SideArea, areaRects, measureBoxModel } from "../../../dom/boxModel.ts";
+import { gapRects, measureGrid } from "../../../dom/gridLines.ts";
 import { px } from "../../px.ts";
+import { useMeasured } from "../../useMeasured.ts";
 
 interface BoxAreasProps {
   element: Element;
@@ -9,53 +10,40 @@ interface BoxAreasProps {
 }
 
 /**
- * Shows parts of the selected element's box model (padding, border, margin),
- * e.g. the padding sides an
- * editor is about to change. Re-measured every frame, so the areas follow the
- * values live while dragging. Purely visual: never receives events.
+ * Shows parts of the selected element, striped: box-model sides (padding,
+ * border, margin), e.g. the padding sides an editor is about to change, or a
+ * grid container's gaps. Re-measured every frame, so the areas follow the
+ * values live while dragging or typing. Purely visual: never receives events.
  */
 export function BoxAreas({ element, areas }: BoxAreasProps) {
-  const model = useBoxModel(element);
+  const model = useMeasured(element, measureBoxModel);
+  const grid = useMeasured(element, measureGrid);
   if (!model) return null;
-  const boxes = [...new Set(areas.map((a) => a.box))];
+  const sides = areas.filter((a): a is SideArea => a.box !== "gap");
+  const boxes = [...new Set(sides.map((a) => a.box))];
+  const rects = [
+    ...boxes.flatMap((box) =>
+      areaRects(
+        model,
+        box,
+        sides.filter((a) => a.box === box).map((a) => a.side),
+      ).map((r) => ({ ...r, key: `${box}-${r.side}`, box, side: r.side as string | undefined })),
+    ),
+    ...(grid && areas.some((a) => a.box === "gap")
+      ? gapRects(grid).map((r, i) => ({ ...r, key: `gap-${i}`, box: "gap", side: undefined }))
+      : []),
+  ];
   return (
     <div class="box-areas" aria-hidden="true">
-      {boxes.flatMap((box) =>
-        areaRects(
-          model,
-          box,
-          areas.filter((a) => a.box === box).map((a) => a.side),
-        ).map((r) => (
-          <div
-            key={`${box}-${r.side}`}
-            class="area"
-            data-box={box}
-            data-side={r.side}
-            style={{ left: px(r.left), top: px(r.top), width: px(r.width), height: px(r.height) }}
-          />
-        )),
-      )}
+      {rects.map((r) => (
+        <div
+          key={r.key}
+          class="area"
+          data-box={r.box}
+          data-side={r.side}
+          style={{ left: px(r.left), top: px(r.top), width: px(r.width), height: px(r.height) }}
+        />
+      ))}
     </div>
   );
-}
-
-/** The element's box model, re-measured every frame; re-renders only when it changes. */
-function useBoxModel(element: Element): BoxModel | null {
-  const [model, setModel] = useState(() => measureBoxModel(element));
-  useLayoutEffect(() => {
-    let frame = 0;
-    let last = "";
-    const tick = () => {
-      const next = measureBoxModel(element);
-      const key = JSON.stringify(next);
-      if (key !== last) {
-        last = key;
-        setModel(next);
-      }
-      frame = requestAnimationFrame(tick);
-    };
-    tick();
-    return () => cancelAnimationFrame(frame);
-  }, [element]);
-  return model;
 }

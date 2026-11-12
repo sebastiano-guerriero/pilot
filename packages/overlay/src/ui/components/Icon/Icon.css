@@ -1,0 +1,7 @@
+/* An icon: drawn in currentColor at its own size (see Icon.tsx). */
+@scope (.icon) {
+  :scope {
+    display: block;
+    flex: none;
+  }
+}

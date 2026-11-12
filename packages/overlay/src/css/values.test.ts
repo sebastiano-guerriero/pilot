@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 import { cssProperty, LENGTH_UNITS } from "./properties.ts";
-import { displayValue, parseValue, stepValue } from "./values.ts";
+import { displayValue, parseValue, scrubIncrement, stepValue } from "./values.ts";
 
 describe("parseValue", () => {
   it("takes a bare number as px", () => {
@@ -75,8 +75,16 @@ describe("stepValue", () => {
 });
 
 describe("CSS property db", () => {
-  it("has the defaults the editors show as placeholders", () => {
+  it("has the properties' initial values", () => {
     expect(cssProperty("width").initial).toBe("auto");
     expect(cssProperty("padding-top").initial).toBe("0");
+  });
+});
+
+describe("scrubIncrement", () => {
+  it("0.1 for font-relative units, 1 otherwise", () => {
+    expect(["2rem", "1.5em", "3lh", "12px", "50%", "10vw", "", "auto"].map(scrubIncrement)).toEqual([
+      0.1, 0.1, 0.1, 1, 1, 1, 1, 1,
+    ]);
   });
 });

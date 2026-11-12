@@ -12,24 +12,23 @@
 
 .root {
   --plt-color-background: #171717;
+  --plt-color-background-light: #303030;
   --plt-color-contrast-low: #737373;
   --plt-color-contrast-high: #E5E5E5;
   --plt-color-border: hsl(from var(--plt-color-contrast-high) h s l / 0.125);
   --plt-color-accent: #1CF69E;
 
   /* Typography */
-  /* Main font: Geist Mono, bundled and registered by ui/fonts.ts. */
-  --plt-font-main: "PLT Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  /* OpenType features. Geist Mono's zero is slashed by default, so keep ss09
-     off: ss09 = non-slashed zero (its only alternate digit style). Other sets:
-     ss01 no-tail a, ss02 alt a, ss03 alt l, ss04 alt R, ss06 alt G,
-     ss07 alt arrows, ss08 rounded dots. */
+  /* Main font: Geist, bundled and registered by ui/fonts.ts. */
+  --plt-font-main: "PLT Geist", ui-sans-serif, system-ui, sans-serif;
+  /* OpenType features for the main font. normal = Geist's defaults. */
   --plt-font-features: normal;
 
   --plt-text-base: 11px;
 
-  /* Elevation */
-  --plt-shadow-lg: 0px 85px 34px rgba(0, 0, 0, 0.01), 0px 48px 29px rgba(0, 0, 0, 0.05), 0px 21px 21px rgba(0, 0, 0, 0.09), 0px 5px 12px rgba(0, 0, 0, 0.1), inset 0px 0px 0px 1px rgba(255, 255, 255, 0.1);
+  /* Elevation. Drop shadows only: components add their own inset rings,
+     which vary (e.g. the dialog's 10% ring, the select menu's 7% + 5%). */
+  --plt-shadow-lg: 0px 85px 34px rgba(0, 0, 0, 0.01), 0px 48px 29px rgba(0, 0, 0, 0.05), 0px 21px 21px rgba(0, 0, 0, 0.09), 0px 5px 12px rgba(0, 0, 0, 0.1);
 
   /* Sizes */
   --plt-control-size: 32px;

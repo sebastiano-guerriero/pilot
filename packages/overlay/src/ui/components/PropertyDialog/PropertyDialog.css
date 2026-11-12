@@ -10,7 +10,7 @@
     border-radius: 12px;
     box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.1), var(--plt-shadow-lg);
     overflow: hidden;
-    width: 248px;
+    width: 260px;
   }
 
   /* Wrapper for the property editors below the search. */

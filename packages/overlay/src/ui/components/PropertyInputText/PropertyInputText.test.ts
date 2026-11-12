@@ -27,8 +27,13 @@ function Harness() {
   });
 }
 
-function PropertyInputTextWithPlaceholder() {
-  return h(PropertyInputText, { value: "", placeholder: "auto", label: "Width", onCommit: () => {} });
+function EmptyPropertyInputText({ compact = false }: { compact?: boolean }) {
+  return h(PropertyInputText, { value: "", label: "Width", compact, onCommit: () => {} });
+}
+
+/** The box diagram's variant, holding `value`. */
+function CompactPropertyInputText({ value }: { value: string }) {
+  return h(PropertyInputText, { value, label: "Width", compact: true, onCommit: () => {} });
 }
 
 let container: HTMLElement;
@@ -65,7 +70,12 @@ describe("PropertyInputText", () => {
     expect(input().getAttribute("aria-label")).toBe("Width");
   });
 
-  it("sizes itself to its content (ch fallback)", () => {
+  it("a regular field fills its slot: no content sizing", () => {
+    expect(input().style.getPropertyValue("--chars")).toBe("");
+  });
+
+  it("a compact field sizes itself to its content (ch fallback)", () => {
+    act(() => render(h(CompactPropertyInputText, { value: "100%" }), container));
     expect(input().style.getPropertyValue("--chars")).toBe("4");
     act(() => input().focus());
     typeText("fit-content");
@@ -94,8 +104,8 @@ describe("PropertyInputText", () => {
     expect(commits).toEqual([""]);
   });
 
-  it("a focused empty field shows its placeholder as selected, until typed into", () => {
-    act(() => render(h(PropertyInputTextWithPlaceholder, {}), container));
+  it("a focused empty compact field shows its placeholder as selected, until typed into", () => {
+    act(() => render(h(EmptyPropertyInputText, { compact: true }), container));
     expect(input().hasAttribute("data-placeholder-selected")).toBe(false);
     act(() => input().focus());
     expect(input().hasAttribute("data-placeholder-selected")).toBe(true);
@@ -105,12 +115,19 @@ describe("PropertyInputText", () => {
     expect(input().hasAttribute("data-placeholder-selected")).toBe(false);
   });
 
-  it("shows a placeholder when there's no value, and sizes to it", () => {
-    act(() => setValue(""));
-    act(() => render(h(PropertyInputTextWithPlaceholder, {}), container));
+  it("with no value, a regular field is simply empty: no placeholder, no selected look", () => {
+    act(() => render(h(EmptyPropertyInputText, { compact: false }), container));
     expect(input().value).toBe("");
-    expect(input().placeholder).toBe("auto");
-    expect(input().style.getPropertyValue("--chars")).toBe("4");
+    expect(input().placeholder).toBe("");
+    act(() => input().focus());
+    expect(input().hasAttribute("data-placeholder-selected")).toBe(false);
+  });
+
+  it("with no value, a compact field shows a dimmed dash, and sizes to it", () => {
+    act(() => render(h(EmptyPropertyInputText, { compact: true }), container));
+    expect(input().value).toBe("");
+    expect(input().placeholder).toBe("—");
+    expect(input().style.getPropertyValue("--chars")).toBe("1");
   });
 
   it("Enter commits once, then submits", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { areaRects, type BoxModel, paddingRects } from "./boxModel.ts";
+import { areaRects, type BoxModel, hidesSelection, paddingRects } from "./boxModel.ts";
 
 // A 200×100 box at (10, 20) with a 1px border and padding 8/16/12/4.
 const model: BoxModel = {
@@ -51,5 +51,14 @@ describe("areaRects", () => {
       top: { left: 8, top: 14, width: 202, height: 6 },
       left: { left: 8, top: 20, width: 2, height: 100 },
     });
+  });
+});
+
+describe("hidesSelection", () => {
+  it("padding, border and margin hide the selection while edited; the gap doesn't", () => {
+    expect(hidesSelection({ box: "padding", side: "top" })).toBe(true);
+    expect(hidesSelection({ box: "border", side: "left" })).toBe(true);
+    expect(hidesSelection({ box: "margin", side: "bottom" })).toBe(true);
+    expect(hidesSelection({ box: "gap" })).toBe(false);
   });
 });

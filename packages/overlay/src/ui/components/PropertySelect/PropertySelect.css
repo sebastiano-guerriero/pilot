@@ -1,0 +1,92 @@
+/* Keyword control in an editor row: a trigger in the shared `.field-box`
+   (base.css, like PropertyInputText) and Pilot's dropdown menu. */
+@scope (.property-select) {
+  :scope {
+    min-width: 0;
+  }
+
+  .trigger {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    /* 6px, like the text fields; on the right, room for the chevron (8px
+       from the edge, 8px wide) plus a 4px gap, so `repeat` fits a 60px
+       select. */
+    padding-inline: 6px 20px;
+    color: var(--plt-color-contrast-high);
+    text-align: left;
+    outline: none;
+    cursor: pointer;
+  }
+
+  /* Too long for the trigger (a 60px select): an ellipsis. min-width: 0 lets
+     it shrink inside the flex trigger instead of running under the chevron. */
+  .value {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  /* No value set: "Select", dimmed. */
+  .placeholder {
+    color: var(--plt-color-contrast-low);
+  }
+
+  .chevron {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    translate: 0 -50%;
+    pointer-events: none;
+  }
+
+  /* As wide as its longest option, up to a limit (longer ones end with an
+     ellipsis). Fixed, so the dialog's overflow doesn't clip it; positioned by
+     PropertySelect.tsx. */
+  .menu {
+    position: fixed;
+    z-index: 1;
+    width: max-content;
+    max-width: 240px;
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 4px;
+    border-radius: 10px;
+    background: var(--plt-color-background-light);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 7%),
+      inset 0 0 0 1px hsl(0 0% 100% / 5%),
+      var(--plt-shadow-lg);
+    color: var(--plt-color-contrast-high);
+  }
+
+  .option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 24px;
+    padding-inline: 8px 24px;
+    border-radius: 6px;
+    white-space: nowrap;
+    cursor: pointer;
+
+    /* Hovered, or highlighted with the keyboard. */
+    &[data-active] {
+      background: hsl(from var(--plt-color-contrast-high) h s l / 10%);
+    }
+  }
+
+  /* The checkmark's column: there on every option, so labels line up. */
+  .check {
+    flex: none;
+    width: 8px;
+  }
+
+  .label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

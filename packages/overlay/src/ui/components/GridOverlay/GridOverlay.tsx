@@ -1,0 +1,84 @@
+import { type GridLine, drawnPositions, measureGrid } from "../../../dom/gridLines.ts";
+import { px } from "../../px.ts";
+import { useMeasured } from "../../useMeasured.ts";
+
+interface GridOverlayProps {
+  element: Element;
+  /**
+   * Which part to draw. They're separate layers so the App can stack them:
+   * lines under the selection highlight and the gap stripes, numbers above
+   * everything (so the outline and corner dots never cover them).
+   */
+  part: "lines" | "numbers";
+}
+
+/**
+ * For a grid container: its grid lines, and (when selected) their numbers,
+ * like CSS numbers them (1 at the start edge). Hovering a grid shows just the
+ * lines. Columns are numbered below the content box, rows to its left.
+ * Between tracks with a gap, both edges of the gap are drawn and the number
+ * sits in the middle. Lines on the element's outline (no padding or border)
+ * aren't drawn: they'd only double it. Their numbers stay. While the gap field
+ * is hovered or focused, BoxAreas also stripes the gaps, along with the lines.
+ * Nothing is drawn for other elements. Re-measured every frame;
+ * purely visual, never receives events.
+ */
+export function GridOverlay({ element, part }: GridOverlayProps) {
+  const lines = part === "lines";
+  const numbers = part === "numbers";
+  const grid = useMeasured(element, measureGrid);
+  if (!grid) return null;
+  const { content } = grid;
+  const edge = (line: GridLine, lines: GridLine[]) =>
+    line.number === 1 ? "start" : line.number === lines.length ? "end" : undefined;
+  return (
+    <div class="grid-overlay" aria-hidden="true">
+      {lines &&
+        grid.columns.flatMap((line) =>
+          drawnPositions(line, grid.box.left, grid.box.left + grid.box.width).map((x) => (
+            <div
+              key={`c${line.number}-${x}`}
+              class="line"
+              data-axis="column"
+              style={{ left: px(x), top: px(content.top), height: px(content.height) }}
+            />
+          )),
+        )}
+      {lines &&
+        grid.rows.flatMap((line) =>
+          drawnPositions(line, grid.box.top, grid.box.top + grid.box.height).map((y) => (
+            <div
+              key={`r${line.number}-${y}`}
+              class="line"
+              data-axis="row"
+              style={{ top: px(y), left: px(content.left), width: px(content.width) }}
+            />
+          )),
+        )}
+      {numbers &&
+        grid.columns.map((line) => (
+          <span
+            key={`cn${line.number}`}
+            class="number"
+            data-axis="column"
+            data-edge={edge(line, grid.columns)}
+            style={{ left: px((line.start + line.end) / 2), top: px(content.top + content.height) }}
+          >
+            {line.number}
+          </span>
+        ))}
+      {numbers &&
+        grid.rows.map((line) => (
+          <span
+            key={`rn${line.number}`}
+            class="number"
+            data-axis="row"
+            data-edge={edge(line, grid.rows)}
+            style={{ top: px((line.start + line.end) / 2), left: px(content.left) }}
+          >
+            {line.number}
+          </span>
+        ))}
+    </div>
+  );
+}

@@ -1,9 +1,12 @@
 // @vitest-environment happy-dom
+import type { BoxArea } from "../../dom/boxModel.ts";
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EditHistory } from "../../edits/history.ts";
+import { paddingLeftEditor, paddingTopEditor } from "../padding/PaddingEditor.tsx";
 import { maxWidthEditor, minWidthEditor, widthEditor } from "../width/WidthEditor.tsx";
+import { lengthEditor } from "./LengthEditor.tsx";
 
 const WidthEditor = widthEditor.component;
 
@@ -57,10 +60,10 @@ const typeAndEnter = (text: string) => {
 };
 
 describe("WidthEditor", () => {
-  it("with no width set, the field is empty and shows the default as placeholder", () => {
+  it("with no width set, the field is empty, not the computed width", () => {
     mount("122.456px");
     expect(input().value).toBe("");
-    expect(input().placeholder).toBe("auto");
+    expect(input().placeholder).toBe("");
   });
 
   it("shows a width set on the element, even if it's the default", () => {
@@ -159,13 +162,13 @@ describe("min-width and max-width", () => {
       );
     });
 
-  it("label and placeholder come from the property and its default", () => {
+  it("the label is the property; nothing set leaves the field empty", () => {
     mountEditor(minWidthEditor);
     expect(container.querySelector(".property-label")?.textContent).toBe("min-width");
-    expect(input().placeholder).toBe("auto");
+    expect(input().value).toBe("");
     mountEditor(maxWidthEditor);
     expect(container.querySelector(".property-label")?.textContent).toBe("max-width");
-    expect(input().placeholder).toBe("none");
+    expect(input().value).toBe("");
   });
 
   it("writes its own property; max-width accepts none", () => {
@@ -185,5 +188,164 @@ describe("min-width and max-width", () => {
       input().dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true }));
     });
     expect(outs).toEqual([-1]);
+  });
+});
+
+describe("padding rows", () => {
+  let inspects: Array<string[] | null>;
+  const mountRow = (editor: typeof paddingTopEditor, computed: string) =>
+    act(() => {
+      render(
+        h(editor.component, {
+          element,
+          values: { [editor.properties[0] as string]: computed },
+          onChange: (p: string, v: string) => changes.push([p, v]),
+          onInspect: (areas: BoxArea[] | null) =>
+            inspects.push(areas ? areas.map((a) => `${a.box}-${"side" in a ? a.side : ""}`) : null),
+        }),
+        container,
+      );
+    });
+  beforeEach(() => {
+    inspects = [];
+  });
+
+  it("the page's own padding isn't shown: with nothing inline, the field is empty", () => {
+    mountRow(paddingTopEditor, "10px");
+    expect(container.querySelector(".property-label")?.textContent).toBe("padding-top");
+    expect(input().value).toBe("");
+    mountRow(paddingLeftEditor, "0px");
+    expect(input().value).toBe("");
+  });
+
+  it("an inline value wins", () => {
+    element.style.paddingTop = "1rem";
+    mountRow(paddingTopEditor, "16px");
+    expect(input().value).toBe("1rem");
+  });
+
+  it("stripes that padding on the page while the row is hovered or focused", () => {
+    mountRow(paddingTopEditor, "10px");
+    const row = container.querySelector(".length-editor") as HTMLElement;
+    act(() => {
+      row.dispatchEvent(new PointerEvent("pointerenter"));
+    });
+    expect(inspects.at(-1)).toEqual(["padding-top"]);
+    act(() => {
+      row.dispatchEvent(new PointerEvent("pointerleave"));
+    });
+    expect(inspects.at(-1)).toBeNull();
+    act(() => input().focus());
+    expect(inspects.at(-1)).toEqual(["padding-top"]);
+  });
+});
+
+describe("drag to scrub", () => {
+  // An opt-in option: a width row with a handle, for these tests.
+  const ScrubbedWidth = lengthEditor({ property: "width", label: "Width", scrub: true }).component;
+  let gestures: object[];
+  let reverts: number;
+  const mountScrub = (component = ScrubbedWidth) =>
+    act(() => {
+      render(
+        h(component, {
+          element,
+          values: { width: "100px" },
+          onChange: (p: string, v: string, o?: { gesture?: object }) => {
+            changes.push([p, v]);
+            if (o?.gesture) gestures.push(o.gesture);
+            history.apply(element, p, v, o?.gesture);
+          },
+          onRevert: (p: string, g: object) => {
+            reverts++;
+            history.revert(element, p, g);
+          },
+        }),
+        container,
+      );
+    });
+  const handle = () => container.querySelector(".scrub-handle") as HTMLElement;
+  const down = (y: number) =>
+    act(() => {
+      handle().dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, cancelable: true, button: 0, pointerId: 1, clientY: y }));
+    });
+  // Moves and the release happen wherever the pointer is: off the handle, over the page.
+  const move = (y: number, init: PointerEventInit = {}) =>
+    act(() => {
+      document.body.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, pointerId: 1, clientY: y, ...init }));
+    });
+  const up = () =>
+    act(() => {
+      document.body.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerId: 1 }));
+    });
+
+  beforeEach(() => {
+    gestures = [];
+    reverts = 0;
+  });
+
+  it("is an option: fields don't have a handle unless asked", () => {
+    mountScrub(WidthEditor);
+    expect(handle()).toBeNull();
+    expect(input().hasAttribute("data-scrub")).toBe(false);
+    mountScrub();
+    expect(handle()).not.toBeNull();
+    expect(input().hasAttribute("data-scrub")).toBe(true);
+  });
+
+  it("dragging up increases, 1 per pixel, from the value the drag started at, as one undo step", () => {
+    element.style.width = "100px";
+    mountScrub();
+    down(100);
+    move(95);
+    move(90);
+    expect(changes).toEqual([
+      ["width", "105px"],
+      ["width", "110px"],
+    ]);
+    expect(gestures[0]).toBe(gestures[1]);
+    up();
+    act(() => {
+      history.undo();
+    });
+    expect(element.style.width).toBe("100px");
+  });
+
+  it("follows changes of direction, even far off the handle", () => {
+    element.style.width = "100px";
+    mountScrub();
+    down(500);
+    for (const y of [480, 440, 400, 440, 480, 500, 520]) move(y);
+    expect(changes.map(([, v]) => v)).toEqual(["120px", "160px", "200px", "160px", "120px", "80px"]);
+    expect(reverts).toBe(1); // passing the start restores the exact earlier value
+    up();
+    move(400); // after the release, moves do nothing
+    expect(changes.at(-1)).toEqual(["width", "80px"]);
+  });
+
+  it("down decreases; Shift steps by 10; the unit is kept", () => {
+    element.style.width = "50%";
+    mountScrub();
+    down(100);
+    move(102); // 2px down: -2
+    move(98, { shiftKey: true }); // 2px up, ×10: +20
+    expect(changes.map(([, v]) => v)).toEqual(["48%", "70%"]);
+  });
+
+  it("back where it started: the earlier value is restored exactly", () => {
+    mountScrub(); // nothing set
+    down(100);
+    move(90);
+    move(100);
+    expect(reverts).toBe(1);
+    expect(element.style.width).toBe("");
+  });
+
+  it("rem and other font-relative units step by 0.1", () => {
+    element.style.width = "2rem";
+    mountScrub();
+    down(100);
+    move(97); // 3px up: +3 steps
+    expect(changes.at(-1)).toEqual(["width", "2.3rem"]);
   });
 });

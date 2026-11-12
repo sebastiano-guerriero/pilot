@@ -237,4 +237,64 @@ describe("PropertyDialog", () => {
       expect(document.activeElement).toBe(search());
     });
   });
+
+  describe("page areas from several editors", () => {
+    it("combines them, so one editor clearing doesn't wipe another's", () => {
+      const shown: Array<string[] | null> = [];
+      const reporter = (id: string, side: "top" | "right"): PropertyEditor => ({
+        ...stub(id, [id]),
+        aliases: ["both"],
+        component: ({ onInspect }: PropertyEditorProps) =>
+          h("div", {}, [
+            h("button", { class: `${id}-on`, onClick: () => onInspect?.([{ box: "padding", side }]) }, "on"),
+            h("button", { class: `${id}-off`, onClick: () => onInspect?.(null) }, "off"),
+          ]),
+      });
+      act(() => {
+        render(
+          h(PropertyDialog, {
+            element,
+            anchor: element.getBoundingClientRect(),
+            editors: [reporter("a", "top"), reporter("b", "right")],
+            onInspect: (areas) => shown.push(areas ? areas.map((x) => ("side" in x ? x.side : x.box)) : null),
+          }),
+          container,
+        );
+      });
+      type("both");
+      const click = (cls: string) => act(() => (container.querySelector(`.${cls}`) as HTMLButtonElement).click());
+      click("b-on");
+      click("a-on");
+      click("b-off"); // b reports "nothing" after a reported its area
+      expect(shown.at(-1)).toEqual(["top"]);
+      click("a-off");
+      expect(shown.at(-1)).toBeNull();
+    });
+  });
+});
+
+describe("declared values", () => {
+  it("editors get the CSS that applies to the element, from stylesheets and inline styles", () => {
+    const style = document.createElement("style");
+    style.textContent = ".box { max-width: 50%; padding: 10px 18px; }";
+    document.head.append(style);
+    element.className = "box";
+    element.style.paddingTop = "4px";
+    let received: Record<string, string> | undefined;
+    const probe: PropertyEditor = {
+      id: "probe",
+      label: "probe",
+      properties: ["max-width", "padding-top", "padding-right", "width"],
+      component: ({ declared }: PropertyEditorProps) => {
+        received = declared;
+        return null;
+      },
+    };
+    act(() => {
+      render(h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors: [probe] }), container);
+    });
+    type("probe");
+    expect(received).toEqual({ "max-width": "50%", "padding-top": "4px", "padding-right": "18px", width: "" });
+    style.remove();
+  });
 });

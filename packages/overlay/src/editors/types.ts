@@ -36,8 +36,19 @@ export interface PropertyEditor {
 export interface PropertyEditorProps {
   /** The element being edited. */
   element: EditableElement;
-  /** Current values (computed style, or the pending edit) for `properties`. */
+  /**
+   * Computed values for `properties`. Never shown in fields: they're only
+   * where steps and drags start from (and what overlays measure).
+   */
   values: Record<string, string>;
+  /**
+   * What fields show: the declared value for each of `properties`, the CSS
+   * that actually applies to the element from any source (stylesheets,
+   * Tailwind classes, inline styles, Pilot's edits), as written (`50%`,
+   * `var(--space-4)`), or "" when nothing declares it. See dom/declared.ts.
+   * Read it with `declaredOf()` (editors/declared.ts).
+   */
+  declared?: Record<string, string>;
   /**
    * Apply a value: Pilot sets it as an inline style and records it in the undo
    * history (Cmd/Ctrl+Z). Editors never write `element.style` themselves.

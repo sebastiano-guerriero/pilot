@@ -32,11 +32,13 @@ describe("searchEditors", () => {
     expect(matchEditors("PX", withAliases).map((e) => e.id)).toEqual(["padding"]);
   });
 
-  it("finds the built-in padding editor by p, pt, padding", async () => {
+  it("finds the padding rows by p, pt, padding", async () => {
     const { editors } = await import("./registry.ts");
-    for (const q of ["p", "pt", "pr", "pb", "pl", "px", "py", "pad", "padding", "padding-top", "spacing"]) {
-      expect(searchEditors(q, editors)[0]?.id, q).toBe("padding");
+    for (const q of ["p", "pt", "py", "pad", "padding", "padding-top", "spacing"]) {
+      expect(searchEditors(q, editors)[0]?.id, q).toBe("padding-top");
     }
+    expect(searchEditors("pr", editors)[0]?.id).toBe("padding-right");
+    expect(searchEditors("pl", editors)[0]?.id).toBe("padding-left");
   });
 
   it("finds the built-in width editor by w, width", async () => {
@@ -72,16 +74,26 @@ describe("matchEditors (what the dialog shows)", () => {
   it("ignores hyphens and spaces: minw, min w, minwidth", async () => {
     for (const q of ["minw", "min w", "MIN-W", "minwidth", "min width"]) expect(await ids(q), q).toEqual(["min-width"]);
     for (const q of ["maxw", "max w", "maxwidth"]) expect(await ids(q), q).toEqual(["max-width"]);
-    expect(await ids("paddingtop")).toEqual(["padding"]);
+    expect(await ids("paddingtop")).toEqual(["padding-top"]);
   });
 
   it("abbreviations: the letters in order, from a word start", async () => {
     expect(await ids("wdt")).toEqual(["width", "min-width", "max-width"]);
     expect(await ids("wd")).toEqual(["width", "min-width", "max-width"]);
-    expect(await ids("pdg")).toEqual(["padding"]);
+    expect(await ids("pdg")).toEqual(["padding-top", "padding-right", "padding-bottom", "padding-left"]);
     expect(await ids("mxw")).toEqual(["max-width"]);
     expect(await ids("mnw")).toEqual(["min-width"]);
     expect(await ids("xyz")).toEqual([]);
+  });
+
+  it("padding rows follow Tailwind: p all four, px/py two, pt one", async () => {
+    const all = ["padding-top", "padding-right", "padding-bottom", "padding-left"];
+    for (const q of ["p", "pad", "padding", "PADDING"]) expect(await ids(q), q).toEqual(all);
+    expect(await ids("px")).toEqual(["padding-right", "padding-left"]);
+    expect(await ids("py")).toEqual(["padding-top", "padding-bottom"]);
+    expect(await ids("pt")).toEqual(["padding-top"]);
+    expect(await ids("pb")).toEqual(["padding-bottom"]);
+    expect(await ids("padding-left")).toEqual(["padding-left"]);
   });
 
   it("margin and border use Tailwind's aliases", async () => {
@@ -90,8 +102,8 @@ describe("matchEditors (what the dialog shows)", () => {
   });
 
   it("other properties are unaffected", async () => {
-    expect(await ids("p")).toEqual(["padding"]);
-    expect(await ids("pt")).toEqual(["padding"]);
+    expect(await ids("m")).toEqual(["margin"]);
+    expect(await ids("border")).toEqual(["border"]);
     expect(await ids("")).toEqual([]);
     expect(await ids("zz")).toEqual([]);
   });
@@ -107,7 +119,7 @@ describe("abbreviationPenalty", () => {
   it("counts the letters skipped, starting at a word start", () => {
     expect(abbreviationPenalty("wdt", "width")).toBe(1);
     expect(abbreviationPenalty("mxw", "max-width")).toBe(1);
-    expect(abbreviationPenalty("wdt", "min-width")).toBe(1); // from the "width" word
+    expect(abbreviationPenalty("wdt", "min-width")).toBe(2); // from a later word: one step worse
     expect(abbreviationPenalty("dt", "width")).toBeNull(); // d doesn't start a word
     expect(abbreviationPenalty("wtd", "width")).toBeNull(); // out of order
   });

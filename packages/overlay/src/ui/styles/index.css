@@ -17,9 +17,14 @@
 @import "../components/PropertySearch/PropertySearch.css" layer(components);
 @import "../components/Highlight/Highlight.css" layer(components);
 @import "../components/BoxAreas/BoxAreas.css" layer(components);
+@import "../components/GridOverlay/GridOverlay.css" layer(components);
 @import "../components/PropertyLabel/PropertyLabel.css" layer(components);
 @import "../components/PropertyInputText/PropertyInputText.css" layer(components);
+@import "../components/PropertyRow/PropertyRow.css" layer(components);
+@import "../components/PropertySelect/PropertySelect.css" layer(components);
+@import "../components/Icon/Icon.css" layer(components);
+@import "../components/ScrubHandle/ScrubHandle.css" layer(components);
 
 /* Property editors */
 @import "../../editors/box/BoxEditor.css" layer(components);
-@import "../../editors/length/LengthEditor.css" layer(components);
+@import "../../editors/display/DisplayEditor.css" layer(components);

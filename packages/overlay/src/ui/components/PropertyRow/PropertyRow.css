@@ -1,0 +1,21 @@
+/* Editor row: the label on the left, a 128px value area on the right. Fields
+   in the value area share it equally: one is 128px, two are 60px each. */
+@scope (.property-row) {
+  :scope {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  /* Equal columns, whatever each field's padding (flex would share the space
+     after padding, so a padded input would come out wider than a select). */
+  .values {
+    flex: none;
+    width: 128px;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+}

@@ -1,29 +1,23 @@
-/* Value control in an editor row. Look is still to be designed. */
+/* Value control in an editor row: a box that fills the width of its slot
+   (PropertyRow's value area: 128px for one field, 60px each for two). The box
+   itself (height, fill, radius, inner shadow) is `.field-box` in base.css,
+   shared with PropertySelect. An empty box means nothing is set. The
+   `compact` variant (box diagram) keeps no box and sizes to its content. */
 @scope (.property-input-text) {
   :scope {
-    --_padding: 2px;
+    --_padding: 6px;
 
-    height: 16px;
-    display: inline-flex;
-    align-items: center;
-    padding-inline: var(--_padding);
-    border-radius: 3px;
-
-    /* A text input that sizes itself to its content. A set value is full
-       contrast; with no value, the dimmed placeholder shows the default. */
-    background: transparent;
-    color: var(--plt-color-contrast-high);
-    outline: none;
+    display: block;
+    width: 100%;
     min-width: 0;
-    /* Containers can set a tighter limit with --_max-width (the box diagram's
-       side bands). Longer values scroll inside the field while editing. */
-    max-width: var(--_max-width, 128px);
-    width: calc(var(--chars) * 1ch + 2 * var(--_padding)); /* fallback: monospaced, so exact */
-    field-sizing: content;
+    padding-inline: var(--_padding);
+    color: var(--plt-color-contrast-high);
+    /* Tabular figures: every digit is as wide, so values don't jitter while
+       they change (stepping, dragging) and numbers line up across rows. */
+    font-variant-numeric: tabular-nums;
+    outline: none;
     cursor: text;
-    /* The field sits at the right of its row and grows leftward as you type,
-       so text, placeholder and the caret of an empty field start on the right. */
-    text-align: right;
+    text-align: left;
 
     /* Too long for the space: an ellipsis says there's more. Clipped normally
        while editing, so the whole value can be read and moved through. */
@@ -35,17 +29,37 @@
       text-overflow: clip;
     }
 
+    /* Room on the right for the scrub handle (8px from the edge, 8px wide,
+       plus 6px), like a select's chevron. */
+    &[data-scrub] {
+      padding-right: 22px;
+    }
+
     &::placeholder {
       color: var(--plt-color-contrast-low);
       opacity: 1;
     }
 
-    /* Tight layouts (box diagram). */
+    /* Box diagram: no box; a text field that sizes itself to its content, at
+       the right of its band, growing leftward as you type. With no value, the
+       dimmed dash placeholder. Containers can limit it with --_max-width. */
     &[data-compact] {
       --_padding: 4px;
+
+      display: inline-flex;
+      align-items: center;
+      height: 16px;
+      border-radius: 3px;
+      background: transparent;
+      box-shadow: none;
+      max-width: var(--_max-width, 128px);
+      width: calc(var(--chars) * 1ch + 2 * var(--_padding)); /* fallback: approximate, 1ch is a digit's width */
+      field-sizing: content;
+      text-align: right;
     }
 
-    /* Drawn selections, with the same highlight as ::selection in base.css:
+    /* Drawn selections (compact fields), with the same highlight as
+       ::selection in base.css:
        - a linked field mirroring the one being edited (a page holds only one
          real selection);
        - a focused, empty field: its placeholder is "selected", since typing
@@ -58,7 +72,7 @@
   }
 
   @supports (field-sizing: content) {
-    :scope {
+    :scope[data-compact] {
       width: auto;
     }
   }

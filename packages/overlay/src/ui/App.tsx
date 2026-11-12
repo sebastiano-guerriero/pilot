@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useReducer, useState } from "preact/hooks";
-import type { BoxArea } from "../dom/boxModel.ts";
+import { type BoxArea, hidesSelection } from "../dom/boxModel.ts";
 import { type EditableElement, isEditable } from "../dom/target.ts";
 import { EditHistory, historyShortcut } from "../edits/history.ts";
 import type { PilotDevOptions } from "../mount.tsx";
 import { useElementPicker } from "../select/useElementPicker.ts";
 import { useElementRect } from "../select/useElementRect.ts";
 import { BoxAreas } from "./components/BoxAreas/BoxAreas.tsx";
+import { GridOverlay } from "./components/GridOverlay/GridOverlay.tsx";
 import { Highlight } from "./components/Highlight/Highlight.tsx";
 import { PropertyDialog } from "./components/PropertyDialog/PropertyDialog.tsx";
 import { Toolbar } from "./components/Toolbar/Toolbar.tsx";
@@ -101,16 +102,37 @@ export function App({ host, dev, onQuit }: AppProps) {
     setSelecting(!selecting);
   };
 
+  const hideSelection = !!inspect?.some(hidesSelection);
+
   return (
     <>
-      {hovered && hoverRect && <Highlight element={hovered} rect={hoverRect} variant="hover" />}
+      {hovered && hoverRect && (
+        <>
+          <Highlight element={hovered} rect={hoverRect} variant="hover" />
+          {/* A hovered grid shows its lines; numbers come with the selection. */}
+          <GridOverlay element={hovered} part="lines" />
+        </>
+      )}
       {selected && selectedRect && (
         <>
-          {inspect ? (
-            <BoxAreas element={selected.element} areas={inspect} />
-          ) : (
-            <Highlight element={selected.element} rect={selectedRect} variant="selected" />
+          {/* Grid containers also show their grid lines, under the selection
+              highlight and the gap stripes; their numbers go on top (below). */}
+          {!hideSelection && <GridOverlay element={selected.element} part="lines" />}
+          {/* While some properties are edited (padding…) their areas replace the
+              selection highlight and the grid lines and numbers, so the change
+              is visible; others (the gap) are drawn along with them. See
+              hidesSelection(). */}
+          {!hideSelection && (
+            <Highlight
+              element={selected.element}
+              rect={selectedRect}
+              variant="selected"
+              // Hovering another element: only its label shows, so they don't overlap.
+              label={!(hovered && hovered !== selected.element)}
+            />
           )}
+          {inspect && <BoxAreas element={selected.element} areas={inspect} />}
+          {!hideSelection && <GridOverlay element={selected.element} part="numbers" />}
           <PropertyDialog
             key={selected.key}
             element={selected.element}

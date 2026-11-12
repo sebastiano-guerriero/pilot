@@ -1,0 +1,62 @@
+/* Grid lines and line numbers of a selected grid container. Positions are
+   set inline by GridOverlay.tsx; the padding stripes are BoxAreas. */
+@scope (.grid-overlay) {
+  .line,
+  .number {
+    position: fixed;
+    z-index: var(--plt-z-highlight);
+    pointer-events: none;
+  }
+
+  /* 1px dashed accent lines across the content box. */
+  .line[data-axis="column"] {
+    width: 0;
+    border-left: 1px dashed hsl(from var(--plt-color-accent) h s l / 70%);
+  }
+
+  .line[data-axis="row"] {
+    height: 0;
+    border-top: 1px dashed hsl(from var(--plt-color-accent) h s l / 70%);
+  }
+
+  /* Line numbers, 4px outside the content box: columns below it, rows to its
+     left. Centered on their line. The first and last column numbers align to
+     the box's edges (inward); the first and last row numbers sit just outside
+     the top and bottom lines (outward), so they never overlap each other even
+     in a short row, nor the column numbers at a corner. */
+  .number {
+    padding: 2px 4px;
+    border-radius: 4px;
+    background: var(--plt-color-accent);
+    color: var(--plt-color-background);
+    font-size: var(--plt-text-base);
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .number[data-axis="column"] {
+    margin-top: 4px;
+    translate: -50% 0;
+
+    &[data-edge="start"] {
+      translate: 0 0;
+    }
+
+    &[data-edge="end"] {
+      translate: -100% 0;
+    }
+  }
+
+  .number[data-axis="row"] {
+    margin-left: -4px;
+    translate: -100% -50%;
+
+    &[data-edge="start"] {
+      translate: -100% -100%;
+    }
+
+    &[data-edge="end"] {
+      translate: -100% 0;
+    }
+  }
+}

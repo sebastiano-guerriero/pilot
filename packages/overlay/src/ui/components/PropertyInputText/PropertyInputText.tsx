@@ -1,5 +1,6 @@
 import type { RefObject } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { ScrubHandle } from "../ScrubHandle/ScrubHandle.tsx";
 
 /**
  * What's in a field being edited, for linked fields to mirror (padding's
@@ -12,14 +13,20 @@ export interface InputDraft {
   typed: boolean;
 }
 
+/**
+ * What an empty compact field (box diagram) shows, dimmed: nothing is set.
+ * Not a CSS keyword (`unset`, `auto`…), so it can't be mistaken for a value.
+ * Regular fields are visible boxes, so they're simply empty. Pilot doesn't
+ * show computed values: a field shows CSS that's set, or nothing.
+ */
+export const NOT_SET = "—";
+
 interface PropertyInputTextProps {
   /**
    * The value set on the element (e.g. "100%"), or "" when none is: the field
-   * is then empty and shows `placeholder`.
+   * is then empty (compact fields show a dimmed dash, NOT_SET).
    */
   value: string;
-  /** The property's default, shown (dimmed) while no value is set, e.g. "auto". */
-  placeholder?: string;
   /** Accessible name, e.g. "Width". */
   label: string;
   /** The input itself, so the editor can focus it (e.g. from the search). */
@@ -38,7 +45,17 @@ interface PropertyInputTextProps {
   onTab?(direction: 1 | -1): void;
   /** The field got focus. */
   onFocus?(): void;
-  /** Compact size, for tight layouts such as the box-model diagram (12px tall). */
+  /**
+   * Adds a drag handle (ScrubHandle) at the field's right edge: dragging it
+   * up or down changes the value. Called on every change of the drag with
+   * the total `steps` from the start (Shift: ×10), the field's text when the
+   * drag started, and one `gesture` object for the whole drag (one undo step).
+   */
+  onScrub?(steps: number, startText: string, gesture: object): void;
+  /**
+   * The box-model diagram's variant: no box, sized to its content, a dimmed
+   * dash when empty. Regular fields are a 24px box that fills its slot.
+   */
   compact?: boolean;
   /**
    * A linked field is being edited: show its text once something has been
@@ -59,7 +76,6 @@ interface PropertyInputTextProps {
  */
 export function PropertyInputText({
   value,
-  placeholder,
   label,
   inputRef,
   onCommit,
@@ -70,6 +86,7 @@ export function PropertyInputText({
   compact,
   mirror,
   onDraft,
+  onScrub,
 }: PropertyInputTextProps) {
   const ownRef = useRef<HTMLInputElement>(null);
   const ref = inputRef ?? ownRef;
@@ -77,6 +94,8 @@ export function PropertyInputText({
   const [draft, setDraft] = useState<string | null>(null);
   // Enter commits right away; the blur that follows must not commit again.
   const skipBlurCommit = useRef(false);
+  // With a scrub handle: the field's text when a drag starts (what it steps from).
+  const scrubStart = useRef("");
 
   // Being edited, and typed into since it got focus (see InputDraft).
   const editing = useRef(false);
@@ -88,7 +107,8 @@ export function PropertyInputText({
   // selected: typing will replace its placeholder, as it replaces a selected
   // value. Drawn behind the placeholder, and mirrored by linked fields, so it's
   // clear several values will change at once even when they're all defaults.
-  const placeholderSelected = draft === "" && !typed.current && !!placeholder;
+  // Only compact fields have a placeholder to draw it behind.
+  const placeholderSelected = !!compact && draft === "" && !typed.current;
 
   const report = () => {
     const el = ref.current;
@@ -96,7 +116,7 @@ export function PropertyInputText({
     const selected =
       el.value.length > 0
         ? el.selectionStart === 0 && el.selectionEnd === el.value.length
-        : !typed.current && !!placeholder;
+        : !typed.current;
     onDraft({ text: el.value, selected, typed: typed.current });
   };
   // Selection changes (select-all, caret moves) update the mirrored highlight.
@@ -182,23 +202,24 @@ export function PropertyInputText({
     }
   };
 
-  return (
+  const input = (
     <input
       ref={ref}
-      class="property-input-text"
+      class="property-input-text field-box"
       type="text"
       spellcheck={false}
       autocomplete="off"
       aria-label={label}
       data-compact={compact || undefined}
+      data-scrub={onScrub ? "" : undefined}
       data-mirror-selected={mirror?.selected || undefined}
       data-placeholder-selected={placeholderSelected || undefined}
       value={shown}
-      placeholder={placeholder}
-      // Fallback sizing where `field-sizing: content` isn't supported: the
-      // font is monospaced, so the width in `ch` is exact (an empty field is
-      // as wide as its placeholder).
-      style={{ "--chars": String(Math.max(1, (shown || placeholder || "").length)) }}
+      placeholder={compact ? NOT_SET : undefined}
+      // Compact fields size to their content. Fallback where `field-sizing:
+      // content` isn't supported: a width in `ch` (a digit's width), close
+      // enough for short values (an empty field is as wide as its placeholder).
+      style={compact ? { "--chars": String(Math.max(1, (shown || NOT_SET).length)) } : undefined}
       onPointerDown={onPointerDown}
       onFocus={() => {
         editing.current = true;
@@ -222,7 +243,20 @@ export function PropertyInputText({
         setDraft(null);
       }}
       onKeyDown={onKeyDown}
-    />
+    />);
+  if (!onScrub) return input;
+
+  return (
+    <span class="scrub-field">
+      {input}
+      <ScrubHandle
+        onStart={() => {
+          scrubStart.current = ref.current?.value ?? value;
+          return true;
+        }}
+        onScrub={(steps, gesture) => onScrub(steps, scrubStart.current, gesture)}
+      />
+    </span>
   );
 }
 
