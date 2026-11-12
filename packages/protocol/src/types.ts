@@ -32,9 +32,28 @@ export interface StyleChange {
   property: string;
   /** Computed value before the edit. */
   from: string;
-  /** Value the designer set. */
+  /** Value the designer set ("" when `removed`). */
   to: string;
+  /**
+   * The designer removed the property for this element: it shouldn't declare
+   * it at all, so it gets whatever the cascade gives without that
+   * declaration (another rule, the inherited value, or the default). Not the
+   * same as setting it to `0` or `none`. `from` is the removed value.
+   */
+  removed?: boolean;
+  /** Where `from` is declared in the page's CSS, when known. */
+  source?: StyleSource;
 }
+
+/** Where a value is declared in the page's CSS. */
+export type StyleSource =
+  /** The element's own style attribute, in the app's markup. */
+  | { kind: "inline" }
+  /**
+   * A stylesheet rule. `elements`: how many elements on the page that
+   * selector matches, so the agent can tell a one-off from a shared rule.
+   */
+  | { kind: "rule"; selector: string; elements?: number };
 
 export interface ElementEdit {
   target: ElementTarget;

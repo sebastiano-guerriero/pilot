@@ -333,12 +333,74 @@ describe("drag to scrub", () => {
   });
 
   it("back where it started: the earlier value is restored exactly", () => {
-    mountScrub(); // nothing set
+    element.style.width = "100px";
+    mountScrub();
     down(100);
     move(90);
     move(100);
     expect(reverts).toBe(1);
-    expect(element.style.width).toBe("");
+    expect(element.style.width).toBe("100px");
+  });
+
+  // A gap row whose computed value follows the edits, as on a real page.
+  const ScrubbedGap = lengthEditor({ property: "gap", label: "Gap", scrub: true }).component;
+  const mountGap = () =>
+    act(() => {
+      render(
+        h(ScrubbedGap, {
+          element,
+          values: { gap: element.style.gap || "normal" },
+          onChange: (p: string, v: string, o?: { gesture?: object }) => {
+            history.apply(element, p, v, o?.gesture);
+            mountGap();
+          },
+          onRevert: (p: string, g: object) => {
+            reverts++;
+            history.revert(element, p, g);
+            mountGap();
+          },
+        }),
+        container,
+      );
+    });
+
+  it("from an empty field: starts at 0 (up is 1px), and turning back goes down", () => {
+    mountGap();
+    down(100);
+    move(99);
+    expect(element.style.gap).toBe("1px");
+    move(90);
+    expect(element.style.gap).toBe("10px");
+    move(95); // turned back
+    expect(element.style.gap).toBe("5px");
+  });
+
+  it("from an empty field: back at the start is 0, never empty again", () => {
+    mountGap();
+    down(100);
+    move(90);
+    move(100);
+    expect(element.style.gap).toBe("0px");
+    expect(reverts).toBe(0);
+  });
+
+  it("at 0, dragging further down doesn't count: turning back goes up right away", () => {
+    mountGap();
+    down(100);
+    move(150); // 50px down, held at 0
+    expect(element.style.gap).toBe("0px");
+    move(145); // 5px back up
+    expect(element.style.gap).toBe("5px");
+  });
+
+  it("the same from a value: down to 0, then up right away", () => {
+    element.style.gap = "10px";
+    mountGap();
+    down(100);
+    move(140); // 40px down: 0, not -30
+    expect(element.style.gap).toBe("0px");
+    move(137);
+    expect(element.style.gap).toBe("3px");
   });
 
   it("rem and other font-relative units step by 0.1", () => {

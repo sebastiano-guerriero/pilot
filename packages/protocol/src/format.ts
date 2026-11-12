@@ -1,4 +1,4 @@
-import type { ChangeSet, ElementEdit } from "./types.ts";
+import type { ChangeSet, ElementEdit, StyleChange } from "./types.ts";
 
 /**
  * Turn a change set into instructions a coding agent can follow.
@@ -43,7 +43,26 @@ function formatEdit(edit: ElementEdit, n: number): string[] {
   }
   out.push("", "| Property | From | To |", "| --- | --- | --- |");
   for (const c of changes) {
-    out.push(`| \`${c.property}\` | \`${c.from}\` | \`${c.to}\` |`);
+    out.push(`| \`${c.property}\` | \`${c.from}\` | ${c.removed ? "*removed*" : `\`${c.to}\``} |`);
   }
+  const removed = changes.filter((c) => c.removed);
+  if (removed.length) out.push("");
+  for (const c of removed) out.push(`- ${removalNote(c)}`);
   return out;
+}
+
+/**
+ * What "removed" means, spelled out: the element stops declaring the
+ * property (not a new value like 0), and where the page declares it today.
+ */
+function removalNote(c: StyleChange): string {
+  const note = `\`${c.property}\` is removed: this element shouldn't set it (not \`0\` or \`none\`), so it gets what the cascade gives without it (another rule, the inherited value, or the default).`;
+  const source = c.source;
+  if (!source) return note;
+  if (source.kind === "inline") return `${note} It's set in the element's own \`style\` attribute.`;
+  const shared =
+    source.elements && source.elements > 1
+      ? `, which matches ${source.elements} elements on the page: remove it for this element only, unless the designer's note says otherwise`
+      : "";
+  return `${note} It comes from \`${source.selector}\`${shared}.`;
 }

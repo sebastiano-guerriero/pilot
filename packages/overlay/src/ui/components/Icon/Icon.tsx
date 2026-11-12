@@ -9,16 +9,14 @@ type Item = { x: number; y: number; w?: number; h?: number };
 /**
  * A layout icon: the container (the frame, contrast-high at 20%) and accent
  * items where the content goes. Items sit flush on the frame's edges (over
- * its border), as in the designed justify-start icon. `extra` is drawn under
- * the items (e.g. align-items' baseline). Colors are tokens, not currentColor:
+ * its border), as in the designed icons. Colors are tokens, not currentColor:
  * the design uses two.
  */
-const layout = (items: Item[], extra?: JSX.Element) => ({
+const layout = (items: Item[]) => ({
   size: 12,
   body: (
     <>
       <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
-      {extra}
       {items.map(({ x, y, w = 2, h = 2 }) => (
         <rect key={`${x},${y}`} x={x} y={y} width={w} height={h} fill="var(--plt-color-accent)" />
       ))}
@@ -29,9 +27,15 @@ const layout = (items: Item[], extra?: JSX.Element) => ({
 /** justify-content: two items in a row, at `xs` (vertically centered). */
 const justify = (xs: [number, number]) => layout(xs.map((x) => ({ x, y: 5 })));
 
-/** align-items: two items side by side (horizontally centered), placed vertically. */
-const ALIGN_XS = [3.5, 6.5];
-const align = (y: number, h = 2) => layout(ALIGN_XS.map((x) => ({ x, y, h })));
+/**
+ * align-items: a short item (2px) and a tall one (4px) side by side, at `y`
+ * (short) and `tallY` (tall). Stretch makes both full height.
+ */
+const align = (y: number, tallY: number, h = 2, tallH = 4) =>
+  layout([
+    { x: 3.5, y, h },
+    { x: 6.5, y: tallY, h: tallH },
+  ]);
 
 /**
  * Pilot's icons. Single-color ones are drawn in `currentColor`, so they take
@@ -55,19 +59,13 @@ const ICONS = {
   "justify-around": justify([2, 8]),
   // Equal space before, between and after: 8px free, a third each.
   "justify-evenly": justify([8 / 3, 2 + (2 * 8) / 3]),
-  // align-items: the same items, on the vertical axis.
-  "align-start": align(0),
-  "align-center": align(5),
-  "align-end": align(10),
-  "align-stretch": align(0, 12),
-  // A tall and a short item whose bottoms sit on one line, drawn faintly.
-  "align-baseline": layout(
-    [
-      { x: 3.5, y: 3, h: 4 },
-      { x: 6.5, y: 5, h: 2 },
-    ],
-    <rect x="1" y="7" width="10" height="1" fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />,
-  ),
+  // align-items: the designed icons, a short and a tall item.
+  "align-start": align(0, 0),
+  "align-center": align(5, 4),
+  "align-end": align(10, 8),
+  "align-stretch": align(0, 0, 12, 12),
+  // Bottoms on one line (y 7), the tall item rising above it.
+  "align-baseline": align(5, 3),
   // Nothing set (any layout property): the container, crossed out.
   "layout-empty": {
     size: 12,

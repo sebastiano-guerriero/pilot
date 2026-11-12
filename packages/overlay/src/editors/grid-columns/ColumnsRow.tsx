@@ -70,11 +70,11 @@ export function ColumnsRow({ value, focusRequest, onChange, onSubmit, onTab }: C
   };
 
   return (
-    <PropertyRow label="columns">
+    <PropertyRow label="grid-columns">
       <PropertySelect
         value={mode}
         options={COLUMNS_MODES}
-        label="columns"
+        label="grid-columns"
         triggerRef={selectRef}
         clearable={false}
         onChange={(next) => {

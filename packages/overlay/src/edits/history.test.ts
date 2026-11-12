@@ -107,3 +107,24 @@ describe("historyShortcut", () => {
     expect(historyShortcut(key({ key: "z" }), true)).toBeNull();
   });
 });
+
+describe("shorthands", () => {
+  // happy-dom expands padding but not grid-column; browsers expand both
+  // (grid-column is checked in the playground).
+  it("knows a shorthand's longhands", async () => {
+    const { longhandsOf } = await import("./history.ts");
+    expect(longhandsOf("padding")).toEqual(["padding-top", "padding-right", "padding-bottom", "padding-left"]);
+    expect(longhandsOf("padding-top")).toEqual(["padding-top"]);
+  });
+
+  it("undoing a shorthand puts back a longhand that was set on its own", () => {
+    history.apply(el, "padding-top", "4px");
+    history.apply(el, "padding", "10px");
+    expect(el.style.getPropertyValue("padding-top")).toBe("10px");
+    history.undo();
+    expect(el.style.getPropertyValue("padding-top")).toBe("4px");
+    expect(el.style.getPropertyValue("padding-left")).toBe("");
+    history.undo();
+    expect(el.style.getPropertyValue("padding-top")).toBe("");
+  });
+});

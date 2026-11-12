@@ -1,0 +1,31 @@
+import { declaredOf } from "../declared.ts";
+import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
+import { ColumnsRow } from "./ColumnsRow.tsx";
+
+/**
+ * grid-columns (`grid-template-columns`): a mode select plus a field, see
+ * ColumnsRow. Found on its own (`cols`, `grid-cols`), and shown by display
+ * as one of its grid rows.
+ */
+function GridColumnsEditor(props: PropertyEditorProps) {
+  const { onChange, focusRequest, onReturnToSearch, onTabOut } = props;
+  return (
+    <ColumnsRow
+      value={declaredOf(props, "grid-template-columns")}
+      focusRequest={focusRequest}
+      onChange={(value) => onChange("grid-template-columns", value)}
+      onSubmit={onReturnToSearch}
+      onTab={(direction) => (onTabOut ? onTabOut(direction) : onReturnToSearch?.())}
+    />
+  );
+}
+
+export const gridColumnsEditor: PropertyEditor = {
+  id: "grid-columns",
+  label: "Grid columns",
+  properties: ["grid-template-columns"],
+  // Tailwind's grid-cols-* utilities.
+  aliases: ["cols", "grid-cols", "grid-columns"],
+  keywords: ["columns", "grid"],
+  component: GridColumnsEditor,
+};

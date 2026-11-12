@@ -51,8 +51,18 @@ export interface CssPropertyInfo {
   initial: string;
   /** Keywords accepted besides lengths (global keywords are always accepted). */
   keywords: string[];
-  /** Negative lengths are valid (margins), or not (width, padding). */
+  /** Negative values are valid (margins, order, grid lines), or not (width, padding). */
   negative: boolean;
+  /**
+   * What the value is (css/values.ts parses, shows and steps each kind):
+   * - "length" (the default): `120` is px, units, math (width, padding…);
+   * - "integer": a whole number, no unit (order);
+   * - "grid-line": a line number (not 0), `span 2`, or `auto` (grid-column-start/end);
+   * - "grid-span": how many columns an item spans, for the grid-column
+   *   shorthand: `3` writes `span 3 / span 3` (Tailwind's col-span-3), `full`
+   *   writes `1 / -1` (first line to last). Shown back as `3` and `full`.
+   */
+  kind?: "length" | "integer" | "grid-line" | "grid-span";
 }
 
 const SIZE_KEYWORDS = ["auto", "fit-content", "min-content", "max-content", "stretch"];
@@ -85,6 +95,10 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   gap: { initial: "normal", keywords: ["normal"], negative: false },
   "justify-content": { initial: "normal", keywords: ["normal", ...JUSTIFY_CONTENT_VALUES], negative: false },
   "align-items": { initial: "normal", keywords: ["normal", ...ALIGN_ITEMS_VALUES], negative: false },
+  order: { initial: "0", keywords: [], negative: true, kind: "integer" },
+  "grid-column": { initial: "auto", keywords: ["auto"], negative: false, kind: "grid-span" },
+  "grid-column-start": { initial: "auto", keywords: ["auto"], negative: true, kind: "grid-line" },
+  "grid-column-end": { initial: "auto", keywords: ["auto"], negative: true, kind: "grid-line" },
   width: { initial: "auto", keywords: SIZE_KEYWORDS, negative: false },
   "min-width": { initial: "auto", keywords: SIZE_KEYWORDS, negative: false },
   "max-width": { initial: "none", keywords: ["none", ...SIZE_KEYWORDS.filter((k) => k !== "auto")], negative: false },

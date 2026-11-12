@@ -33,4 +33,23 @@ describe("formatPrompt", () => {
     expect(prompt).toContain("Designer note: Softer hero");
     expect(prompt).toContain("Translate them to this project's conventions");
   });
+
+  it("spells out a removal: not a new value, and where the page sets it", () => {
+    const prompt = formatPrompt({
+      ...changeSet,
+      edits: [
+        {
+          target: changeSet.edits[0]!.target,
+          changes: [
+            { property: "gap", from: "16px", to: "", removed: true, source: { kind: "rule", selector: ".cards", elements: 3 } },
+            { property: "color", from: "red", to: "", removed: true, source: { kind: "inline" } },
+          ],
+        },
+      ],
+    });
+    expect(prompt).toContain("| `gap` | `16px` | *removed* |");
+    expect(prompt).toContain("`gap` is removed: this element shouldn't set it (not `0` or `none`)");
+    expect(prompt).toContain("It comes from `.cards`, which matches 3 elements on the page: remove it for this element only");
+    expect(prompt).toContain("It's set in the element's own `style` attribute.");
+  });
 });

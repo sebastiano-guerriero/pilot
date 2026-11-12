@@ -1,6 +1,15 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { beats, declaredValue, pickSide, sourcesOf, specificity, splitTopLevel } from "./declared.ts";
+import {
+  beats,
+  declaredValue,
+  declaredWithout,
+  matchedRules as matchedRulesFor,
+  pickSide,
+  sourcesOf,
+  specificity,
+  splitTopLevel,
+} from "./declared.ts";
 
 describe("specificity", () => {
   it("counts ids, classes/attributes/pseudo-classes, and types/pseudo-elements", () => {
@@ -117,7 +126,7 @@ describe("declaredValue (with real stylesheets)", () => {
 
   it("finds a value set by a stylesheet, as written (not computed)", () => {
     sheet(".card { max-width: 50%; }");
-    expect(declaredValue(element, "max-width")).toEqual({
+    expect(declaredValue(element, "max-width")).toMatchObject({
       value: "50%",
       important: false,
       source: { selector: ".card" },
@@ -157,6 +166,22 @@ describe("declaredValue (with real stylesheets)", () => {
     sheet("@media print { .card { width: 1px; } } .wide { min-width: 3px; }");
     expect(declaredValue(element, "width")).toBeNull();
     expect(declaredValue(element, "min-width")?.value).toBe("3px");
+  });
+
+  it("declaredWithout: the next declaration once the winner (or the inline style) is left out", () => {
+    sheet(".card { gap: 8px; } #main { gap: 16px; }");
+    element.style.gap = "4px";
+    const winner = declaredValue(element, "gap");
+    expect(winner?.value).toBe("4px");
+    const rules = declaredWithout(element, "gap", { inline: true });
+    expect(rules).toMatchObject({ value: "16px", source: { selector: "#main" } });
+    expect(declaredWithout(element, "gap", { inline: true, skip: [rules?.rule as CSSStyleDeclaration] })?.value).toBe("8px");
+    expect(
+      declaredWithout(element, "gap", {
+        inline: true,
+        skip: matchedRulesFor(element).map((r) => r.style),
+      }),
+    ).toBeNull();
   });
 
   it("selectors that don't parse don't break the rest", () => {

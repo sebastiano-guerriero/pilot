@@ -297,4 +297,53 @@ describe("declared values", () => {
     expect(received).toEqual({ "max-width": "50%", "padding-top": "4px", "padding-right": "18px", width: "" });
     style.remove();
   });
+
+  it("an editor also gets the values of the editors it embeds", () => {
+    element.style.justifyContent = "center";
+    let received: Record<string, string> | undefined;
+    const embedded: PropertyEditor = { ...stub("justify-content", ["justify-content"]) };
+    const host: PropertyEditor = {
+      id: "host",
+      label: "host",
+      properties: ["display"],
+      embeds: [embedded],
+      component: ({ declared }: PropertyEditorProps) => {
+        received = declared;
+        return null;
+      },
+    };
+    act(() => {
+      render(h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors: [host] }), container);
+    });
+    type("host");
+    expect(received).toEqual({ display: "", "justify-content": "center" });
+  });
+
+  it("clearing a value the page's CSS sets removes it: the editor gets nothing, the page shows the fallback", () => {
+    const style = document.createElement("style");
+    style.textContent = ".box { gap: 16px; }";
+    document.head.append(style);
+    element.className = "box";
+    let received: Record<string, string> | undefined;
+    let change: PropertyEditorProps["onChange"] | undefined;
+    const probe: PropertyEditor = {
+      id: "probe",
+      label: "probe",
+      properties: ["gap"],
+      component: ({ declared, onChange }: PropertyEditorProps) => {
+        received = declared;
+        change = onChange;
+        return null;
+      },
+    };
+    act(() => {
+      render(h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors: [probe] }), container);
+    });
+    type("probe");
+    expect(received).toEqual({ gap: "16px" });
+    act(() => change?.("gap", ""));
+    expect(received).toEqual({ gap: "" });
+    expect(element.style.gap).toBe("revert");
+    style.remove();
+  });
 });

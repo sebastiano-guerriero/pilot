@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useState } from "preact/hooks";
+import { useCallback, useEffect, useReducer, useRef, useState } from "preact/hooks";
 import { type BoxArea, hidesSelection } from "../dom/boxModel.ts";
 import { type EditableElement, isEditable } from "../dom/target.ts";
 import { EditHistory, historyShortcut } from "../edits/history.ts";
@@ -35,6 +35,14 @@ export function App({ host, dev, onQuit }: AppProps) {
     console.warn(`[pilot] dev.select "${dev.select}" matched no element.`);
     return null;
   });
+
+  // The search carries over from one selection to the next: set col-span on
+  // one card, click the next, and the same editor is already there. It starts
+  // empty again once nothing is selected (Esc, the cursor off, the dialog closed).
+  const lastQuery = useRef(dev?.query ?? "");
+  useEffect(() => {
+    if (!selected) lastQuery.current = "";
+  }, [selected]);
 
   const onPick = useCallback((element: EditableElement) => {
     setSelected((prev) => (prev?.element === element ? prev : { element, key: (prev?.key ?? 0) + 1 }));
@@ -116,8 +124,9 @@ export function App({ host, dev, onQuit }: AppProps) {
       {selected && selectedRect && (
         <>
           {/* Grid containers also show their grid lines, under the selection
-              highlight and the gap stripes; their numbers go on top (below). */}
-          {!hideSelection && <GridOverlay element={selected.element} part="lines" />}
+              highlight and the gap stripes; their numbers go on top (below).
+              A grid item shows its parent's grid (orParent). */}
+          {!hideSelection && <GridOverlay element={selected.element} part="lines" orParent />}
           {/* While some properties are edited (padding…) their areas replace the
               selection highlight and the grid lines and numbers, so the change
               is visible; others (the gap) are drawn along with them. See
@@ -132,13 +141,15 @@ export function App({ host, dev, onQuit }: AppProps) {
             />
           )}
           {inspect && <BoxAreas element={selected.element} areas={inspect} />}
-          {!hideSelection && <GridOverlay element={selected.element} part="numbers" />}
+          {!hideSelection && <GridOverlay element={selected.element} part="numbers" orParent />}
           <PropertyDialog
             key={selected.key}
             element={selected.element}
             anchor={selectedRect}
-            // Only the dev-pinned first selection gets the pre-filled query.
-            initialQuery={dev && selected.key === 1 ? dev.query : undefined}
+            initialQuery={lastQuery.current}
+            onQueryChange={(query) => {
+              lastQuery.current = query;
+            }}
             history={history}
             onClose={() => setSelected(null)}
             onInspect={setInspect}

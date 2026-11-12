@@ -10,6 +10,12 @@ interface GridOverlayProps {
    * everything (so the outline and corner dots never cover them).
    */
   part: "lines" | "numbers";
+  /**
+   * When the element isn't a grid itself, draw its parent's grid, if the
+   * parent is one: a selected grid item shows the lines it's placed on (for
+   * col-span, col-start…). Its own grid wins when it's both.
+   */
+  orParent?: boolean;
 }
 
 /**
@@ -20,13 +26,17 @@ interface GridOverlayProps {
  * sits in the middle. Lines on the element's outline (no padding or border)
  * aren't drawn: they'd only double it. Their numbers stay. While the gap field
  * is hovered or focused, BoxAreas also stripes the gaps, along with the lines.
- * Nothing is drawn for other elements. Re-measured every frame;
+ * With `orParent`, a grid item shows its parent's grid instead. Nothing is
+ * drawn for other elements. Re-measured every frame;
  * purely visual, never receives events.
  */
-export function GridOverlay({ element, part }: GridOverlayProps) {
+export function GridOverlay({ element, part, orParent }: GridOverlayProps) {
   const lines = part === "lines";
   const numbers = part === "numbers";
-  const grid = useMeasured(element, measureGrid);
+  const grid = useMeasured(element, (el) => {
+    const own = measureGrid(el);
+    return own || !orParent || !el.parentElement ? own : measureGrid(el.parentElement);
+  });
   if (!grid) return null;
   const { content } = grid;
   const edge = (line: GridLine, lines: GridLine[]) =>

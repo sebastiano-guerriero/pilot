@@ -9,10 +9,15 @@ interface PropertySearchProps {
   inputRef: RefObject<HTMLInputElement | null>;
 }
 
-/** The property search field. Focused as soon as it appears. */
+/**
+ * The property search field. Focused as soon as it appears, its text selected
+ * (a query carried over from the previous selection): typing replaces it, and
+ * Tab/Enter goes straight into its editor.
+ */
 export function PropertySearch({ value, onChange, onKeyDown, inputRef }: PropertySearchProps) {
   useEffect(() => {
     inputRef.current?.focus();
+    inputRef.current?.select();
   }, []);
 
   return (

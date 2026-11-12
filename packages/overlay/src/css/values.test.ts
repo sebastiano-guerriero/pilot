@@ -88,3 +88,58 @@ describe("scrubIncrement", () => {
     ]);
   });
 });
+
+describe("other kinds of value", () => {
+  it("order: whole numbers, no unit, negatives allowed", () => {
+    expect(parseValue("order", "3")).toBe("3");
+    expect(parseValue("order", "-1")).toBe("-1");
+    expect(parseValue("order", "1.5")).toBeNull();
+    expect(parseValue("order", "2px")).toBeNull();
+    expect(stepValue("order", "", 1, "0")).toBe("1");
+    expect(stepValue("order", "1", -10, "1")).toBe("-9");
+  });
+
+  it("grid lines: numbers but 0, span N, auto", () => {
+    expect(parseValue("grid-column-start", "2")).toBe("2");
+    expect(parseValue("grid-column-start", "-1")).toBe("-1");
+    expect(parseValue("grid-column-start", "0")).toBeNull();
+    expect(parseValue("grid-column-end", "span2")).toBe("span 2");
+    expect(parseValue("grid-column-end", "auto")).toBe("auto");
+    expect(parseValue("grid-column-end", "2px")).toBeNull();
+  });
+
+  it("grid lines step past 0, and from empty or auto start at 1 / -1", () => {
+    expect(stepValue("grid-column-start", "1", -1, "auto")).toBe("-1");
+    expect(stepValue("grid-column-start", "-1", 1, "auto")).toBe("1");
+    expect(stepValue("grid-column-start", "", 1, "auto")).toBe("1");
+    expect(stepValue("grid-column-start", "auto", -1, "auto")).toBe("-1");
+    expect(stepValue("grid-column-end", "span 2", -5, "auto")).toBe("span 1");
+  });
+
+  it("col-span: a count is span N / span N, full is 1 / -1", () => {
+    expect(parseValue("grid-column", "3")).toBe("span 3 / span 3");
+    expect(parseValue("grid-column", "span 3")).toBe("span 3 / span 3");
+    expect(parseValue("grid-column", "Full")).toBe("1 / -1");
+    expect(parseValue("grid-column", "0")).toBeNull();
+    expect(parseValue("grid-column", "2/4")).toBe("2 / 4");
+    expect(parseValue("grid-column", "nope")).toBeNull();
+  });
+
+  it("col-span shows the count and full back", () => {
+    expect(displayValue("span 3 / span 3", "grid-column")).toBe("3");
+    expect(displayValue("2 / span 3", "grid-column")).toBe("3");
+    expect(displayValue("span 3", "grid-column")).toBe("3");
+    expect(displayValue("1 / -1", "grid-column")).toBe("full");
+    expect(displayValue("2 / 4", "grid-column")).toBe("2 / 4");
+    // Only grid-column reads this way.
+    expect(displayValue("span 3", "grid-column-start")).toBe("span 3");
+  });
+
+  it("col-span steps the count, from 1", () => {
+    expect(stepValue("grid-column", "3", 1, "auto")).toBe("span 4 / span 4");
+    expect(stepValue("grid-column", "1", -1, "auto")).toBe("span 1 / span 1");
+    expect(stepValue("grid-column", "", 1, "auto")).toBe("span 2 / span 2");
+    expect(stepValue("grid-column", "", -1, "auto")).toBeNull();
+    expect(stepValue("grid-column", "full", 1, "auto")).toBeNull();
+  });
+});

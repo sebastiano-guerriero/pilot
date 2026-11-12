@@ -9,6 +9,9 @@ import { cssProperty, GLOBAL_KEYWORDS, LENGTH_UNITS } from "./properties.ts";
  * - math without `calc()`: `100% - 20px` → `calc(100% - 20px)`. A typed
  *   `calc(…)` is accepted too, but fields never show it, so designers learn
  *   they don't need it.
+ * That's for lengths. Properties of another kind (see `kind` in
+ * properties.ts) take whole numbers (order), grid lines (`3`, `-1`,
+ * `span 2`), or a column span (`3`, `full`) instead.
  */
 
 // Longest first, so "rem" wins over "em" and "vmin" over "vw".
@@ -24,10 +27,33 @@ const MATH_CHARS = /^[\d.%a-z()+\-*/\s,]+$/;
 // a closing parenthesis) and an operand's start (a number, "(" or a function).
 const BINARY_PLUS_MINUS = new RegExp(String.raw`(?<=(?:\d|\))(?:${UNIT})?)\s*([+-])\s*(?=[\d.(]|[a-z-]+\()`, "g");
 
-/** The value as the field shows it: an outer `calc(…)` is left out. */
-export function displayValue(value: string): string {
+/**
+ * The value as the field shows it: an outer `calc(…)` is left out. For a
+ * column span (grid-column), `span 3 / span 3` shows as `3` and `1 / -1` as
+ * `full`, the way they're typed.
+ */
+export function displayValue(value: string, property?: string): string {
+  if (property && cssProperty(property).kind === "grid-span") {
+    const v = value.trim().replace(/\s+/g, " ");
+    if (v === "1 / -1") return "full";
+    const count = spanCount(v);
+    if (count) return count;
+  }
   const inner = unwrapCalc(value.trim());
   return inner ?? value;
+}
+
+/**
+ * How many columns a grid-column value spans, when it ends in `span N`
+ * (`span 3 / span 3`, `2 / span 3`, `span 3`). Null for anything else.
+ */
+function spanCount(value: string): string | null {
+  const parts = value.split("/").map((p) => p.trim());
+  if (parts.length > 2) return null;
+  const end = parts.at(-1) as string;
+  const start = parts.length === 2 ? (parts[0] as string) : "auto";
+  const match = end.match(/^span (\d+)$/);
+  return match && /^(?:auto|-?\d+|span \d+)$/.test(start) ? (match[1] as string) : null;
 }
 
 /**
@@ -39,17 +65,43 @@ export function parseValue(property: string, text: string): string | null {
   let t = text.trim().toLowerCase().replace(/\s+/g, " ");
   if (!t) return null;
   t = unwrapCalc(t) ?? t; // typed calc(): we add it back where needed
-  if (/^-?\d*\.?\d+$/.test(t)) t = `${t}px`;
 
   const info = cssProperty(property);
   const isKeyword = info.keywords.includes(t) || (GLOBAL_KEYWORDS as readonly string[]).includes(t);
   let candidate: string | null = null;
-  if (lengthPattern(info.negative).test(t) || isKeyword || FUNCTION.test(t)) candidate = t;
-  else if (isMath(t)) candidate = `calc(${normalizeMath(t)})`;
+  if (isKeyword || FUNCTION.test(t)) candidate = t;
+  else if (info.kind && info.kind !== "length") candidate = parseOther(info.kind, info.negative, t);
+  else {
+    if (/^-?\d*\.?\d+$/.test(t)) t = `${t}px`;
+    if (lengthPattern(info.negative).test(t)) candidate = t;
+    else if (isMath(t)) candidate = `calc(${normalizeMath(t)})`;
+  }
   if (!candidate) return null;
 
   if (typeof CSS !== "undefined" && typeof CSS.supports === "function" && !CSS.supports(property, candidate)) return null;
   return candidate;
+}
+
+/** parseValue for the kinds that aren't lengths (keywords and functions are handled before). */
+function parseOther(kind: "integer" | "grid-line" | "grid-span", negative: boolean, t: string): string | null {
+  const integer = /^-?\d+$/.test(t) ? Number(t) : null;
+  const span = t.match(/^span ?(\d+)$/);
+  switch (kind) {
+    case "integer":
+      if (integer !== null) return negative || integer >= 0 ? String(integer) : null;
+      return isMath(t) ? `calc(${normalizeMath(t)})` : null;
+    case "grid-line":
+      // Lines are numbered from 1 (or from -1 at the end): there's no line 0.
+      if (integer !== null) return integer !== 0 ? String(integer) : null;
+      return span && Number(span[1]) >= 1 ? `span ${Number(span[1])}` : null;
+    case "grid-span": {
+      if (t === "full") return "1 / -1";
+      const count = integer ?? (span ? Number(span[1]) : null);
+      if (count !== null) return count >= 1 ? `span ${count} / span ${count}` : null;
+      // An explicit start / end (`2 / 4`, `1 / span 2`): as typed, checked by the browser.
+      return /^[\w -]+\/[\w -]+$/.test(t) ? t.replace(/\s*\/\s*/, " / ") : null;
+    }
+  }
 }
 
 /**
@@ -59,8 +111,9 @@ export function parseValue(property: string, text: string): string | null {
  * allows negative values.
  */
 export function stepValue(property: string, text: string, delta: number, computed: string | undefined): string | null {
-  const t = displayValue(text.trim().toLowerCase());
   const info = cssProperty(property);
+  const t = displayValue(text.trim().toLowerCase(), property);
+  if (info.kind && info.kind !== "length") return stepOther(info.kind, info, t, Math.round(delta), computed);
   const match = t.match(/^(-?\d*\.?\d+)([a-z%]*)$/);
   let n: number;
   let unit: string;
@@ -78,6 +131,46 @@ export function stepValue(property: string, text: string, delta: number, compute
   let next = Math.round((n + delta) * 100) / 100;
   if (!info.negative) next = Math.max(0, next);
   return `${next}${unit}`;
+}
+
+/**
+ * stepValue for the kinds that aren't lengths, by whole numbers:
+ * - integer: from an empty field, from the computed value (order: 0);
+ * - grid-line: skips 0 (1 → -1); `span N` steps N, from 1; from empty or
+ *   `auto`, ↑ gives 1 and ↓ gives -1;
+ * - grid-span: the count, from 1 (the default: ↓ on an empty field writes nothing).
+ */
+function stepOther(
+  kind: "integer" | "grid-line" | "grid-span",
+  info: { keywords: string[]; negative: boolean },
+  t: string,
+  delta: number,
+  computed: string | undefined,
+): string | null {
+  const blank = t === "" || info.keywords.includes(t);
+  const integer = /^-?\d+$/.test(t) ? Number(t) : null;
+  switch (kind) {
+    case "integer": {
+      const n = integer ?? (blank ? Number.parseInt(computed ?? "", 10) || 0 : null);
+      if (n === null) return null;
+      return String(info.negative ? n + delta : Math.max(0, n + delta));
+    }
+    case "grid-line": {
+      const span = t.match(/^span (\d+)$/);
+      if (span) return `span ${Math.max(1, Number(span[1]) + delta)}`;
+      const n = integer ?? (blank ? 0 : null);
+      if (n === null) return null;
+      const next = n + delta;
+      return String(next !== 0 ? next : delta > 0 ? 1 : -1);
+    }
+    case "grid-span": {
+      const n = integer ?? (t === "" ? 1 : null);
+      if (n === null) return null;
+      const next = Math.max(1, n + delta);
+      if (t === "" && next === 1) return null;
+      return `span ${next} / span ${next}`;
+    }
+  }
 }
 
 /** "calc(…)" → its inside, if the outer parentheses really belong together; else null. */

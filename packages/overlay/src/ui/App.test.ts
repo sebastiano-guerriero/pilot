@@ -56,3 +56,34 @@ describe("App: Esc", () => {
     expect(e.defaultPrevented).toBe(false);
   });
 });
+
+describe("App: the search carries over between selections", () => {
+  const search = () => host.querySelector(".property-search input") as HTMLInputElement;
+  const type = (text: string) =>
+    act(() => {
+      search().value = text;
+      search().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+  it("selecting another element keeps the query, selected so typing replaces it", () => {
+    const other = document.createElement("button");
+    document.body.append(other);
+    act(() => cursor().click());
+    act(() => page.click());
+    type("col-span");
+    act(() => other.click());
+    expect(search().value).toBe("col-span");
+    expect([search().selectionStart, search().selectionEnd]).toEqual([0, "col-span".length]);
+    expect(host.querySelector('.editor[data-editor="grid-column"]')).not.toBeNull();
+    other.remove();
+  });
+
+  it("starts empty again once nothing is selected", () => {
+    act(() => cursor().click());
+    act(() => page.click());
+    type("gap");
+    esc(); // clears the selection
+    act(() => page.click());
+    expect(search().value).toBe("");
+  });
+});

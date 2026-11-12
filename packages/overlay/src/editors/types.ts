@@ -30,7 +30,19 @@ export interface PropertyEditor {
    * this one shows just it.
    */
   family?: string;
+  /**
+   * Editors this one shows as rows of its own (display shows justify-content
+   * and align-items under grid). Their properties are read and written through
+   * this editor (`values`, `declared`, `onChange`), but don't make it match
+   * the search: searching for them finds the embedded editor on its own.
+   */
+  embeds?: PropertyEditor[];
   component: ComponentType<PropertyEditorProps>;
+}
+
+/** Every property an editor reads: its own, then its embedded editors'. */
+export function propertiesOf(editor: PropertyEditor): string[] {
+  return [...editor.properties, ...(editor.embeds ?? []).flatMap(propertiesOf)];
 }
 
 export interface PropertyEditorProps {

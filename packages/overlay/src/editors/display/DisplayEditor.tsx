@@ -2,20 +2,21 @@ import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import { DISPLAY_VALUES } from "../../css/properties.ts";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { PropertySelect } from "../../ui/components/PropertySelect/PropertySelect.tsx";
-import { LengthEditor } from "../length/LengthEditor.tsx";
-import { ColumnsRow } from "./ColumnsRow.tsx";
+import { alignItemsEditor } from "../align/AlignItemsEditor.tsx";
 import { declaredOf } from "../declared.ts";
-import { normalizeQuery } from "../query.ts";
+import { gapEditor } from "../gap/GapEditor.tsx";
+import { gridColumnsEditor } from "../grid-columns/GridColumnsEditor.tsx";
+import { justifyContentEditor } from "../justify/JustifyContentEditor.tsx";
 import type { FocusRequest, PropertyEditor, PropertyEditorProps } from "../types.ts";
-
-/** The gap row: a length row that stripes the grid's gaps while in use, with a drag handle. */
-const GAP_OPTIONS = { inspect: { box: "gap" } as const, scrub: true };
 
 /** Display values that show the grid rows below the select. */
 const GRID = ["grid", "inline-grid"];
 
-/** Queries that land on the columns row (when it's shown). */
-const COLUMNS_QUERIES = ["cols", "gridcols", "columns", "gridtemplatecolumns"].map(normalizeQuery);
+/**
+ * The rows `grid` shows. Each is an editor of its own: searching for it
+ * (`gap`, `cols`, `items`…) shows just that editor, without display.
+ */
+const GRID_ROWS = [gridColumnsEditor, gapEditor, justifyContentEditor, alignItemsEditor];
 
 /** One focus request per row: rows focus themselves when theirs changes. */
 interface RowFocus {
@@ -25,33 +26,30 @@ interface RowFocus {
 
 /**
  * Display, as a select. Picking `grid` (or `inline-grid`) shows the grid rows
- * below it: columns (a mode select plus a field, see ColumnsRow) and gap. Each row writes its own property, so each change
- * is its own undo step, and undoing back past `grid` hides the rows again.
+ * below it (GRID_ROWS). Display is what reveals them: the rows don't reveal
+ * display or each other. Each row writes its own property, so each change is
+ * its own undo step, and undoing back past `grid` hides the rows again.
  * Tab moves through the rows, then on to the next editor.
  */
 export function DisplayEditor(props: PropertyEditorProps) {
-  const { element, onChange, focusRequest, onReturnToSearch, onTabOut } = props;
+  const { onChange, focusRequest, onReturnToSearch, onTabOut } = props;
   const display = declaredOf(props, "display");
-  const grid = GRID.includes(display);
-  const rows = grid ? 3 : 1;
+  const rows = GRID.includes(display) ? GRID_ROWS : [];
 
-  // From the search, land on the row the query names (`gap`, `cols`), if it's
-  // shown; from the previous/next editor, on the first/last row.
+  // From the search, land on the select; from the previous/next editor, on
+  // the first/last row.
   const [focus, setFocus] = useState<RowFocus | null>(null);
   useLayoutEffect(() => {
     if (!focusRequest) return;
-    const q = normalizeQuery(focusRequest.query);
-    let row = 0;
-    if (focusRequest.edge === "last") row = rows - 1;
-    else if (grid && COLUMNS_QUERIES.includes(q)) row = 1;
-    else if (grid && q === "gap") row = 2;
-    setFocus({ row, request: { ...focusRequest } });
+    setFocus({ row: focusRequest.edge === "last" ? rows.length : 0, request: { ...focusRequest } });
   }, [focusRequest]);
 
+  // Row 0 is the select, then the grid rows.
   const tab = (row: number, direction: 1 | -1) => {
     const next = row + direction;
-    if (next >= 0 && next < rows) setFocus({ row: next, request: { query: "", edge: direction > 0 ? "first" : "last" } });
-    else if (onTabOut) onTabOut(direction);
+    if (next >= 0 && next <= rows.length) {
+      setFocus({ row: next, request: { query: "", edge: direction > 0 ? "first" : "last" } });
+    } else if (onTabOut) onTabOut(direction);
     else onReturnToSearch?.();
   };
   const requestFor = (row: number) => (focus?.row === row ? focus.request : undefined);
@@ -64,25 +62,14 @@ export function DisplayEditor(props: PropertyEditorProps) {
         onChange={(value) => onChange("display", value)}
         onTab={(direction) => tab(0, direction)}
       />
-      {grid && (
-        <>
-          <ColumnsRow
-            value={declaredOf(props, "grid-template-columns")}
-            focusRequest={requestFor(1)}
-            onChange={(value) => onChange("grid-template-columns", value)}
-            onSubmit={onReturnToSearch}
-            onTab={(direction) => tab(1, direction)}
-          />
-          <LengthEditor
-            {...props}
-            property="gap"
-            // Hovering or focusing the gap stripes the grid's gaps on the page.
-            options={GAP_OPTIONS}
-            focusRequest={requestFor(2)}
-            onTabOut={(direction) => tab(2, direction)}
-          />
-        </>
-      )}
+      {rows.map((editor, i) => (
+        <editor.component
+          key={editor.id}
+          {...props}
+          focusRequest={requestFor(i + 1)}
+          onTabOut={(direction) => tab(i + 1, direction)}
+        />
+      ))}
     </div>
   );
 }
@@ -91,7 +78,6 @@ interface RowProps {
   value: string;
   focusRequest?: FocusRequest;
   onChange(value: string): void;
-  onSubmit?(): void;
   onTab(direction: 1 | -1): void;
 }
 
@@ -121,9 +107,11 @@ function DisplayRow({ value, focusRequest, onChange, onTab }: RowProps) {
 export const displayEditor: PropertyEditor = {
   id: "display",
   label: "Display",
-  properties: ["display", "grid-template-columns", "gap"],
-  // Tailwind's display utilities, plus its grid ones: they all land here.
-  aliases: ["grid", "inline-grid", "flex", "inline-flex", "block", "inline-block", "inline", "hidden", "contents", "grid-cols", "cols", "gap"],
-  keywords: ["layout", "columns", "grid-template-columns"],
+  properties: ["display"],
+  // Shown as grid rows; searching for them finds their own editors.
+  embeds: GRID_ROWS,
+  // Tailwind's display utilities: they all land here.
+  aliases: ["grid", "inline-grid", "flex", "inline-flex", "block", "inline-block", "inline", "hidden", "contents"],
+  keywords: ["layout"],
   component: DisplayEditor,
 };

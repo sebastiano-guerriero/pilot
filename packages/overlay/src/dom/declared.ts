@@ -24,6 +24,8 @@ export interface Declared {
   important: boolean;
   /** Where it comes from: the style attribute, or the selector of the winning rule. */
   source: "inline" | { selector: string };
+  /** The winning rule's declarations (for a rule source), to leave it out (see declaredWithout). */
+  rule?: CSSStyleDeclaration;
 }
 
 /** A style rule that matches the element, with what the cascade needs to rank it. */
@@ -116,6 +118,22 @@ export function declaredValue(element: Element, property: string): Declared | nu
   return declaredValues(element, [property])[property] ?? null;
 }
 
+/**
+ * What would apply to `property` without some of its declarations: without
+ * the style attribute (`inline: false`), and without the rules in `skip`
+ * (their `rule`, from a Declared). How Pilot previews a removed value: the
+ * next declaration in the cascade, or null when nothing else declares it.
+ */
+export function declaredWithout(
+  element: Element,
+  property: string,
+  without: { inline: boolean; skip?: CSSStyleDeclaration[] },
+): Declared | null {
+  const rules = matchedRules(element).filter((r) => !without.skip?.includes(r.style));
+  const inline = without.inline ? undefined : ((element as HTMLElement).style as CSSStyleDeclaration | undefined);
+  return resolve(property, inline, rules);
+}
+
 /** The winner for `property` among the inline style and the matched rules. */
 export function resolve(
   property: string,
@@ -142,9 +160,15 @@ export function resolve(
   // Important declarations beat normal ones; within the same importance,
   // inline (element-attached) styles beat any rule.
   if (fromInline?.important) return { ...fromInline, source: "inline" };
-  if (best?.important) return { value: best.value, important: true, source: { selector: best.rule.selector } };
+  const fromRule = (r: NonNullable<typeof best>): Declared => ({
+    value: r.value,
+    important: r.important,
+    source: { selector: r.rule.selector },
+    rule: r.rule.style,
+  });
+  if (best?.important) return fromRule(best);
   if (fromInline) return { ...fromInline, source: "inline" };
-  if (best) return { value: best.value, important: false, source: { selector: best.rule.selector } };
+  if (best) return fromRule(best);
   return null;
 }
 

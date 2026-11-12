@@ -3,9 +3,10 @@ import { declaredValues } from "../../../dom/declared.ts";
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
 import type { BoxArea } from "../../../dom/boxModel.ts";
 import type { EditableElement } from "../../../dom/target.ts";
+import { clearProperty } from "../../../edits/clear.ts";
 import { EditHistory } from "../../../edits/history.ts";
 import { editors as allEditors, matchEditors } from "../../../editors/registry.ts";
-import type { FocusRequest, PropertyEditor } from "../../../editors/types.ts";
+import { type FocusRequest, type PropertyEditor, propertiesOf } from "../../../editors/types.ts";
 import { px } from "../../px.ts";
 import { PropertySearch } from "../PropertySearch/PropertySearch.tsx";
 
@@ -16,8 +17,13 @@ interface PropertyDialogProps {
   anchor: DOMRect;
   /** Editors to search. Defaults to the built-in registry (overridable for tests). */
   editors?: PropertyEditor[];
-  /** Starting search text (dev pinning); empty by default. */
+  /**
+   * Starting search text: the previous selection's (App carries it over), or
+   * the dev option's. Empty by default.
+   */
   initialQuery?: string;
+  /** The search text changed (App keeps it for the next selection). */
+  onQueryChange?(query: string): void;
   /** Where changes are applied and recorded. App passes its shared one so undo spans selections. */
   history?: EditHistory;
   /** Close the dialog (deselect): Esc on an empty search. */
@@ -31,8 +37,9 @@ const GAP = 8;
 /**
  * The dialog next to the selected element. It starts with only the search
  * field; as the designer types, it adds the editors for the query below it:
- * the best matches plus their family (see matchEditors). Remounted (empty
- * query, focus) for every new selection.
+ * the best matches plus their family (see matchEditors). Remounted for every
+ * new selection, starting from the previous selection's query (selected, so
+ * typing replaces it).
  *
  * Keyboard loop, Tailwind-fast: type a property (`pt`), Tab or Enter into its
  * editor, type a value, Enter: back in the search, ready for the next one.
@@ -43,6 +50,7 @@ export function PropertyDialog({
   anchor,
   editors = allEditors,
   initialQuery = "",
+  onQueryChange,
   history: sharedHistory,
   onClose,
   onInspect,
@@ -63,6 +71,7 @@ export function PropertyDialog({
   const setQuery = (q: string) => {
     setQueryState(q);
     setFocus(null);
+    onQueryChange?.(q);
   };
 
   // Tab past an editor's last field (or Shift+Tab before its first): on to the
@@ -238,9 +247,15 @@ function MatchedEditor({
 }) {
   const [, rerender] = useReducer((n: number) => n + 1, 0);
   const computed = getComputedStyle(element);
-  const values = Object.fromEntries(editor.properties.map((p) => [p, computed.getPropertyValue(p)]));
+  const properties = propertiesOf(editor);
+  const values = Object.fromEntries(properties.map((p) => [p, computed.getPropertyValue(p)]));
+  // A removed property shows nothing: the element doesn't set it (the page
+  // shows what applies without it). See clearProperty.
   const declared = Object.fromEntries(
-    Object.entries(declaredValues(element, editor.properties)).map(([p, d]) => [p, d?.value ?? ""]),
+    Object.entries(declaredValues(element, properties)).map(([p, d]) => [
+      p,
+      history.removalOf(element, p) ? "" : (d?.value ?? ""),
+    ]),
   );
   const Editor = editor.component;
   return (
@@ -249,7 +264,9 @@ function MatchedEditor({
       values={values}
       declared={declared}
       onChange={(property, value, options) => {
-        history.apply(element, property, value, options?.gesture);
+        // Cleared: the element doesn't set it (a removal, when the page's CSS does).
+        if (value === "") clearProperty(history, element, property, options?.gesture);
+        else history.apply(element, property, value, options?.gesture);
         rerender(0);
       }}
       onRevert={(property, gesture) => {

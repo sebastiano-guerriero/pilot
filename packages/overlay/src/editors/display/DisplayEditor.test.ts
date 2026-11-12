@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EditHistory } from "../../edits/history.ts";
 import { matchEditors } from "../registry.ts";
 import type { FocusRequest } from "../types.ts";
-import { columnsCount, columnsMode, columnsValue, parseCustomColumns } from "./ColumnsRow.tsx";
+import { gridColumnsEditor } from "../grid-columns/GridColumnsEditor.tsx";
 import { displayEditor } from "./DisplayEditor.tsx";
 
 const DisplayEditor = displayEditor.component;
@@ -51,7 +51,7 @@ afterEach(() => {
   element.remove();
 });
 
-/** A select by its label: "display" (the first one) or "columns". */
+/** A select by its label: "display" (the first one), "grid-columns"… */
 const select = (label = "display") => container.querySelector(`[role="combobox"][aria-label="${label}"]`) as HTMLButtonElement;
 /** What the select shows: its value, or "" for the dimmed "Select". */
 const shown = () => {
@@ -109,12 +109,17 @@ describe("display select", () => {
 });
 
 describe("grid rows", () => {
+  it("are the grid-columns, gap, justify-content and align-items editors", () => {
+    expect(displayEditor.embeds?.map((e) => e.id)).toEqual(["grid-columns", "gap", "justify-content", "align-items"]);
+    expect(gridColumnsEditor.properties).toEqual(["grid-template-columns"]);
+  });
+
   it("appear only for grid and inline-grid", () => {
     mount();
     pick("grid");
-    expect(labels()).toEqual(["display", "columns", "gap"]);
+    expect(labels()).toEqual(["display", "grid-columns", "gap", "justify-content", "align-items"]);
     pick("inline-grid");
-    expect(labels()).toEqual(["display", "columns", "gap"]);
+    expect(labels()).toEqual(["display", "grid-columns", "gap", "justify-content", "align-items"]);
     pick("flex");
     expect(labels()).toEqual(["display"]);
   });
@@ -129,112 +134,15 @@ describe("grid rows", () => {
     expect(labels()).toEqual(["display"]);
   });
 
-  it("columns: with nothing set, shows repeat and 1 (CSS grid's default), writing nothing", () => {
-    element.style.display = "grid";
-    mount();
-    expect(select("columns").textContent).toBe("repeat");
-    expect(field("column count")?.value).toBe("1");
-    expect(changes).toEqual([]);
-  });
 
-  it("columns: there's no Select option, and Backspace on the select does nothing", () => {
-    element.style.display = "grid";
-    mount();
-    act(() => select("columns").click());
-    const options = [...container.querySelectorAll('[role="option"]')].map((o) => o.textContent);
-    expect(options).toEqual(["repeat", "custom", "subgrid", "none"]);
-    act(() => select("columns").click());
-    element.style.gridTemplateColumns = "subgrid";
-    mount();
-    key(select("columns"), "Backspace");
-    expect(changes).toEqual([]);
-  });
 
-  it("columns, repeat: a count writes equal columns, shown back as the number", () => {
-    element.style.display = "grid";
-    mount();
-    typeAndEnter("column count", "3");
-    expect(changes).toEqual([["grid-template-columns", "repeat(3, minmax(0, 1fr))"]]);
-    expect(field("column count")?.value).toBe("3");
-  });
 
-  it("columns, repeat: clearing the count goes back to the default, 1", () => {
-    element.style.display = "grid";
-    mount();
-    typeAndEnter("column count", "3");
-    typeAndEnter("column count", "");
-    expect(changes.at(-1)).toEqual(["grid-template-columns", ""]);
-    expect(field("column count")?.value).toBe("1");
-  });
 
-  it("columns, repeat: a value Pilot wrote is read back as repeat with its count", () => {
-    element.style.display = "grid";
-    element.style.gridTemplateColumns = "repeat(4, minmax(0px, 1fr))";
-    mount();
-    expect(select("columns").textContent).toBe("repeat");
-    expect(field("column count")?.value).toBe("4");
-  });
 
-  it("columns, repeat: anything but a whole number from 1 is ignored", () => {
-    element.style.display = "grid";
-    mount();
-    for (const text of ["0", "-2", "1.5", "1fr 2fr", "abc"]) typeAndEnter("column count", text);
-    expect(changes).toEqual([]);
-  });
 
-  it("columns, repeat: ↑/↓ add or remove one column, never below 1, from the default 1", () => {
-    element.style.display = "grid";
-    mount();
-    act(() => field("column count")?.focus());
-    for (const k of ["ArrowDown", "ArrowUp", "ArrowUp", "ArrowDown"]) key(field("column count") as HTMLInputElement, k);
-    // ↓ at the default 1 writes nothing; then 2, 3, 2.
-    expect(changes.map(([, v]) => columnsCount(v))).toEqual(["2", "3", "2"]);
-  });
 
-  it("columns, custom: any valid CSS, shown as it is", () => {
-    element.style.display = "grid";
-    element.style.gridTemplateColumns = "repeat(2, minmax(0, 1fr))";
-    mount();
-    pick("custom", "columns");
-    // Switching to custom starts from the current value, to edit it.
-    expect(field("custom columns")?.value).toBe(element.style.gridTemplateColumns);
-    typeAndEnter("custom columns", "1fr   2fr");
-    expect(changes).toEqual([["grid-template-columns", "1fr 2fr"]]);
-    expect(select("columns").textContent).toBe("custom");
-    expect(field("custom columns")?.value).toBe("1fr 2fr");
-  });
 
-  it("columns: subgrid and none are written right away, with no field; repeat brings back 1 column", () => {
-    element.style.display = "grid";
-    mount();
-    pick("subgrid", "columns");
-    expect(field("column count")).toBeNull();
-    expect(field("custom columns")).toBeNull();
-    pick("none", "columns");
-    pick("repeat", "columns");
-    expect(changes).toEqual([
-      ["grid-template-columns", "subgrid"],
-      ["grid-template-columns", "none"],
-      ["grid-template-columns", "repeat(1, minmax(0, 1fr))"],
-    ]);
-    expect(field("column count")?.value).toBe("1");
-  });
 
-  it("columns: picking custom writes nothing until typed; undoing clears the picked mode", () => {
-    element.style.display = "grid";
-    element.style.gridTemplateColumns = "subgrid";
-    mount();
-    pick("custom", "columns");
-    expect(changes).toEqual([]);
-    expect(field("custom columns")?.value).toBe("");
-    pick("none", "columns");
-    act(() => {
-      history.undo();
-    });
-    mount();
-    expect(select("columns").textContent).toBe("subgrid");
-    expect(field("custom columns")).toBeNull();
-  });
 
   it("gap: hovering or focusing the row stripes the grid's gaps", () => {
     element.style.display = "grid";
@@ -260,6 +168,18 @@ describe("grid rows", () => {
     expect(handles[0]?.closest(".property-row")?.querySelector(".property-label")?.textContent).toBe("gap");
   });
 
+  it("justify-content and align-items: the icon selects, writing their own property", () => {
+    element.style.display = "grid";
+    mount();
+    pick("center", "justify-content");
+    pick("stretch", "align-items");
+    expect(changes).toEqual([
+      ["justify-content", "center"],
+      ["align-items", "stretch"],
+    ]);
+    expect(select("justify-content").querySelector(".option-icon")).not.toBeNull();
+  });
+
   it("gap is a length field like the others", () => {
     element.style.display = "grid";
     mount();
@@ -270,33 +190,42 @@ describe("grid rows", () => {
 });
 
 describe("keyboard", () => {
-  it("Tab goes display → columns select → count → gap, then out of the editor", () => {
+  it("Tab goes display → columns select → count → gap → justify → align, then out of the editor", () => {
     element.style.display = "grid";
     element.style.gridTemplateColumns = "repeat(3, minmax(0, 1fr))";
     mount({ query: "grid" });
     expect(focused()).toBe("display");
     key(select(), "Tab");
-    expect(focused()).toBe("columns");
-    key(select("columns"), "Tab");
+    expect(focused()).toBe("grid-columns");
+    key(select("grid-columns"), "Tab");
     expect(focused()).toBe("column count");
     key(field("column count") as HTMLInputElement, "Tab");
     expect(focused()).toBe("gap");
     key(field("gap") as HTMLInputElement, "Tab");
+    expect(focused()).toBe("justify-content");
+    key(select("justify-content"), "Tab");
+    expect(focused()).toBe("align-items");
+    key(select("align-items"), "Tab");
     expect(tabbedOut).toEqual([1]);
+    key(select("align-items"), "Tab", { shiftKey: true });
+    expect(focused()).toBe("justify-content");
+    key(select("justify-content"), "Tab", { shiftKey: true });
+    expect(focused()).toBe("gap");
     key(field("gap") as HTMLInputElement, "Tab", { shiftKey: true });
     expect(focused()).toBe("column count");
     key(field("column count") as HTMLInputElement, "Tab", { shiftKey: true });
-    expect(focused()).toBe("columns");
-    key(select("columns"), "Tab", { shiftKey: true });
+    expect(focused()).toBe("grid-columns");
+    key(select("grid-columns"), "Tab", { shiftKey: true });
     expect(focused()).toBe("display");
   });
 
-  it("without a columns field (subgrid), Tab goes from the columns select to gap", () => {
+  it("without a columns field (subgrid), Tab goes from the grid-columns select to gap", () => {
     element.style.display = "grid";
     element.style.gridTemplateColumns = "subgrid";
-    mount({ query: "grid-cols" });
-    expect(focused()).toBe("columns");
-    key(select("columns"), "Tab");
+    mount({ query: "grid" });
+    key(select(), "Tab");
+    expect(focused()).toBe("grid-columns");
+    key(select("grid-columns"), "Tab");
     expect(focused()).toBe("gap");
   });
 
@@ -306,46 +235,33 @@ describe("keyboard", () => {
     expect(tabbedOut).toEqual([1]);
   });
 
-  it("the query picks the row: gap, cols", () => {
+  it("from the search it lands on display; from the next editor (Shift+Tab), on the last row", () => {
     element.style.display = "grid";
-    mount({ query: "gap" });
-    expect(focused()).toBe("gap");
-    mount({ query: "grid-cols" });
-    expect(focused()).toBe("columns");
+    mount({ query: "grid" });
+    expect(focused()).toBe("display");
     mount({ query: "", edge: "last" });
-    expect(focused()).toBe("gap");
+    expect(focused()).toBe("align-items");
   });
 });
 
-describe("columns value", () => {
-  it("tells the mode from the value", () => {
-    expect(["", "repeat(3, minmax(0, 1fr))", "subgrid", "none", "1fr 2fr", "repeat(3, 1fr)"].map(columnsMode)).toEqual([
-      "",
-      "repeat",
-      "subgrid",
-      "none",
-      "custom",
-      "custom", // only Pilot's own repeat is a count
-    ]);
-  });
-
-  it("custom: cleared removes, whitespace is tidied", () => {
-    expect(parseCustomColumns("  ")).toBe("");
-    expect(parseCustomColumns(" 1fr   200px ")).toBe("1fr 200px");
-  });
-
-  it("round-trips, including the browser's minmax(0px, …)", () => {
-    expect(columnsValue(4)).toBe("repeat(4, minmax(0, 1fr))");
-    expect(columnsCount("repeat(4, minmax(0, 1fr))")).toBe("4");
-    expect(columnsCount("repeat(4, minmax(0px, 1fr))")).toBe("4");
-    expect(columnsCount("1fr 2fr")).toBeNull();
-  });
-});
 
 describe("search", () => {
   it("Tailwind's display and grid utilities land on display", () => {
-    for (const q of ["display", "grid", "flex", "hidden", "gap", "cols", "grid-cols"]) {
+    for (const q of ["display", "grid", "flex", "hidden"]) {
       expect(matchEditors(q).map((e) => e.id)).toEqual(["display"]);
     }
+  });
+
+  it("the grid rows are found on their own, without display or each other", () => {
+    expect(matchEditors("gap").map((e) => e.id)).toEqual(["gap"]);
+    for (const q of ["cols", "grid-cols", "grid-columns"]) {
+      expect(matchEditors(q).map((e) => e.id)).toEqual(["grid-columns"]);
+    }
+  });
+
+  it("the embedded grid rows don't make display match: their own editors do", () => {
+    expect(matchEditors("justify-content").map((e) => e.id)).toEqual(["justify-content"]);
+    expect(matchEditors("align-items").map((e) => e.id)).toEqual(["align-items"]);
+    expect(matchEditors("align").map((e) => e.id)).toEqual(["align-items"]);
   });
 });
