@@ -237,3 +237,19 @@ describe("PropertyInputText parentheses", () => {
     expect(commits).toEqual(["var(--gap)"]);
   });
 });
+
+describe("icon variant", () => {
+  it("draws the icon at the field's left and makes room for it", () => {
+    act(() => render(h(PropertyInputText, { value: "12px", label: "Gap", icon: h("i", {}, "I"), onCommit: () => {} }), container));
+    const wrap = container.querySelector(".input-wrap") as HTMLElement;
+    expect(wrap.querySelector(".input-icon")?.textContent).toBe("I");
+    expect(input().hasAttribute("data-icon")).toBe(true);
+    expect(input().value).toBe("12px");
+  });
+
+  it("without an icon or a handle, the field isn't wrapped", () => {
+    act(() => render(h(PropertyInputText, { value: "12px", label: "Gap", onCommit: () => {} }), container));
+    expect(container.querySelector(".input-wrap")).toBeNull();
+    expect(input().hasAttribute("data-icon")).toBe(false);
+  });
+});

@@ -73,10 +73,18 @@ export const DISPLAY_VALUES = [
   "none",
 ] as const;
 
+/** The justify-content values Pilot offers, in menu order (each has an icon). */
+export const JUSTIFY_CONTENT_VALUES = ["start", "end", "center", "space-between", "space-around", "space-evenly"] as const;
+
+/** The align-items values Pilot offers, in menu order (each has an icon). */
+export const ALIGN_ITEMS_VALUES = ["start", "center", "end", "stretch", "baseline"] as const;
+
 export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   display: { initial: "inline", keywords: [...DISPLAY_VALUES], negative: false },
   "grid-template-columns": { initial: "none", keywords: ["none"], negative: false },
   gap: { initial: "normal", keywords: ["normal"], negative: false },
+  "justify-content": { initial: "normal", keywords: ["normal", ...JUSTIFY_CONTENT_VALUES], negative: false },
+  "align-items": { initial: "normal", keywords: ["normal", ...ALIGN_ITEMS_VALUES], negative: false },
   width: { initial: "auto", keywords: SIZE_KEYWORDS, negative: false },
   "min-width": { initial: "auto", keywords: SIZE_KEYWORDS, negative: false },
   "max-width": { initial: "none", keywords: ["none", ...SIZE_KEYWORDS.filter((k) => k !== "auto")], negative: false },

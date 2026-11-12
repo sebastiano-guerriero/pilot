@@ -1,5 +1,7 @@
+import { alignItemsEditor } from "./align/AlignItemsEditor.tsx";
 import { borderEditor } from "./border/BorderEditor.tsx";
 import { displayEditor } from "./display/DisplayEditor.tsx";
+import { justifyContentEditor } from "./justify/JustifyContentEditor.tsx";
 import { marginEditor } from "./margin/MarginEditor.tsx";
 import { paddingBottomEditor, paddingLeftEditor, paddingRightEditor, paddingTopEditor } from "./padding/PaddingEditor.tsx";
 import { normalizeQuery } from "./query.ts";
@@ -22,6 +24,8 @@ export const editors: PropertyEditor[] = [
   minWidthEditor,
   maxWidthEditor,
   displayEditor,
+  justifyContentEditor,
+  alignItemsEditor,
 ];
 
 /**

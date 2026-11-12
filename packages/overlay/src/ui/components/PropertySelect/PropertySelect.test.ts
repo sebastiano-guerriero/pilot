@@ -278,3 +278,42 @@ describe("typeaheadMatch", () => {
     expect(typeaheadMatch(list, "x", 0)).toBe(-1);
   });
 });
+
+describe("icon variant", () => {
+  const icons: Record<string, string> = { block: "B", flex: "F" };
+  const mountIcons = (initial = "") =>
+    act(() =>
+      render(
+        h(PropertySelect, {
+          value: initial,
+          options: ["block", "flex", "grid"],
+          label: "display",
+          onChange: (v: string) => changes.push(v),
+          iconFor: (v: string) => (icons[v] ? h("i", {}, icons[v]) : null),
+        }),
+        container,
+      ),
+    );
+
+  it("shows the value's icon before its text on the trigger", () => {
+    mountIcons("flex");
+    expect(trigger().querySelector(".option-icon")?.textContent).toBe("F");
+    expect(trigger().querySelector(".option-icon + .value")?.textContent).toBe("flex");
+  });
+
+  it("every option has an icon slot, empty where a value has none, so labels line up", () => {
+    mountIcons("flex");
+    act(() => trigger().click());
+    const slots = options().map((o) => o.querySelector(".content .option-icon")?.textContent);
+    expect(slots).toEqual(["", "B", "F", ""]); // Select, block, flex, grid
+    // The checkmark column comes first, then the icon and label together.
+    const checked = options().find((o) => o.getAttribute("aria-selected") === "true") as HTMLElement;
+    expect([...checked.children].map((c) => c.className)).toEqual(["check", "content"]);
+  });
+
+  it("without iconFor, there are no icon slots", () => {
+    mount("flex");
+    act(() => trigger().click());
+    expect(container.querySelector(".option-icon")).toBeNull();
+  });
+});

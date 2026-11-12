@@ -1,4 +1,4 @@
-import type { RefObject } from "preact";
+import type { ComponentChildren, RefObject } from "preact";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { px } from "../../px.ts";
 import { Icon } from "../Icon/Icon.tsx";
@@ -22,6 +22,12 @@ interface PropertySelectProps {
    * value (the columns mode, which defaults to repeat).
    */
   clearable?: boolean;
+  /**
+   * The icon variant: an icon for each value (12px, 6px before the text), on
+   * the trigger and on every option. Called with "" for the "Select" state
+   * (nothing set). Values without one keep an empty slot, so labels line up.
+   */
+  iconFor?(value: string): ComponentChildren;
 }
 
 /** The menu's padding: its options line up with the trigger once it's moved left by this. */
@@ -53,7 +59,16 @@ const TYPEAHEAD_MS = 500;
  * it removes the value. A value that isn't in `options` (set some other way)
  * is still listed, right after it.
  */
-export function PropertySelect({ value, options, label, triggerRef, onChange, onTab, clearable = true }: PropertySelectProps) {
+export function PropertySelect({
+  value,
+  options,
+  label,
+  triggerRef,
+  onChange,
+  onTab,
+  clearable = true,
+  iconFor,
+}: PropertySelectProps) {
   // "" is the "Select" option: no value.
   const list = [...(clearable ? [""] : []), ...(value && !options.includes(value) ? [value] : []), ...options];
   const ownRef = useRef<HTMLButtonElement>(null);
@@ -184,6 +199,7 @@ export function PropertySelect({ value, options, label, triggerRef, onChange, on
         onKeyDown={onKeyDown}
         onBlur={close}
       >
+        {iconFor && <span class="option-icon">{iconFor(value)}</span>}
         {value ? <span class="value">{value}</span> : <span class="value placeholder">Select</span>}
         <Icon name="chevron-down" class="chevron" />
       </button>
@@ -215,7 +231,10 @@ export function PropertySelect({ value, options, label, triggerRef, onChange, on
               onClick={() => choose(index)}
             >
               <span class="check">{option === value && <Icon name="check" />}</span>
-              <span class={option ? "label" : "label placeholder"}>{option || "Select"}</span>
+              <span class="content">
+                {iconFor && <span class="option-icon">{iconFor(option)}</span>}
+                <span class={option ? "label" : "label placeholder"}>{option || "Select"}</span>
+              </span>
             </div>
           ))}
         </div>

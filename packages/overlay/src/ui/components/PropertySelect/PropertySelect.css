@@ -78,6 +78,26 @@
     }
   }
 
+  /* Icon variant: a 12px icon slot, 6px before the text, on the trigger and
+     on every option (empty where a value has no icon, so labels line up). */
+  .option-icon {
+    flex: none;
+    width: 12px;
+    height: 12px;
+  }
+
+  .trigger .option-icon {
+    margin-right: 6px;
+  }
+
+  /* An option's icon and label: 6px apart, 8px after the checkmark. */
+  .content {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
   /* The checkmark's column: there on every option, so labels line up. */
   .check {
     flex: none;

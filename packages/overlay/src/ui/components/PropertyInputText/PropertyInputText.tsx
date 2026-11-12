@@ -1,4 +1,4 @@
-import type { RefObject } from "preact";
+import type { ComponentChildren, RefObject } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { ScrubHandle } from "../ScrubHandle/ScrubHandle.tsx";
 
@@ -52,6 +52,8 @@ interface PropertyInputTextProps {
    * drag started, and one `gesture` object for the whole drag (one undo step).
    */
   onScrub?(steps: number, startText: string, gesture: object): void;
+  /** The icon variant: an icon (12px) at the field's left, 6px before the text. */
+  icon?: ComponentChildren;
   /**
    * The box-model diagram's variant: no box, sized to its content, a dimmed
    * dash when empty. Regular fields are a 24px box that fills its slot.
@@ -87,6 +89,7 @@ export function PropertyInputText({
   mirror,
   onDraft,
   onScrub,
+  icon,
 }: PropertyInputTextProps) {
   const ownRef = useRef<HTMLInputElement>(null);
   const ref = inputRef ?? ownRef;
@@ -212,6 +215,7 @@ export function PropertyInputText({
       aria-label={label}
       data-compact={compact || undefined}
       data-scrub={onScrub ? "" : undefined}
+      data-icon={icon ? "" : undefined}
       data-mirror-selected={mirror?.selected || undefined}
       data-placeholder-selected={placeholderSelected || undefined}
       value={shown}
@@ -244,18 +248,22 @@ export function PropertyInputText({
       }}
       onKeyDown={onKeyDown}
     />);
-  if (!onScrub) return input;
+  if (!onScrub && !icon) return input;
 
+  // With an icon or a scrub handle: a wrapper the input fills, with them on top.
   return (
-    <span class="scrub-field">
+    <span class={onScrub ? "input-wrap scrub-field" : "input-wrap"}>
+      {icon && <span class="input-icon">{icon}</span>}
       {input}
-      <ScrubHandle
-        onStart={() => {
-          scrubStart.current = ref.current?.value ?? value;
-          return true;
-        }}
-        onScrub={(steps, gesture) => onScrub(steps, scrubStart.current, gesture)}
-      />
+      {onScrub && (
+        <ScrubHandle
+          onStart={() => {
+            scrubStart.current = ref.current?.value ?? value;
+            return true;
+          }}
+          onScrub={(steps, gesture) => onScrub(steps, scrubStart.current, gesture)}
+        />
+      )}
     </span>
   );
 }

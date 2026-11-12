@@ -11,10 +11,21 @@ describe("Icon", () => {
     expect(svg.getAttribute("class")).toBe("icon chevron");
     expect([svg.getAttribute("width"), svg.getAttribute("viewBox")]).toEqual(["8", "0 0 8 8"]);
     expect(svg.getAttribute("aria-hidden")).toBe("true");
-    // No inline colors: only currentColor (and fill="none").
+    // No raw colors: only currentColor (and fill="none").
     const colors = [...host.querySelectorAll("*")].flatMap((el) =>
       ["stroke", "fill"].map((a) => el.getAttribute(a)).filter((v): v is string => !!v),
     );
     expect(colors.every((c) => c === "currentColor" || c === "none")).toBe(true);
+  });
+
+  it("multi-color icons use tokens, never raw colors", () => {
+    const host = document.createElement("div");
+    render(h(Icon, { name: "justify-start" }), host);
+    expect(host.querySelector("svg")?.getAttribute("width")).toBe("12");
+    const colors = [...host.querySelectorAll("*")].flatMap((el) =>
+      ["stroke", "fill"].map((a) => el.getAttribute(a)).filter((v): v is string => !!v),
+    );
+    expect(colors.length).toBeGreaterThan(0);
+    expect(colors.every((c) => c === "none" || /^var\(--plt-[\w-]+\)$/.test(c))).toBe(true);
   });
 });
