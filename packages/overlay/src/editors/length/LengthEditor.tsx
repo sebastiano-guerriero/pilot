@@ -148,7 +148,6 @@ export function lengthEditor(
     property: string;
     label: string;
     aliases?: string[];
-    keywords?: string[];
     family?: string;
   } & LengthOptions,
 ): PropertyEditor {

@@ -24,8 +24,7 @@ export const gridColumnsEditor: PropertyEditor = {
   id: "grid-columns",
   label: "Grid columns",
   properties: ["grid-template-columns"],
-  // Tailwind's grid-cols-* utilities.
-  aliases: ["cols", "grid-cols", "grid-columns"],
-  keywords: ["columns", "grid"],
+  // Tailwind's grid-cols-* utilities, and the row's label.
+  aliases: ["grid-cols", "grid-columns"],
   component: GridColumnsEditor,
 };

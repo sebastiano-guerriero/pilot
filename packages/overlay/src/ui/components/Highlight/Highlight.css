@@ -16,14 +16,17 @@
     left: -1px;
     bottom: 100%;
     margin-bottom: 4px;
-    padding: 4px;
+    /* 20px tall, like the viewport width button (ViewportWidth.css). */
+    height: 20px;
+    padding-inline: 4px;
+    line-height: 20px;
     border-radius: 4px;
     background: var(--plt-color-accent);
     color: var(--plt-color-background);
     font-size: var(--plt-text-base);
     white-space: nowrap;
 
-    /* Element touches the top of the viewport: label goes inside the box. */
+    /* Element touches the top of the viewport: the label goes inside the box. */
     &[data-inside] {
       bottom: auto;
       top: 4px;

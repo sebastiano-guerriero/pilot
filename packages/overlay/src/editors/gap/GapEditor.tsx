@@ -10,5 +10,4 @@ export const gapEditor = lengthEditor({
   label: "Gap",
   inspect: { box: "gap" },
   scrub: true,
-  keywords: ["gutter", "spacing"],
 });

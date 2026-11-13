@@ -26,23 +26,41 @@ interface GridOverlayProps {
  * sits in the middle. Lines on the element's outline (no padding or border)
  * aren't drawn: they'd only double it. Their numbers stay. While the gap field
  * is hovered or focused, BoxAreas also stripes the gaps, along with the lines.
- * With `orParent`, a grid item shows its parent's grid instead. Nothing is
+ * With `orParent`, a grid item shows its parent's grid instead, with the
+ * parent's border box dashed too (it has no selection outline). Nothing is
  * drawn for other elements. Re-measured every frame;
  * purely visual, never receives events.
  */
 export function GridOverlay({ element, part, orParent }: GridOverlayProps) {
   const lines = part === "lines";
   const numbers = part === "numbers";
-  const grid = useMeasured(element, (el) => {
+  const measured = useMeasured(element, (el) => {
     const own = measureGrid(el);
-    return own || !orParent || !el.parentElement ? own : measureGrid(el.parentElement);
+    if (own || !orParent || !el.parentElement) return own && { grid: own, parent: false };
+    const parent = measureGrid(el.parentElement);
+    return parent && { grid: parent, parent: true };
   });
-  if (!grid) return null;
+  if (!measured) return null;
+  const { grid, parent } = measured;
   const { content } = grid;
   const edge = (line: GridLine, lines: GridLine[]) =>
     line.number === 1 ? "start" : line.number === lines.length ? "end" : undefined;
   return (
     <div class="grid-overlay" aria-hidden="true">
+      {/* A selected grid's outer lines are its selection outline. The parent
+          grid of a selected item has no outline, so its border box is drawn
+          dashed like the lines: the outer lines aren't missing. */}
+      {lines && parent && (
+        <div
+          class="frame"
+          style={{
+            left: px(grid.box.left),
+            top: px(grid.box.top),
+            width: px(grid.box.width),
+            height: px(grid.box.height),
+          }}
+        />
+      )}
       {lines &&
         grid.columns.flatMap((line) =>
           drawnPositions(line, grid.box.left, grid.box.left + grid.box.width).map((x) => (

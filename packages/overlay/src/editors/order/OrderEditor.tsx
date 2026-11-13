@@ -8,5 +8,4 @@ export const orderEditor = lengthEditor({
   property: "order",
   label: "Order",
   aliases: ["order"],
-  keywords: ["position", "sort", "flex", "grid"],
 });

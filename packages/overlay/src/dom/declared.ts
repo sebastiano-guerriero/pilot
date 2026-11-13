@@ -172,6 +172,21 @@ export function resolve(
   return null;
 }
 
+/**
+ * The `@media` conditions a rule's declarations sit in, joined with `and`
+ * when nested (`(min-width: 768px) and (hover: hover)`), or undefined.
+ */
+export function mediaOf(style: CSSStyleDeclaration): string | undefined {
+  const conditions: string[] = [];
+  let rule: CSSRule | null = style.parentRule;
+  while (rule) {
+    const text = (rule as CSSRule & { media?: MediaList }).media?.mediaText;
+    if (text && "cssRules" in rule) conditions.unshift(text);
+    rule = rule.parentRule;
+  }
+  return conditions.length ? conditions.join(" and ") : undefined;
+}
+
 /** Whether declaration `a` wins over `b` in the cascade (both from rules). */
 export function beats(
   a: { important: boolean; rule: Pick<MatchedRule, "layer" | "specificity" | "order"> },

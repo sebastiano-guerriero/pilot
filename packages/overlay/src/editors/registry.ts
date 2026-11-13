@@ -43,7 +43,10 @@ export const editors: PropertyEditor[] = [
  * 4. exact alias (`pt` → padding)
  * 3. exact label or property name
  * 2. label/property starting with the query (`pad`, `padding-t`)
- * 1. label/property/keyword containing it
+ * 1½. a later word of a label/property/alias starting with it (`spa` → col-span,
+ *    `cols` → grid-cols), so a word being typed beats letters in the middle of one
+ * 1. label/property containing it
+ * Only names, properties and aliases (Tailwind's class names) are searched.
  * ½. abbreviations: the query's letters appear in order in a label/property,
  *    starting at a word start (`wdt` → width, `mxw` → max-width). Ranked last,
  *    so it only matters when nothing better matches; among several, the one
@@ -99,7 +102,9 @@ function rank(q: string, list: PropertyEditor[]): Array<{ editor: PropertyEditor
     const names = [e.label, ...e.properties].map(normalizeQuery);
     if (names.some((n) => n === q)) return 3;
     if (names.some((n) => n.startsWith(q))) return 2;
-    if (names.some((n) => n.includes(q)) || e.keywords?.some((k) => normalizeQuery(k).includes(q))) return 1;
+    const laterWords = [e.label, ...e.properties, ...(e.aliases ?? [])].flatMap((n) => n.toLowerCase().split(/[\s-]+/).slice(1));
+    if (laterWords.some((w) => w.startsWith(q))) return 1.5;
+    if (names.some((n) => n.includes(q))) return 1;
     return 0;
   };
   const abbreviation = (e: PropertyEditor): number | null => {

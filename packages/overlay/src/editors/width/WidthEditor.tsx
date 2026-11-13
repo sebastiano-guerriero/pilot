@@ -8,7 +8,6 @@ export const widthEditor = lengthEditor({
   property: "width",
   label: "Width",
   aliases: ["w"],
-  keywords: ["size", "horizontal"],
 });
 
 export const minWidthEditor = lengthEditor({

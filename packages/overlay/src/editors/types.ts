@@ -12,18 +12,20 @@ import type { EditableElement } from "../dom/target.ts";
 export interface PropertyEditor {
   /** Stable id, e.g. `opacity`. */
   id: string;
-  /** Label shown in search results. */
+  /**
+   * The editor's name ("Column span"). Searched like `properties` and
+   * `aliases`: those three are all the search looks at (no extra keywords).
+   */
   label: string;
   /** CSS properties this editor writes, in kebab-case. */
   properties: string[];
   /**
-   * Short codes that match exactly and rank first, Tailwind-style: `p`, `pt`,
-   * `px`… for padding. They're how a designer who knows the utility names gets
-   * to an editor in one or two keystrokes.
+   * Tailwind's class names for it, which match exactly and rank first: `p`,
+   * `pt`, `px`… for padding, `col-span` for grid-column. Also the row's label
+   * when it's neither the property nor the editor's name (`grid-columns`).
+   * Only those: no made-up shortcuts.
    */
   aliases?: string[];
-  /** Extra search terms ("transparency", "fade"...), matched anywhere in the word. */
-  keywords?: string[];
   /**
    * The id of the editor this one belongs with (min-width → "width"). A search
    * that lands on that editor shows the whole family; a search that lands on

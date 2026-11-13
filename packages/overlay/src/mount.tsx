@@ -12,6 +12,12 @@ export interface PilotOptions {
   launch?: boolean;
   /** Development aids for working on Pilot itself (e.g. in the playground). */
   dev?: PilotDevOptions;
+  /**
+   * Data attributes this project names its elements with (e.g.
+   * `["data-block"]`), shown in the selection label before the common ones
+   * (`data-testid`, `data-slot`…). See dom/name.ts.
+   */
+  nameAttributes?: string[];
 }
 
 export interface PilotDevOptions {
@@ -69,7 +75,7 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
     draw();
   };
 
-  const draw = () => render(running ? <App host={host} dev={options.dev} onQuit={() => instance.quit()} /> : null, container);
+  const draw = () => render(running ? <App host={host} dev={options.dev} nameAttributes={options.nameAttributes} onQuit={() => instance.quit()} /> : null, container);
 
   const instance: PilotInstance = {
     launch: () => setRunning(true),

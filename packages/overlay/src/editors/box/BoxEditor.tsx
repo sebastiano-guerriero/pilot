@@ -40,7 +40,6 @@ export interface BoxConfig {
   property(side: SideName): string;
   /** Tailwind-style aliases: one for all sides, one per side, one per axis. */
   aliases: { all: string; top: string; right: string; bottom: string; left: string; x: string; y: string };
-  keywords?: string[];
   /**
    * A property that must be set for this one to show. Border widths do
    * nothing while the side's border-style is `none`: setting a width on such a
@@ -553,7 +552,6 @@ export function boxEditor(config: BoxConfig): PropertyEditor {
     label: config.label,
     properties: ALL.map(config.property),
     aliases: [aliases.all, aliases.top, aliases.right, aliases.bottom, aliases.left, aliases.x, aliases.y],
-    keywords: config.keywords,
     component: (props: PropertyEditorProps) => <BoxEditor {...props} config={config} />,
   };
 }

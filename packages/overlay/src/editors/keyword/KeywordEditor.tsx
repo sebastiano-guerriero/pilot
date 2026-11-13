@@ -61,7 +61,6 @@ export function keywordEditor(
     property: string;
     label: string;
     aliases?: string[];
-    keywords?: string[];
     family?: string;
   } & KeywordOptions,
 ): PropertyEditor {

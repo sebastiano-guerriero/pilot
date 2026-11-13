@@ -6,6 +6,9 @@ const pilot = mountPilot({
   // open an editor directly; remove `dev` to get the real flow back (Pilot
   // dormant until `/pilot`).
   dev: { select: ".button--primary" },
+  // This project names its blocks with data-block (the CTA row): the
+  // selection label tries it before data-testid, data-slot…
+  nameAttributes: ["data-block"],
 });
 
 // Playground-only stand-in for `/pilot` until the bridge exists.

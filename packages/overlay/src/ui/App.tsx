@@ -1,21 +1,27 @@
+import type { WidthRange } from "@pilot/protocol";
 import { useCallback, useEffect, useReducer, useRef, useState } from "preact/hooks";
 import { type BoxArea, hidesSelection } from "../dom/boxModel.ts";
 import { type EditableElement, isEditable } from "../dom/target.ts";
 import { EditHistory, historyShortcut } from "../edits/history.ts";
+import { clickWidth } from "../edits/widths.ts";
 import type { PilotDevOptions } from "../mount.tsx";
 import { useElementPicker } from "../select/useElementPicker.ts";
 import { useElementRect } from "../select/useElementRect.ts";
 import { BoxAreas } from "./components/BoxAreas/BoxAreas.tsx";
 import { GridOverlay } from "./components/GridOverlay/GridOverlay.tsx";
 import { Highlight } from "./components/Highlight/Highlight.tsx";
-import { PropertyDialog } from "./components/PropertyDialog/PropertyDialog.tsx";
+import { PropertyDialog, type WidthPick } from "./components/PropertyDialog/PropertyDialog.tsx";
 import { Toolbar } from "./components/Toolbar/Toolbar.tsx";
+import { ViewportWidth } from "./components/ViewportWidth/ViewportWidth.tsx";
+import { useViewportWidth } from "./useViewportWidth.ts";
 
 interface AppProps {
   /** Pilot's Shadow DOM host, so the picker can ignore events from Pilot's own UI. */
   host: HTMLElement;
   /** See `PilotOptions.dev`: start with an element selected and the dialog open. */
   dev?: PilotDevOptions;
+  /** See `PilotOptions.nameAttributes`: how the selection label names elements. */
+  nameAttributes?: readonly string[];
   onQuit(): void;
 }
 
@@ -26,7 +32,7 @@ interface AppProps {
  *   another element re-selects; Esc clears the selection.
  * - Cursor off: the page behaves normally again and the selection is cleared.
  */
-export function App({ host, dev, onQuit }: AppProps) {
+export function App({ host, dev, nameAttributes, onQuit }: AppProps) {
   const [selecting, setSelecting] = useState(!!dev);
   const [selected, setSelected] = useState<{ element: EditableElement; key: number } | null>(() => {
     if (!dev) return null;
@@ -43,6 +49,15 @@ export function App({ host, dev, onQuit }: AppProps) {
   useEffect(() => {
     if (!selected) lastQuery.current = "";
   }, [selected]);
+
+  // The width chip: the viewport widths changes are for (null: every width).
+  // Set in the search (`from-1200 `) or by clicking the viewport width; it
+  // stays, across selections and with nothing selected, until it's removed.
+  const [widths, setWidths] = useState<WidthRange | null>(null);
+  const viewportWidth = useViewportWidth();
+  // A click on the viewport width. With the dialog open, it goes to the
+  // dialog, which sets the chip (a `from`/`to` typed in the search decides it).
+  const [widthPick, setWidthPick] = useState<WidthPick | undefined>();
 
   const onPick = useCallback((element: EditableElement) => {
     setSelected((prev) => (prev?.element === element ? prev : { element, key: (prev?.key ?? 0) + 1 }));
@@ -116,7 +131,7 @@ export function App({ host, dev, onQuit }: AppProps) {
     <>
       {hovered && hoverRect && (
         <>
-          <Highlight element={hovered} rect={hoverRect} variant="hover" />
+          <Highlight element={hovered} rect={hoverRect} variant="hover" nameAttributes={nameAttributes} />
           {/* A hovered grid shows its lines; numbers come with the selection. */}
           <GridOverlay element={hovered} part="lines" />
         </>
@@ -136,8 +151,9 @@ export function App({ host, dev, onQuit }: AppProps) {
               element={selected.element}
               rect={selectedRect}
               variant="selected"
-              // Hovering another element: only its label shows, so they don't overlap.
-              label={!(hovered && hovered !== selected.element)}
+              // No name and size on the selection: you know what you clicked,
+              // and its corner is kept for the selection's actions.
+              label={false}
             />
           )}
           {inspect && <BoxAreas element={selected.element} areas={inspect} />}
@@ -153,9 +169,20 @@ export function App({ host, dev, onQuit }: AppProps) {
             history={history}
             onClose={() => setSelected(null)}
             onInspect={setInspect}
+            widths={widths}
+            onWidthsChange={setWidths}
+            viewportWidth={viewportWidth}
+            widthPick={widthPick}
           />
         </>
       )}
+      <ViewportWidth
+        width={viewportWidth}
+        widths={widths}
+        onPick={(width, shift) =>
+          selected ? setWidthPick({ width, shift }) : setWidths((current) => clickWidth(current, width, shift))
+        }
+      />
       <Toolbar selecting={selecting} onToggleSelect={toggleSelect} canSend={false} onSend={() => {}} onQuit={onQuit} />
     </>
   );

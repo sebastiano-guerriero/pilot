@@ -2,22 +2,21 @@ import { describe, expect, it } from "vitest";
 import { abbreviationPenalty, matchEditors, searchEditors } from "./registry.ts";
 import type { PropertyEditor } from "./types.ts";
 
-const stub = (id: string, properties: string[], keywords?: string[]): PropertyEditor => ({
+const stub = (id: string, properties: string[]): PropertyEditor => ({
   id,
   label: id,
   properties,
-  keywords,
   component: () => null,
 });
 
-const list = [stub("opacity", ["opacity"], ["transparency", "fade"]), stub("padding", ["padding"]), stub("gap", ["gap", "row-gap", "column-gap"])];
+const list = [stub("opacity", ["opacity"]), stub("padding", ["padding"]), stub("gap", ["gap", "row-gap", "column-gap"])];
 
 describe("searchEditors", () => {
   it("matches by prefix", () => {
     expect(searchEditors("opa", list).map((e) => e.id)).toEqual(["opacity"]);
   });
-  it("matches by keyword", () => {
-    expect(searchEditors("fade", list).map((e) => e.id)).toEqual(["opacity"]);
+  it("only searches names, properties and aliases: no extra keywords", () => {
+    expect(searchEditors("fade", list)).toEqual([]);
   });
   it("ranks exact matches above partial ones", () => {
     expect(searchEditors("gap", list).map((e) => e.id)[0]).toBe("gap");
@@ -34,7 +33,7 @@ describe("searchEditors", () => {
 
   it("finds the padding rows by p, pt, padding", async () => {
     const { editors } = await import("./registry.ts");
-    for (const q of ["p", "pt", "py", "pad", "padding", "padding-top", "spacing"]) {
+    for (const q of ["p", "pt", "py", "pad", "padding", "padding-top"]) {
       expect(searchEditors(q, editors)[0]?.id, q).toBe("padding-top");
     }
     expect(searchEditors("pr", editors)[0]?.id).toBe("padding-right");
@@ -43,7 +42,7 @@ describe("searchEditors", () => {
 
   it("finds the built-in width editor by w, width", async () => {
     const { editors } = await import("./registry.ts");
-    for (const q of ["w", "wid", "width", "size"]) {
+    for (const q of ["w", "wid", "width"]) {
       expect(searchEditors(q, editors)[0]?.id, q).toBe("width");
     }
   });
@@ -109,7 +108,7 @@ describe("matchEditors (what the dialog shows)", () => {
   });
 
   it("shows every editor tied for a prefix-or-better match, but only the top substring match", () => {
-    const list = [stub("min-width", ["min-width"]), stub("min-height", ["min-height"]), stub("gap", ["gap"], ["spacing"])];
+    const list = [stub("min-width", ["min-width"]), stub("min-height", ["min-height"]), stub("gap", ["gap"])];
     expect(matchEditors("min", list).map((e) => e.id)).toEqual(["min-width", "min-height"]);
     expect(matchEditors("i", list).map((e) => e.id)).toHaveLength(1);
   });
@@ -122,5 +121,13 @@ describe("abbreviationPenalty", () => {
     expect(abbreviationPenalty("wdt", "min-width")).toBe(2); // from a later word: one step worse
     expect(abbreviationPenalty("dt", "width")).toBeNull(); // d doesn't start a word
     expect(abbreviationPenalty("wtd", "width")).toBeNull(); // out of order
+  });
+
+  it("a word being typed beats letters inside one: spa is col-span", () => {
+    expect(matchEditors("spa").map((e) => e.id)).toEqual(["grid-column"]);
+    expect(matchEditors("span").map((e) => e.id)).toEqual(["grid-column"]);
+    expect(matchEditors("ite").map((e) => e.id)).toEqual(["align-items"]);
+    expect(matchEditors("items").map((e) => e.id)).toEqual(["align-items"]);
+    expect(matchEditors("justify").map((e) => e.id)).toEqual(["justify-content"]);
   });
 });

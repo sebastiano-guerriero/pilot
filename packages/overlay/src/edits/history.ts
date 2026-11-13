@@ -1,4 +1,4 @@
-import type { StyleSource } from "@pilot/protocol";
+import type { StyleSource, WidthRange } from "@pilot/protocol";
 import type { EditableElement } from "../dom/target.ts";
 
 /**
@@ -26,6 +26,18 @@ interface Entry {
   afterPriority: string;
   /** Set when this change removes the page's own value (see Removal). */
   removal?: Removal;
+  /** The viewport widths it's for (the search's width chip). None: every width. */
+  widths?: WidthRange;
+}
+
+/** A change still in effect, for the change set. */
+export interface RecordedChange {
+  element: EditableElement;
+  property: string;
+  /** The value set (a removal's preview when `removal` is set). */
+  value: string;
+  removal?: Removal;
+  widths?: WidthRange;
 }
 
 /** Inline values of some properties, to put back exactly. */
@@ -56,19 +68,23 @@ export class EditHistory {
    *
    * `options.removal` marks the change as removing the page's own value (see
    * clearProperty): `value` is then only the preview of what applies without
-   * it. `options.important` sets it with !important.
+   * it. `options.important` sets it with !important. `options.widths`: the
+   * viewport widths the change is for (none: every width). Changes for
+   * different widths are separate changes, even within a gesture.
    */
   apply(
     element: EditableElement,
     property: string,
     value: string,
     gesture?: object,
-    options: { important?: boolean; removal?: Removal } = {},
+    options: { important?: boolean; removal?: Removal; widths?: WidthRange } = {},
   ): void {
     const priority = options.important ? "important" : "";
     const last = this.done.at(-1);
     const step = gesture && last?.gesture === gesture ? last : undefined;
-    const existing = step?.entries.find((e) => e.element === element && e.property === property);
+    const existing = step?.entries.find(
+      (e) => e.element === element && e.property === property && sameWidths(e.widths, options.widths),
+    );
     if (existing) {
       element.style.setProperty(property, value, priority);
       existing.after = value;
@@ -79,7 +95,10 @@ export class EditHistory {
     }
     const current = element.style.getPropertyValue(property);
     const unchanged = current === value && element.style.getPropertyPriority(property) === priority;
-    if (unchanged && !options.removal && !this.removalOf(element, property)) return;
+    // Same value, but for other widths (a chip added since): still a change.
+    const latest = this.latestEntry(element, property);
+    const sameRange = sameWidths(latest?.widths, options.widths);
+    if (unchanged && sameRange && !options.removal && !this.removalOf(element, property)) return;
     const entry: Entry = {
       element,
       property,
@@ -87,11 +106,32 @@ export class EditHistory {
       after: value,
       afterPriority: priority,
       removal: options.removal,
+      widths: options.widths,
     };
     if (step) step.entries.push(entry);
     else this.done.push({ gesture, entries: [entry] });
     element.style.setProperty(property, value, priority);
     this.undone = [];
+  }
+
+  /**
+   * The changes in effect (not undone), one per element, property and width
+   * range, with its latest value, in the order they were first made. What the
+   * change set is built from.
+   */
+  changes(): RecordedChange[] {
+    const out: RecordedChange[] = [];
+    for (const { entries } of this.done) {
+      for (const { element, property, after, removal, widths } of entries) {
+        const change: RecordedChange = { element, property, value: after, removal, widths };
+        const i = out.findIndex(
+          (c) => c.element === element && c.property === property && sameWidths(c.widths, widths),
+        );
+        if (i === -1) out.push(change);
+        else out[i] = change;
+      }
+    }
+    return out;
   }
 
   /**
@@ -128,6 +168,17 @@ export class EditHistory {
       }
     }
     return null;
+  }
+
+  private latestEntry(element: EditableElement, property: string): Entry | undefined {
+    for (let i = this.done.length - 1; i >= 0; i--) {
+      const entries = (this.done[i] as Step).entries;
+      for (let j = entries.length - 1; j >= 0; j--) {
+        const entry = entries[j] as Entry;
+        if (entry.element === element && entry.property === property) return entry;
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -184,6 +235,10 @@ export function longhandsOf(property: string): string[] {
     longhandCache.set(property, longhands);
   }
   return longhands;
+}
+
+function sameWidths(a?: WidthRange, b?: WidthRange): boolean {
+  return a?.min === b?.min && a?.max === b?.max;
 }
 
 function snapshot(element: EditableElement, property: string): Snapshot {

@@ -1,12 +1,17 @@
-import { shortName } from "../../../dom/target.ts";
+import { elementName } from "../../../dom/name.ts";
 import { px } from "../../px.ts";
 
 interface HighlightProps {
   element: Element;
   rect: DOMRect;
   variant: "hover" | "selected";
-  /** Show the name and size label. Default true; off for the selection while another element is hovered, so the two labels don't overlap. */
+  /**
+   * Show the name and size label. The hover highlight has one; the selection
+   * doesn't (App passes false): its corner is kept for the selection's actions.
+   */
   label?: boolean;
+  /** The project's own naming attributes, tried first (see elementName). */
+  nameAttributes?: readonly string[];
 }
 
 /** Corner markers drawn on the selected element. */
@@ -14,12 +19,13 @@ const CORNERS = ["top-left", "top-right", "bottom-left", "bottom-right"] as cons
 
 /**
  * Outline + label drawn over an element; the selected one also gets a round
- * handle on each corner. Purely visual: never receives events.
+ * handle on each corner. The label (name and size) sits above the top-left
+ * corner. Purely visual: never receives events.
  */
-export function Highlight({ element, rect, variant, label = true }: HighlightProps) {
+export function Highlight({ element, rect, variant, label = true, nameAttributes }: HighlightProps) {
   const size = `${Math.round(rect.width)}×${Math.round(rect.height)}`;
   // Put the label above the box, or inside it when the element touches the top edge.
-  const labelInside = rect.top < 22;
+  const labelInside = rect.top < 24; // the label (20px) and its 4px margin
   return (
     <div
       class="highlight"
@@ -29,7 +35,7 @@ export function Highlight({ element, rect, variant, label = true }: HighlightPro
     >
       {label && (
         <span class="label" data-inside={labelInside || undefined}>
-          {shortName(element)} <span class="size">{size}</span>
+          {elementName(element, nameAttributes)} <span class="size">{size}</span>
         </span>
       )}
       {variant === "selected" &&

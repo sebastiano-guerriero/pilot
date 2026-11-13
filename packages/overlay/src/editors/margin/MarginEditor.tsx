@@ -8,5 +8,4 @@ export const marginEditor = boxEditor({
   box: "margin",
   property: (side) => `margin-${side}`,
   aliases: { all: "m", top: "mt", right: "mr", bottom: "mb", left: "ml", x: "mx", y: "my" },
-  keywords: ["spacing", "outer space", "offset"],
 });

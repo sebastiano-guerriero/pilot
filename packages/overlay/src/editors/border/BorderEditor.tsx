@@ -12,6 +12,5 @@ export const borderEditor = boxEditor({
   box: "border",
   property: (side) => `border-${side}-width`,
   aliases: { all: "border", top: "border-t", right: "border-r", bottom: "border-b", left: "border-l", x: "border-x", y: "border-y" },
-  keywords: ["border width", "stroke", "outline"],
   requires: { property: (side) => `border-${side}-style`, missing: "none", value: "solid" },
 });

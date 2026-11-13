@@ -1,55 +1,41 @@
 @scope (.property-search) {
   :scope {
     position: relative;
+    display: flex;
+    align-items: center;
   }
 
-  .input {
-    all: unset;
-    /* `all: unset` also resets box-sizing to content-box: without this the
-       padding is added on top of width: 100% and the field overflows the dialog. */
-    box-sizing: border-box;
-    width: 100%;
-    height: 40px;
-    padding-inline: 16px;
-    font-size: 12px;
+  /* The width chip (placeholder styling, pending design). */
+  .widths {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 22px;
+    margin-inline-start: 12px;
+    padding-inline: 8px 2px;
+    border-radius: 6px;
+    background: var(--plt-color-background-light);
+    color: var(--plt-color-contrast-high);
+    font-size: 11px;
+    white-space: nowrap;
 
-    /* Room for the clear button, which only exists once there is text. */
-    &:not(:placeholder-shown) {
-      padding-inline-end: 36px;
-    }
-
-    &:focus-visible {
-      outline: none;
-    }
-
-    &::placeholder {
+    /* The window is outside the range: what you see isn't what it's for. */
+    &[data-outside] {
+      background: none;
       color: var(--plt-color-contrast-low);
-    }
-
-    /* Replaced by the `.clear` button below. */
-    &::-webkit-search-cancel-button {
-      -webkit-appearance: none;
-      appearance: none;
-      display: none;
+      box-shadow: inset 0 0 0 1px var(--plt-color-contrast-low);
     }
   }
 
-  .clear {
+  .remove {
     all: unset;
-    position: absolute;
-    top: 0;
-    right: 4px;
-    width: 36px;
-    height: 40px;
+    width: 18px;
+    height: 18px;
     display: grid;
     place-items: center;
     color: var(--plt-color-contrast-low);
     cursor: pointer;
-
-    & svg {
-      width: 12px;
-      height: 12px;
-    }
 
     &:hover {
       color: var(--plt-color-contrast-high);
@@ -59,4 +45,61 @@
       outline: 2px solid var(--plt-color-accent);
     }
   }
+
+  .field {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    display: flex;
+  }
+
+  /* The suggested width after `from-`, dimmed, over the field: Tab takes it. */
+  .suggestion {
+    position: absolute;
+    inset: 0;
+    padding-inline: 16px;
+    font-size: 12px;
+    line-height: 40px;
+    white-space: pre;
+    overflow: hidden;
+    pointer-events: none;
+    color: var(--plt-color-contrast-low);
+  }
+
+  .typed {
+    color: transparent;
+  }
+
+  .widths + .field :is(.input, .suggestion) {
+    padding-inline-start: 8px;
+  }
+
+  .input {
+    all: unset;
+    /* `all: unset` also resets box-sizing to content-box: without this the
+       padding is added on top of width: 100% and the field overflows the dialog. */
+    box-sizing: border-box;
+    flex: 1;
+    min-width: 0;
+    width: 100%;
+    height: 40px;
+    padding-inline: 16px;
+    font-size: 12px;
+
+    &:focus-visible {
+      outline: none;
+    }
+
+    &::placeholder {
+      color: var(--plt-color-contrast-low);
+    }
+
+    /* No clear button: Esc clears the search. */
+    &::-webkit-search-cancel-button {
+      -webkit-appearance: none;
+      appearance: none;
+      display: none;
+    }
+  }
+
 }

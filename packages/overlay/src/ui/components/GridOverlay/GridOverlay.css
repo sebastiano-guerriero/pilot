@@ -2,6 +2,7 @@
    set inline by GridOverlay.tsx; the padding stripes are BoxAreas. */
 @scope (.grid-overlay) {
   .line,
+  .frame,
   .number {
     position: fixed;
     z-index: var(--plt-z-highlight);
@@ -17,6 +18,13 @@
   .line[data-axis="row"] {
     height: 0;
     border-top: 1px dashed hsl(from var(--plt-color-accent) h s l / 70%);
+  }
+
+  /* A grid item's parent grid: its border box, dashed like the lines (its
+     outer lines aren't drawn, see drawnPositions). */
+  .frame {
+    box-sizing: border-box;
+    border: 1px dashed hsl(from var(--plt-color-accent) h s l / 70%);
   }
 
   /* Line numbers, 4px outside the content box: columns below it, rows to its

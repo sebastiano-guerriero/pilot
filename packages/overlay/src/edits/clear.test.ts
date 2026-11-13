@@ -101,4 +101,16 @@ describe("clearProperty", () => {
     history.apply(element, "padding", "20px");
     expect(history.originalInline(element, "padding")).toEqual({ value: "4px", important: false });
   });
+
+  it("a removal records the rule's media query and the widths it's for", () => {
+    style.textContent = "@media (min-width: 1px) { .card { gap: 16px; } }";
+    clearProperty(history, element, "gap", undefined, { min: 1200 });
+    expect(history.removalOf(element, "gap")?.source).toEqual({
+      kind: "rule",
+      selector: ".card",
+      elements: 1,
+      media: "(min-width: 1px)",
+    });
+    expect(history.changes()[0]?.widths).toEqual({ min: 1200 });
+  });
 });

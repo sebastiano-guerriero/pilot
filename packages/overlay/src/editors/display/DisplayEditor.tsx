@@ -112,6 +112,5 @@ export const displayEditor: PropertyEditor = {
   embeds: GRID_ROWS,
   // Tailwind's display utilities: they all land here.
   aliases: ["grid", "inline-grid", "flex", "inline-flex", "block", "inline-block", "inline", "hidden", "contents"],
-  keywords: ["layout"],
   component: DisplayEditor,
 };

@@ -1,0 +1,115 @@
+/*
+ * An invisible 6px strip along the top of the window; hovering it shows the
+ * bar (ruler + width button). The bar stays while the pointer is on it, since
+ * it's inside the strip's element. The bar is 48px tall: 28px of content and
+ * 20px of invisible margin below, so it doesn't hide the moment the pointer
+ * leaves the button. It also shows while the window is resized
+ * (`data-resizing`, set by ViewportWidth.tsx).
+ */
+@scope (.viewport-width) {
+  :scope {
+    position: fixed;
+    z-index: var(--plt-z-ui);
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 48px;
+    visibility: hidden;
+    /* Stays visible while the ticks and button animate out. */
+    transition: visibility 0s 150ms;
+  }
+
+  /* Ticks from the left edge: 4px every 10px, 8px every 50px. The first is at
+     10px (short): none at 0. */
+  .ticks {
+    position: absolute;
+    inset: 0 0 auto;
+    height: 8px;
+    background:
+      repeating-linear-gradient(to right, var(--plt-color-accent) 0 1px, transparent 1px 50px) 50px 0 / 100% 8px no-repeat,
+      repeating-linear-gradient(to right, var(--plt-color-accent) 0 1px, transparent 1px 10px) 10px 0 / 100% 4px no-repeat;
+    transform-origin: top;
+    scale: 1 0;
+    transition: scale 150ms ease-out;
+  }
+
+  /* The width and the breakpoints: like the selection label (Highlight.css).
+     The bar's content ends 28px down. */
+  .width,
+  .breakpoint {
+    all: unset;
+    position: absolute;
+    top: 8px;
+    height: 20px;
+    padding-inline: 4px;
+    border-radius: 4px;
+    font-size: 11px;
+    line-height: 20px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    cursor: pointer;
+    opacity: 0;
+    translate: 0 -4px;
+    transition:
+      opacity 150ms ease-out,
+      translate 150ms ease-out;
+
+    &:focus-visible {
+      outline: 2px solid var(--plt-color-accent);
+      outline-offset: 2px;
+    }
+  }
+
+  .width {
+    z-index: 1;
+    right: 8px;
+    background: var(--plt-color-background);
+    color: var(--plt-color-contrast-high);
+  }
+
+  /* On its tick, centered; over the width button where they meet. */
+  .breakpoint {
+    z-index: 2;
+    /* `transform` centers; `translate` is left to the show animation. */
+    transform: translateX(-50%);
+    background: var(--plt-color-accent);
+    color: var(--plt-color-background);
+  }
+
+  /* Shown: the ticks grow down from the top edge, the button slides in. */
+  :scope:is(:hover, [data-resizing]) {
+    .bar {
+      visibility: visible;
+      transition-delay: 0s;
+    }
+
+    .ticks {
+      scale: 1 1;
+    }
+
+    .width,
+    .breakpoint {
+      opacity: 1;
+      translate: 0 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bar,
+    .ticks,
+    .width,
+    .breakpoint {
+      transition: none;
+    }
+  }
+}

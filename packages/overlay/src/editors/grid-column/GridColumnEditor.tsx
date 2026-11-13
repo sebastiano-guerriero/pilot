@@ -13,8 +13,7 @@ export const colSpanEditor = lengthEditor({
   property: "grid-column",
   name: "col-span",
   label: "Column span",
-  aliases: ["col-span", "col-span-full", "span"],
-  keywords: ["grid", "full", "columns"],
+  aliases: ["col-span", "col-span-full"],
 });
 
 export const colStartEditor = lengthEditor({
@@ -22,7 +21,6 @@ export const colStartEditor = lengthEditor({
   name: "col-start",
   label: "Column start",
   aliases: ["col-start"],
-  keywords: ["grid", "line"],
 });
 
 export const colEndEditor = lengthEditor({
@@ -30,5 +28,4 @@ export const colEndEditor = lengthEditor({
   name: "col-end",
   label: "Column end",
   aliases: ["col-end"],
-  keywords: ["grid", "line"],
 });

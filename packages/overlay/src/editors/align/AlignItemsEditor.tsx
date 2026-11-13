@@ -19,6 +19,5 @@ export const alignItemsEditor = keywordEditor({
     baseline: "align-baseline",
   },
   // Tailwind's items-* utilities.
-  aliases: ["items", "items-start", "items-center", "items-end", "items-stretch", "items-baseline"],
-  keywords: ["alignment", "vertical"],
+  aliases: ["items-start", "items-center", "items-end", "items-stretch", "items-baseline"],
 });

@@ -8,17 +8,19 @@
   </head>
   <body>
     <main>
-      <section class="hero">
+      <!-- Naming examples for the selection label (see dom/name.ts): hover
+           these to see what Pilot calls them. -->
+      <section class="hero" data-testid="hero">
         <p class="eyebrow">Playground</p>
-        <h1>Ship the design you meant</h1>
+        <h1 id="title" data-testid="hero-title">Ship the design you meant</h1>
         <p class="lead">A sample page for developing Pilot. In a real project, <code>/pilot</code> launches it.</p>
-        <div class="actions">
+        <div class="actions" data-block="cta">
           <a class="button button--primary" href="#">Get started</a>
           <a class="button" href="#">Learn more</a>
         </div>
       </section>
-      <section class="cards">
-        <article class="card">
+      <section class="cards" id="features">
+        <article class="card" data-slot="card" data-state="active">
           <h2>Select</h2>
           <p>Click any element on the page to start editing it.</p>
         </article>

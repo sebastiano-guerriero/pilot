@@ -12,7 +12,6 @@ const side = (s: BoxSide, aliases: string[]) =>
     property: `padding-${s}`,
     label: `Padding ${s}`,
     aliases: ["p", ...aliases],
-    keywords: ["spacing", "inset"],
     inspect: { box: "padding", side: s },
   });
 

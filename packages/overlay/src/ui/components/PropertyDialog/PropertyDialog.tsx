@@ -1,9 +1,11 @@
+import type { WidthRange } from "@pilot/protocol";
 import type { ComponentChildren } from "preact";
 import { declaredValues } from "../../../dom/declared.ts";
-import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import type { BoxArea } from "../../../dom/boxModel.ts";
 import type { EditableElement } from "../../../dom/target.ts";
 import { clearProperty } from "../../../edits/clear.ts";
+import { clickWidth, partialWidth, takeWidths } from "../../../edits/widths.ts";
 import { EditHistory } from "../../../edits/history.ts";
 import { editors as allEditors, matchEditors } from "../../../editors/registry.ts";
 import { type FocusRequest, type PropertyEditor, propertiesOf } from "../../../editors/types.ts";
@@ -30,6 +32,26 @@ interface PropertyDialogProps {
   onClose?(): void;
   /** The editor wants areas of the element shown on the page (null: back to the highlight). */
   onInspect?(areas: BoxArea[] | null): void;
+  /**
+   * The width chip: the viewport widths changes are for (null: every width).
+   * App keeps it across selections, until it's removed.
+   */
+  widths?: WidthRange | null;
+  /** The chip was typed in the search or removed. */
+  onWidthsChange?(widths: WidthRange | null): void;
+  /** The window's width now (see ViewportWidth). */
+  viewportWidth?: number;
+  /**
+   * The viewport width was clicked (a new object per click). The dialog sets
+   * the chip, since a `from`/`to` being typed in the search decides it.
+   */
+  widthPick?: WidthPick;
+}
+
+/** A click on the viewport width. */
+export interface WidthPick {
+  width: number;
+  shift: boolean;
 }
 
 const GAP = 8;
@@ -54,13 +76,22 @@ export function PropertyDialog({
   history: sharedHistory,
   onClose,
   onInspect,
+  widths = null,
+  onWidthsChange,
+  viewportWidth,
+  widthPick,
 }: PropertyDialogProps) {
   const [query, setQueryState] = useState(initialQuery);
   const [ownHistory] = useState(() => new EditHistory());
   const history = sharedHistory ?? ownHistory;
   // The editors shown for the query: the best matches, plus their family
-  // (`w` → width, min-width, max-width). See matchEditors.
-  const matches = matchEditors(query, editors);
+  // (`w` → width, min-width, max-width). See matchEditors. With nothing
+  // typed: the editors for every property the element has a value for. That
+  // list is taken when the search becomes empty and kept while you edit, so
+  // clearing a value doesn't make its row vanish under the cursor.
+  const empty = !query.trim();
+  const withValues = useMemo(() => (empty ? editorsWithValues(element, editors, history) : []), [element, empty]);
+  const matches = empty ? withValues : matchEditors(query, editors);
   const matchKey = matches.map((m) => m.id).join(",");
 
   const searchRef = useRef<HTMLInputElement>(null);
@@ -73,6 +104,21 @@ export function PropertyDialog({
     setFocus(null);
     onQueryChange?.(q);
   };
+
+  // A click on the viewport width sets the chip (clickWidth). With `from`,
+  // `to-`… typed in the search, that word decides: `from` (or `to`) the
+  // clicked width, as if `from-1108 ` had been typed, and the word goes.
+  // The pick the dialog mounted with was handled already (by the previous one).
+  const handledPick = useRef(widthPick);
+  useEffect(() => {
+    if (!widthPick || widthPick === handledPick.current) return;
+    handledPick.current = widthPick;
+    const typed = partialWidth(query);
+    if (typed) {
+      onWidthsChange?.(takeWidths(`${typed.end}-${widthPick.width} `, widths).range);
+      setQuery("");
+    } else onWidthsChange?.(clickWidth(widths, widthPick.width, widthPick.shift));
+  }, [widthPick]);
 
   // Tab past an editor's last field (or Shift+Tab before its first): on to the
   // next/previous editor, or back to the search past either end.
@@ -171,7 +217,15 @@ export function PropertyDialog({
       onKeyDown={onKeyDown}
       onFocusIn={onFocusIn}
     >
-      <PropertySearch value={query} onChange={setQuery} onKeyDown={onSearchKeyDown} inputRef={searchRef} />
+      <PropertySearch
+        value={query}
+        onChange={setQuery}
+        onKeyDown={onSearchKeyDown}
+        inputRef={searchRef}
+        widths={widths}
+        onWidthsChange={onWidthsChange}
+        viewportWidth={viewportWidth}
+      />
       {matches.length > 0 && (
         // Wrapper for the property editors shown below the search. Only
         // rendered when something matches, so the empty dialog is just the search.
@@ -184,6 +238,7 @@ export function PropertyDialog({
                   editor={match}
                   element={element}
                   history={history}
+                  widths={widths ?? undefined}
                   focusRequest={focus?.index === index ? focus.request : undefined}
                   onReturnToSearch={returnToSearch}
                   onTabOut={(direction) => tabOut(index, direction)}
@@ -200,6 +255,21 @@ export function PropertyDialog({
       )}
     </div>
   );
+}
+
+/**
+ * The editors for the properties `element` has a value for (from any source:
+ * stylesheets, classes, inline styles, Pilot's edits; removed ones don't
+ * count), in registry order. An editor another one shows as its rows (gap
+ * under display: grid) is left to that one.
+ */
+function editorsWithValues(element: EditableElement, editors: PropertyEditor[], history: EditHistory): PropertyEditor[] {
+  const properties = [...new Set(editors.flatMap((e) => e.properties))];
+  const declared = declaredValues(element, properties);
+  const isSet = (p: string) => !!declared[p] && !history.removalOf(element, p);
+  const shown = editors.filter((e) => e.properties.some(isSet));
+  const embedded = new Set(shown.flatMap((e) => e.embeds ?? []));
+  return shown.filter((e) => !embedded.has(e));
 }
 
 /**
@@ -230,6 +300,7 @@ function MatchedEditor({
   editor,
   element,
   history,
+  widths,
   focusRequest,
   onReturnToSearch,
   onTabOut,
@@ -239,6 +310,7 @@ function MatchedEditor({
   editor: PropertyEditor;
   element: EditableElement;
   history: EditHistory;
+  widths?: WidthRange;
   focusRequest?: FocusRequest;
   onReturnToSearch(): void;
   onTabOut(direction: 1 | -1): void;
@@ -265,8 +337,9 @@ function MatchedEditor({
       declared={declared}
       onChange={(property, value, options) => {
         // Cleared: the element doesn't set it (a removal, when the page's CSS does).
-        if (value === "") clearProperty(history, element, property, options?.gesture);
-        else history.apply(element, property, value, options?.gesture);
+        // Recorded for the chip's widths (none: every width).
+        if (value === "") clearProperty(history, element, property, options?.gesture, widths);
+        else history.apply(element, property, value, options?.gesture, { widths });
         rerender(0);
       }}
       onRevert={(property, gesture) => {

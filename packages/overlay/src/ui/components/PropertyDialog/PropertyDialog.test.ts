@@ -1,20 +1,21 @@
 // @vitest-environment happy-dom
+import type { WidthRange } from "@pilot/protocol";
 import { h, render } from "preact";
+import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EditHistory } from "../../../edits/history.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../../../editors/types.ts";
-import { PropertyDialog } from "./PropertyDialog.tsx";
+import { PropertyDialog, type WidthPick } from "./PropertyDialog.tsx";
 
 // Stub editors: render their id and the values they receive, expose onChange,
 // record the focus requests they get, and can hand focus back to the search.
 let focusRequests: Array<{ query: string; edge?: string } | undefined>;
 let focusedEditors: string[];
-const stub = (id: string, properties: string[], keywords?: string[]): PropertyEditor => ({
+const stub = (id: string, properties: string[]): PropertyEditor => ({
   id,
   label: id,
   properties,
-  keywords,
   component: ({ values, onChange, focusRequest, onReturnToSearch, onTabOut }: PropertyEditorProps) => {
     focusRequests.push(focusRequest);
     if (focusRequest) focusedEditors.push(`${id}${focusRequest.edge ? `@${focusRequest.edge}` : ""}`);
@@ -27,7 +28,7 @@ const stub = (id: string, properties: string[], keywords?: string[]): PropertyEd
   },
 });
 
-const editors = [stub("opacity", ["opacity"], ["fade"]), stub("padding", ["padding"]), stub("gap", ["gap"])];
+const editors = [stub("opacity", ["opacity"]), stub("padding", ["padding"]), stub("gap", ["gap"])];
 
 let container: HTMLElement;
 let element: HTMLElement;
@@ -83,8 +84,6 @@ describe("PropertyDialog", () => {
   it("shows just the best-matching editor as you type", () => {
     mount();
     type("opa");
-    expect(editorIds()).toEqual(["opacity"]);
-    type("fade");
     expect(editorIds()).toEqual(["opacity"]);
     type("pad");
     expect(editorIds()).toEqual(["padding"]);
@@ -345,5 +344,127 @@ describe("declared values", () => {
     expect(received).toEqual({ gap: "" });
     expect(element.style.gap).toBe("revert");
     style.remove();
+  });
+
+  it("with nothing typed, shows the editors for the properties the element has a value for", () => {
+    const style = document.createElement("style");
+    style.textContent = ".box { gap: 16px; }";
+    document.head.append(style);
+    element.className = "box";
+    element.style.opacity = "0.5";
+    act(() => {
+      render(h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors }), container);
+    });
+    // opacity (inline) and gap (stylesheet), in registry order; padding has no value.
+    expect(editorIds()).toEqual(["opacity", "gap"]);
+    type("pad");
+    expect(editorIds()).toEqual(["padding"]);
+    type("");
+    expect(editorIds()).toEqual(["opacity", "gap"]);
+    style.remove();
+  });
+
+  it("leaves an embedded editor to the one that shows it as a row", () => {
+    element.style.display = "grid";
+    element.style.gap = "8px";
+    const gap = stub("gap", ["gap"]);
+    const display: PropertyEditor = { ...stub("display", ["display"]), embeds: [gap] };
+    act(() => {
+      render(h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors: [display, gap] }), container);
+    });
+    expect(editorIds()).toEqual(["display"]);
+  });
+});
+
+describe("width chip", () => {
+  // The dialog with the chip's state kept outside, as App does.
+  let pick: (p: WidthPick) => void;
+  const mountWithWidths = (history: EditHistory, viewportWidth = 1440, initial: WidthRange | null = null) => {
+    function Host() {
+      const [widths, setWidths] = useState<WidthRange | null>(initial);
+      const [widthPick, setWidthPick] = useState<WidthPick | undefined>();
+      pick = setWidthPick;
+      return h(PropertyDialog, {
+        widthPick,
+        element,
+        anchor: element.getBoundingClientRect(),
+        editors,
+        history,
+        widths,
+        onWidthsChange: setWidths,
+        viewportWidth,
+      });
+    }
+    act(() => {
+      render(h(Host, {}), container);
+    });
+  };
+  const chip = () => container.querySelector(".widths");
+
+  it("`from-1200 ` at the start becomes the chip; the rest is the search", () => {
+    const history = new EditHistory();
+    mountWithWidths(history);
+    type("from-1200");
+    expect(chip()).toBeNull();
+    type("from-1200 opa");
+    expect(chip()?.textContent).toContain("from 1200px");
+    expect(search().value).toBe("opa");
+    expect(editorIds()).toEqual(["opacity"]);
+  });
+
+  it("changes made with the chip are recorded for its widths", () => {
+    const history = new EditHistory();
+    mountWithWidths(history, 1440, { min: 768, max: 1199 });
+    type("opacity");
+    act(() => (container.querySelector(".stub") as HTMLButtonElement).click());
+    expect(history.changes()[0]?.widths).toEqual({ min: 768, max: 1199 });
+  });
+
+  it("Backspace at the start of the field removes the chip", () => {
+    mountWithWidths(new EditHistory(), 1440, { min: 1200 });
+    search().setSelectionRange(0, 0);
+    key(search(), "Backspace");
+    expect(chip()).toBeNull();
+  });
+
+  it("marks the chip when the window is outside its range", () => {
+    mountWithWidths(new EditHistory(), 900, { min: 1200 });
+    expect(chip()?.hasAttribute("data-outside")).toBe(true);
+  });
+
+  it("`from-` suggests the window's width, dimmed; Tab takes it", () => {
+    mountWithWidths(new EditHistory(), 1108);
+    type("from");
+    expect(container.querySelector(".suggestion")).toBeNull();
+    type("from-1");
+    expect(container.querySelector(".suggestion")?.textContent).toBe("from-1108");
+    key(search(), "Tab");
+    expect(chip()?.textContent).toContain("from 1108px");
+    expect(search().value).toBe("");
+    type("to-9");
+    expect(container.querySelector(".suggestion")).toBeNull();
+  });
+
+  it("clicking the width with `from`/`to` typed: that word decides, and it goes", () => {
+    mountWithWidths(new EditHistory(), 1108, { min: 768 });
+    type("to");
+    act(() => pick({ width: 1108, shift: false }));
+    expect(chip()?.textContent).toContain("768–1108px");
+  });
+
+  it("the same width at both ends reads `1108px only`", () => {
+    mountWithWidths(new EditHistory(), 1108, { min: 1108 });
+    type("to");
+    act(() => pick({ width: 1108, shift: false }));
+    expect(chip()?.textContent).toContain("1108px only");
+    expect(search().value).toBe("");
+  });
+
+  it("clicking the width with a search typed: the chip as usual, the search stays", () => {
+    mountWithWidths(new EditHistory(), 1108);
+    type("pad");
+    act(() => pick({ width: 1108, shift: true }));
+    expect(chip()?.textContent).toContain("to 1108px");
+    expect(search().value).toBe("pad");
   });
 });

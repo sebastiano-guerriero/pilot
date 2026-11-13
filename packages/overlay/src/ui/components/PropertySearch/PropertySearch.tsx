@@ -1,5 +1,7 @@
+import { describeWidths, type WidthRange } from "@pilot/protocol";
 import type { RefObject } from "preact";
 import { useEffect } from "preact/hooks";
+import { inWidths, takeWidths, widthSuggestion } from "../../../edits/widths.ts";
 
 interface PropertySearchProps {
   value: string;
@@ -7,6 +9,12 @@ interface PropertySearchProps {
   onKeyDown?(e: KeyboardEvent): void;
   /** The field itself, so the dialog can move focus back to it. */
   inputRef: RefObject<HTMLInputElement | null>;
+  /** The width chip: the viewport widths changes are for. null: every width (no chip). */
+  widths?: WidthRange | null;
+  /** The chip changed: typed (`from-1200 `), or removed (null). Without it, no chip. */
+  onWidthsChange?(widths: WidthRange | null): void;
+  /** The window's width now, to show when it's outside the chip's range. */
+  viewportWidth?: number;
 }
 
 /**
@@ -14,45 +22,100 @@ interface PropertySearchProps {
  * (a query carried over from the previous selection): typing replaces it, and
  * Tab/Enter goes straight into its editor.
  */
-export function PropertySearch({ value, onChange, onKeyDown, inputRef }: PropertySearchProps) {
+export function PropertySearch({
+  value,
+  onChange,
+  onKeyDown,
+  inputRef,
+  widths = null,
+  onWidthsChange,
+  viewportWidth,
+}: PropertySearchProps) {
   useEffect(() => {
     inputRef.current?.focus();
     inputRef.current?.select();
   }, []);
 
+  // `from-1200 ` / `to-767 ` at the start becomes the chip; the rest is the search.
+  const onInput = (e: Event) => {
+    const input = e.currentTarget as HTMLInputElement;
+    const taken = onWidthsChange ? takeWidths(input.value, widths) : null;
+    if (taken?.range) {
+      onWidthsChange?.(taken.range);
+      input.value = taken.rest;
+      onChange(taken.rest);
+    } else onChange(input.value);
+  };
+
+  // `from-` (or `to-`) suggests the window's width, dimmed after the text.
+  const suggestion = onWidthsChange && viewportWidth !== undefined ? widthSuggestion(value, viewportWidth) : null;
+
+  // Backspace at the very start of the field removes the chip. Tab takes the
+  // suggested width: the chip, as if `from-1108 ` had been typed.
+  const onSearchKeyDown = (e: KeyboardEvent) => {
+    const input = e.currentTarget as HTMLInputElement;
+    if (e.key === "Tab" && !e.shiftKey && suggestion) {
+      e.preventDefault();
+      onWidthsChange?.(takeWidths(`${value}${suggestion} `, widths).range);
+      onChange("");
+      return;
+    }
+    if (e.key === "Backspace" && widths && input.selectionStart === 0 && input.selectionEnd === 0) {
+      e.preventDefault();
+      onWidthsChange?.(null);
+      return;
+    }
+    onKeyDown?.(e);
+  };
+
+  const outside = !!widths && viewportWidth !== undefined && !inWidths(widths, viewportWidth);
+
   return (
     <div class="property-search">
-      <input
-        ref={inputRef}
-        class="input"
-        type="search"
-        aria-label="Search a property"
-        placeholder="Search a property…"
-        value={value}
-        onInput={(e) => onChange(e.currentTarget.value)}
-        onKeyDown={onKeyDown}
-      />
-      {value && (
-        <button
-          type="button"
-          class="clear"
-          aria-label="Clear search"
-          // Keep focus in the field: a mousedown would otherwise move it here,
-          // and clearing unmounts the editor that may have held it.
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => {
-            onChange("");
-            inputRef.current?.focus();
-          }}
+      {widths && (
+        <span
+          class="widths"
+          data-outside={outside || undefined}
+          title={
+            outside
+              ? `The window (${viewportWidth}px) is outside this range: what you see isn't what these changes are for`
+              : "Changes are for these viewport widths. Backspace at the start of the field removes it."
+          }
         >
-          <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
-            <path
-              d="m6,0C2.691,0,0,2.691,0,6s2.691,6,6,6,6-2.691,6-6S9.309,0,6,0Zm2.53,7.47c.293.293.293.768,0,1.061-.146.146-.338.22-.53.22s-.384-.073-.53-.22l-1.47-1.47-1.47,1.47c-.146.146-.338.22-.53.22s-.384-.073-.53-.22c-.293-.293-.293-.768,0-1.061l1.47-1.47-1.47-1.47c-.293-.293-.293-.768,0-1.061s.768-.293,1.061,0l1.47,1.47,1.47-1.47c.293-.293.768-.293,1.061,0s.293.768,0,1.061l-1.47,1.47,1.47,1.47Z"
-              fill="currentColor"
-            />
-          </svg>
-        </button>
+          {describeWidths(widths)}
+          <button
+            type="button"
+            class="remove"
+            aria-label="Changes for every width"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              onWidthsChange?.(null);
+              inputRef.current?.focus();
+            }}
+          >
+            ×
+          </button>
+        </span>
       )}
+      <div class="field">
+        <input
+          ref={inputRef}
+          class="input"
+          type="search"
+          aria-label="Add a property"
+          placeholder="Add a property…"
+          value={value}
+          onInput={onInput}
+          onKeyDown={onSearchKeyDown}
+        />
+        {suggestion && (
+          // The typed text, invisible, so the suggestion lands right after it.
+          <span class="suggestion" aria-hidden="true">
+            <span class="typed">{value}</span>
+            {suggestion}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

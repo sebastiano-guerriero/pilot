@@ -105,3 +105,18 @@ code {
   margin: 0;
   color: #475569;
 }
+
+/* Breakpoints, so the ruler has some to show (hover the top edge with Pilot
+   running): one in Tailwind v4's syntax (rem, range), one classic. */
+@media (width >= 40rem) {
+  main {
+    padding-inline: 32px;
+  }
+}
+
+@media (min-width: 960px) {
+  .hero {
+    margin-bottom: 80px;
+  }
+}
+

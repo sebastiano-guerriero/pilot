@@ -43,6 +43,21 @@ export interface StyleChange {
   removed?: boolean;
   /** Where `from` is declared in the page's CSS, when known. */
   source?: StyleSource;
+  /**
+   * The viewport widths the change is for, as the designer set them (the
+   * width chip in Pilot's search). Absent: every width.
+   */
+  widths?: WidthRange;
+}
+
+/**
+ * Viewport widths in CSS px, both ends included: `{ min: 768 }` is 768px and
+ * up, `{ max: 767 }` is to 767px (and below), `{ min: 768, max: 1199 }` is 768–1199px.
+ * At least one end is set.
+ */
+export interface WidthRange {
+  min?: number;
+  max?: number;
 }
 
 /** Where a value is declared in the page's CSS. */
@@ -53,7 +68,13 @@ export type StyleSource =
    * A stylesheet rule. `elements`: how many elements on the page that
    * selector matches, so the agent can tell a one-off from a shared rule.
    */
-  | { kind: "rule"; selector: string; elements?: number };
+  | {
+      kind: "rule";
+      selector: string;
+      elements?: number;
+      /** The `@media` conditions the rule sits in, e.g. `(min-width: 768px)`, when any. */
+      media?: string;
+    };
 
 export interface ElementEdit {
   target: ElementTarget;

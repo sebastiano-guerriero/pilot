@@ -20,6 +20,5 @@ export const justifyContentEditor = keywordEditor({
     "space-evenly": "justify-evenly",
   },
   // Tailwind's justify-* utilities.
-  aliases: ["justify", "justify-start", "justify-end", "justify-center", "justify-between", "justify-around", "justify-evenly"],
-  keywords: ["alignment", "distribute"],
+  aliases: ["justify-start", "justify-end", "justify-center", "justify-between", "justify-around", "justify-evenly"],
 });

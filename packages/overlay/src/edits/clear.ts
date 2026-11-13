@@ -1,5 +1,5 @@
-import type { StyleSource } from "@pilot/protocol";
-import { type Declared, declaredWithout } from "../dom/declared.ts";
+import type { StyleSource, WidthRange } from "@pilot/protocol";
+import { type Declared, declaredWithout, mediaOf } from "../dom/declared.ts";
 import type { EditableElement } from "../dom/target.ts";
 import type { EditHistory } from "./history.ts";
 
@@ -22,6 +22,8 @@ export function clearProperty(
   element: EditableElement,
   property: string,
   gesture?: object,
+  /** The viewport widths it's for (the search's width chip). None: every width. */
+  widths?: WidthRange,
 ): void {
   // The page's own value: the app's style attribute (as it was before Pilot
   // touched it), or else the stylesheets'.
@@ -29,7 +31,7 @@ export function clearProperty(
   const page: Declared | null = original
     ? { ...original, source: "inline" }
     : declaredWithout(element, property, { inline: true });
-  if (!page) return history.apply(element, property, "", gesture);
+  if (!page) return history.apply(element, property, "", gesture, { widths });
 
   // The app's style attribute: removing it shows the stylesheets' value by
   // itself. A rule: it stays in the stylesheet, so the next declaration (or
@@ -43,6 +45,7 @@ export function clearProperty(
   history.apply(element, property, preview, gesture, {
     important: !!rule && page.important,
     removal: { from: page.value, source: sourceOf(element, page) },
+    widths,
   });
 }
 
@@ -57,5 +60,6 @@ function sourceOf(element: Element, declared: Declared): StyleSource {
   } catch {
     // A selector querySelectorAll doesn't take (e.g. a pseudo-element): unknown.
   }
-  return { kind: "rule", selector, elements };
+  const media = declared.rule ? mediaOf(declared.rule) : undefined;
+  return { kind: "rule", selector, elements, ...(media && { media }) };
 }

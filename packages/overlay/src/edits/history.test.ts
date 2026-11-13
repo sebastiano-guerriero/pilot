@@ -128,3 +128,29 @@ describe("shorthands", () => {
     expect(el.style.getPropertyValue("padding-top")).toBe("");
   });
 });
+
+describe("widths", () => {
+  it("records the widths a change is for, a separate change per range", () => {
+    history.apply(el, "padding-top", "10px");
+    history.apply(el, "padding-top", "20px", undefined, { widths: { min: 1200 } });
+    history.apply(el, "padding-top", "24px", undefined, { widths: { min: 1200 } });
+    expect(history.changes().map(({ property, value, widths }) => ({ property, value, widths }))).toEqual([
+      { property: "padding-top", value: "10px", widths: undefined },
+      { property: "padding-top", value: "24px", widths: { min: 1200 } },
+    ]);
+  });
+
+  it("the same value for other widths is still a change", () => {
+    history.apply(el, "padding-top", "10px");
+    history.apply(el, "padding-top", "10px", undefined, { widths: { max: 767 } });
+    expect(history.changes()).toHaveLength(2);
+    history.apply(el, "padding-top", "10px", undefined, { widths: { max: 767 } });
+    expect(history.changes()).toHaveLength(2);
+  });
+
+  it("undone changes aren't in effect", () => {
+    history.apply(el, "padding-top", "10px", undefined, { widths: { min: 768, max: 1199 } });
+    history.undo();
+    expect(history.changes()).toEqual([]);
+  });
+});
