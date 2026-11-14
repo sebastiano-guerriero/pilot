@@ -1,7 +1,10 @@
+import { isPreviewSheet } from "./preview.ts";
+
 /**
  * Declared values: the CSS that actually applies to an element for a
  * property, from any source (the page's stylesheets, Tailwind classes, the
- * app's inline styles, Pilot's own edits). Not computed values: `50%` stays
+ * app's inline styles; Pilot's own edits are added by the dialog, from the
+ * edit history). Not computed values: `50%` stays
  * `50%`, `var(--space-4)` stays as written, and a property nothing declares
  * has no value (the field is empty).
  *
@@ -81,6 +84,11 @@ export function sourcesOf(property: string): Source[] {
       { property: `${kind}-${axis}`, side: { of: "pair", index: pairIndex } },
       { property: kind, side: { of: "box", index: boxIndex } },
     ];
+  }
+  // row-gap and column-gap also come from `gap: <row> <column>` (or one value
+  // for both), when CSSOM can't expand it (var()).
+  if (property === "row-gap" || property === "column-gap") {
+    return [{ property }, { property: "gap", side: { of: "pair", index: property === "row-gap" ? 0 : 1 } }];
   }
   const border = property.match(/^border-(top|right|bottom|left)-width$/);
   if (border) {
@@ -254,12 +262,18 @@ function signatureOf(element: Element): string {
   return parts.join("|");
 }
 
+/**
+ * The page's stylesheets for the element's root, without Pilot's preview
+ * sheets: declared values are the page's own. Pilot's edits are read from
+ * the edit history instead (EditHistory.valueOf), which also works where the
+ * preview's @layer can't be parsed.
+ */
 function sheetsOf(element: Element): CSSStyleSheet[] {
   const root = element.getRootNode() as Document | ShadowRoot;
   return [
     ...Array.from(root.styleSheets ?? []),
     ...Array.from((root as { adoptedStyleSheets?: CSSStyleSheet[] }).adoptedStyleSheets ?? []),
-  ];
+  ].filter((sheet) => !isPreviewSheet(sheet));
 }
 
 interface Walk {

@@ -9,6 +9,12 @@ type PropertyRowProps = Omit<HTMLAttributes<HTMLDivElement>, "label"> & {
    * share it with an 8px gap (60px each).
    */
   children: ComponentChildren;
+  /**
+   * A 24px control at the end of the value area (e.g. a view toggle), 8px
+   * after the fields, which give up its width (96px left for them). Its right
+   * edge lines up with the other rows' fields.
+   */
+  action?: ComponentChildren;
 };
 
 /**
@@ -16,11 +22,12 @@ type PropertyRowProps = Omit<HTMLAttributes<HTMLDivElement>, "label"> & {
  * Shared by the one-row editors (width, padding-top…). Other attributes (e.g.
  * pointer and focus handlers) go on the row itself.
  */
-export function PropertyRow({ label, children, class: className, ...rest }: PropertyRowProps) {
+export function PropertyRow({ label, children, action, class: className, ...rest }: PropertyRowProps) {
   return (
-    <div {...rest} class={className ? `property-row ${className}` : "property-row"}>
+    <div {...rest} class={className ? `property-row ${className}` : "property-row"} data-action={action ? "" : undefined}>
       <PropertyLabel>{label}</PropertyLabel>
       <div class="values">{children}</div>
+      {action && <div class="action">{action}</div>}
     </div>
   );
 }

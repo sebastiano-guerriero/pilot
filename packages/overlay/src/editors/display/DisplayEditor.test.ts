@@ -7,6 +7,7 @@ import { matchEditors } from "../registry.ts";
 import type { FocusRequest } from "../types.ts";
 import { gridColumnsEditor } from "../grid-columns/GridColumnsEditor.tsx";
 import { displayEditor } from "./DisplayEditor.tsx";
+import { inlinePreview } from "../../test/inlinePreview.ts";
 
 const DisplayEditor = displayEditor.component;
 
@@ -37,7 +38,7 @@ const mount = (focusRequest?: FocusRequest) =>
   });
 
 beforeEach(() => {
-  history = new EditHistory();
+  history = new EditHistory(inlinePreview());
   changes = [];
   tabbedOut = [];
   inspects = [];
@@ -109,19 +110,42 @@ describe("display select", () => {
 });
 
 describe("grid rows", () => {
-  it("are the grid-columns, gap, justify-content and align-items editors", () => {
-    expect(displayEditor.embeds?.map((e) => e.id)).toEqual(["grid-columns", "gap", "justify-content", "align-items"]);
+  it("are editors of their own: grid-columns, gap, justify-content, align-items, flex-direction, flex-wrap", () => {
+    expect(displayEditor.embeds?.map((e) => e.id)).toEqual([
+      "grid-columns",
+      "gap",
+      "justify-content",
+      "align-items",
+      "flex-direction",
+      "flex-wrap",
+    ]);
     expect(gridColumnsEditor.properties).toEqual(["grid-template-columns"]);
   });
 
-  it("appear only for grid and inline-grid", () => {
+  it("grid shows the grid rows, flex the flex rows, anything else none", () => {
     mount();
     pick("grid");
     expect(labels()).toEqual(["display", "grid-columns", "gap", "justify-content", "align-items"]);
     pick("inline-grid");
     expect(labels()).toEqual(["display", "grid-columns", "gap", "justify-content", "align-items"]);
     pick("flex");
+    expect(labels()).toEqual(["display", "flex-direction", "flex-wrap", "gap", "justify-content", "align-items"]);
+    pick("inline-flex");
+    expect(labels()).toEqual(["display", "flex-direction", "flex-wrap", "gap", "justify-content", "align-items"]);
+    pick("block");
     expect(labels()).toEqual(["display"]);
+  });
+
+  it("flex rows write their own property", () => {
+    mount();
+    pick("flex");
+    pick("column", "flex-direction");
+    pick("wrap", "flex-wrap");
+    expect(changes).toEqual([
+      ["display", "flex"],
+      ["flex-direction", "column"],
+      ["flex-wrap", "wrap"],
+    ]);
   });
 
   it("undoing back past grid hides them again", () => {
@@ -147,17 +171,21 @@ describe("grid rows", () => {
   it("gap: hovering or focusing the row stripes the grid's gaps", () => {
     element.style.display = "grid";
     mount();
-    const row = (field("gap") as HTMLInputElement).closest(".property-row") as HTMLElement;
+    const row = (field("gap") as HTMLInputElement).closest(".field") as HTMLElement;
     act(() => {
       row.dispatchEvent(new PointerEvent("pointerenter"));
     });
-    expect(inspects.at(-1)).toEqual([{ box: "gap" }]);
+    const both = [
+      { box: "gap", axis: "row" },
+      { box: "gap", axis: "column" },
+    ];
+    expect(inspects.at(-1)).toEqual(both);
     act(() => {
       row.dispatchEvent(new PointerEvent("pointerleave"));
     });
     expect(inspects.at(-1)).toBeNull();
     act(() => field("gap")?.focus());
-    expect(inspects.at(-1)).toEqual([{ box: "gap" }]);
+    expect(inspects.at(-1)).toEqual(both);
   });
 
   it("only the gap field has a drag handle", () => {
@@ -185,7 +213,9 @@ describe("grid rows", () => {
     mount();
     typeAndEnter("gap", "16");
     expect(changes).toEqual([["gap", "16px"]]);
-    expect(field("gap")?.value).toBe("16px");
+    // (happy-dom doesn't expand `gap` into row-gap and column-gap, which the
+    // field reads back: browsers do, see the playground.)
+    expect(element.style.gap).toBe("16px");
   });
 });
 

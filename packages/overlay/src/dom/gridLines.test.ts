@@ -63,6 +63,14 @@ describe("gapRects", () => {
     ]);
   });
 
+  it("one axis: the row gaps alone run the full width; the column gaps alone, the full height", () => {
+    expect(gapRects(grid, { rows: true, columns: false })).toEqual([{ left: 100, top: 50, width: 300, height: 10 }]);
+    expect(gapRects(grid, { rows: false, columns: true })).toEqual([
+      { left: 190, top: 0, width: 15, height: 110 },
+      { left: 295, top: 0, width: 15, height: 110 },
+    ]);
+  });
+
   it("no gaps, nothing to stripe", () => {
     const flat: GridModel = {
       ...grid,

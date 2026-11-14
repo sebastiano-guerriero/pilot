@@ -46,11 +46,18 @@ img, picture, video, canvas, svg {
   height: 24px;
   border-radius: 6px;
   /* Slightly see-through at rest; solid, with a ring, when focused from the
-     keyboard (or typed into, for text fields). */
+     keyboard (or typed into, for text fields), and on a field linked to the
+     one being edited (data-mirror-focus: typing there changes it too). */
   background: hsl(from var(--plt-color-background-light) h s l / 90%);
   box-shadow: inset 0 1px 0 hsl(0 0% 100% / 7%);
 
-  &:focus-visible {
+  /* Hovered: the fill turns solid (no transition). */
+  &:hover {
+    background: var(--plt-color-background-light);
+  }
+
+  &:focus-visible,
+  &[data-mirror-focus] {
     background: var(--plt-color-background-light);
     box-shadow:
       inset 0 1px 0 hsl(0 0% 100% / 10%),

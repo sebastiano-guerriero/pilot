@@ -1,11 +1,15 @@
-import { boxEditor } from "../box/BoxEditor.tsx";
+import { sidesEditor } from "../sides/sides.ts";
 
-/** Margin: the box diagram on margin-top/right/bottom/left (negatives and `auto` allowed). */
-export const marginEditor = boxEditor({
+/**
+ * Margin: one value for every side (`margin`), or one per side
+ * (`margin-top`…), like padding (see sides.ts and SplitEditor). Negative
+ * values and `auto` are allowed (css/properties.ts). `mx` + `auto` centers.
+ */
+export const marginEditor = sidesEditor({
   id: "margin",
   label: "Margin",
   title: "margin",
+  shorthand: "margin",
   box: "margin",
-  property: (side) => `margin-${side}`,
-  aliases: { all: "m", top: "mt", right: "mr", bottom: "mb", left: "ml", x: "mx", y: "my" },
+  aliases: { all: "m", top: "mt", right: "mr", bottom: "mb", left: "ml", x: "mx", y: "my", start: "ms", end: "me" },
 });

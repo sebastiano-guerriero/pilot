@@ -13,18 +13,10 @@ export interface InputDraft {
   typed: boolean;
 }
 
-/**
- * What an empty compact field (box diagram) shows, dimmed: nothing is set.
- * Not a CSS keyword (`unset`, `auto`…), so it can't be mistaken for a value.
- * Regular fields are visible boxes, so they're simply empty. Pilot doesn't
- * show computed values: a field shows CSS that's set, or nothing.
- */
-export const NOT_SET = "—";
-
 interface PropertyInputTextProps {
   /**
    * The value set on the element (e.g. "100%"), or "" when none is: the field
-   * is then empty (compact fields show a dimmed dash, NOT_SET).
+   * is then empty (Pilot doesn't show computed values).
    */
   value: string;
   /** Accessible name, e.g. "Width". */
@@ -52,13 +44,14 @@ interface PropertyInputTextProps {
    * drag started, and one `gesture` object for the whole drag (one undo step).
    */
   onScrub?(steps: number, startText: string, gesture: object): void;
+  /**
+   * Dimmed text shown while the field is empty, for a field that stands for
+   * several values that differ ("Mixed"). Boxed fields have none otherwise:
+   * an empty box means nothing is set.
+   */
+  placeholder?: string;
   /** The icon variant: an icon (12px) at the field's left, 6px before the text. */
   icon?: ComponentChildren;
-  /**
-   * The box-model diagram's variant: no box, sized to its content, a dimmed
-   * dash when empty. Regular fields are a 24px box that fills its slot.
-   */
-  compact?: boolean;
   /**
    * A linked field is being edited: show its text once something has been
    * typed there, and its selection highlight while all of it is selected (a
@@ -85,11 +78,11 @@ export function PropertyInputText({
   onSubmit,
   onTab,
   onFocus,
-  compact,
   mirror,
   onDraft,
   onScrub,
   icon,
+  placeholder,
 }: PropertyInputTextProps) {
   const ownRef = useRef<HTMLInputElement>(null);
   const ref = inputRef ?? ownRef;
@@ -105,13 +98,6 @@ export function PropertyInputText({
   const typed = useRef(false);
 
   const shown = mirror?.typed ? mirror.text : (draft ?? value);
-
-  // An empty field that has focus and hasn't been typed into counts as
-  // selected: typing will replace its placeholder, as it replaces a selected
-  // value. Drawn behind the placeholder, and mirrored by linked fields, so it's
-  // clear several values will change at once even when they're all defaults.
-  // Only compact fields have a placeholder to draw it behind.
-  const placeholderSelected = !!compact && draft === "" && !typed.current;
 
   const report = () => {
     const el = ref.current;
@@ -213,17 +199,12 @@ export function PropertyInputText({
       spellcheck={false}
       autocomplete="off"
       aria-label={label}
-      data-compact={compact || undefined}
       data-scrub={onScrub ? "" : undefined}
       data-icon={icon ? "" : undefined}
-      data-mirror-selected={mirror?.selected || undefined}
-      data-placeholder-selected={placeholderSelected || undefined}
+      // Linked to the field being edited: it shows focused too (base.css).
+      data-mirror-focus={mirror ? "" : undefined}
       value={shown}
-      placeholder={compact ? NOT_SET : undefined}
-      // Compact fields size to their content. Fallback where `field-sizing:
-      // content` isn't supported: a width in `ch` (a digit's width), close
-      // enough for short values (an empty field is as wide as its placeholder).
-      style={compact ? { "--chars": String(Math.max(1, (shown || NOT_SET).length)) } : undefined}
+      placeholder={placeholder}
       onPointerDown={onPointerDown}
       onFocus={() => {
         editing.current = true;
@@ -248,13 +229,23 @@ export function PropertyInputText({
       }}
       onKeyDown={onKeyDown}
     />);
-  if (!onScrub && !icon) return input;
+  // Mirroring a linked field that's being edited: its selection, drawn over
+  // this field's text (a page holds only one real selection). With no text
+  // there's nothing to draw: the focused look (data-mirror-focus) shows it.
+  const drawnSelection = !!mirror?.selected && !!shown;
+  if (!onScrub && !icon && !drawnSelection) return input;
 
-  // With an icon or a scrub handle: a wrapper the input fills, with them on top.
+  // With an icon, a scrub handle or a drawn selection: a wrapper the input
+  // fills, with them on top.
   return (
     <span class={onScrub ? "input-wrap scrub-field" : "input-wrap"}>
       {icon && <span class="input-icon">{icon}</span>}
       {input}
+      {drawnSelection && (
+        <span class="mirror-selection" data-icon={icon ? "" : undefined} aria-hidden="true">
+          <span>{shown}</span>
+        </span>
+      )}
       {onScrub && (
         <ScrubHandle
           onStart={() => {

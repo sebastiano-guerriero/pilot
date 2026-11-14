@@ -27,14 +27,14 @@ describe("clearProperty", () => {
   it("only Pilot set it: Pilot's value is dropped, nothing to remove", () => {
     history.apply(element, "gap", "10px");
     clearProperty(history, element, "gap");
-    expect(element.style.gap).toBe("");
+    expect(history.valueOf(element, "gap")).toBeNull();
     expect(history.removalOf(element, "gap")).toBeNull();
   });
 
   it("a stylesheet sets it: a removal, previewed with revert when no other rule declares it", () => {
     style.textContent = ".card { gap: 16px; }";
     clearProperty(history, element, "gap");
-    expect(element.style.gap).toBe("revert");
+    expect(history.valueOf(element, "gap")).toBe("revert");
     expect(history.removalOf(element, "gap")).toEqual({
       from: "16px",
       source: { kind: "rule", selector: ".card", elements: 1 },
@@ -45,23 +45,17 @@ describe("clearProperty", () => {
     style.textContent = "div { gap: 8px; } .card { gap: 16px; }";
     await nextTask();
     clearProperty(history, element, "gap");
-    expect(element.style.gap).toBe("8px");
+    expect(history.valueOf(element, "gap")).toBe("8px");
     expect(history.removalOf(element, "gap")?.from).toBe("16px");
   });
 
-  it("over an !important rule, the preview is !important too", async () => {
-    style.textContent = ".card { gap: 16px !important; }";
-    await nextTask();
-    clearProperty(history, element, "gap");
-    expect(element.style.getPropertyPriority("gap")).toBe("important");
-  });
-
-  it("the app's own style attribute: removed from it, the stylesheet's value shows", async () => {
+  it("the app's own style attribute: the stylesheet's value shows, the attribute is left alone", async () => {
     style.textContent = ".card { gap: 4px; }";
     element.style.gap = "16px";
     await nextTask();
     clearProperty(history, element, "gap");
-    expect(element.style.gap).toBe("");
+    expect(history.valueOf(element, "gap")).toBe("4px");
+    expect(element.style.gap).toBe("16px");
     expect(history.removalOf(element, "gap")).toEqual({ from: "16px", source: { kind: "inline" } });
   });
 
@@ -78,7 +72,7 @@ describe("clearProperty", () => {
     await nextTask();
     clearProperty(history, element, "gap");
     history.undo();
-    expect(element.style.gap).toBe("");
+    expect(history.valueOf(element, "gap")).toBeNull();
     expect(history.removalOf(element, "gap")).toBeNull();
     history.redo();
     expect(history.removalOf(element, "gap")).not.toBeNull();
@@ -87,30 +81,40 @@ describe("clearProperty", () => {
   });
 
   // happy-dom expands padding (not gap, unlike browsers): a shorthand case.
-  it("a shorthand: removed, and the page's own value read back from its longhands", async () => {
+  it("a shorthand: removed, previewed on its longhands too", async () => {
     style.textContent = ".card { padding: 16px; }";
     await nextTask();
     history.apply(element, "padding", "20px");
     clearProperty(history, element, "padding");
     expect(history.removalOf(element, "padding")?.from).toBe("16px");
-    expect(element.style.paddingTop).toBe("revert");
+    expect(history.valueOf(element, "padding-top")).toBe("revert");
   });
 
-  it("a shorthand set in the app's own style attribute is the page's, not Pilot's", () => {
+  it("Pilot never writes the app's own style attribute: its value stays the page's", () => {
     element.style.padding = "4px";
     history.apply(element, "padding", "20px");
-    expect(history.originalInline(element, "padding")).toEqual({ value: "4px", important: false });
+    expect(element.style.padding).toBe("4px");
+    clearProperty(history, element, "padding");
+    expect(history.removalOf(element, "padding")).toEqual({ from: "4px", source: { kind: "inline" } });
   });
 
   it("a removal records the rule's media query and the widths it's for", () => {
     style.textContent = "@media (min-width: 1px) { .card { gap: 16px; } }";
     clearProperty(history, element, "gap", undefined, { min: 1200 });
-    expect(history.removalOf(element, "gap")?.source).toEqual({
+    expect(history.removalOf(element, "gap", 1440)?.source).toEqual({
       kind: "rule",
       selector: ".card",
       elements: 1,
       media: "(min-width: 1px)",
     });
     expect(history.changes()[0]?.widths).toEqual({ min: 1200 });
+  });
+
+  it("a removal for some widths applies only there", () => {
+    style.textContent = ".card { gap: 16px; }";
+    clearProperty(history, element, "gap", undefined, { min: 1200 });
+    expect(history.removalOf(element, "gap", 1440)).not.toBeNull();
+    expect(history.removalOf(element, "gap", 800)).toBeNull();
+    expect(history.valueOf(element, "gap", 800)).toBeNull();
   });
 });

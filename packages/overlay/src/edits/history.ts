@@ -1,5 +1,7 @@
 import type { StyleSource, WidthRange } from "@pilot/protocol";
+import { type Preview, stylesheetPreview } from "../dom/preview.ts";
 import type { EditableElement } from "../dom/target.ts";
+import { inWidths } from "./widths.ts";
 
 /**
  * A value the designer removed (cleared a field the page's own CSS sets): the
@@ -15,16 +17,9 @@ export interface Removal {
 interface Entry {
   element: EditableElement;
   property: string;
-  /**
-   * The inline values before the change, of every longhand `property` sets
-   * (just `property` itself when it isn't a shorthand). "" = no inline value,
-   * i.e. the stylesheet's.
-   */
-  before: Snapshot;
-  after: string;
-  /** "important" when the value is set with !important (a removal's preview over an !important rule). */
-  afterPriority: string;
-  /** Set when this change removes the page's own value (see Removal). */
+  /** The value set; "" drops Pilot's value (the page's own shows again). */
+  value: string;
+  /** Set when this change removes the page's own value (see Removal); `value` is then its preview. */
   removal?: Removal;
   /** The viewport widths it's for (the search's width chip). None: every width. */
   widths?: WidthRange;
@@ -40,9 +35,6 @@ export interface RecordedChange {
   widths?: WidthRange;
 }
 
-/** Inline values of some properties, to put back exactly. */
-type Snapshot = Array<{ property: string; value: string; priority: string }>;
-
 /** One undo step: a single change, or every change made with the same gesture. */
 interface Step {
   /** Continuous-interaction token: changes sharing it are one undo step. */
@@ -51,157 +43,117 @@ interface Step {
 }
 
 /**
- * Every property change Pilot makes goes through here: it applies the value as
- * an inline style and records it, so it can be undone (Cmd/Ctrl+Z) and redone
- * (Cmd/Ctrl+Shift+Z, Ctrl+Y). This is also where the change set's
- * `from → to` will come from.
+ * Every property change Pilot makes goes through here: it records the change
+ * and shows it on the page through the preview (a stylesheet, see
+ * dom/preview.ts; never the element's own `style`), so it can be undone
+ * (Cmd/Ctrl+Z) and redone (Cmd/Ctrl+Shift+Z, Ctrl+Y). The change set is
+ * built from it (`changes()`), and fields read Pilot's values from it
+ * (`valueOf()`, `removalOf()`).
+ *
+ * The preview is rebuilt from the changes in effect after every change, undo
+ * and redo, so there's nothing to restore: undoing a change just leaves it out.
  */
 export class EditHistory {
   private done: Step[] = [];
   private undone: Step[] = [];
 
+  constructor(private readonly preview: Preview = stylesheetPreview) {}
+
   /**
-   * Apply `value` to `property` on `element`. Pass the same `gesture` object
+   * Set `property` to `value` on `element`. Pass the same `gesture` object
    * for every change that belongs together, and they're undone as a single
    * step: all the moves of a drag, or both sides of a linked `px` edit.
-   * Re-applying the current value is a no-op.
+   * Setting what Pilot already sets there is a no-op, and so is "" where
+   * Pilot sets nothing.
    *
    * `options.removal` marks the change as removing the page's own value (see
    * clearProperty): `value` is then only the preview of what applies without
-   * it. `options.important` sets it with !important. `options.widths`: the
-   * viewport widths the change is for (none: every width). Changes for
-   * different widths are separate changes, even within a gesture.
+   * it. `options.widths`: the viewport widths the change is for (none: every
+   * width). Changes for different widths are separate changes, even within a
+   * gesture.
    */
   apply(
     element: EditableElement,
     property: string,
     value: string,
     gesture?: object,
-    options: { important?: boolean; removal?: Removal; widths?: WidthRange } = {},
+    options: { removal?: Removal; widths?: WidthRange } = {},
   ): void {
-    const priority = options.important ? "important" : "";
+    const { removal, widths } = options;
     const last = this.done.at(-1);
     const step = gesture && last?.gesture === gesture ? last : undefined;
     const existing = step?.entries.find(
-      (e) => e.element === element && e.property === property && sameWidths(e.widths, options.widths),
+      (e) => e.element === element && e.property === property && sameWidths(e.widths, widths),
     );
     if (existing) {
-      element.style.setProperty(property, value, priority);
-      existing.after = value;
-      existing.afterPriority = priority;
-      existing.removal = options.removal;
-      this.undone = [];
-      return;
+      existing.value = value;
+      existing.removal = removal;
+    } else {
+      const current = this.currentFor(element, property, widths);
+      if (!removal && !current?.removal && (current?.value ?? "") === value) return;
+      const entry: Entry = { element, property, value, removal, widths };
+      if (step) step.entries.push(entry);
+      else this.done.push({ gesture, entries: [entry] });
     }
-    const current = element.style.getPropertyValue(property);
-    const unchanged = current === value && element.style.getPropertyPriority(property) === priority;
-    // Same value, but for other widths (a chip added since): still a change.
-    const latest = this.latestEntry(element, property);
-    const sameRange = sameWidths(latest?.widths, options.widths);
-    if (unchanged && sameRange && !options.removal && !this.removalOf(element, property)) return;
-    const entry: Entry = {
-      element,
-      property,
-      before: snapshot(element, property),
-      after: value,
-      afterPriority: priority,
-      removal: options.removal,
-      widths: options.widths,
-    };
-    if (step) step.entries.push(entry);
-    else this.done.push({ gesture, entries: [entry] });
-    element.style.setProperty(property, value, priority);
     this.undone = [];
+    this.render();
   }
 
   /**
    * The changes in effect (not undone), one per element, property and width
-   * range, with its latest value, in the order they were first made. What the
-   * change set is built from.
+   * range, with its latest value, in the order of their latest change. A
+   * change a later one replaced (see rules) isn't listed, and neither are
+   * changes back to "" (Pilot's value dropped). What the change set is built from.
    */
   changes(): RecordedChange[] {
-    const out: RecordedChange[] = [];
-    for (const { entries } of this.done) {
-      for (const { element, property, after, removal, widths } of entries) {
-        const change: RecordedChange = { element, property, value: after, removal, widths };
-        const i = out.findIndex(
-          (c) => c.element === element && c.property === property && sameWidths(c.widths, widths),
-        );
-        if (i === -1) out.push(change);
-        else out[i] = change;
-      }
-    }
-    return out;
+    return this.rules()
+      .filter((r) => r.value !== "")
+      .map(({ element, property, value, removal, widths }) => ({ element, property, value, removal, widths }));
   }
 
   /**
-   * The element's own inline value for `property` before Pilot changed it
-   * (the app's style attribute), or null when it had none.
+   * What Pilot sets `property` to on `element` at the viewport width `width`
+   * (the window's, by default), or null where it sets nothing: the latest
+   * preview rule that sets it there, a longhand read out of a shorthand
+   * (`grid-column-start` from `grid-column`). What a field shows over the
+   * page's own CSS.
    */
-  originalInline(element: EditableElement, property: string): { value: string; important: boolean } | null {
-    const longhands = longhandsOf(property);
-    for (const step of this.done) {
-      for (const entry of step.entries) {
-        if (entry.element !== element) continue;
-        // The first change that recorded all of it (a shorthand's longhands).
-        if (!longhands.every((l) => entry.before.some((b) => b.property === l))) continue;
-        const { value, priority } = read(entry.before, property);
-        return value ? { value, important: priority === "important" } : null;
-      }
-    }
-    const value = element.style.getPropertyValue(property);
-    return value ? { value, important: element.style.getPropertyPriority(property) === "important" } : null;
+  valueOf(element: EditableElement, property: string, width = window.innerWidth): string | null {
+    const rule = this.activeRule(element, property, width);
+    return rule ? valueIn(rule, property) || null : null;
   }
 
   /**
-   * Whether `property` is currently removed on `element` (its latest change
-   * is a removal): the field shows nothing, the change set says "remove".
+   * Whether `property` is removed on `element` at the viewport width `width`
+   * (the window's, by default): the change in effect there is a removal. The
+   * field then shows nothing, and the change set says "remove".
    */
-  removalOf(element: EditableElement, property: string): Removal | null {
-    for (let i = this.done.length - 1; i >= 0; i--) {
-      const entries = (this.done[i] as Step).entries;
-      for (let j = entries.length - 1; j >= 0; j--) {
-        const entry = entries[j] as Entry;
-        const touches = entry.property === property || longhandsOf(entry.property).includes(property);
-        if (entry.element !== element || !touches) continue;
-        return entry.property === property ? (entry.removal ?? null) : null;
-      }
-    }
-    return null;
-  }
-
-  private latestEntry(element: EditableElement, property: string): Entry | undefined {
-    for (let i = this.done.length - 1; i >= 0; i--) {
-      const entries = (this.done[i] as Step).entries;
-      for (let j = entries.length - 1; j >= 0; j--) {
-        const entry = entries[j] as Entry;
-        if (entry.element === element && entry.property === property) return entry;
-      }
-    }
-    return undefined;
+  removalOf(element: EditableElement, property: string, width = window.innerWidth): Removal | null {
+    const rule = this.activeRule(element, property, width);
+    return rule?.property === property ? (rule.removal ?? null) : null;
   }
 
   /**
    * Take back what `gesture` did to `property` so far, as if it never touched
-   * it: restores the exact earlier inline value (or the stylesheet's) and drops
-   * it from the step. E.g. releasing Alt mid-drag un-mirrors the opposite side.
+   * it, and drop it from the step. E.g. releasing Alt mid-drag un-mirrors the
+   * opposite side.
    */
   revert(element: EditableElement, property: string, gesture: object): void {
     const step = this.done.at(-1);
     if (!step || step.gesture !== gesture) return;
     const index = step.entries.findIndex((e) => e.element === element && e.property === property);
     if (index === -1) return;
-    const [entry] = step.entries.splice(index, 1);
-    if (entry) restore(element, entry.before);
+    step.entries.splice(index, 1);
     if (step.entries.length === 0) this.done.pop();
+    this.render();
   }
 
   /** Revert the latest step. Returns false when there's nothing to undo. */
   undo(): boolean {
     const step = this.done.pop();
     if (!step) return false;
-    for (const { element, before } of [...step.entries].reverse()) restore(element, before);
     this.undone.push(step);
+    this.render();
     return true;
   }
 
@@ -209,20 +161,86 @@ export class EditHistory {
   redo(): boolean {
     const step = this.undone.pop();
     if (!step) return false;
-    for (const { element, property, after, afterPriority } of step.entries) {
-      element.style.setProperty(property, after, afterPriority);
-    }
     this.done.push(step);
+    this.render();
     return true;
   }
+
+  /**
+   * The preview's rules: every change in effect, in the order made. A change
+   * replaces the earlier ones it covers for the same element and widths: the
+   * same property, or a longhand of it (`padding` replaces `padding-top`).
+   * A change to "" drops Pilot's value: it's left out, unless an earlier
+   * rule of Pilot's still sets the property (a shorthand, or the same
+   * property for other widths). Then it stays, and the preview writes
+   * `revert-layer` for it: the page's own value, as if Pilot didn't set it.
+   */
+  private rules(): Entry[] {
+    const out: Entry[] = [];
+    for (const { entries } of this.done) {
+      for (const entry of entries) {
+        const covered = longhandsOf(entry.property);
+        for (let i = out.length - 1; i >= 0; i--) {
+          const prior = out[i] as Entry;
+          const replaced =
+            prior.element === entry.element &&
+            sameWidths(prior.widths, entry.widths) &&
+            (prior.property === entry.property || covered.includes(prior.property));
+          if (replaced) out.splice(i, 1);
+        }
+        const needed = entry.value !== "" || out.some((r) => r.element === entry.element && sets(r, entry.property));
+        if (needed) out.push(entry);
+      }
+    }
+    return out;
+  }
+
+  private render(): void {
+    this.preview.render(this.rules().map((r) => (r.value === "" ? { ...r, value: "revert-layer" } : r)));
+  }
+
+  /** The rule that wins for `property` on `element` at `width`: the latest that sets it there. */
+  private activeRule(element: EditableElement, property: string, width: number): Entry | undefined {
+    const rules = this.rules();
+    for (let i = rules.length - 1; i >= 0; i--) {
+      const r = rules[i] as Entry;
+      if (r.element === element && sets(r, property) && inWidths(r.widths ?? null, width)) return r;
+    }
+    return undefined;
+  }
+
+  /**
+   * What Pilot sets `property` to for exactly these widths (the latest rule
+   * for them that sets it), to tell a change from a no-op.
+   */
+  private currentFor(element: EditableElement, property: string, widths?: WidthRange): { value: string; removal?: Removal } | undefined {
+    const rules = this.rules();
+    for (let i = rules.length - 1; i >= 0; i--) {
+      const r = rules[i] as Entry;
+      if (r.element !== element || !sameWidths(r.widths, widths) || !sets(r, property)) continue;
+      return { value: valueIn(r, property), removal: r.property === property ? r.removal : undefined };
+    }
+    return undefined;
+  }
+}
+
+/** Whether a change sets `property`: it's that property, or a shorthand of it. */
+function sets(entry: Entry, property: string): boolean {
+  return entry.property === property || longhandsOf(entry.property).includes(property);
+}
+
+/** `property`'s value in a change: the value itself, or a longhand read out of a shorthand. "" for none. */
+function valueIn(entry: Entry, property: string): string {
+  if (entry.property === property || entry.value === "") return entry.value;
+  const style = document.createElement("div").style;
+  style.setProperty(entry.property, entry.value);
+  return style.getPropertyValue(property);
 }
 
 /**
  * The longhands a property sets: `grid-column` → grid-column-start and
  * grid-column-end. Just the property itself when it isn't a shorthand.
- * Undo has to put each of them back: restoring the shorthand alone can't
- * bring back a longhand that was set on its own (the shorthand reads as ""
- * until all of its longhands are set).
+ * A change to a shorthand replaces Pilot's earlier changes to its longhands.
  */
 const longhandCache = new Map<string, string[]>();
 export function longhandsOf(property: string): string[] {
@@ -239,28 +257,6 @@ export function longhandsOf(property: string): string[] {
 
 function sameWidths(a?: WidthRange, b?: WidthRange): boolean {
   return a?.min === b?.min && a?.max === b?.max;
-}
-
-function snapshot(element: EditableElement, property: string): Snapshot {
-  return longhandsOf(property).map((p) => ({
-    property: p,
-    value: element.style.getPropertyValue(p),
-    priority: element.style.getPropertyPriority(p),
-  }));
-}
-
-/** `property`'s value in a snapshot, a shorthand rebuilt from its longhands. */
-function read(snapshot: Snapshot, property: string): { value: string; priority: string } {
-  const style = document.createElement("div").style;
-  for (const b of snapshot) if (b.value) style.setProperty(b.property, b.value, b.priority);
-  return { value: style.getPropertyValue(property), priority: style.getPropertyPriority(property) };
-}
-
-function restore(element: EditableElement, snapshot: Snapshot): void {
-  for (const { property, value, priority } of snapshot) {
-    if (value) element.style.setProperty(property, value, priority);
-    else element.style.removeProperty(property);
-  }
 }
 
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);

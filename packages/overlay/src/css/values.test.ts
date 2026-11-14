@@ -143,3 +143,23 @@ describe("other kinds of value", () => {
     expect(stepValue("grid-column", "full", 1, "auto")).toBeNull();
   });
 });
+
+describe("ratio (aspect-ratio)", () => {
+  it("x/y, x / y and x:y write x / y; one number is that ratio to 1", async () => {
+    const { parseValue, normalizeRatio } = await import("./values.ts");
+    expect(parseValue("aspect-ratio", "16/9")).toBe("16 / 9");
+    expect(parseValue("aspect-ratio", "4 / 5")).toBe("4 / 5");
+    expect(parseValue("aspect-ratio", "21:9")).toBe("21 / 9");
+    expect(parseValue("aspect-ratio", "1.5")).toBe("1.5 / 1");
+    expect(parseValue("aspect-ratio", "auto")).toBe("auto");
+    expect(normalizeRatio("1/0")).toBeNull();
+    expect(parseValue("aspect-ratio", "16/9/2")).toBeNull();
+    expect(parseValue("aspect-ratio", "wide")).toBeNull();
+  });
+
+  it("isn't stepped", async () => {
+    const { stepValue } = await import("./values.ts");
+    expect(stepValue("aspect-ratio", "16 / 9", 1, undefined)).toBeNull();
+  });
+});
+

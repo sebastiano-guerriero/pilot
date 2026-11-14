@@ -137,13 +137,14 @@ export interface GapRect {
  * The gaps between tracks, as viewport rects to stripe: each column gap spans
  * the rows, each row gap spans the columns. Row gaps are cut where a column
  * gap crosses them, so the crossings aren't covered (and striped) twice.
+ * `axes` picks which: just the row gaps (row-gap's field) run the full width.
  */
-export function gapRects(grid: GridModel): GapRect[] {
+export function gapRects(grid: GridModel, axes: { rows: boolean; columns: boolean } = { rows: true, columns: true }): GapRect[] {
   const span = (lines: GridLine[]) => ({ from: lines[0]?.start ?? 0, to: lines.at(-1)?.end ?? 0 });
   const across = span(grid.columns);
   const down = span(grid.rows);
-  const columnGaps = grid.columns.filter((l) => l.end > l.start);
-  const rowGaps = grid.rows.filter((l) => l.end > l.start);
+  const columnGaps = axes.columns ? grid.columns.filter((l) => l.end > l.start) : [];
+  const rowGaps = axes.rows ? grid.rows.filter((l) => l.end > l.start) : [];
 
   const rects: GapRect[] = columnGaps.map((c) => ({
     left: c.start,

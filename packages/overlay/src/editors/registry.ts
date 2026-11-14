@@ -1,13 +1,16 @@
 import { alignItemsEditor } from "./align/AlignItemsEditor.tsx";
-import { borderEditor } from "./border/BorderEditor.tsx";
+import { aspectRatioEditor } from "./aspect-ratio/AspectRatioEditor.tsx";
 import { displayEditor } from "./display/DisplayEditor.tsx";
+import { flexDirectionEditor, flexWrapEditor } from "./flex/FlexEditors.tsx";
 import { gapEditor } from "./gap/GapEditor.tsx";
 import { colEndEditor, colSpanEditor, colStartEditor } from "./grid-column/GridColumnEditor.tsx";
 import { gridColumnsEditor } from "./grid-columns/GridColumnsEditor.tsx";
+import { heightEditor, maxHeightEditor, minHeightEditor } from "./height/HeightEditor.tsx";
 import { justifyContentEditor } from "./justify/JustifyContentEditor.tsx";
 import { marginEditor } from "./margin/MarginEditor.tsx";
 import { orderEditor } from "./order/OrderEditor.tsx";
-import { paddingBottomEditor, paddingLeftEditor, paddingRightEditor, paddingTopEditor } from "./padding/PaddingEditor.tsx";
+import { paddingEditor } from "./padding/PaddingEditor.tsx";
+import { sizeEditor } from "./size/SizeEditor.tsx";
 import { normalizeQuery } from "./query.ts";
 import type { PropertyEditor } from "./types.ts";
 import { maxWidthEditor, minWidthEditor, widthEditor } from "./width/WidthEditor.tsx";
@@ -18,17 +21,20 @@ import { maxWidthEditor, minWidthEditor, widthEditor } from "./width/WidthEditor
  * `ui/styles/index.css`.
  */
 export const editors: PropertyEditor[] = [
-  paddingTopEditor,
-  paddingRightEditor,
-  paddingBottomEditor,
-  paddingLeftEditor,
+  paddingEditor,
   marginEditor,
-  borderEditor,
   widthEditor,
   minWidthEditor,
   maxWidthEditor,
+  heightEditor,
+  minHeightEditor,
+  maxHeightEditor,
+  sizeEditor,
+  aspectRatioEditor,
   displayEditor,
   gridColumnsEditor,
+  flexDirectionEditor,
+  flexWrapEditor,
   gapEditor,
   justifyContentEditor,
   alignItemsEditor,

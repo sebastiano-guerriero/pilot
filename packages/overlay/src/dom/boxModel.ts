@@ -7,9 +7,14 @@ export interface SideArea {
   side: BoxSide;
 }
 
-/** A grid container's gaps: the space between its tracks (see dom/gridLines.ts). */
+/**
+ * A grid container's gaps: the space between its tracks (see dom/gridLines.ts).
+ * `axis`: only the gaps between rows (row-gap) or between columns
+ * (column-gap); both when absent.
+ */
 export interface GapArea {
   box: "gap";
+  axis?: "row" | "column";
 }
 
 /** An area of the selected element to visualize: a box-model side, or the grid's gaps. */

@@ -4,6 +4,7 @@ import { h, render } from "preact";
 import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { EDIT_ATTRIBUTE, PREVIEW_ATTRIBUTE } from "../../../dom/preview.ts";
 import { EditHistory } from "../../../edits/history.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../../../editors/types.ts";
 import { PropertyDialog, type WidthPick } from "./PropertyDialog.tsx";
@@ -72,6 +73,7 @@ const type = (text: string) =>
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 
+const previewText = () => document.querySelector(`style[${PREVIEW_ATTRIBUTE}]`)?.textContent ?? "";
 const editorIds = () => [...container.querySelectorAll(".editor")].map((e) => (e as HTMLElement).dataset.editor);
 
 describe("PropertyDialog", () => {
@@ -104,16 +106,18 @@ describe("PropertyDialog", () => {
     });
     type("opacity");
     act(() => (container.querySelector(".stub") as HTMLButtonElement).click());
-    expect(element.style.getPropertyValue("opacity")).toBe("0.5");
+    expect(history.valueOf(element, "opacity")).toBe("0.5");
     expect(history.undo()).toBe(true);
-    expect(element.style.getPropertyValue("opacity")).toBe("");
+    expect(history.valueOf(element, "opacity")).toBeNull();
   });
 
-  it("applies editor changes as inline styles on the element", () => {
+  it("shows editor changes on the page through Pilot's stylesheet, never the element's style", () => {
     mount();
     type("opacity");
     act(() => (container.querySelector(".stub") as HTMLButtonElement).click());
-    expect(element.style.getPropertyValue("opacity")).toBe("0.5");
+    expect(previewText()).toContain("opacity: 0.5 !important");
+    expect(element.hasAttribute(EDIT_ATTRIBUTE)).toBe(true);
+    expect(element.style.cssText).toBe("");
   });
 
   describe("keyboard", () => {
@@ -342,7 +346,7 @@ describe("declared values", () => {
     expect(received).toEqual({ gap: "16px" });
     act(() => change?.("gap", ""));
     expect(received).toEqual({ gap: "" });
-    expect(element.style.gap).toBe("revert");
+    expect(previewText()).toContain("gap: revert !important");
     style.remove();
   });
 

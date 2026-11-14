@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
-import { cssProperty } from "../../css/properties.ts";
-import { displayValue, parseValue, scrubIncrement, stepValue } from "../../css/values.ts";
+import { displayValue, parseValue, stepValue } from "../../css/values.ts";
 import type { BoxArea } from "../../dom/boxModel.ts";
-import { PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
+import { type InputDraft, PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { declaredOf } from "../declared.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
+import { useScrub } from "./useScrub.ts";
 
 /** How a length editor behaves, beyond its property. */
 interface LengthOptions {
@@ -15,6 +15,18 @@ interface LengthOptions {
   scrub?: boolean;
   /** The row's label, when it isn't the property's name (grid-column-start → col-start). */
   name?: string;
+}
+
+/**
+ * Linking with another length editor's field (size: width and height), set by
+ * the editor that shows both. The leading field writes a typed value to
+ * `also` too (one undo step) and reports what's being typed (`onDraft`); the
+ * other field shows it (`mirror`): selected while it's selected, then the text.
+ */
+export interface LengthLink {
+  also?: string[];
+  onDraft?(draft: InputDraft | null): void;
+  mirror?: InputDraft;
 }
 
 /**
@@ -39,7 +51,8 @@ export function LengthEditor({
   onReturnToSearch,
   onTabOut,
   onInspect,
-}: PropertyEditorProps & { property: string; options?: LengthOptions }) {
+  link,
+}: PropertyEditorProps & { property: string; options?: LengthOptions; link?: LengthLink }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const computed = values[property];
   // The declared value (from any source), without its outer calc(); ""
@@ -66,45 +79,15 @@ export function LengthEditor({
   useEffect(() => () => void (options.inspect && onInspect?.(null)), []);
 
   // ↑/↓ on an empty field or a keyword start from a px value: the property's
-  // computed value; when that isn't a length, the element's computed width for
-  // the width family (max-width: none), or 0 (gap: normal).
+  // computed value; when that isn't a length, the element's computed width or
+  // height for those families (max-width: none), or 0 (gap: normal).
   const stepBase = () => {
     if (computed && Number.isFinite(Number.parseFloat(computed))) return computed;
-    return property.endsWith("width") ? getComputedStyle(element).width : "0px";
+    const size = /^(?:min-|max-)?(width|height)$/.exec(property)?.[1];
+    return size ? getComputedStyle(element).getPropertyValue(size) : "0px";
   };
 
-  // The ongoing drag: what it steps from, fixed when it starts (the computed
-  // value changes with every step, so it can't be read again mid-drag), and
-  // how far its steps have been shifted to stay at the minimum.
-  const drag = useRef<{ gesture: object; base: string; start: number; shift: number } | null>(null);
-
-  // Drag the handle (ScrubHandle): `steps` is the total from where the drag
-  // started, in the same unit, as one undo step.
-  // - From a value: back at the start, the exact earlier value is restored
-  //   (no fake edit).
-  // - From an empty field: it steps from the computed value (0 for gap, so the
-  //   first step up is 1px), and never goes back to empty: only deleting the
-  //   field's text does that.
-  // - At the minimum (0, unless negatives are allowed), dragging further
-  //   doesn't count: turning back moves the value right away.
-  const scrub = (steps: number, startText: string, gesture: object) => {
-    if (drag.current?.gesture !== gesture) {
-      const base = stepBase();
-      const start = Number.parseFloat(stepValue(property, startText, 0, base) ?? "");
-      drag.current = { gesture, base, start, shift: 0 };
-    }
-    const d = drag.current;
-    const increment = scrubIncrement(startText);
-    let offset = steps - d.shift;
-    if (!cssProperty(property).negative && Number.isFinite(d.start) && d.start + offset * increment < 0) {
-      const floor = -d.start / increment;
-      d.shift += offset - floor;
-      offset = floor;
-    }
-    if (offset === 0 && startText) return onRevert?.(property, gesture);
-    const next = stepValue(property, startText, offset * increment, d.base);
-    if (next) onChange(property, next, { gesture });
-  };
+  const scrub = useScrub({ onChange, onRevert });
 
   return (
     <PropertyRow
@@ -121,10 +104,16 @@ export function LengthEditor({
         inputRef={inputRef}
         onCommit={(text) => {
           // Cleared: remove the value (back to the page's CSS, or the default).
-          if (!text.trim()) return onChange(property, "");
-          const next = parseValue(property, text);
-          if (next && next !== current) onChange(property, next);
+          const next = text.trim() ? parseValue(property, text) : "";
+          if (next === null) return;
+          // Linked (size): the other properties too, as one undo step.
+          if (link?.also?.length) {
+            const gesture = {};
+            for (const p of [property, ...link.also]) onChange(p, next, { gesture });
+          } else if (next !== current) onChange(property, next);
         }}
+        onDraft={link?.onDraft}
+        mirror={link?.mirror}
         onStep={(delta, text) => {
           const next = stepValue(property, text, delta, stepBase());
           if (next && next !== current) onChange(property, next);
@@ -132,7 +121,7 @@ export function LengthEditor({
         // Drag the handle: steps from the value the drag started at, in the
         // same unit, as one undo step. Back at the start, the exact earlier
         // value is restored (no fake edit).
-        onScrub={options.scrub ? scrub : undefined}
+        onScrub={options.scrub ? (steps, text, gesture) => scrub({ property, base: stepBase }, steps, text, gesture) : undefined}
         onSubmit={onReturnToSearch}
         // One field: Tab moves on to the next editor in the dialog (or back to
         // the search when there's none).

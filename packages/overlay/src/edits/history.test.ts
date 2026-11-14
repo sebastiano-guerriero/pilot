@@ -1,12 +1,13 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest";
+import { inlinePreview } from "../test/inlinePreview.ts";
 import { EditHistory, historyShortcut } from "./history.ts";
 
 let el: HTMLElement;
 let history: EditHistory;
 beforeEach(() => {
   el = document.createElement("div");
-  history = new EditHistory();
+  history = new EditHistory(inlinePreview());
 });
 
 describe("EditHistory", () => {
@@ -154,3 +155,77 @@ describe("widths", () => {
     expect(history.changes()).toEqual([]);
   });
 });
+
+describe("the preview's rules", () => {
+  // Records what the history hands its preview.
+  let rendered: string[];
+  const recording = () =>
+    new EditHistory({
+      render: (rules) => {
+        rendered = rules.map((r) => `${r.property}: ${r.value}${r.widths ? ` @${r.widths.min ?? ""}-${r.widths.max ?? ""}` : ""}`);
+      },
+    });
+  beforeEach(() => {
+    rendered = [];
+  });
+
+  it("every change in effect, in the order made; undo leaves one out", () => {
+    const h = recording();
+    h.apply(el, "padding-top", "10px");
+    h.apply(el, "padding-top", "40px", undefined, { widths: { min: 1200 } });
+    expect(rendered).toEqual(["padding-top: 10px", "padding-top: 40px @1200-"]);
+    h.undo();
+    expect(rendered).toEqual(["padding-top: 10px"]);
+    h.redo();
+    expect(rendered).toEqual(["padding-top: 10px", "padding-top: 40px @1200-"]);
+  });
+
+  it("a later change replaces the same property's for the same widths, and moves after the others", () => {
+    const h = recording();
+    h.apply(el, "padding-top", "10px");
+    h.apply(el, "padding-top", "40px", undefined, { widths: { min: 1200 } });
+    h.apply(el, "padding-top", "12px");
+    expect(rendered).toEqual(["padding-top: 40px @1200-", "padding-top: 12px"]);
+  });
+
+  it("a shorthand replaces its longhands; clearing to '' leaves nothing", () => {
+    const h = recording();
+    h.apply(el, "padding-top", "4px");
+    h.apply(el, "padding", "10px");
+    expect(rendered).toEqual(["padding: 10px"]);
+    h.apply(el, "padding", "");
+    expect(rendered).toEqual([]);
+  });
+
+  it("valueOf and removalOf: what Pilot sets at a given width", () => {
+    const h = recording();
+    h.apply(el, "padding-top", "10px");
+    h.apply(el, "padding-top", "40px", undefined, { widths: { min: 1200 } });
+    h.apply(el, "padding-top", "revert", undefined, {
+      widths: { max: 767 },
+      removal: { from: "8px", source: { kind: "inline" } },
+    });
+    expect(h.valueOf(el, "padding-top", 1440)).toBe("40px");
+    expect(h.valueOf(el, "padding-top", 1000)).toBe("10px");
+    expect(h.removalOf(el, "padding-top", 1000)).toBeNull();
+    expect(h.removalOf(el, "padding-top", 375)).toEqual({ from: "8px", source: { kind: "inline" } });
+    expect(h.valueOf(el, "padding-bottom", 1440)).toBeNull();
+  });
+
+  it("valueOf reads a longhand out of a shorthand", () => {
+    const h = recording();
+    h.apply(el, "padding", "10px 20px");
+    expect(h.valueOf(el, "padding-right", 1000)).toBe("20px");
+  });
+
+  it("clearing a side after a shorthand: the side falls back to the page's value (revert-layer)", () => {
+    const h = recording();
+    h.apply(el, "padding", "12px");
+    h.apply(el, "padding-top", "");
+    expect(rendered).toEqual(["padding: 12px", "padding-top: revert-layer"]);
+    expect(h.valueOf(el, "padding-top", 1000)).toBeNull();
+    expect(h.valueOf(el, "padding-left", 1000)).toBe("12px");
+    expect(h.changes().map((c) => c.property)).toEqual(["padding"]);
+  });
+});
+

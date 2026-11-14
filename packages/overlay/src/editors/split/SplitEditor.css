@@ -1,0 +1,63 @@
+/* A shorthand as one value or split into its parts (SplitEditor.tsx): one
+   row with one value, or a field per part, stacked 8px apart, with the label
+   on the first. The view button sits in the row's action slot (PropertyRow);
+   in the parts view it's as tall as the fields, with each part's icon level
+   with its field. */
+@scope (.split-editor) {
+  .field {
+    display: block;
+    min-width: 0;
+  }
+
+  .stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* Parts: the label level with the first field. (Doubled class: PropertyRow's
+     own scope is closer to the row, so it would win a tie.) */
+  .property-row.parts {
+    align-items: start;
+
+    & > .property-label {
+      line-height: 24px;
+    }
+
+    & > .action {
+      align-self: stretch;
+    }
+  }
+
+  /* No background at rest; on hover, drawn like a field at rest (.field-box
+     in base.css: its fill and top highlight). The icons centered. */
+  .split-toggle {
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+
+    &:hover {
+      background: hsl(from var(--plt-color-background-light) h s l / 90%);
+      box-shadow: inset 0 1px 0 hsl(0 0% 100% / 7%);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--plt-color-accent);
+    }
+  }
+
+  /* Parts: one icon per field, each centered on its 24px row (rows are 32px apart). */
+  .parts .split-toggle {
+    height: 100%;
+    justify-content: space-between;
+    padding-block: 6px;
+  }
+}

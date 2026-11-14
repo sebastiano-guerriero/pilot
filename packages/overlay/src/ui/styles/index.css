@@ -27,5 +27,6 @@
 @import "../components/ViewportWidth/ViewportWidth.css" layer(components);
 
 /* Property editors */
-@import "../../editors/box/BoxEditor.css" layer(components);
+@import "../../editors/split/SplitEditor.css" layer(components);
+@import "../../editors/size/SizeEditor.css" layer(components);
 @import "../../editors/display/DisplayEditor.css" layer(components);

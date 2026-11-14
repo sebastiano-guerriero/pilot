@@ -18,4 +18,17 @@
     grid-auto-columns: minmax(0, 1fr);
     gap: 8px;
   }
+
+  /* With an action: the fields give up its 24px and the 8px gap. Rows with
+     and without one keep the same value area: same left and right edges. */
+  :scope[data-action] .values {
+    width: 96px;
+    /* Next to the action, not centered between it and the label. */
+    margin-inline-start: auto;
+  }
+
+  .action {
+    flex: none;
+    width: 24px;
+  }
 }

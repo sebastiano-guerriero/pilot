@@ -1,21 +1,19 @@
-import type { BoxSide } from "../../dom/boxModel.ts";
-import { lengthEditor } from "../length/LengthEditor.tsx";
+import { sidesEditor } from "../sides/sides.ts";
 
 /**
- * Padding as four rows, one per side, each a length editor like width.
- * Tailwind's aliases pick the rows: `p` (and `pad`, `padding`) shows all four,
- * `px` right and left, `py` top and bottom, `pt`/`pr`/`pb`/`pl` just one.
- * A side with no inline value shows a dimmed dash. Hovering or focusing a row stripes that padding on the page.
+ * Padding: one value for every side (`padding`), or one per side
+ * (`padding-top`…), switched with the button at the right of the row (see
+ * SplitEditor). Typing a side or a pair in the search shows each side right
+ * away, and Tab lands on it: `pt`/`pr`/`pb`/`pl` (and `ps`/`pe`,
+ * `padding-left`, `padding-inline-start`…) on that side, `px`/`py` (and
+ * `padding-inline`/`padding-block`) on a pair (a value typed sets both).
+ * `p` shows the one value.
  */
-const side = (s: BoxSide, aliases: string[]) =>
-  lengthEditor({
-    property: `padding-${s}`,
-    label: `Padding ${s}`,
-    aliases: ["p", ...aliases],
-    inspect: { box: "padding", side: s },
-  });
-
-export const paddingTopEditor = side("top", ["pt", "py"]);
-export const paddingRightEditor = side("right", ["pr", "px"]);
-export const paddingBottomEditor = side("bottom", ["pb", "py"]);
-export const paddingLeftEditor = side("left", ["pl", "px"]);
+export const paddingEditor = sidesEditor({
+  id: "padding",
+  label: "Padding",
+  title: "padding",
+  shorthand: "padding",
+  box: "padding",
+  aliases: { all: "p", top: "pt", right: "pr", bottom: "pb", left: "pl", x: "px", y: "py", start: "ps", end: "pe" },
+});

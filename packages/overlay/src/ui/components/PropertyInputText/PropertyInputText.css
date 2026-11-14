@@ -1,8 +1,7 @@
 /* Value control in an editor row: a box that fills the width of its slot
    (PropertyRow's value area: 128px for one field, 60px each for two). The box
    itself (height, fill, radius, inner shadow) is `.field-box` in base.css,
-   shared with PropertySelect. An empty box means nothing is set. The
-   `compact` variant (box diagram) keeps no box and sizes to its content. */
+   shared with PropertySelect. An empty box means nothing is set. */
 @scope (.property-input-text) {
   :scope {
     --_padding: 6px;
@@ -45,42 +44,6 @@
       color: var(--plt-color-contrast-low);
       opacity: 1;
     }
-
-    /* Box diagram: no box; a text field that sizes itself to its content, at
-       the right of its band, growing leftward as you type. With no value, the
-       dimmed dash placeholder. Containers can limit it with --_max-width. */
-    &[data-compact] {
-      --_padding: 4px;
-
-      display: inline-flex;
-      align-items: center;
-      height: 16px;
-      border-radius: 3px;
-      background: transparent;
-      box-shadow: none;
-      max-width: var(--_max-width, 128px);
-      width: calc(var(--chars) * 1ch + 2 * var(--_padding)); /* fallback: approximate, 1ch is a digit's width */
-      field-sizing: content;
-      text-align: right;
-    }
-
-    /* Drawn selections (compact fields), with the same highlight as
-       ::selection in base.css:
-       - a linked field mirroring the one being edited (a page holds only one
-         real selection);
-       - a focused, empty field: its placeholder is "selected", since typing
-         replaces it (::selection can't style placeholders). */
-    &[data-mirror-selected],
-    &[data-placeholder-selected] {
-      background: hsl(from var(--plt-color-accent) h s l / 20%);
-      background-clip: content-box;
-    }
-  }
-
-  @supports (field-sizing: content) {
-    :scope[data-compact] {
-      width: auto;
-    }
   }
 }
 
@@ -91,6 +54,29 @@
     position: relative;
     display: block;
     min-width: 0;
+  }
+
+  /* A linked field's selection, drawn over this field's text (the text itself
+     is left to the input), with the same highlight as ::selection (base.css).
+     Same padding and type as the input, so it lines up with the text. */
+  .mirror-selection {
+    position: absolute;
+    inset: 0;
+    padding-inline: 6px;
+    line-height: 24px;
+    font-variant-numeric: tabular-nums;
+    white-space: pre;
+    overflow: hidden;
+    color: transparent;
+    pointer-events: none;
+
+    &[data-icon] {
+      padding-left: 24px;
+    }
+  }
+
+  .mirror-selection > span {
+    background: hsl(from var(--plt-color-accent) h s l / 20%);
   }
 
   /* 12px, 6px from the field's left edge, vertically centered. Clicks go

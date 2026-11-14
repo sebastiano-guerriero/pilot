@@ -64,10 +64,11 @@ export interface PropertyEditorProps {
    */
   declared?: Record<string, string>;
   /**
-   * Apply a value: Pilot sets it as an inline style and records it in the undo
-   * history (Cmd/Ctrl+Z). Editors never write `element.style` themselves.
-   * An empty `value` removes the property's inline value: back to the
-   * default / stylesheet (e.g. the designer cleared the field).
+   * Apply a value: Pilot records it in the undo history (Cmd/Ctrl+Z) and
+   * shows it on the page (the preview stylesheet). Editors never write
+   * `element.style` themselves. An empty `value` clears it: the element
+   * doesn't set the property (a removal when the page's CSS does, see
+   * edits/clear.ts).
    * For a continuous interaction (a drag), pass the same `gesture` object on
    * every change so the whole interaction is undone in one step.
    */
@@ -84,6 +85,12 @@ export interface PropertyEditorProps {
    * lowercase), so the editor can focus the matching part: `pt` → top side.
    */
   focusRequest?: FocusRequest;
+  /**
+   * What's typed in the search right now (as typed; "" when nothing is), live,
+   * not only when focus moves in: an editor may adapt its view to it before
+   * Tab (padding shows each side for `px`). Focus still waits for focusRequest.
+   */
+  query?: string;
   /**
    * Give focus back to the search so the next property can be typed: after
    * Enter on a value, or Tab/Shift+Tab past the editor's last/first field.

@@ -18,8 +18,69 @@ const layout = (items: Item[]) => ({
     <>
       <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
       {items.map(({ x, y, w = 2, h = 2 }) => (
-        <rect key={`${x},${y}`} x={x} y={y} width={w} height={h} fill="var(--plt-color-accent)" />
+        <rect key={`${x},${y},${w},${h}`} x={x} y={y} width={w} height={h} fill="var(--plt-color-accent)" />
       ))}
+    </>
+  ),
+});
+
+/**
+ * A box side icon (padding, margin…): the frame, and an accent bar (2px)
+ * along each side it stands for, flush on the frame's edge.
+ */
+const BARS = {
+  top: { x: 0, y: 0, w: 12, h: 2 },
+  right: { x: 10, y: 0, w: 2, h: 12 },
+  bottom: { x: 0, y: 10, w: 12, h: 2 },
+  left: { x: 0, y: 0, w: 2, h: 12 },
+} as const;
+const sides = (...names: Array<keyof typeof BARS>) => layout(names.map((n) => BARS[n]));
+
+/**
+ * A gap icon: the cell (a 12×12 square, contrast-high at 20%) and an accent
+ * bar (2px) through its middle for each gap it stands for: a horizontal one
+ * for the gap between rows, a vertical one for the gap between columns.
+ */
+const GAP_BARS = { row: "M12 5V7H0V5H12Z", column: "M5 0H7V12H5V0Z" } as const;
+const gap = (...bars: Array<keyof typeof GAP_BARS>) => ({
+  size: 12,
+  body: (
+    <>
+      <path d="M12 0V12H0V0H12Z" fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+      {bars.map((b) => (
+        <path key={b} d={GAP_BARS[b]} fill="var(--plt-color-accent)" />
+      ))}
+    </>
+  ),
+});
+
+/**
+ * flex-wrap: no-wrap is three items (3px) in one row running out of a frame
+ * that's open on the right; wrap is the closed frame with the third item
+ * moved down to a second line; wrap-reverse is wrap flipped (the second line
+ * above the first).
+ */
+const NOWRAP_FRAME = "M12 3H11V1H1V11H11V9H12V12H0V0H12V3Z";
+const item3 = (x: number, y: number) => ({ x, y, w: 3, h: 3 });
+
+/**
+ * flex-direction: three items (accent, fading to 66% and 33% in the order
+ * they run) and an arrow (contrast-high at 50%) along the main axis. Row and
+ * column are designed; their reverses mirror them (items from the other end,
+ * the arrow pointing back).
+ */
+type Box = { x: number; y: number; w: number; h: number };
+const direction = (items: [Box, Box, Box], line: string, head: string) => ({
+  size: 12,
+  body: (
+    <>
+      {items.map(({ x, y, w, h }, i) => (
+        <rect key={i} x={x} y={y} width={w} height={h} fill="var(--plt-color-accent)" opacity={[1, 0.66, 0.33][i]} />
+      ))}
+      <g opacity="0.5" stroke="var(--plt-color-contrast-high)" stroke-linecap="round" stroke-linejoin="round">
+        <path d={line} />
+        <path d={head} />
+      </g>
     </>
   ),
 });
@@ -51,6 +112,67 @@ const ICONS = {
     size: 8,
     body: <path d="M1.5 4L3.25 6L6.5 1.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" />,
   },
+  // Box sides: all four (one value for every side), then one each.
+  "sides-all": sides("top", "right", "bottom", "left"),
+  "side-top": sides("top"),
+  "side-right": sides("right"),
+  "side-bottom": sides("bottom"),
+  "side-left": sides("left"),
+  // Gaps: both (the designed icon), then the row gap and the column gap alone.
+  "gap-all": gap("column", "row"),
+  "gap-row": gap("row"),
+  "gap-column": gap("column"),
+  // flex-direction: row and column are designed; the reverses mirror them.
+  "flex-row": direction(
+    [
+      { x: 0, y: 3, w: 2, h: 2 },
+      { x: 3, y: 3, w: 2, h: 2 },
+      { x: 6, y: 3, w: 2, h: 2 },
+    ],
+    "M0.5 8H11.5",
+    "M10 6.5L11.5 8L10 9.5",
+  ),
+  "flex-row-reverse": direction(
+    [
+      { x: 10, y: 3, w: 2, h: 2 },
+      { x: 7, y: 3, w: 2, h: 2 },
+      { x: 4, y: 3, w: 2, h: 2 },
+    ],
+    "M0.5 8H11.5",
+    "M2 6.5L0.5 8L2 9.5",
+  ),
+  "flex-col": direction(
+    [
+      { x: 0, y: 1, w: 7, h: 2 },
+      { x: 0, y: 4.5, w: 7, h: 2 },
+      { x: 0, y: 8, w: 7, h: 2 },
+    ],
+    "M10 0.5L10 11.5",
+    "M11.5 10L10 11.5L8.5 10",
+  ),
+  "flex-col-reverse": direction(
+    [
+      { x: 0, y: 9, w: 7, h: 2 },
+      { x: 0, y: 5.5, w: 7, h: 2 },
+      { x: 0, y: 2, w: 7, h: 2 },
+    ],
+    "M10 0.5L10 11.5",
+    "M8.5 2L10 0.5L11.5 2",
+  ),
+  // flex-wrap: no-wrap and wrap are designed; wrap-reverse flips wrap.
+  "flex-nowrap": {
+    size: 12,
+    body: (
+      <>
+        <path d={NOWRAP_FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+        {[1, 5, 9].map((x) => (
+          <rect key={x} x={x} y={4.5} width={3} height={3} fill="var(--plt-color-accent)" />
+        ))}
+      </>
+    ),
+  },
+  "flex-wrap": layout([item3(1, 2.5), item3(5, 2.5), item3(1, 6.5)]),
+  "flex-wrap-reverse": layout([item3(1, 6.5), item3(5, 6.5), item3(1, 2.5)]),
   // justify-content: start is the designed icon; the others move its items.
   "justify-start": justify([0, 3]),
   "justify-end": justify([7, 10]),

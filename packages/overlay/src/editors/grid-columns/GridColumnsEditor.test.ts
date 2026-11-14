@@ -6,6 +6,7 @@ import { EditHistory } from "../../edits/history.ts";
 import type { FocusRequest } from "../types.ts";
 import { columnsCount, columnsMode, columnsValue, parseCustomColumns } from "./ColumnsRow.tsx";
 import { gridColumnsEditor } from "./GridColumnsEditor.tsx";
+import { inlinePreview } from "../../test/inlinePreview.ts";
 
 const GridColumnsEditor = gridColumnsEditor.component;
 
@@ -36,7 +37,7 @@ const mount = (focusRequest?: FocusRequest) =>
   });
 
 beforeEach(() => {
-  history = new EditHistory();
+  history = new EditHistory(inlinePreview());
   changes = [];
   tabbedOut = [];
   inspects = [];

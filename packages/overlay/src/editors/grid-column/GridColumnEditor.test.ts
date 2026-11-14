@@ -7,6 +7,7 @@ import { orderEditor } from "../order/OrderEditor.tsx";
 import { matchEditors } from "../registry.ts";
 import type { PropertyEditor } from "../types.ts";
 import { colEndEditor, colSpanEditor, colStartEditor } from "./GridColumnEditor.tsx";
+import { inlinePreview } from "../../test/inlinePreview.ts";
 
 let element: HTMLElement;
 let container: HTMLElement;
@@ -28,7 +29,7 @@ const mount = (editor: PropertyEditor) =>
   });
 
 beforeEach(() => {
-  history = new EditHistory();
+  history = new EditHistory(inlinePreview());
   element = document.createElement("div");
   container = document.createElement("div");
   document.body.append(element, container);
@@ -85,12 +86,13 @@ describe("col-start, col-end, order", () => {
 });
 
 describe("search", () => {
-  it("Tailwind's names find each one; col finds all three", () => {
+  it("Tailwind's names find each one; col finds all three (and gap, by column-gap)", () => {
     expect(matchEditors("col-span").map((e) => e.id)).toEqual(["grid-column"]);
     expect(matchEditors("col-start").map((e) => e.id)).toEqual(["grid-column-start"]);
     expect(matchEditors("col-end").map((e) => e.id)).toEqual(["grid-column-end"]);
     expect(matchEditors("order").map((e) => e.id)).toEqual(["order"]);
-    expect(matchEditors("col").map((e) => e.id)).toEqual(["grid-column", "grid-column-start", "grid-column-end"]);
+    // column-gap is a property gap writes: it starts with col too.
+    expect(matchEditors("col").map((e) => e.id)).toEqual(["gap", "grid-column", "grid-column-start", "grid-column-end"]);
     // cols is still the grid's columns.
     expect(matchEditors("cols").map((e) => e.id)).toEqual(["grid-columns"]);
   });

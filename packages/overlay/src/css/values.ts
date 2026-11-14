@@ -83,7 +83,7 @@ export function parseValue(property: string, text: string): string | null {
 }
 
 /** parseValue for the kinds that aren't lengths (keywords and functions are handled before). */
-function parseOther(kind: "integer" | "grid-line" | "grid-span", negative: boolean, t: string): string | null {
+function parseOther(kind: "integer" | "grid-line" | "grid-span" | "ratio", negative: boolean, t: string): string | null {
   const integer = /^-?\d+$/.test(t) ? Number(t) : null;
   const span = t.match(/^span ?(\d+)$/);
   switch (kind) {
@@ -101,7 +101,22 @@ function parseOther(kind: "integer" | "grid-line" | "grid-span", negative: boole
       // An explicit start / end (`2 / 4`, `1 / span 2`): as typed, checked by the browser.
       return /^[\w -]+\/[\w -]+$/.test(t) ? t.replace(/\s*\/\s*/, " / ") : null;
     }
+    case "ratio":
+      return normalizeRatio(t);
   }
+}
+
+/**
+ * A width / height ratio, as CSS writes it: `16/9`, `16 / 9`, `16:9` →
+ * `16 / 9`; one number (`1.5`) → `1.5 / 1`. Both positive. Null otherwise.
+ */
+export function normalizeRatio(text: string): string | null {
+  const parts = text.trim().split(/\s*[/:]\s*/);
+  if (parts.length > 2) return null;
+  const [w, h = "1"] = parts as [string, string?];
+  const number = /^\d*\.?\d+$/;
+  if (!number.test(w) || !number.test(h) || Number(w) <= 0 || Number(h) <= 0) return null;
+  return `${Number(w)} / ${Number(h)}`;
 }
 
 /**
@@ -141,7 +156,7 @@ export function stepValue(property: string, text: string, delta: number, compute
  * - grid-span: the count, from 1 (the default: ↓ on an empty field writes nothing).
  */
 function stepOther(
-  kind: "integer" | "grid-line" | "grid-span",
+  kind: "integer" | "grid-line" | "grid-span" | "ratio",
   info: { keywords: string[]; negative: boolean },
   t: string,
   delta: number,
@@ -170,6 +185,8 @@ function stepOther(
       if (t === "" && next === 1) return null;
       return `span ${next} / span ${next}`;
     }
+    case "ratio":
+      return null;
   }
 }
 

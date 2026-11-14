@@ -4,9 +4,9 @@ import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EditHistory } from "../../edits/history.ts";
-import { paddingLeftEditor, paddingTopEditor } from "../padding/PaddingEditor.tsx";
 import { maxWidthEditor, minWidthEditor, widthEditor } from "../width/WidthEditor.tsx";
 import { lengthEditor } from "./LengthEditor.tsx";
+import { inlinePreview } from "../../test/inlinePreview.ts";
 
 const WidthEditor = widthEditor.component;
 
@@ -36,7 +36,7 @@ const mount = (computed: string, focusRequest?: { query: string }) =>
 beforeEach(() => {
   changes = [];
   returned = 0;
-  history = new EditHistory();
+  history = new EditHistory(inlinePreview());
   element = document.createElement("div");
   container = document.createElement("div");
   document.body.append(element, container);
@@ -76,7 +76,7 @@ describe("WidthEditor", () => {
   });
 
   it("clearing the field removes the width (back to the default), undoably", () => {
-    element.style.width = "10px";
+    history.apply(element, "width", "10px"); // set with Pilot
     mount("10px");
     typeAndEnter("");
     expect(changes).toEqual([["width", ""]]);
@@ -191,7 +191,11 @@ describe("min-width and max-width", () => {
   });
 });
 
-describe("padding rows", () => {
+// The inspect option, on rows like the padding sides.
+const paddingTopEditor = lengthEditor({ property: "padding-top", label: "Padding top", inspect: { box: "padding", side: "top" } });
+const paddingLeftEditor = lengthEditor({ property: "padding-left", label: "Padding left", inspect: { box: "padding", side: "left" } });
+
+describe("rows with an area to inspect", () => {
   let inspects: Array<string[] | null>;
   const mountRow = (editor: typeof paddingTopEditor, computed: string) =>
     act(() => {
@@ -285,7 +289,7 @@ describe("drag to scrub", () => {
   });
 
   it("is an option: fields don't have a handle unless asked", () => {
-    mountScrub(WidthEditor);
+    mountScrub(lengthEditor({ property: "width", label: "Width" }).component);
     expect(handle()).toBeNull();
     expect(input().hasAttribute("data-scrub")).toBe(false);
     mountScrub();

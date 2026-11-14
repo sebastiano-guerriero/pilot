@@ -239,6 +239,7 @@ export function PropertyDialog({
                   element={element}
                   history={history}
                   widths={widths ?? undefined}
+                  query={query}
                   focusRequest={focus?.index === index ? focus.request : undefined}
                   onReturnToSearch={returnToSearch}
                   onTabOut={(direction) => tabOut(index, direction)}
@@ -265,11 +266,27 @@ export function PropertyDialog({
  */
 function editorsWithValues(element: EditableElement, editors: PropertyEditor[], history: EditHistory): PropertyEditor[] {
   const properties = [...new Set(editors.flatMap((e) => e.properties))];
-  const declared = declaredValues(element, properties);
-  const isSet = (p: string) => !!declared[p] && !history.removalOf(element, p);
+  const declared = fieldValues(element, properties, history);
+  const isSet = (p: string) => !!declared[p];
   const shown = editors.filter((e) => e.properties.some(isSet));
   const embedded = new Set(shown.flatMap((e) => e.embeds ?? []));
   return shown.filter((e) => !embedded.has(e));
+}
+
+/**
+ * What each field shows: Pilot's value at the window's width (from the
+ * history, see EditHistory.valueOf), else the page's own declared value,
+ * else "". A removed property shows nothing: the element doesn't set it (the
+ * page shows what applies without it). See clearProperty.
+ */
+function fieldValues(element: EditableElement, properties: string[], history: EditHistory): Record<string, string> {
+  const page = declaredValues(element, properties);
+  return Object.fromEntries(
+    properties.map((p) => [
+      p,
+      history.removalOf(element, p) ? "" : (history.valueOf(element, p) ?? page[p]?.value ?? ""),
+    ]),
+  );
 }
 
 /**
@@ -294,13 +311,14 @@ function Hint({ area }: { area: "search" | "editor" }) {
 
 /**
  * Feeds an editor the element's current values and routes its changes through
- * the edit history (which applies them as inline styles and makes them undoable).
+ * the edit history (which shows them on the page and makes them undoable).
  */
 function MatchedEditor({
   editor,
   element,
   history,
   widths,
+  query,
   focusRequest,
   onReturnToSearch,
   onTabOut,
@@ -311,6 +329,7 @@ function MatchedEditor({
   element: EditableElement;
   history: EditHistory;
   widths?: WidthRange;
+  query?: string;
   focusRequest?: FocusRequest;
   onReturnToSearch(): void;
   onTabOut(direction: 1 | -1): void;
@@ -321,14 +340,7 @@ function MatchedEditor({
   const computed = getComputedStyle(element);
   const properties = propertiesOf(editor);
   const values = Object.fromEntries(properties.map((p) => [p, computed.getPropertyValue(p)]));
-  // A removed property shows nothing: the element doesn't set it (the page
-  // shows what applies without it). See clearProperty.
-  const declared = Object.fromEntries(
-    Object.entries(declaredValues(element, properties)).map(([p, d]) => [
-      p,
-      history.removalOf(element, p) ? "" : (d?.value ?? ""),
-    ]),
-  );
+  const declared = fieldValues(element, properties, history);
   const Editor = editor.component;
   return (
     <Editor
@@ -346,6 +358,7 @@ function MatchedEditor({
         history.revert(element, property, gesture);
         rerender(0);
       }}
+      query={query}
       focusRequest={focusRequest}
       onReturnToSearch={onReturnToSearch}
       onTabOut={onTabOut}
