@@ -20,7 +20,7 @@ Pilot is a design tool that lives inside your codebase, not on a separate canvas
 └──────────────────┘     └───────────────────────────────────┘     └──────────────────────────┘
 ```
 
-1. **Launch.** Run `/pilot` in your agent. Pilot is loaded in dev but stays invisible until `/pilot` launches it.
+1. **Launch.** Press **Option+P** (Alt+P) on any page of the app (`mountPilot({ shortcut })` changes it, `false` turns it off; it's ignored while typing in the page's own fields). Pilot is loaded in dev but stays invisible until launched. Once the agent bridge exists, `/pilot` in your agent will launch it too.
 2. **The toolbar.** While Pilot runs, a small toolbar is always visible. It has three buttons:
    - **Cursor:** turns on select mode. Then click any element on the page.
      - Hovering outlines the element and labels it with its **name and size** above its top-left corner: `article[data-slot=card] 293×110` (20px tall, 4px radius, 4px inline padding, 11px, like the width button). The name says what's about to be selected ([dom/name.ts](packages/overlay/src/dom/name.ts)), the most telling one first:
@@ -35,7 +35,8 @@ Pilot is a design tool that lives inside your codebase, not on a separate canvas
      - **Grid items** show their parent's grid when selected: the lines and numbers they're placed on, for col-span, col-start and col-end (`orParent` on `GridOverlay`). The parent's border box is dashed like the lines: a grid's outer lines aren't drawn (they'd double its selection outline), and the parent has no outline, so they'd look missing. An element that's a grid itself shows its own.
      - Select mode stays on, so you can click another element to switch to it. **Esc** clears the selection. With nothing selected, **Esc** turns the select tool off.
      - Clicking the cursor again turns select mode off. The selection is cleared and the page behaves normally again.
-   - **Send:** sends the collected edits to the agent.
+   - **Copy prompt** (the middle button): copies the changes as a prompt for your agent (see **Hand off**). It's disabled while there's nothing to copy, and says "Copied" for a moment after a copy (`data-copied`, placeholder look).
+   - **Clear changes** (the eraser, Nucleo UI filled): removes every change, so the page shows its own CSS again. Use it once your agent has applied the copied prompt, to see the real result. It's one undo step (`EditHistory.clear()`: a step that ends every change before it), so Cmd/Ctrl+Z brings the changes back. Disabled while there's nothing to clear.
    - **Quit:** closes Pilot.
 
    The **viewport width** is hidden until you need it ([ViewportWidth](packages/overlay/src/ui/components/ViewportWidth/ViewportWidth.tsx)). An invisible 6px strip runs along the top of the window. Hovering it shows the bar: 28px of content, plus 20px of invisible margin below so it doesn't hide the moment the pointer leaves the button (48px in all). It stays while the pointer is on it. It also shows while the window is being resized, and hides 800ms after the last resize (`data-resizing`), so you can watch the width while dragging the window's edge. Nothing in it can be selected as text (`user-select: none`).
@@ -54,7 +55,7 @@ Pilot is a design tool that lives inside your codebase, not on a separate canvas
    - Both ends are included. The chip **stays** across selections and with nothing selected, until you remove it. Every change made while it's set is recorded for its widths, a separate change from the same property at other widths.
    - When the window is **outside** the chip's range (`from 1200px` at 1108px), the chip shows it (`data-outside`, also set on the width button for styling): changes you make now don't show on the page until you resize into the range, and the fields show what applies at the window's width.
 4. **Tweak.** Each change shows live on the page, through a stylesheet Pilot adds (see **The preview** below), so you see the result right away. A change for some widths shows only in its range: resize the window and each range shows its own changes, and the page's CSS everywhere else. Nothing touches your source yet. **Cmd+Z** (Ctrl+Z on Windows/Linux) undoes the last change, and **Cmd+Shift+Z** (Ctrl+Shift+Z or Ctrl+Y) redoes it. This works for every property, across selections, and a whole drag counts as one step.
-5. **Hand off.** Click **Send**. The edits go to the agent through Pilot's local bridge and MCP server. When no agent is connected, Send copies them to the clipboard as a Markdown prompt you can paste into any agent.
+5. **Hand off.** Click **Copy prompt** and paste it to your agent. It's the change set (`buildChangeSet()` in [edits/changeSet.ts](packages/overlay/src/edits/changeSet.ts): one edit per element, each change with the page's own previous value and where it's declared, removals, widths) formatted by `formatPrompt()`, the same text the bridge's MCP tools will send. Sending it to a connected agent directly (the bridge) comes later. Your changes stay after copying, and they also survive reloads (see **Edits survive reloads** below). Once the agent has applied them, **Clear changes** removes them so you see the real code. The bridge will do that by itself later, when the agent reports it's done.
 6. **Apply.** The agent translates the plain-CSS intent into your stack. For example, `border-radius: 12px` becomes `rounded-xl` in a Tailwind project, an existing `--radius-lg` token, or a CSS-module rule.
 
 **Keyboard: as fast as typing Tailwind classes.** Figma makes you hunt for a property in a sidebar. Tailwind is fast to type but gives no visual help. Pilot aims to beat both: you type, and you get a visual editor for exactly that property.
@@ -82,7 +83,9 @@ A **footer** under the properties always shows the keys for what you're doing: i
 
 Linked values follow Tailwind's meaning: `px` links left and right, `py` top and bottom, and `p` all four, so one number sets them all, as one undo step.
 
-**Launching and quitting.** `/pilot` is the only way to launch Pilot, and the toolbar's **Quit** button is the only way to quit it. There's no keyboard shortcut for now. Pilot remembers whether it's running for the current browser tab, so the reloads a dev session triggers all the time (the agent editing files, HMR) don't open or close it on their own.
+**Launching and quitting.** The shortcut (Option+P / Alt+P) launches Pilot, and the toolbar's **Quit** button quits it. `/pilot` will launch it too once the bridge exists. Pilot remembers whether it's running for the current browser tab, so the reloads a dev session triggers all the time (the agent editing files, HMR) don't open or close it on their own.
+
+**Edits survive reloads** ([edits/persist.ts](packages/overlay/src/edits/persist.ts)). The history (changes, undo and redo) is saved in the tab's `sessionStorage` after every change and restored when Pilot mounts again: after a reload the preview comes back, undo still works, and Copy prompt still has everything. The history belongs to `mountPilot`, not the UI, so quitting and relaunching keeps it too. Each change keeps how to find its element (its unique selector, taken at the first change) and the page it was made on. On restore, an element found on this page gets its changes back. One that isn't (another page of the app, or not rendered yet) keeps its changes on a detached stand-in, still in the prompt, and finds its element again later (`reattach()`: on launch, on selecting an element, on `popstate`). A new tab starts clean. Known limit: an element whose selector changed (a list reordered, classes renamed) can't be found again.
 
 ## Principles
 
@@ -115,6 +118,7 @@ Linked values follow Tailwind's meaning: `px` links left and right, `py` top and
 | `@pilot/overlay` | [packages/overlay](packages/overlay) | The in-page editor: Shadow DOM mount, launch/quit, toolbar, property search, editor registry. Builds `pilot.js` (API) and `pilot-auto.js` (self-mounting). |
 | `@pilot/protocol` | [packages/protocol](packages/protocol) | Shared `ChangeSet` types and `formatPrompt()`. The clipboard prompt and the MCP tools produce identical text. |
 | `@pilot/cli` | [packages/cli](packages/cli) | The `pilot` command: `init`, `bridge`, `mcp` (placeholders for now). |
+| `usepilot` | [packages/usepilot](packages/usepilot) | The one published package: the overlay's build (`dist/`, copied in by its `build` script, which `prepack` runs), hand-written types (`types/`), and the user-facing README (install for Vite and Next.js, use, options). Exports `usepilot` (`mountPilot`) and `usepilot/auto` (mounts with defaults). The CLI joins it later. |
 | `playground` | [apps/playground](apps/playground) | A plain Vite page for developing Pilot. |
 | `/pilot` skill | [skills/pilot](skills/pilot) | Instructions the agent follows to launch Pilot and apply change sets. |
 
@@ -245,17 +249,21 @@ The plan for one-click handoff:
 ## Installing Pilot in a project (planned)
 
 ```bash
-npx pilot init
+npm install -D usepilot
+```
+
+```bash
+npx usepilot init
 ```
 
 `init` will add the dev-only overlay to the app and register the MCP server and `/pilot` skill with the user's agent. Users will also be able to ask their agent to install Pilot through the MCP server. Manual setup will look like this:
 
 ```ts
 // app entry, dev only
-if (import.meta.env.DEV) import("@pilot/overlay/auto");
+if (import.meta.env.DEV) import("usepilot/auto");
 ```
 
-> Package names (`@pilot/*`) are placeholders until we pick an npm scope.
+**Names:** Pilot is published as one package, `usepilot` (the plain `pilot` name on npm is an abandoned 2011 library from the Ace editor's authors). The npm organization `usepilot` reserves the `@usepilot/…` scope in case Pilot is ever split into several packages. The site will be `usepilot.design`. The workspace packages (`@pilot/overlay`, `@pilot/protocol`, `@pilot/cli`) are internal and never published under those names: the `usepilot` package will bundle them.
 
 ## Developing Pilot
 
@@ -269,7 +277,7 @@ pnpm install
 pnpm dev
 ```
 
-`pnpm dev` starts the playground at http://localhost:5173. Until the bridge exists, the playground has a dashed **Simulate /pilot** button that launches Pilot. Use the toolbar's Quit button to close it.
+`pnpm dev` starts the playground at http://localhost:5173. Launch Pilot with Option+P (or the dashed **Simulate /pilot** button). Use the toolbar's Quit button to close it.
 
 **Designing the dialog.** Saving a CSS file reloads the page, which normally closes everything. To keep the dialog on screen while you style it, the playground mounts Pilot with a `dev` option ([apps/playground/src/main.ts](apps/playground/src/main.ts)):
 
@@ -287,6 +295,21 @@ On every load this launches Pilot (even after a Quit), turns on select mode, and
 | `pnpm typecheck` | `tsc` in every workspace package |
 
 Stack: TypeScript, Preact (small, bundled into the overlay, so it never conflicts with the host app's framework), Vite, Vitest, and tsup for the CLI.
+
+### Releasing `usepilot`
+
+The published package is [packages/usepilot](packages/usepilot). Publishing builds it first (`prepack` runs the overlay build and copies `dist/` and the license in):
+
+1. Bump the version in [packages/usepilot/package.json](packages/usepilot/package.json) (0.x for now: `0.1.1` for fixes, `0.2.0` for new features), or run `npm version patch --no-git-tag-version` there.
+2. Publish, from that folder (it asks for your npm security key):
+
+   ```bash
+   cd packages/usepilot && npm publish
+   ```
+
+3. Commit the version bump.
+
+npm can take a minute or two to show a new version. Users update with `npm install -D usepilot@latest`. A published version can't be changed or reused: fix forward with a new version. To try the package before publishing, `npm pack` makes the tarball, and a separate app installs it with `npm install -D <path to the .tgz>`.
 
 ### Styling
 
@@ -380,8 +403,10 @@ We decided against Tailwind for now. If we revisit it: Tailwind v4's `@property`
 - [x] Read the page's breakpoints from its CSS (the `@media` widths in use) and show them on the ruler, clickable
 - [ ] `from-md` in the search (breakpoint names, where the page exposes them)
 - [x] Undo/redo for every property change (Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z, Ctrl+Y), with drags grouped into one step
-- [ ] Change set from the history (`changes()`): `from → to` per element, with widths, for Copy prompt and Send
-- [ ] Keep pending edits across page reloads. Today a reload (including the dev server's full reloads) drops every preview edit and the undo history, because they only live in the page's DOM and memory.
+- [x] Change set from the history (`buildChangeSet()`): per element, the page's own `from`, `to`, removals, widths; Copy prompt in the toolbar
+- [x] Edits survive reloads: the history is saved per tab and restored, elements found again by selector (see **Edits survive reloads**)
+- [x] Clear changes (toolbar, undoable) once the agent has applied the prompt, so the preview stops covering the real result
+- [ ] With the bridge: clear a batch when the agent calls `pilot_done`, after checking each change landed (the page's own CSS now matches); a change that came out different stays, marked
 - [ ] First property editors (opacity, spacing, radius, color, typography…)
   - [x] **Margin: one value or each side** ([editors/margin](packages/overlay/src/editors/margin/MarginEditor.tsx)): the same split editor as padding below, on `margin` and `margin-top`…: Tailwind's `m`, `mt`/`mr`/`mb`/`ml`, `ms`/`me`, `mx`/`my` and the logical names (`margin-inline`, `margin-block-start`…) land the same way. Negative values and `auto` are allowed (`mx` + `auto` centers), and ↓ and drags go below 0. Fields show the margin area on the page.
   - [x] **Padding: one value or each side** ([editors/padding](packages/overlay/src/editors/padding/PaddingEditor.tsx), built on the shared split editor, [editors/split](packages/overlay/src/editors/split/SplitEditor.tsx): a shorthand as one value or split into its parts, configured with the parts' properties, icons, page areas and search words, and pairs of parts typed together. `sidesEditor({ … })` ([editors/sides](packages/overlay/src/editors/sides/sides.ts)) configures the four sides for padding and margin; gap configures row and column). One row, two views, switched with the **button at the right of the row** (it changes nothing on the page):
@@ -433,24 +458,32 @@ We decided against Tailwind for now. If we revisit it: Tailwind v4's `@property`
 - [ ] **Design tokens** (planned, design in [docs/design-tokens.md](docs/design-tokens.md)): read the page's CSS custom properties live (colors, type scale, spacing), offer them in fields, step and drag along the scale, and give the agent token names. Tokens that only live in code come later, watched by the bridge.
 
 **Handoff**
-- [ ] Send: clipboard prompt when no agent is connected
+- [x] Copy prompt: the toolbar's middle button copies the change set as a prompt
+- [x] Launch shortcut (Option+P / Alt+P) until `/pilot` exists
 - [ ] `pilot mcp`: MCP server and localhost bridge in one process
 - [ ] The bridge watches token files that only live in code (Tailwind v3 config, `tokens.json`, Style Dictionary) and pushes them to the overlay live (see [docs/design-tokens.md](docs/design-tokens.md))
 - [ ] `pilot_wait_for_edits` and the `/pilot` skill flow (including launching Pilot from the agent)
 - [ ] Send to agent through the bridge
 
 **Distribution**
-- [ ] `npx pilot init` (detect framework entry, add the dev import, register MCP and skill)
-- [ ] Pick the npm scope and publish
+- [ ] `npx usepilot init` (detect framework entry, add the dev import, register MCP and skill)
+- [x] Pick the name: `usepilot` on npm (package and organization), `usepilot.design` for the site
+- [x] Claim `usepilot` on npm (`0.0.1`, published)
+- [x] `usepilot` 0.1.0: the overlay bundled, installable in Vite and Next.js apps (tested in a separate Vite app from the packed tarball)
+- [ ] Publish `usepilot` 0.1.0
+- [ ] Add the CLI (`init`, `mcp`) to `usepilot`
 
 ## Open questions
 
 - Which property editors ship in v1, and how should related properties be grouped?
 - Should Pilot handle hover and focus states (edit in a pseudo-state)? Widths are handled by the width chip (see **Viewport widths**).
 - How should multi-element edits work (e.g. "all cards")?
-- Do we want a keyboard shortcut to launch Pilot later? (Removed for now: `/pilot` only.)
 - Values typed in the search (`pt-4` + Enter, Tailwind-style) are deliberately left out for now: the search only finds properties. Revisit once more editors exist.
 - Does Send also quit Pilot (hand control back), or keep it running for more edits?
 - Should the toolbar be draggable, or have a fixed position (bottom center for now)?
 - After a click selects an element, should select mode stay on (current behavior) or switch off so the page is interactive again?
-- License.
+
+## License
+
+[FSL-1.1-MIT](LICENSE.md) (Functional Source License, MIT Future License). The code is public and free to use, modify and share, including at work, for anything except a competing commercial product or service built from it. Each version becomes MIT two years after it's released. The packages declare it in their `license` field.
+

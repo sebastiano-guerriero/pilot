@@ -2,7 +2,9 @@ import type { WidthRange } from "@pilot/protocol";
 import { useCallback, useEffect, useReducer, useRef, useState } from "preact/hooks";
 import { type BoxArea, hidesSelection } from "../dom/boxModel.ts";
 import { type EditableElement, isEditable } from "../dom/target.ts";
-import { EditHistory, historyShortcut } from "../edits/history.ts";
+import { formatPrompt } from "@pilot/protocol";
+import { buildChangeSet, copyText } from "../edits/changeSet.ts";
+import { type EditHistory, historyShortcut } from "../edits/history.ts";
 import { clickWidth } from "../edits/widths.ts";
 import type { PilotDevOptions } from "../mount.tsx";
 import { useElementPicker } from "../select/useElementPicker.ts";
@@ -22,6 +24,13 @@ interface AppProps {
   dev?: PilotDevOptions;
   /** See `PilotOptions.nameAttributes`: how the selection label names elements. */
   nameAttributes?: readonly string[];
+  /**
+   * Where changes are recorded: one per page load, owned by mountPilot so it
+   * outlives quitting and is restored after a reload (edits/persist.ts).
+   */
+  history: EditHistory;
+  /** Find again the elements of changes that aren't on the page (see EditHistory.reattach). */
+  onReattach?(): void;
   onQuit(): void;
 }
 
@@ -32,7 +41,7 @@ interface AppProps {
  *   another element re-selects; Esc clears the selection.
  * - Cursor off: the page behaves normally again and the selection is cleared.
  */
-export function App({ host, dev, nameAttributes, onQuit }: AppProps) {
+export function App({ host, dev, nameAttributes, history, onReattach, onQuit }: AppProps) {
   const [selecting, setSelecting] = useState(!!dev);
   const [selected, setSelected] = useState<{ element: EditableElement; key: number } | null>(() => {
     if (!dev) return null;
@@ -60,6 +69,7 @@ export function App({ host, dev, nameAttributes, onQuit }: AppProps) {
   const [widthPick, setWidthPick] = useState<WidthPick | undefined>();
 
   const onPick = useCallback((element: EditableElement) => {
+    onReattach?.(); // the page may have re-rendered since: changes find their elements again
     setSelected((prev) => (prev?.element === element ? prev : { element, key: (prev?.key ?? 0) + 1 }));
   }, []);
 
@@ -68,9 +78,13 @@ export function App({ host, dev, nameAttributes, onQuit }: AppProps) {
   const [inspect, setInspect] = useState<BoxArea[] | null>(null);
   useEffect(() => setInspect(null), [selected?.key]);
 
-  // One history for the whole Pilot session, so undo works across selections.
-  const [history] = useState(() => new EditHistory());
   const [, refresh] = useReducer((n: number) => n + 1, 0);
+  // Whether there's anything to copy: the toolbar's button follows the history.
+  const [hasChanges, setHasChanges] = useState(() => history.changes().length > 0);
+  useEffect(() => history.subscribe(() => setHasChanges(history.changes().length > 0)), [history]);
+  // Copy prompt: the change set, as the text the agent gets (the same text the
+  // MCP path will send: formatPrompt), on the clipboard.
+  const copyPrompt = () => copyText(formatPrompt(buildChangeSet(history)));
 
   // Cmd/Ctrl+Z undoes the last property change, Cmd/Ctrl+Shift+Z (or Ctrl+Y)
   // redoes it. Left alone when there's nothing to undo/redo, and when the
@@ -183,7 +197,7 @@ export function App({ host, dev, nameAttributes, onQuit }: AppProps) {
           selected ? setWidthPick({ width, shift }) : setWidths((current) => clickWidth(current, width, shift))
         }
       />
-      <Toolbar selecting={selecting} onToggleSelect={toggleSelect} canSend={false} onSend={() => {}} onQuit={onQuit} />
+      <Toolbar selecting={selecting} onToggleSelect={toggleSelect} canSend={hasChanges} onSend={copyPrompt} onClear={() => history.clear()} onQuit={onQuit} />
     </>
   );
 }

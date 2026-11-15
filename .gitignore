@@ -6,3 +6,9 @@ dist
 coverage
 .env*
 !.env.example
+
+# Copied in when packing usepilot (prepack); the source is the root LICENSE.md.
+packages/usepilot/LICENSE.md
+*.tgz
+# The usepilot package ships the overlay build (copied in by its build script).
+packages/usepilot/dist

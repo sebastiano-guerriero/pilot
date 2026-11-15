@@ -24,7 +24,8 @@ The README is the project's living spec. Update it in the same change whenever y
 - Fields show declared values, never computed ones: read them with `declaredOf(props, property)` (`src/editors/declared.ts`), which comes from `dom/declared.ts` via the dialog. Pilot's own values come from the history (`valueOf`, `removalOf`), not the page. Don't read `element.style` or `getComputedStyle` for what a field shows. Computed `values` are only for steps and drags.
 - Editors parse, display and step values with `src/css/values.ts` (`parseValue`, `displayValue`, `stepValue`), so every field accepts the same things. Don't write per-editor parsers. Add each new property an editor writes to `src/css/properties.ts` (default, keywords, negative allowed).
 - Viewport widths are explicit: a change is for every width unless the width chip is set. Never infer a range from the window size. Changes record the chip's `widths` through `history.apply(…, { widths })` / `clearProperty(…, widths)`, which the dialog passes for every editor: editors don't handle widths.
-- The copy-prompt and MCP paths must produce identical text. Both go through `formatPrompt()`.
+- The history belongs to `mountPilot` (one per page load) and survives reloads: it's saved per tab and restored by selector (`src/edits/persist.ts`). Anything new it records must be plain data (JSON-safe) apart from the element, and found again from the change's `target` after a reload.
+- The copy-prompt and MCP paths must produce identical text. Both go through `formatPrompt()`, fed by `buildChangeSet()` (`src/edits/changeSet.ts`).
 
 ## Repo conventions
 

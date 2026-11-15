@@ -30,7 +30,10 @@ export interface ElementTarget {
 export interface StyleChange {
   /** CSS property in kebab-case, e.g. `border-radius`. */
   property: string;
-  /** Computed value before the edit. */
+  /**
+   * The page's own value before the edit, as declared in its CSS (`16px`,
+   * `var(--space-4)`), or "" when the page doesn't set the property.
+   */
   from: string;
   /** Value the designer set ("" when `removed`). */
   to: string;

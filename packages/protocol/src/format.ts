@@ -45,7 +45,8 @@ function formatEdit(edit: ElementEdit, n: number): string[] {
   out.push("", "| Property | From | To | Widths |", "| --- | --- | --- | --- |");
   for (const c of changes) {
     const to = c.removed ? "*removed*" : `\`${c.to}\``;
-    out.push(`| \`${c.property}\` | \`${c.from}\` | ${to} | ${c.widths ? describeWidths(c.widths) : "every width"} |`);
+    const from = c.from ? `\`${c.from}\`` : "*not set*";
+    out.push(`| \`${c.property}\` | ${from} | ${to} | ${c.widths ? describeWidths(c.widths) : "every width"} |`);
   }
   const notes = changes.flatMap((c) => [c.removed && removalNote(c), mediaNote(c)].filter((n): n is string => !!n));
   if (notes.length) out.push("", ...notes.map((n) => `- ${n}`));

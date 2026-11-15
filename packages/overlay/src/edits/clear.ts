@@ -48,7 +48,7 @@ export function clearProperty(
 }
 
 /** Where the page declares a value, for the change set. */
-function sourceOf(element: Element, declared: Declared): StyleSource {
+export function sourceOf(element: Element, declared: Declared): StyleSource {
   if (declared.source === "inline") return { kind: "inline" };
   const { selector } = declared.source;
   let elements: number | undefined;

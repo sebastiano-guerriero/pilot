@@ -53,6 +53,14 @@ describe("formatPrompt", () => {
     expect(prompt).toContain("It's set in the element's own `style` attribute.");
   });
 
+  it("a property the page didn't set reads not set", () => {
+    const prompt = formatPrompt({
+      ...changeSet,
+      edits: [{ target: changeSet.edits[0]!.target, changes: [{ property: "gap", from: "", to: "8px" }] }],
+    });
+    expect(prompt).toContain("| `gap` | *not set* | `8px` | every width |");
+  });
+
   it("says which widths each change is for", () => {
     const prompt = formatPrompt({
       ...changeSet,

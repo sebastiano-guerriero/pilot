@@ -1,18 +1,37 @@
+import { useEffect, useState } from "preact/hooks";
+import { Icon } from "../Icon/Icon.tsx";
+
+/** How long the Copy prompt button says "Copied", in ms. */
+const COPIED_FOR = 1500;
+
 interface ToolbarProps {
   /** Select mode is on (the cursor button is pressed). */
   selecting: boolean;
   onToggleSelect(): void;
-  /** There are collected edits to send. */
+  /** There are changes to copy. */
   canSend: boolean;
-  onSend(): void;
+  /** Copy the prompt; resolves to whether it reached the clipboard. */
+  onSend(): Promise<boolean> | void;
+  /** Clear every change (undoable). Enabled with `canSend`. */
+  onClear(): void;
   onQuit(): void;
 }
 
 /**
- * The only UI visible while Pilot runs: cursor (select), send, quit.
+ * The only UI visible while Pilot runs: cursor (select), Copy prompt, Clear
+ * changes, quit.
  * Icons and styling are placeholders pending the real design.
  */
-export function Toolbar({ selecting, onToggleSelect, canSend, onSend, onQuit }: ToolbarProps) {
+export function Toolbar({ selecting, onToggleSelect, canSend, onSend, onClear, onQuit }: ToolbarProps) {
+  // After a copy, the button says so for a moment (`data-copied`, styled as a
+  // placeholder until it's designed).
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), COPIED_FOR);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  const copyLabel = copied ? "Copied" : canSend ? "Copy prompt" : "No changes to copy yet";
   return (
     <div class="toolbar" role="toolbar" aria-label="Pilot">
       <button
@@ -33,10 +52,13 @@ export function Toolbar({ selecting, onToggleSelect, canSend, onSend, onQuit }: 
       <button
         type="button"
         class="button"
-        aria-label="Send to agent"
-        title={canSend ? "Send to agent" : "No edits to send yet"}
+        aria-label={copied ? "Copied" : "Copy prompt"}
+        title={copyLabel}
+        data-copied={copied || undefined}
         disabled={!canSend}
-        onClick={onSend}
+        onClick={async () => {
+          if ((await onSend()) !== false) setCopied(true);
+        }}
       >
         <svg viewBox="0 0 18 18" width="18" height="18" aria-hidden="true">
           <path
@@ -44,6 +66,16 @@ export function Toolbar({ selecting, onToggleSelect, canSend, onSend, onQuit }: 
             fill="currentColor"
           />
         </svg>
+      </button>
+      <button
+        type="button"
+        class="button"
+        aria-label="Clear changes"
+        title={canSend ? "Clear changes (Cmd/Ctrl+Z brings them back)" : "No changes to clear"}
+        disabled={!canSend}
+        onClick={onClear}
+      >
+        <Icon name="eraser" />
       </button>
       <span class="divider" aria-hidden="true" />
       <button type="button" class="button" aria-label="Quit Pilot" title="Quit Pilot" onClick={onQuit}>

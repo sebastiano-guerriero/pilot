@@ -2,6 +2,7 @@
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { EditHistory } from "../edits/history.ts";
 import { App } from "./App.tsx";
 
 let host: HTMLElement;
@@ -12,7 +13,7 @@ beforeEach(() => {
   page.textContent = "Page button";
   host = document.createElement("div");
   document.body.append(page, host);
-  act(() => render(h(App, { host, onQuit: () => {} }), host));
+  act(() => render(h(App, { host, history: new EditHistory(), onQuit: () => {} }), host));
 });
 
 afterEach(() => {

@@ -1,6 +1,6 @@
-import type { StyleSource, WidthRange } from "@pilot/protocol";
+import type { ElementTarget, StyleSource, WidthRange } from "@pilot/protocol";
 import { type Preview, stylesheetPreview } from "../dom/preview.ts";
-import type { EditableElement } from "../dom/target.ts";
+import { type EditableElement, describeElement } from "../dom/target.ts";
 import { inWidths } from "./widths.ts";
 
 /**
@@ -16,6 +16,14 @@ export interface Removal {
 
 interface Entry {
   element: EditableElement;
+  /**
+   * How to find the element again (and tell the agent which it is), taken
+   * when the element is first changed: what the change set and a reload's
+   * restore use (see edits/persist.ts).
+   */
+  target: ElementTarget;
+  /** The page it was changed on (`location.pathname`). */
+  path: string;
   property: string;
   /** The value set; "" drops Pilot's value (the page's own shows again). */
   value: string;
@@ -28,6 +36,8 @@ interface Entry {
 /** A change still in effect, for the change set. */
 export interface RecordedChange {
   element: EditableElement;
+  /** The element as described when it was first changed (see Entry). */
+  target: ElementTarget;
   property: string;
   /** The value set (a removal's preview when `removal` is set). */
   value: string;
@@ -40,7 +50,25 @@ interface Step {
   /** Continuous-interaction token: changes sharing it are one undo step. */
   gesture?: object;
   entries: Entry[];
+  /** A Clear: every change before it stops being in effect (undoing it brings them back). */
+  clears?: boolean;
 }
+
+/** A change as saved (no element: it's found again from `target` on load). */
+export type SavedEntry = Omit<Entry, "element">;
+
+/** A step as saved: its changes, or a Clear. */
+export type SavedStep = SavedEntry[] | { clears: true };
+
+/** The history as saved, to survive reloads (see edits/persist.ts). */
+export interface SavedHistory {
+  version: 1;
+  done: SavedStep[];
+  undone: SavedStep[];
+}
+
+/** Finds the element a saved change is for: the live one, or a detached stand-in. */
+export type Resolve = (target: ElementTarget, path: string) => EditableElement;
 
 /**
  * Every property change Pilot makes goes through here: it records the change
@@ -56,8 +84,68 @@ interface Step {
 export class EditHistory {
   private done: Step[] = [];
   private undone: Step[] = [];
+  private listeners = new Set<() => void>();
 
   constructor(private readonly preview: Preview = stylesheetPreview) {}
+
+  /** Call `listener` after every change, undo, redo and restore. Returns the unsubscribe. */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  /** The history as plain data, to save (steps keep their order; gestures are dropped). */
+  serialize(): SavedHistory {
+    const save = (steps: Step[]): SavedStep[] =>
+      steps.map((s) => (s.clears ? { clears: true } : s.entries.map(({ element: _, ...rest }) => rest)));
+    return { version: 1, done: save(this.done), undone: save(this.undone) };
+  }
+
+  /**
+   * Restore a saved history, finding each change's element with `resolve`
+   * (an element that isn't on the page gets a detached stand-in, so nothing
+   * is lost: see reattach). Shows it on the page.
+   */
+  load(saved: SavedHistory, resolve: Resolve): void {
+    if (saved?.version !== 1) return;
+    const elements = new Map<string, EditableElement>();
+    const element = (e: SavedEntry) => {
+      const key = `${e.path}|${e.target.selector}`;
+      let el = elements.get(key);
+      if (!el) elements.set(key, (el = resolve(e.target, e.path)));
+      return el;
+    };
+    const steps = (list: SavedStep[]): Step[] =>
+      list.map((step) =>
+        Array.isArray(step) ? { entries: step.map((e) => ({ ...e, element: element(e) })) } : { entries: [], clears: true },
+      );
+    this.done = steps(saved.done ?? []);
+    this.undone = steps(saved.undone ?? []);
+    this.render();
+  }
+
+  /**
+   * Find again the elements of changes whose element isn't on the page (a
+   * stand-in after a reload, or replaced by a re-render), with `resolve`.
+   * Shows the changes on them. Call it when the page may have changed (a
+   * launch, a selection, navigation).
+   */
+  reattach(resolve: Resolve): void {
+    const found = new Map<EditableElement, EditableElement>();
+    let changed = false;
+    for (const step of [...this.done, ...this.undone]) {
+      for (const entry of step.entries) {
+        if (entry.element.isConnected) continue;
+        let el = found.get(entry.element);
+        if (!el) found.set(entry.element, (el = resolve(entry.target, entry.path)));
+        if (el.isConnected) {
+          entry.element = el;
+          changed = true;
+        }
+      }
+    }
+    if (changed) this.render();
+  }
 
   /**
    * Set `property` to `value` on `element`. Pass the same `gesture` object
@@ -91,7 +179,7 @@ export class EditHistory {
     } else {
       const current = this.currentFor(element, property, widths);
       if (!removal && !current?.removal && (current?.value ?? "") === value) return;
-      const entry: Entry = { element, property, value, removal, widths };
+      const entry: Entry = { element, target: this.targetOf(element), path: location.pathname, property, value, removal, widths };
       if (step) step.entries.push(entry);
       else this.done.push({ gesture, entries: [entry] });
     }
@@ -108,7 +196,7 @@ export class EditHistory {
   changes(): RecordedChange[] {
     return this.rules()
       .filter((r) => r.value !== "")
-      .map(({ element, property, value, removal, widths }) => ({ element, property, value, removal, widths }));
+      .map(({ element, target, property, value, removal, widths }) => ({ element, target, property, value, removal, widths }));
   }
 
   /**
@@ -148,6 +236,18 @@ export class EditHistory {
     this.render();
   }
 
+  /**
+   * Clear: no change is in effect anymore, so the page shows its own CSS again
+   * (e.g. once the agent has applied the copied prompt). One undo step: undo
+   * brings every change back. Does nothing when there's nothing in effect.
+   */
+  clear(): void {
+    if (!this.rules().length) return;
+    this.done.push({ entries: [], clears: true });
+    this.undone = [];
+    this.render();
+  }
+
   /** Revert the latest step. Returns false when there's nothing to undo. */
   undo(): boolean {
     const step = this.done.pop();
@@ -177,7 +277,8 @@ export class EditHistory {
    */
   private rules(): Entry[] {
     const out: Entry[] = [];
-    for (const { entries } of this.done) {
+    for (const { entries, clears } of this.done) {
+      if (clears) out.length = 0;
       for (const entry of entries) {
         const covered = longhandsOf(entry.property);
         for (let i = out.length - 1; i >= 0; i--) {
@@ -197,6 +298,16 @@ export class EditHistory {
 
   private render(): void {
     this.preview.render(this.rules().map((r) => (r.value === "" ? { ...r, value: "revert-layer" } : r)));
+    for (const listener of this.listeners) listener();
+  }
+
+  /** The element's description: the one taken at its first change, so all its changes agree. */
+  private targetOf(element: EditableElement): ElementTarget {
+    for (const step of [...this.done, ...this.undone]) {
+      const entry = step.entries.find((e) => e.element === element);
+      if (entry) return entry.target;
+    }
+    return describeElement(element);
   }
 
   /** The rule that wins for `property` on `element` at `width`: the latest that sets it there. */

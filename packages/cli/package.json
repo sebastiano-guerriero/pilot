@@ -2,6 +2,7 @@
   "name": "@pilot/cli",
   "version": "0.0.0",
   "private": true,
+  "license": "FSL-1.1-MIT",
   "description": "The `pilot` command: project setup, the local bridge the overlay talks to, and the MCP server agents connect to.",
   "type": "module",
   "bin": {

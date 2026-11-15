@@ -2,6 +2,7 @@
   "name": "@pilot/overlay",
   "version": "0.0.0",
   "private": true,
+  "license": "FSL-1.1-MIT",
   "description": "The Pilot in-page editor: selection, property search, property editors and inline-style preview.",
   "type": "module",
   "exports": {

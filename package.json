@@ -1,6 +1,7 @@
 {
   "name": "pilot-monorepo",
   "private": true,
+  "license": "FSL-1.1-MIT",
   "description": "Pilot: take the controls from your coding agent and edit your UI in the browser.",
   "type": "module",
   "packageManager": "pnpm@10.8.1",

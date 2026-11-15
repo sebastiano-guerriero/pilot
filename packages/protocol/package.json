@@ -2,6 +2,7 @@
   "name": "@pilot/protocol",
   "version": "0.0.0",
   "private": true,
+  "license": "FSL-1.1-MIT",
   "description": "Shared types for Pilot change sets and the prompt formatter used by the overlay and the bridge.",
   "type": "module",
   "exports": {

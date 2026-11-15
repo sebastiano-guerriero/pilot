@@ -1,4 +1,5 @@
 import { render } from "preact";
+import { persistentHistory, resolveTarget } from "./edits/persist.ts";
 import { App } from "./ui/App.tsx";
 import { registerFonts } from "./ui/fonts.ts";
 import styles from "./ui/styles/index.css?inline";
@@ -6,7 +7,7 @@ import styles from "./ui/styles/index.css?inline";
 export interface PilotOptions {
   /**
    * Launch Pilot as soon as it mounts. Default: false (Pilot stays dormant
-   * until `/pilot` launches it). A launch/quit from the current tab session
+   * until the shortcut, or `/pilot` once the bridge exists, launches it). A launch/quit from the current tab session
    * takes precedence, so reloads keep whatever the user chose.
    */
   launch?: boolean;
@@ -18,6 +19,12 @@ export interface PilotOptions {
    * (`data-testid`, `data-slot`…). See dom/name.ts.
    */
   nameAttributes?: string[];
+  /**
+   * The keyboard shortcut that launches Pilot, as modifiers and a key joined
+   * by `+` (`alt+p`, `ctrl+shift+e`). Default `alt+p` (Option+P on a Mac).
+   * `false` turns it off. Ignored while typing in the page's own fields.
+   */
+  shortcut?: string | false;
 }
 
 export interface PilotDevOptions {
@@ -46,12 +53,15 @@ const STORAGE_KEY = "pilot:running";
 
 /**
  * Mount the Pilot overlay into the current page. Mounting is invisible:
- * Pilot stays dormant until launched.
+ * Pilot stays dormant until launched (the shortcut, Alt+P by default, or
+ * `launch()`). On the server it does nothing.
  *
  * The UI lives in a Shadow DOM so the host app's CSS can't leak in and
  * Pilot's CSS can't leak out. Calling it twice returns the same instance.
  */
 export function mountPilot(options: PilotOptions = {}): PilotInstance {
+  // On the server (an SSR framework rendering the module): nothing to mount.
+  if (typeof window === "undefined" || typeof document === "undefined") return INERT;
   const existing = (window as WindowWithPilot).__pilot;
   if (existing) return existing;
 
@@ -67,15 +77,45 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
   const unregisterFonts = registerFonts();
 
   let running = options.dev ? true : (readStoredRunning() ?? options.launch ?? false);
+  // One history per page load, restored from this tab's last one: edits
+  // survive reloads, quitting and relaunching (see edits/persist.ts).
+  const history = persistentHistory();
+  const reattach = () => history.reattach(resolveTarget);
 
   const setRunning = (next: boolean) => {
     if (running === next) return;
     running = next;
     storeRunning(next);
+    if (next) reattach();
     draw();
   };
 
-  const draw = () => render(running ? <App host={host} dev={options.dev} nameAttributes={options.nameAttributes} onQuit={() => instance.quit()} /> : null, container);
+  const draw = () =>
+    render(
+      running ? (
+        <App
+          host={host}
+          history={history}
+          dev={options.dev}
+          nameAttributes={options.nameAttributes}
+          onReattach={reattach}
+          onQuit={() => instance.quit()}
+        />
+      ) : null,
+      container,
+    );
+
+  // The launch shortcut, from anywhere on the page (not while typing in the
+  // page's own fields). Matched on the physical key, since Option+P types π.
+  const shortcut = options.shortcut === false ? null : parseShortcut(options.shortcut ?? "alt+p");
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (!shortcut || !matchesShortcut(e, shortcut) || isTyping(e)) return;
+    e.preventDefault();
+    instance.launch();
+  };
+  window.addEventListener("keydown", onKeyDown, true);
+  // Single-page apps: other pages' changes find their elements again on arrival.
+  window.addEventListener("popstate", reattach);
 
   const instance: PilotInstance = {
     launch: () => setRunning(true),
@@ -87,6 +127,8 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
       render(null, container);
       host.remove();
       unregisterFonts();
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener("popstate", reattach);
       delete (window as WindowWithPilot).__pilot;
     },
   };
@@ -97,6 +139,41 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
 }
 
 type WindowWithPilot = Window & { __pilot?: PilotInstance };
+
+/** What mountPilot returns where there's no page (server rendering). */
+const INERT: PilotInstance = { launch() {}, quit() {}, running: false, destroy() {} };
+
+interface Shortcut {
+  alt: boolean;
+  ctrl: boolean;
+  meta: boolean;
+  shift: boolean;
+  /** The physical key, as KeyboardEvent.code: "KeyP", "Digit1"… */
+  code: string;
+}
+
+/** `alt+p` → Alt and the P key. Modifiers: alt/option, ctrl, meta/cmd, shift. */
+export function parseShortcut(text: string): Shortcut | null {
+  const parts = text.toLowerCase().split("+").map((p) => p.trim());
+  const key = parts.pop();
+  if (!key) return null;
+  const has = (...names: string[]) => parts.some((p) => names.includes(p));
+  const code = /^[a-z]$/.test(key) ? `Key${key.toUpperCase()}` : /^\d$/.test(key) ? `Digit${key}` : key;
+  return { alt: has("alt", "option"), ctrl: has("ctrl", "control"), meta: has("meta", "cmd", "command"), shift: has("shift"), code };
+}
+
+export function matchesShortcut(e: KeyboardEvent, s: Shortcut): boolean {
+  return (
+    e.code === s.code && e.altKey === s.alt && e.ctrlKey === s.ctrl && e.metaKey === s.meta && e.shiftKey === s.shift
+  );
+}
+
+/** Typing in one of the page's own fields (Pilot's own UI is in its Shadow DOM, so it never counts). */
+function isTyping(e: KeyboardEvent): boolean {
+  const el = e.composedPath()[0];
+  if (!(el instanceof HTMLElement)) return false;
+  return el.isContentEditable || el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
+}
 
 // Per-tab memory, so the constant reloads of a dev session (the agent editing
 // files, HMR full reloads) don't relaunch or kill Pilot behind the user's back.
