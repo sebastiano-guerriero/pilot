@@ -1,4 +1,6 @@
 import { render } from "preact";
+import { DEFAULT_BRIDGE_URL } from "./bridge/client.ts";
+import { PilotSession } from "./bridge/session.ts";
 import { persistentHistory, resolveTarget } from "./edits/persist.ts";
 import { App } from "./ui/App.tsx";
 import { registerFonts } from "./ui/fonts.ts";
@@ -7,7 +9,7 @@ import styles from "./ui/styles/index.css?inline";
 export interface PilotOptions {
   /**
    * Launch Pilot as soon as it mounts. Default: false (Pilot stays dormant
-   * until the shortcut, or `/pilot` once the bridge exists, launches it). A launch/quit from the current tab session
+   * until the shortcut, or `/pilot` in an agent, launches it). A launch/quit from the current tab session
    * takes precedence, so reloads keep whatever the user chose.
    */
   launch?: boolean;
@@ -25,6 +27,12 @@ export interface PilotOptions {
    * `false` turns it off. Ignored while typing in the page's own fields.
    */
   shortcut?: string | false;
+  /**
+   * Where Pilot reaches the agents: the bridge's URL (`pilot mcp`, started by
+   * the agent). Default `http://127.0.0.1:4747`. `false` turns it off: no
+   * Send, no launch from `/pilot`, Copy prompt only.
+   */
+  bridge?: string | false;
 }
 
 export interface PilotDevOptions {
@@ -81,6 +89,11 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
   // survive reloads, quitting and relaunching (see edits/persist.ts).
   const history = persistentHistory();
   const reattach = () => history.reattach(resolveTarget);
+  // The handoff to agents: Send, the jobs, and /pilot launching Pilot.
+  const session = new PilotSession(history, {
+    bridge: options.bridge ?? DEFAULT_BRIDGE_URL,
+    onLaunch: () => instance.launch(),
+  });
 
   const setRunning = (next: boolean) => {
     if (running === next) return;
@@ -96,6 +109,7 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
         <App
           host={host}
           history={history}
+          session={session}
           dev={options.dev}
           nameAttributes={options.nameAttributes}
           onReattach={reattach}
@@ -125,6 +139,7 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
     },
     destroy() {
       render(null, container);
+      session.destroy();
       host.remove();
       unregisterFonts();
       window.removeEventListener("keydown", onKeyDown, true);
@@ -135,6 +150,7 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
 
   (window as WindowWithPilot).__pilot = instance;
   draw();
+  session.start();
   return instance;
 }
 

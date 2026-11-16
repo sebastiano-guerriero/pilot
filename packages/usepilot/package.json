@@ -1,10 +1,21 @@
 {
   "name": "usepilot",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "license": "FSL-1.1-MIT",
   "description": "Pilot: take the controls from your coding agent and edit your UI in the browser. A dev-only design overlay that hands your edits to the agent as plain-CSS intent.",
-  "keywords": ["design", "overlay", "css", "tailwind", "agent", "mcp", "devtools"],
+  "keywords": [
+    "design",
+    "overlay",
+    "css",
+    "tailwind",
+    "agent",
+    "mcp",
+    "devtools"
+  ],
   "type": "module",
+  "bin": {
+    "usepilot": "./cli/index.js"
+  },
   "exports": {
     ".": {
       "types": "./types/index.d.ts",
@@ -15,10 +26,18 @@
       "default": "./dist/pilot-auto.js"
     }
   },
-  "sideEffects": ["./dist/pilot-auto.js"],
-  "files": ["dist", "types", "README.md", "LICENSE.md"],
+  "sideEffects": [
+    "./dist/pilot-auto.js"
+  ],
+  "files": [
+    "dist",
+    "cli",
+    "types",
+    "README.md",
+    "LICENSE.md"
+  ],
   "scripts": {
-    "build": "pnpm --filter @pilot/overlay build && rm -rf dist && cp -R ../overlay/dist ./dist",
+    "build": "pnpm --filter @pilot/overlay build && pnpm --filter @pilot/cli build && rm -rf dist cli && cp -R ../overlay/dist ./dist && mkdir cli && cp ../cli/dist/index.js cli/index.js",
     "prepack": "pnpm run build && cp ../../LICENSE.md ./LICENSE.md",
     "postpack": "rm -f ./LICENSE.md"
   }

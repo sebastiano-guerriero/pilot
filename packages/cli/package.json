@@ -9,14 +9,16 @@
     "pilot": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --target node22 --clean",
-    "dev": "tsup src/index.ts --format esm --target node22 --watch",
+    "build": "tsup",
+    "dev": "tsup --watch",
     "typecheck": "tsc -p ."
   },
   "devDependencies": {
     "tsup": "^9.0.0"
   },
   "dependencies": {
-    "@pilot/protocol": "workspace:^"
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "@pilot/protocol": "workspace:^",
+    "zod": "^4.6.7"
   }
 }

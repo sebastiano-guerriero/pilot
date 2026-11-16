@@ -1,0 +1,66 @@
+/* The jobs sent to agents, above the toolbar. Placeholder look, pending the
+   real design. */
+@scope (.job-list) {
+  :scope {
+    position: fixed;
+    bottom: 84px;
+    left: 50%;
+    translate: -50%;
+    z-index: var(--plt-z-ui);
+    width: 280px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 12px;
+    background: var(--plt-color-background);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1), var(--plt-shadow-lg);
+    line-height: 16px;
+  }
+
+  .job + .job {
+    padding-top: 8px;
+    border-top: 1px dotted var(--plt-color-border);
+  }
+
+  .summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .status {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .job[data-status="done"][data-checked] .status {
+    color: var(--plt-color-accent);
+  }
+
+  .count,
+  .notes {
+    color: var(--plt-color-contrast-low);
+  }
+
+  .notes {
+    white-space: pre-wrap;
+  }
+
+  .action {
+    all: unset;
+    cursor: pointer;
+    color: var(--plt-color-contrast-low);
+  }
+
+  .action:hover {
+    color: var(--plt-color-contrast-high);
+  }
+
+  .action:focus-visible {
+    outline: 2px solid var(--plt-color-accent);
+  }
+}

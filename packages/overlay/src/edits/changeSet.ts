@@ -15,11 +15,12 @@ import type { EditHistory } from "./history.ts";
  * - `widths`, when the change is for some widths only.
  * Elements still on the page are described afresh; one that isn't (another
  * page of the app, or re-rendered) keeps the description taken when it was
- * first changed.
+ * first changed. `unsent`: only the changes not sent to the agent yet (what
+ * Send hands over); Copy prompt takes everything in effect.
  */
-export function buildChangeSet(history: EditHistory): ChangeSet {
+export function buildChangeSet(history: EditHistory, options: { unsent?: boolean; id?: string } = {}): ChangeSet {
   const edits = new Map<Element, ElementEdit>();
-  for (const change of history.changes()) {
+  for (const change of history.changes({ unsent: options.unsent })) {
     const { element, property, value, removal, widths } = change;
     let edit = edits.get(element);
     if (!edit) {
@@ -34,7 +35,7 @@ export function buildChangeSet(history: EditHistory): ChangeSet {
     edit.changes.push(styleChange);
   }
   return {
-    id: `cs_${Date.now().toString(36)}`,
+    id: options.id ?? `cs_${Date.now().toString(36)}`,
     createdAt: new Date().toISOString(),
     page: {
       url: location.href,

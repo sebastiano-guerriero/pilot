@@ -4,7 +4,7 @@
 
 Pilot is a design tool that lives inside your codebase, not on a separate canvas. You're building with an agent. When you want to experiment or make a few precise edits yourself, you launch Pilot and your running app becomes editable. You select an element, search for the property you want to change, and tweak it with a purpose-built control. When the result looks right, you hand the edits back to the agent, and the agent writes them into the source using your project's conventions.
 
-> Status: **early scaffolding**. The toolbar (cursor, send, quit) and element selection work with placeholder styling, and the playground launches Pilot with a stand-in for `/pilot`. The preview engine, property editors and the agent handoff are next. See the [Roadmap](#roadmap).
+> Status: **early preview (0.x)**. Selecting, searching and the property editors work; `/pilot` in an agent hands the page to you, and **Send** hands your edits back as jobs the agent applies while you keep designing. The toolbar and the job list have placeholder styling. See the [Roadmap](#roadmap).
 
 ---
 
@@ -35,8 +35,9 @@ Pilot is a design tool that lives inside your codebase, not on a separate canvas
      - **Grid items** show their parent's grid when selected: the lines and numbers they're placed on, for col-span, col-start and col-end (`orParent` on `GridOverlay`). The parent's border box is dashed like the lines: a grid's outer lines aren't drawn (they'd double its selection outline), and the parent has no outline, so they'd look missing. An element that's a grid itself shows its own.
      - Select mode stays on, so you can click another element to switch to it. **Esc** clears the selection. With nothing selected, **Esc** turns the select tool off.
      - Clicking the cursor again turns select mode off. The selection is cleared and the page behaves normally again.
-   - **Copy prompt** (the middle button): copies the changes as a prompt for your agent (see **Hand off**). It's disabled while there's nothing to copy, and says "Copied" for a moment after a copy (`data-copied`, placeholder look).
-   - **Clear changes** (the eraser, Nucleo UI filled): removes every change, so the page shows its own CSS again. Use it once your agent has applied the copied prompt, to see the real result. It's one undo step (`EditHistory.clear()`: a step that ends every change before it), so Cmd/Ctrl+Z brings the changes back. Disabled while there's nothing to clear.
+   - The toolbar ([Toolbar](packages/overlay/src/ui/components/Toolbar/Toolbar.tsx)) is select, Send, the jobs button (only while there are jobs), a divider and quit: 32px buttons 4px apart, icons from Nucleo UI (filled, 18px: `square-dashed-cursor`, `circle-arrow-up`, `loader-4`, `power-off`).
+   - **Send** (the second button): with an agent on this page, sends the changes not sent yet (see **Hand off**); without one, copies them as a prompt. With something to send it's the strong one: accent background, its icon in the background color (`data-ready`). With nothing, it's disabled, its icon at 50%.
+   - **Jobs:** while jobs aren't finished (waiting, an agent applying, checking the page), a third button shows the spinning loader with a pill for how many (10px tall, 4px radius, 8px bold text, 3px padding inline, accent). Its arrival is animated: its slot grows from nothing, so the toolbar widens and stays centered, then the button scales in and, 0.1s later, its pill (`slot-in`, `pop-in`, 0.2s; reversed when the last job finishes). Clicking it opens the job list.
    - **Quit:** closes Pilot.
 
    The **viewport width** is hidden until you need it ([ViewportWidth](packages/overlay/src/ui/components/ViewportWidth/ViewportWidth.tsx)). An invisible 6px strip runs along the top of the window. Hovering it shows the bar: 28px of content, plus 20px of invisible margin below so it doesn't hide the moment the pointer leaves the button (48px in all). It stays while the pointer is on it. It also shows while the window is being resized, and hides 800ms after the last resize (`data-resizing`), so you can watch the width while dragging the window's edge. Nothing in it can be selected as text (`user-select: none`).
@@ -64,7 +65,7 @@ Pilot is a design tool that lives inside your codebase, not on a separate canvas
    - Both ends are included. The chip **stays** across selections and with nothing selected, until you remove it. Every change made while it's set is recorded for its widths, a separate change from the same property at other widths.
    - When the window is **outside** the chip's range (`from 1200px` at 1108px), the pill looks the same (`data-outside` is still set on it and on the width button, unstyled): changes you make now don't show on the page until you resize into the range, and the fields show what applies at the window's width.
 4. **Tweak.** Each change shows live on the page, through a stylesheet Pilot adds (see **The preview** below), so you see the result right away. A change for some widths shows only in its range: resize the window and each range shows its own changes, and the page's CSS everywhere else. Nothing touches your source yet. **Cmd+Z** (Ctrl+Z on Windows/Linux) undoes the last change, and **Cmd+Shift+Z** (Ctrl+Shift+Z or Ctrl+Y) redoes it. This works for every property, across selections, and a whole drag counts as one step.
-5. **Hand off.** Click **Copy prompt** and paste it to your agent. It's the change set (`buildChangeSet()` in [edits/changeSet.ts](packages/overlay/src/edits/changeSet.ts): one edit per element, each change with the page's own previous value and where it's declared, removals, widths) formatted by `formatPrompt()`, the same text the bridge's MCP tools will send. Sending it to a connected agent directly (the bridge) comes later. Your changes stay after copying, and they also survive reloads (see **Edits survive reloads** below). Once the agent has applied them, **Clear changes** removes them so you see the real code. The bridge will do that by itself later, when the agent reports it's done.
+5. **Hand off.** With an agent in `/pilot` mode on this page, the toolbar's middle button is **Send**: the changes not sent yet become a **job** for the agent (see **Agent handoff** below). Their preview stays on the page while the agent works, and you keep designing: new changes go in the next job. When the agent reports the job done, Pilot checks each change against the page's real CSS: what landed stops being previewed (you see the real code). What didn't goes back to the agent once, with what the page gives instead; after that, Pilot takes what the code gives. Without an agent, the button is **Copy prompt**: the same text (`buildChangeSet()` in [edits/changeSet.ts](packages/overlay/src/edits/changeSet.ts), formatted by `formatPrompt()`) to paste anywhere, and **Clear changes** removes the preview once it's applied. Your changes and jobs survive reloads (see **Edits survive reloads** below).
 6. **Apply.** The agent translates the plain-CSS intent into your stack. For example, `border-radius: 12px` becomes `rounded-xl` in a Tailwind project, an existing `--radius-lg` token, or a CSS-module rule.
 
 **Keyboard: as fast as typing Tailwind classes.** Figma makes you hunt for a property in a sidebar. Tailwind is fast to type but gives no visual help. Pilot aims to beat both: you type, and you get a visual editor for exactly that property.
@@ -107,27 +108,22 @@ Linked values follow Tailwind's meaning: `px` links left and right, `py` top and
 ## Architecture
 
 ```
-┌──────────────────────── browser (your app, dev mode) ────────────────────────┐
-│  @pilot/overlay  (Shadow DOM, Preact)                                        │
-│    toolbar · selection · property search · editors · stylesheet preview     │
-│    change set ──▶ Send ──HTTP──┐   (no agent connected → clipboard prompt)  │
-│                                └────────┐                                    │
-└─────────────────────────────────────────┼────────────────────────────────────┘
-                                          ▼
-                     @pilot/cli   `pilot mcp`  (local process, started by the agent)
-                       • localhost HTTP endpoint that receives change sets
-                       • MCP tools over stdio, e.g. pilot_wait_for_edits
-                                          ▲
-                              coding agent (Claude Code, Cursor, …)
-                              + the /pilot skill
+page (your app in dev, the overlay)          one hub per machine, 127.0.0.1:4747
+  Send ──POST /jobs──────────────────────▶  ┌───────────────────────────────────┐
+  job updates, launch ◀──SSE /events───────  │ jobs and agents, by page origin   │
+  follow-up ──POST /jobs/:id/retry───────▶  └───────────────────────────────────┘
+                                               ▲ in-process        ▲ HTTP
+                                   chat A: `usepilot mcp`   chat B: `usepilot mcp`
+                                   (stdio MCP, runs the hub) (joins it, takes over
+                                                              if chat A closes)
 ```
 
 | Package | Path | Role |
 | --- | --- | --- |
 | `@pilot/overlay` | [packages/overlay](packages/overlay) | The in-page editor: Shadow DOM mount, launch/quit, toolbar, property search, editor registry. Builds `pilot.js` (API) and `pilot-auto.js` (self-mounting). |
 | `@pilot/protocol` | [packages/protocol](packages/protocol) | Shared `ChangeSet` types and `formatPrompt()`. The clipboard prompt and the MCP tools produce identical text. |
-| `@pilot/cli` | [packages/cli](packages/cli) | The `pilot` command: `init`, `bridge`, `mcp` (placeholders for now). |
-| `usepilot` | [packages/usepilot](packages/usepilot) | The one published package: the overlay's build (`dist/`, copied in by its `build` script, which `prepack` runs), hand-written types (`types/`), and the user-facing README (install for Vite and Next.js, use, options). Exports `usepilot` (`mountPilot`) and `usepilot/auto` (mounts with defaults). The CLI joins it later. |
+| `@pilot/cli` | [packages/cli](packages/cli) | The CLI, shipped as `usepilot`'s command: `mcp` (the MCP server agents start, and the hub the page talks to: [hub.ts](packages/cli/src/hub.ts), [server.ts](packages/cli/src/server.ts), [agent.ts](packages/cli/src/agent.ts), [mcp.ts](packages/cli/src/mcp.ts)), `setup` (installs the `/pilot` skill). Bundled into one file by tsup, dependencies included. |
+| `usepilot` | [packages/usepilot](packages/usepilot) | The one published package: the overlay's build (`dist/`) and the CLI's (`cli/`, its `usepilot` command), copied in by its `build` script, which `prepack` runs, hand-written types (`types/`), and the user-facing README (install for Vite and Next.js, use, options). Exports `usepilot` (`mountPilot`) and `usepilot/auto` (mounts with defaults). The CLI joins it later. |
 | `playground` | [apps/playground](apps/playground) | A plain Vite page for developing Pilot. |
 | `/pilot` skill | [skills/pilot](skills/pilot) | Instructions the agent follows to launch Pilot and apply change sets. |
 
@@ -247,30 +243,45 @@ Values are checked against this grammar, then by the browser (`CSS.supports`). `
 
 ### Agent handoff ("Send to agent")
 
-The plan for one-click handoff:
+**The loop.** In any agent chat, `/pilot`:
+1. The skill ([skills/pilot/SKILL.md](skills/pilot/SKILL.md)) has the agent find the dev server's URL and call `pilot_launch({ url })`. The hub registers the chat for that page's origin and tells the open page to launch Pilot.
+2. The agent calls `pilot_wait_for_edits`. It returns a job when the designer presses Send, or "no edits yet" after a while (the agent calls it again). In Claude Code the call waits up to 25 minutes, and after 2 minutes Claude Code moves it to the background: the chat stays usable and the job arrives as the task's result. Other clients wait 50 seconds per call, under MCP's default 60-second request timeout (`waitMsFor()` in [mcp.ts](packages/cli/src/mcp.ts); `PILOT_WAIT_MS` overrides it). Progress notifications every 20 seconds keep the call under Claude Code's idle limit.
+3. The job is `formatPrompt()`'s text plus its id and "call `pilot_done`". The agent applies it, calls `pilot_done({ jobId, notes })`, and waits again. If some changes didn't land, the same job comes back once as a **follow-up** (`followUp()` in [mcp.ts](packages/cli/src/mcp.ts)): each change with its element, the designer's value and what the page gives, the usual causes, and "if you chose a different value on purpose, keep it and say so in your notes".
 
-1. The user runs `/pilot` in the agent. The skill tells the agent to call `pilot_wait_for_edits`. That tool blocks until the designer clicks **Send**, which effectively hands control back.
-2. The agent starts `pilot mcp` as a regular MCP server (stdio). The same process listens on `localhost` for change sets posted by the overlay.
-3. When the designer clicks **Send**, the tool returns the formatted change set, and the agent applies it.
-4. If no agent is connected (bridge unreachable), **Send** copies the same text to the clipboard instead.
-5. `/pilot` is also what launches Pilot in the open page: the bridge tells the overlay to call `launch()`.
+**The hub** ([packages/cli](packages/cli)) is one per machine, on `127.0.0.1:4747` (`PILOT_PORT`). It lives in the first `usepilot mcp` process; later ones get `EADDRINUSE`, check `/health`, and talk to it over HTTP (`/agents/*`). When the hub's process ends (its chat closed), the next call of another agent fails to connect and that process takes over the port. State is in memory only: the page is the source of truth for its jobs and posts its unfinished ones again on every connect (idempotent by id), so a takeover loses nothing. Remote agents ping every 10 seconds and are dropped after 30 without one.
+- **Follow-ups:** `POST /jobs/:id/retry` puts a done job back in the queue once (`attempt: 2`, with its `differences`), given first to the agent that did it if it's waiting (`Hub.retry()`).
+- **Routing:** jobs are filed by page origin (`localhost`, `127.0.0.1` and `[::1]` count as the same, `originKey()`): an agent only gets jobs from the page it launched for. Two repos open at once stay separate.
+- **Security:** the page's origin comes from the `Origin` header, never from the request; jobs are only accepted from an origin an agent registered, so another website can't hand prompts to the agent. The agent routes refuse any request with an `Origin` (browsers send one, Node doesn't).
 
-## Installing Pilot in a project (planned)
+**The page** ([packages/overlay/src/bridge](packages/overlay/src/bridge)): `BridgeClient` listens to Server-Sent Events (`agents`, `launch`, `job`) and reconnects every 2–5 seconds while the hub is away (so `/pilot` opens Pilot within seconds; `bridge: false` in `mountPilot` options turns it off). `PilotSession` (owned by `mountPilot`, like the history) runs Send, keeps the jobs (saved in `sessionStorage`, `pilot:jobs`), and checks done jobs.
+- **Jobs in the history:** Send tags the changes not sent yet with the job's id (`EditHistory.send()`, saved with the history); Copy prompt still takes everything in effect. Sent changes stay previewed and aren't sent again; a newer change of the same property goes in the next job. Cancel un-tags them (`unsend()`). A settled change leaves the history for good, not as an undo step (`settle()`): undoing it would cover the real code with a stale preview.
+- **Checking** ([edits/verify.ts](packages/overlay/src/edits/verify.ts)): for each change, the element's computed value with only the page's CSS against its computed value with the job's changes previewed (`EditHistory.probe()`, both in one task, so nothing flickers). So `1.5rem` or `pt-5` from the agent matches the designer's `20px`. It checks again on every stylesheet change in the head (hot reload; Pilot's own preview sheet is ignored, `isPageMutation()`) and every half second, for up to 15 seconds; what landed is settled at once. Changes for other widths than the window's, or on elements not on this page, can't be checked: they're settled on the agent's word. What still doesn't match after 15 seconds goes back to the agent once as a follow-up, and stays previewed meanwhile (the job reads as the agent applying). After the follow-up, Pilot accepts what the code gives: the job's previews go, whatever they show, so the page never stays in a state the designer has to sort out. An applied job leaves the list after 8 seconds (and on the next load). To get an exact value the agent didn't keep, edit it again and Send: a new job.
+- **Toolbar:** Send when an agent works on this page, Copy prompt otherwise; the jobs button with how many are in progress. It opens the job list ([JobList](packages/overlay/src/ui/components/JobList/JobList.tsx)), which shows each job: waiting for an agent, an agent applying (a follow-up too), checking the page, applied, with the agent's notes, and Cancel while it's not done. The list has a placeholder look, pending its design.
+
+## Installing Pilot in a project
+
+In the app, dev only (see [packages/usepilot/README.md](packages/usepilot/README.md) for Vite, Next.js and others):
 
 ```bash
 npm install -D usepilot
 ```
 
-```bash
-npx usepilot init
-```
-
-`init` will add the dev-only overlay to the app and register the MCP server and `/pilot` skill with the user's agent. Users will also be able to ask their agent to install Pilot through the MCP server. Manual setup will look like this:
-
 ```ts
 // app entry, dev only
 if (import.meta.env.DEV) import("usepilot/auto");
 ```
+
+Once per machine, for every project: the `/pilot` skill, and Pilot's MCP server registered with Claude Code (Cursor and others: the same command as an MCP server in their settings).
+
+```bash
+npx usepilot setup
+```
+
+```bash
+claude mcp add --scope user pilot -- npx -y usepilot mcp
+```
+
+Then `/pilot` in any chat. `npx usepilot init` (planned) will add the dev import to the app by itself.
 
 **Names:** Pilot is published as one package, `usepilot` (the plain `pilot` name on npm is an abandoned 2011 library from the Ace editor's authors). The npm organization `usepilot` reserves the `@usepilot/…` scope in case Pilot is ever split into several packages. The site will be `usepilot.design`. The workspace packages (`@pilot/overlay`, `@pilot/protocol`, `@pilot/cli`) are internal and never published under those names: the `usepilot` package will bundle them.
 
@@ -388,7 +399,7 @@ We decided against Tailwind for now. If we revisit it: Tailwind v4's `@property`
 - [x] pnpm monorepo, TypeScript, Vite, Vitest
 - [x] Overlay mounts in Shadow DOM, dormant until launched
 - [x] `launch()` / Quit button, running state kept per tab (playground simulates `/pilot`)
-- [x] Toolbar: cursor, send, quit (placeholder styling)
+- [x] Toolbar: select, Send (accent when there's something to send), the jobs button with its count, quit (designed)
 - [x] `ChangeSet` model and `formatPrompt()`
 - [x] Property search ranking
 - [ ] Visual design: toolbar, property search, selection highlight
@@ -414,8 +425,8 @@ We decided against Tailwind for now. If we revisit it: Tailwind v4's `@property`
 - [x] Undo/redo for every property change (Cmd/Ctrl+Z, Cmd/Ctrl+Shift+Z, Ctrl+Y), with drags grouped into one step
 - [x] Change set from the history (`buildChangeSet()`): per element, the page's own `from`, `to`, removals, widths; Copy prompt in the toolbar
 - [x] Edits survive reloads: the history is saved per tab and restored, elements found again by selector (see **Edits survive reloads**)
-- [x] Clear changes (toolbar, undoable) once the agent has applied the prompt, so the preview stops covering the real result
-- [ ] With the bridge: clear a batch when the agent calls `pilot_done`, after checking each change landed (the page's own CSS now matches); a change that came out different stays, marked
+- [x] Clear changes (toolbar, undoable) once the agent has applied the prompt; left out of the designed toolbar (the bridge clears what landed by itself; undo still removes changes)
+- [x] With the bridge: clear a job when the agent calls `pilot_done`, after checking each change landed (the page's own CSS now gives the value); what didn't goes back to the agent once as a follow-up, then Pilot accepts the code
 - [ ] First property editors (opacity, spacing, radius, color, typography…)
   - [x] **Margin: one value or each side** ([editors/margin](packages/overlay/src/editors/margin/MarginEditor.tsx)): the same split editor as padding below, on `margin` and `margin-top`…: Tailwind's `m`, `mt`/`mr`/`mb`/`ml`, `ms`/`me`, `mx`/`my` and the logical names (`margin-inline`, `margin-block-start`…) land the same way. Negative values and `auto` are allowed (`mx` + `auto` centers), and ↓ and drags go below 0. Fields show the margin area on the page.
   - [x] **Padding: one value or each side** ([editors/padding](packages/overlay/src/editors/padding/PaddingEditor.tsx), built on the shared split editor, [editors/split](packages/overlay/src/editors/split/SplitEditor.tsx): a shorthand as one value or split into its parts, configured with the parts' properties, icons, page areas and search words, and pairs of parts typed together. `sidesEditor({ … })` ([editors/sides](packages/overlay/src/editors/sides/sides.ts)) configures the four sides for padding and margin; gap configures row and column). One row, two views, switched with the **button at the right of the row** (it changes nothing on the page):
@@ -484,18 +495,20 @@ We decided against Tailwind for now. If we revisit it: Tailwind v4's `@property`
 **Handoff**
 - [x] Copy prompt: the toolbar's middle button copies the change set as a prompt
 - [x] Launch shortcut (Option+P / Alt+P) until `/pilot` exists
-- [ ] `pilot mcp`: MCP server and localhost bridge in one process
+- [x] `usepilot mcp`: MCP server and localhost hub in one process; several agents share one hub, with takeover
 - [ ] The bridge watches token files that only live in code (Tailwind v3 config, `tokens.json`, Style Dictionary) and pushes them to the overlay live (see [docs/design-tokens.md](docs/design-tokens.md))
-- [ ] `pilot_wait_for_edits` and the `/pilot` skill flow (including launching Pilot from the agent)
-- [ ] Send to agent through the bridge
+- [x] `pilot_launch`, `pilot_wait_for_edits`, `pilot_done` and the `/pilot` skill flow (including launching Pilot from the agent)
+- [x] Send to agent through the bridge, as jobs: queued while the agent works, routed by page origin
+- [ ] Design the Send states and the job list (placeholder look now)
+- [ ] Cursor: a `/pilot` command file next to the MCP server (the server works there already)
 
 **Distribution**
 - [ ] `npx usepilot init` (detect framework entry, add the dev import, register MCP and skill)
 - [x] Pick the name: `usepilot` on npm (package and organization), `usepilot.design` for the site
 - [x] Claim `usepilot` on npm (`0.0.1`, published)
 - [x] `usepilot` 0.1.0: the overlay bundled, installable in Vite and Next.js apps (tested in a separate Vite app from the packed tarball)
-- [ ] Publish `usepilot` 0.1.0
-- [ ] Add the CLI (`init`, `mcp`) to `usepilot`
+- [x] Publish `usepilot` 0.1.0 and 0.2.0
+- [x] Add the CLI (`mcp`, `setup`) to `usepilot`
 
 ## Open questions
 
@@ -503,7 +516,6 @@ We decided against Tailwind for now. If we revisit it: Tailwind v4's `@property`
 - Should Pilot handle hover and focus states (edit in a pseudo-state)? Widths are handled by the width chip (see **Viewport widths**).
 - How should multi-element edits work (e.g. "all cards")?
 - Values typed in the search (`pt-4` + Enter, Tailwind-style) are deliberately left out for now: the search only finds properties. Revisit once more editors exist.
-- Does Send also quit Pilot (hand control back), or keep it running for more edits?
 - Should the toolbar be draggable, or have a fixed position (bottom center for now)?
 - After a click selects an element, should select mode stay on (current behavior) or switch off so the page is interactive again?
 

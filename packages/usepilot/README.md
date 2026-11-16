@@ -4,8 +4,8 @@
 
 Pilot is a dev-only design overlay for your real app. Select an element,
 search a property the way you'd type a Tailwind class (`pt`, `gap-x`,
-`size`), adjust it in a visual editor and see the change live. Then copy your
-changes as a prompt for your coding agent: plain-CSS intent it translates into
+`size`), adjust it in a visual editor and see the change live. Then send your
+changes to your coding agent: plain-CSS intent it translates into
 your project's own conventions (Tailwind classes, CSS modules, design tokens…).
 Pilot never edits your files.
 
@@ -51,6 +51,20 @@ export function Pilot() {
 **Anything else**: import `usepilot/auto` from code that only runs in the
 browser, in development.
 
+## Hand the page over from your agent
+
+Pilot works with your coding agent: type `/pilot` in a chat, and Pilot opens
+in your app. Design, press **Send**, and the agent applies your edits while
+you keep going. Pilot shows each change until it's really in your code, and
+sends back to the agent what didn't land. Once per machine:
+
+```bash
+npx usepilot setup
+claude mcp add --scope user pilot -- npx -y usepilot mcp
+```
+
+(Other agents: add `npx -y usepilot mcp` as an MCP server in their settings.)
+
 ## Use
 
 1. **Launch**: press **Option+P** (Alt+P) on any page of your app.
@@ -58,10 +72,11 @@ browser, in development.
 3. **Search and edit**: type a property (`p`, `pt`, `w`, `gap`, `display`,
    `aspect`…), Tab into its editor, type or drag a value. Cmd/Ctrl+Z undoes.
    Type `from-768 ` first to make the change for some viewport widths only.
-4. **Copy prompt**: the second toolbar button copies your changes as a
-   prompt. Paste it to your coding agent.
-5. **Clear changes**: once the agent has applied them, the eraser removes your
-   changes so you see the real result (Cmd/Ctrl+Z brings them back).
+4. **Send**: with an agent in `/pilot` mode, the second toolbar button sends
+   your changes to it. Keep designing meanwhile; each change stops being
+   previewed once it's in your code. Without an agent, the button copies
+   your changes as a prompt to paste anywhere (Cmd/Ctrl+Z undoes them once
+   they're applied).
 
 Your changes survive reloads in the same browser tab. Quit with the toolbar's
 last button.

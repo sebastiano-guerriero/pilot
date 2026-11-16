@@ -10,5 +10,6 @@ coverage
 # Copied in when packing usepilot (prepack); the source is the root LICENSE.md.
 packages/usepilot/LICENSE.md
 *.tgz
-# The usepilot package ships the overlay build (copied in by its build script).
+# The usepilot package ships the overlay and CLI builds (copied in by its build script).
 packages/usepilot/dist
+packages/usepilot/cli

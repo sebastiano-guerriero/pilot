@@ -9,6 +9,7 @@
     translate: -50% 0;
     display: flex;
     align-items: center;
+    gap: 4px;
     width: auto;
     height: 48px;
     padding: 8px;
@@ -17,17 +18,14 @@
 
   .button {
     all: unset;
+    position: relative;
     cursor: pointer;
     width: 32px;
     height: 32px;
     display: grid;
     place-items: center;
     border-radius: 50em;
-
-    & svg {
-      width: 18px;
-      height: 18px;
-    }
+    color: var(--plt-color-contrast-high);
 
     &:hover {
       background: hsl(from var(--plt-color-contrast-high) h s l / 0.125);
@@ -37,27 +35,113 @@
       outline: 2px solid var(--plt-color-accent);
     }
 
-    /* Cursor button while select mode is on. */
+    /* Select button while select mode is on. */
     &[aria-pressed="true"] {
       background: var(--plt-color-contrast-high);
       color: var(--plt-color-background);
     }
 
-    /* Just copied the prompt (placeholder look, pending design). */
-    &[data-copied] {
-      color: var(--plt-color-accent);
-    }
-
     &:disabled {
       pointer-events: none;
-      color: var(--plt-color-contrast-low);
+      opacity: 0.5;
     }
+  }
+
+  /* Send, with something to send: the strong one. */
+  .send[data-ready] {
+    background: var(--plt-color-accent);
+    color: var(--plt-color-background);
+  }
+
+  /* The jobs in progress. Its slot grows from nothing as it arrives, so the
+     toolbar widens (and stays centered); the button, then its pill, scale in. */
+  .jobs-slot {
+    display: block;
+    width: 32px;
+    height: 32px;
+    animation: slot-in 0.2s ease-out both;
+  }
+
+  .jobs {
+    animation: pop-in 0.2s ease-out both;
+  }
+
+  .jobs-slot[data-leaving] {
+    animation-name: slot-out;
+  }
+
+  .jobs-slot[data-leaving] .jobs,
+  .jobs-slot[data-leaving] .pill {
+    animation: pop-out 0.15s ease-in both;
+  }
+
+  .spinner {
+    animation: spin 1s linear infinite;
+  }
+
+  .pill {
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 10px;
+    min-width: 10px;
+    padding-inline: 3px;
+    box-sizing: border-box;
+    border-radius: 4px;
+    background: var(--plt-color-accent);
+    color: var(--plt-color-background);
+    font-size: 8px;
+    font-weight: 700;
+    line-height: 10px;
+    text-align: center;
+    animation: pop-in 0.2s ease-out 0.1s both;
   }
 
   .divider {
     width: 1px;
     height: 16px;
-    margin: 0 4px;
     background: var(--plt-color-border);
+  }
+
+  /* The slot's width, and the gap before it, grow from nothing. */
+  @keyframes slot-in {
+    from {
+      width: 0;
+      margin-inline-start: -4px;
+    }
+  }
+
+  @keyframes slot-out {
+    to {
+      width: 0;
+      margin-inline-start: -4px;
+    }
+  }
+
+  @keyframes pop-in {
+    from {
+      scale: 0;
+    }
+  }
+
+  @keyframes pop-out {
+    to {
+      scale: 0;
+    }
+  }
+
+  @keyframes spin {
+    to {
+      rotate: 1turn;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .jobs-slot,
+    .jobs,
+    .pill,
+    .spinner {
+      animation: none;
+    }
   }
 }

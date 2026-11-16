@@ -28,6 +28,8 @@ The README is the project's living spec. Update it in the same change whenever y
 - Viewport widths are explicit: a change is for every width unless the width chip is set. Never infer a range from the window size. Changes record the chip's `widths` through `history.apply(…, { widths })` / `clearProperty(…, widths)`, which the dialog passes for every editor: editors don't handle widths.
 - The history belongs to `mountPilot` (one per page load) and survives reloads: it's saved per tab and restored by selector (`src/edits/persist.ts`). Anything new it records must be plain data (JSON-safe) apart from the element, and found again from the change's `target` after a reload.
 - The copy-prompt and MCP paths must produce identical text. Both go through `formatPrompt()`, fed by `buildChangeSet()` (`src/edits/changeSet.ts`).
+- The handoff is jobs (README, "Agent handoff"). The page is the source of truth for its jobs: the hub (`packages/cli`) keeps state in memory only and must accept a job posted again (idempotent by id). Sent changes carry their job id in the history; a job's changes leave the history only through `settle()`, after the page checked them (`edits/verify.ts`): what landed at once, what didn't after its one follow-up (Pilot then accepts the code), and changes it can't check on the agent's word.
+- The hub takes jobs only from page origins an agent registered, from the `Origin` header; agent routes refuse requests that carry an `Origin`. Keep both checks for every new route.
 
 ## Repo conventions
 

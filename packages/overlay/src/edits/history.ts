@@ -31,6 +31,12 @@ interface Entry {
   removal?: Removal;
   /** The viewport widths it's for (the search's width chip). None: every width. */
   widths?: WidthRange;
+  /**
+   * The job it was sent in (Send to the agent, see bridge/jobs.ts): sent
+   * changes stay on the page until the agent is done and they're checked,
+   * and aren't sent again. None: not sent yet.
+   */
+  job?: string;
 }
 
 /** A change still in effect, for the change set. */
@@ -43,6 +49,8 @@ export interface RecordedChange {
   value: string;
   removal?: Removal;
   widths?: WidthRange;
+  /** The job it was sent in; none when not sent yet. */
+  job?: string;
 }
 
 /** One undo step: a single change, or every change made with the same gesture. */
@@ -193,10 +201,70 @@ export class EditHistory {
    * change a later one replaced (see rules) isn't listed, and neither are
    * changes back to "" (Pilot's value dropped). What the change set is built from.
    */
-  changes(): RecordedChange[] {
+  changes(filter: { unsent?: boolean; job?: string } = {}): RecordedChange[] {
     return this.rules()
       .filter((r) => r.value !== "")
-      .map(({ element, target, property, value, removal, widths }) => ({ element, target, property, value, removal, widths }));
+      .filter((r) => (filter.unsent ? !r.job : true) && (filter.job === undefined || r.job === filter.job))
+      .map(({ element, target, property, value, removal, widths, job }) => ({ element, target, property, value, removal, widths, job }));
+  }
+
+  /**
+   * Send: the changes in effect that weren't sent yet now belong to job
+   * `jobId`. They stay on the page (the agent is applying them) and aren't
+   * sent again; new changes go in the next job. Returns how many it took.
+   */
+  send(jobId: string): number {
+    const unsent = this.rules().filter((r) => r.value !== "" && !r.job);
+    for (const entry of unsent) entry.job = jobId;
+    if (unsent.length) this.render();
+    return unsent.length;
+  }
+
+  /** A job taken back (cancelled before the agent was done): its changes are unsent again. */
+  unsend(jobId: string): void {
+    let changed = false;
+    for (const step of [...this.done, ...this.undone]) {
+      for (const entry of step.entries) {
+        if (entry.job !== jobId) continue;
+        entry.job = undefined;
+        changed = true;
+      }
+    }
+    if (changed) this.render();
+  }
+
+  /**
+   * A job's changes are in the code now: they leave the history for good (no
+   * undo step: undoing them would cover the real code with a stale preview).
+   * `keep`: the ones that came out different, which stay on the page, still
+   * the job's.
+   */
+  settle(jobId: string, keep: (change: RecordedChange) => boolean = () => false): void {
+    const settle = (steps: Step[]) =>
+      steps
+        .map((step) => ({
+          ...step,
+          entries: step.entries.filter((e) => e.job !== jobId || keep(e)),
+        }))
+        .filter((step) => step.clears || step.entries.length > 0);
+    this.done = settle(this.done);
+    this.undone = settle(this.undone);
+    this.render();
+  }
+
+  /**
+   * Runs `measure` with only `changes` on the page instead of everything in
+   * effect (none: the page's own CSS alone), then shows the real preview
+   * again, in the same task (nothing is painted in between). How Pilot checks
+   * what the page gives against what a job asked for (edits/verify.ts).
+   */
+  probe<T>(changes: RecordedChange[], measure: () => T): T {
+    this.preview.render(changes.map((c) => (c.value === "" ? { ...c, value: "revert-layer" } : c)));
+    try {
+      return measure();
+    } finally {
+      this.preview.render(this.rules().map((r) => (r.value === "" ? { ...r, value: "revert-layer" } : r)));
+    }
   }
 
   /**

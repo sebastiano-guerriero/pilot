@@ -13,6 +13,8 @@ import { BoxAreas } from "./components/BoxAreas/BoxAreas.tsx";
 import { GridOverlay } from "./components/GridOverlay/GridOverlay.tsx";
 import { Highlight } from "./components/Highlight/Highlight.tsx";
 import { PropertyDialog, type WidthPick } from "./components/PropertyDialog/PropertyDialog.tsx";
+import type { PilotSession } from "../bridge/session.ts";
+import { JobList } from "./components/JobList/JobList.tsx";
 import { Toolbar } from "./components/Toolbar/Toolbar.tsx";
 import { ViewportWidth } from "./components/ViewportWidth/ViewportWidth.tsx";
 import { useViewportWidth } from "./useViewportWidth.ts";
@@ -29,6 +31,8 @@ interface AppProps {
    * outlives quitting and is restored after a reload (edits/persist.ts).
    */
   history: EditHistory;
+  /** The handoff to agents (Send, jobs). None: Copy prompt only. */
+  session?: PilotSession;
   /** Find again the elements of changes that aren't on the page (see EditHistory.reattach). */
   onReattach?(): void;
   onQuit(): void;
@@ -41,7 +45,7 @@ interface AppProps {
  *   another element re-selects; Esc clears the selection.
  * - Cursor off: the page behaves normally again and the selection is cleared.
  */
-export function App({ host, dev, nameAttributes, history, onReattach, onQuit }: AppProps) {
+export function App({ host, dev, nameAttributes, history, session, onReattach, onQuit }: AppProps) {
   const [selecting, setSelecting] = useState(!!dev);
   const [selected, setSelected] = useState<{ element: EditableElement; key: number } | null>(() => {
     if (!dev) return null;
@@ -85,6 +89,21 @@ export function App({ host, dev, nameAttributes, history, onReattach, onQuit }: 
   // Copy prompt: the change set, as the text the agent gets (the same text the
   // MCP path will send: formatPrompt), on the clipboard.
   const copyPrompt = () => copyText(formatPrompt(buildChangeSet(history)));
+  // The session's jobs and agents: re-render as they change.
+  const [, setSessionTick] = useState(0);
+  useEffect(() => session?.subscribe(() => setSessionTick((n) => n + 1)), [session]);
+  useEffect(() => history.subscribe(() => setSessionTick((n) => n + 1)), [history]);
+  // With an agent on this page, the button sends the changes not sent yet;
+  // without one, it copies the prompt (everything in effect).
+  const sendToAgent = !!session?.canSendToAgent;
+  const agentName = session?.state.agents[0]?.label;
+  // Jobs not finished yet: waiting, an agent applying, checking the page.
+  const pending = (session?.jobs ?? []).filter((j) => j.status === "queued" || j.status === "working" || (j.status === "done" && !j.checked)).length;
+  // The job list opens from the toolbar's jobs button, and closes when there's nothing left in progress.
+  const [jobsOpen, setJobsOpen] = useState(false);
+  useEffect(() => {
+    if (!pending) setJobsOpen(false);
+  }, [pending]);
 
   // Cmd/Ctrl+Z undoes the last property change, Cmd/Ctrl+Shift+Z (or Ctrl+Y)
   // redoes it. Left alone when there's nothing to undo/redo, and when the
@@ -200,7 +219,19 @@ export function App({ host, dev, nameAttributes, history, onReattach, onQuit }: 
           selected ? setWidthPick({ width, shift }) : setWidths((current) => clickWidth(current, width, shift))
         }
       />
-      <Toolbar selecting={selecting} onToggleSelect={toggleSelect} canSend={hasChanges} onSend={copyPrompt} onClear={() => history.clear()} onQuit={onQuit} />
+      {session && jobsOpen && session.jobs.length > 0 && <JobList jobs={session.jobs} onCancel={(id) => session.cancel(id)} />}
+      <Toolbar
+        selecting={selecting}
+        onToggleSelect={toggleSelect}
+        mode={sendToAgent ? "send" : "copy"}
+        agentName={agentName}
+        canSend={sendToAgent ? (session?.unsent ?? 0) > 0 : hasChanges}
+        onSend={sendToAgent ? () => !!session?.send() : copyPrompt}
+        pending={pending}
+        jobsOpen={jobsOpen}
+        onToggleJobs={() => setJobsOpen((open) => !open)}
+        onQuit={onQuit}
+      />
     </>
   );
 }
