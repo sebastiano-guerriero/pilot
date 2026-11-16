@@ -65,7 +65,7 @@ export const LIST_ORDER: ReadonlyArray<{ group: string; entries: readonly ListEn
   },
   {
     group: "Typography",
-    entries: ["font-family", "font-size", "font-style", "font-weight", "line-height", "letter-spacing"],
+    entries: ["font-family", "font-size", "font-style", "font-weight", "line-height", "letter-spacing", "text-align", "color"],
   },
 ];
 

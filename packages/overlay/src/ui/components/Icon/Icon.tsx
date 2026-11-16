@@ -129,6 +129,26 @@ const direction = (items: [Box, Box, Box], line: string, head: string) => ({
   ),
 });
 
+/**
+ * text-align: the frame, and three lines of text (accent, 1px, round caps):
+ * two full ones and a short one in the middle, placed by the alignment
+ * (`middle`: its x from–to). Center and justify are designed; left and right
+ * move the short line to that side.
+ */
+const textAlign = (middle: [number, number]) => ({
+  size: 12,
+  body: (
+    <>
+      <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+      <g stroke="var(--plt-color-accent)" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2.5 3.5H9.5" />
+        <path d={`M${middle[0]} 6H${middle[1]}`} />
+        <path d="M2.5 8.5H9.5" />
+      </g>
+    </>
+  ),
+});
+
 /** justify-content: two items in a row, at `xs` (vertically centered). */
 const justify = (xs: [number, number]) => layout(xs.map((x) => ({ x, y: 5 })));
 
@@ -357,6 +377,11 @@ const ICONS = {
   // Bottoms on one line (y 7), the tall item rising above it.
   "align-baseline": align(5, 3),
   // Nothing set (any layout property): the container, crossed out.
+  // text-align: center and justify are designed; left and right are derived from center.
+  "text-align-left": textAlign([2.5, 6]),
+  "text-align-center": textAlign([4.05859, 7.55859]),
+  "text-align-right": textAlign([6, 9.5]),
+  "text-align-justify": textAlign([2.5, 9.5]),
   "layout-empty": {
     size: 12,
     body: (

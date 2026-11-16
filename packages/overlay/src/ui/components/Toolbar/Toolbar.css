@@ -41,9 +41,10 @@
       color: var(--plt-color-background);
     }
 
+    /* Send with nothing to send (the only button that's ever disabled). */
     &:disabled {
       pointer-events: none;
-      opacity: 0.5;
+      opacity: 0.3;
     }
   }
 

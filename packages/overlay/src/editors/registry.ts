@@ -5,6 +5,7 @@ import { displayEditor } from "./display/DisplayEditor.tsx";
 import { flexDirectionEditor, flexWrapEditor } from "./flex/FlexEditors.tsx";
 import { flexBasisEditor, flexGrowEditor, flexShrinkEditor } from "./flex-item/FlexItemEditors.tsx";
 import { gapEditor } from "./gap/GapEditor.tsx";
+import { colorEditor } from "./color/ColorEditor.tsx";
 import { colEndEditor, colSpanEditor, colStartEditor } from "./grid-column/GridColumnEditor.tsx";
 import { gridColumnsEditor } from "./grid-columns/GridColumnsEditor.tsx";
 import { heightEditor, maxHeightEditor, minHeightEditor } from "./height/HeightEditor.tsx";
@@ -21,6 +22,7 @@ import {
   fontWeightEditor,
   letterSpacingEditor,
   lineHeightEditor,
+  textAlignEditor,
 } from "./typography/TypographyEditors.tsx";
 import { visibilityEditor } from "./visibility/VisibilityEditor.tsx";
 import { zIndexEditor } from "./z-index/ZIndexEditor.tsx";
@@ -70,6 +72,8 @@ export const editors: PropertyEditor[] = [
   fontWeightEditor,
   lineHeightEditor,
   letterSpacingEditor,
+  textAlignEditor,
+  colorEditor,
 ];
 
 /**

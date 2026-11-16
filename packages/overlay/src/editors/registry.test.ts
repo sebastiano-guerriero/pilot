@@ -153,6 +153,11 @@ describe("abbreviationPenalty", () => {
       ["leading", "line-height"],
       ["letter-spacing", "letter-spacing"],
       ["tracking", "letter-spacing"],
+      ["text-align", "text-align"],
+      ["text-left", "text-align"],
+      ["text-justify", "text-align"],
+      ["text-end", "text-align"],
+      ["text", "font-size"],
     ] as const) {
       expect(await ids(q), q).toEqual([id]);
     }

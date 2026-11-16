@@ -1,4 +1,4 @@
-import { FONT_STYLE_VALUES, FONT_WEIGHTS } from "../../css/properties.ts";
+import { FONT_STYLE_VALUES, FONT_WEIGHTS, TEXT_ALIGN_VALUES } from "../../css/properties.ts";
 import { keywordEditor } from "../keyword/KeywordEditor.tsx";
 import { lengthEditor } from "../length/LengthEditor.tsx";
 import { presetEditor } from "../preset/PresetEditor.tsx";
@@ -65,6 +65,25 @@ export const lineHeightEditor = lengthEditor({
   // Tailwind's leading-*.
   aliases: ["leading"],
   scrub: true,
+});
+
+/**
+ * text-align, as a select with an icon per value: left, center, right,
+ * justify. A value set some other way (`start`, `end`) is still shown.
+ */
+export const textAlignEditor = keywordEditor({
+  property: "text-align",
+  label: "Text align",
+  options: TEXT_ALIGN_VALUES,
+  icons: {
+    "": "layout-empty",
+    left: "text-align-left",
+    center: "text-align-center",
+    right: "text-align-right",
+    justify: "text-align-justify",
+  },
+  // Tailwind's text-left … text-justify, text-start, text-end.
+  aliases: ["text-left", "text-center", "text-right", "text-justify", "text-start", "text-end"],
 });
 
 /** letter-spacing: a length (negatives too: tighter), or normal. */

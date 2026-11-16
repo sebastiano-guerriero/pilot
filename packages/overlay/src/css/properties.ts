@@ -110,6 +110,9 @@ export const FONT_STYLE_VALUES = ["normal", "italic", "oblique"] as const;
 /** The font weights the select offers, thin to black. */
 export const FONT_WEIGHTS = ["100", "200", "300", "400", "500", "600", "700", "800", "900"] as const;
 
+/** text-align's options, in menu order (each has an icon). */
+export const TEXT_ALIGN_VALUES = ["left", "center", "right", "justify"] as const;
+
 /** visibility's options, in menu order. */
 export const VISIBILITY_VALUES = ["visible", "hidden", "collapse"] as const;
 
@@ -153,6 +156,9 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   "font-weight": { initial: "normal", keywords: ["normal", "bold", "bolder", "lighter"], negative: false, kind: "number" },
   "line-height": { initial: "normal", keywords: ["normal"], negative: false, kind: "line-height" },
   "letter-spacing": { initial: "normal", keywords: ["normal"], negative: true },
+  "text-align": { initial: "start", keywords: ["start", "end", ...TEXT_ALIGN_VALUES], negative: false },
+  // Edited by its own editor (css/colors.ts), not as a length.
+  color: { initial: "canvastext", keywords: ["currentcolor", "transparent"], negative: false },
   // inset's sides: the offsets of a positioned element.
   ...sides((side) => side, { initial: "auto", keywords: ["auto"], negative: true }),
 };
