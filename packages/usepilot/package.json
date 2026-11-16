@@ -1,6 +1,6 @@
 {
   "name": "usepilot",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "license": "FSL-1.1-MIT",
   "description": "Pilot: take the controls from your coding agent and edit your UI in the browser. A dev-only design overlay that hands your edits to the agent as plain-CSS intent.",
   "keywords": ["design", "overlay", "css", "tailwind", "agent", "mcp", "devtools"],
