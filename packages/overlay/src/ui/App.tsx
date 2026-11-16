@@ -143,13 +143,6 @@ export function App({ host, dev, nameAttributes, history, onReattach, onQuit }: 
 
   return (
     <>
-      {hovered && hoverRect && (
-        <>
-          <Highlight element={hovered} rect={hoverRect} variant="hover" nameAttributes={nameAttributes} />
-          {/* A hovered grid shows its lines; numbers come with the selection. */}
-          <GridOverlay element={hovered} part="lines" />
-        </>
-      )}
       {selected && selectedRect && (
         <>
           {/* Grid containers also show their grid lines, under the selection
@@ -188,6 +181,16 @@ export function App({ host, dev, nameAttributes, history, onReattach, onQuit }: 
             viewportWidth={viewportWidth}
             widthPick={widthPick}
           />
+        </>
+      )}
+      {/* The hover comes after the selection, so its label is drawn over the
+          selection's outline, dots and grid lines (same layer: DOM order decides).
+          The dialog and the toolbar are on a higher layer either way. */}
+      {hovered && hoverRect && (
+        <>
+          <Highlight element={hovered} rect={hoverRect} variant="hover" nameAttributes={nameAttributes} />
+          {/* A hovered grid shows its lines; numbers come with the selection. */}
+          <GridOverlay element={hovered} part="lines" />
         </>
       )}
       <ViewportWidth

@@ -55,10 +55,10 @@ describe("areaRects", () => {
 });
 
 describe("hidesSelection", () => {
-  it("padding, border and margin hide the selection while edited; the gap doesn't", () => {
-    expect(hidesSelection({ box: "padding", side: "top" })).toBe(true);
-    expect(hidesSelection({ box: "border", side: "left" })).toBe(true);
-    expect(hidesSelection({ box: "margin", side: "bottom" })).toBe(true);
+  it("padding, margin and the gap keep the selection while edited; border hides it", () => {
+    expect(hidesSelection({ box: "padding", side: "top" })).toBe(false);
+    expect(hidesSelection({ box: "margin", side: "bottom" })).toBe(false);
     expect(hidesSelection({ box: "gap" })).toBe(false);
+    expect(hidesSelection({ box: "border", side: "left" })).toBe(true);
   });
 });

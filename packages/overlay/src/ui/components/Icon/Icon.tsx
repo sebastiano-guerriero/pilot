@@ -112,6 +112,27 @@ const ICONS = {
     size: 8,
     body: <path d="M1.5 4L3.25 6L6.5 1.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" />,
   },
+  // A pill's remove button: a small ×.
+  "close-small": {
+    size: 8,
+    body: (
+      <g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2 6L6 2" />
+        <path d="M6 6L2 2" />
+      </g>
+    ),
+  },
+  // The dialog's drag strip: three dots in a row (10×2).
+  grip: {
+    size: [10, 2],
+    body: (
+      <>
+        {[1, 5, 9].map((cx) => (
+          <circle key={cx} cx={cx} cy={1} r={1} fill="currentColor" />
+        ))}
+      </>
+    ),
+  },
   // Toolbar (Nucleo UI, filled, 18px): Clear changes.
   eraser: {
     size: 18,
@@ -217,7 +238,7 @@ const ICONS = {
       </g>
     ),
   },
-} satisfies Record<string, { size: number; body: JSX.Element }>;
+} satisfies Record<string, { size: number | [number, number]; body: JSX.Element }>;
 
 export type IconName = keyof typeof ICONS;
 
@@ -227,15 +248,19 @@ interface IconProps {
   class?: string;
 }
 
-/** An icon at its own size. Decorative: hidden from assistive tech. */
+/**
+ * An icon at its own size (`size`: one number for a square, or [width,
+ * height]). Decorative: hidden from assistive tech.
+ */
 export function Icon({ name, class: className }: IconProps) {
-  const { size, body } = ICONS[name];
+  const { size, body } = ICONS[name] as { size: number | [number, number]; body: JSX.Element };
+  const [width, height] = typeof size === "number" ? [size, size] : size;
   return (
     <svg
       class={className ? `icon ${className}` : "icon"}
-      width={size}
-      height={size}
-      viewBox={`0 0 ${size} ${size}`}
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
       fill="none"
       aria-hidden="true"
     >

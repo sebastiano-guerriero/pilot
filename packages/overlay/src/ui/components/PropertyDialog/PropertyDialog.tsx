@@ -10,12 +10,16 @@ import { EditHistory } from "../../../edits/history.ts";
 import { editors as allEditors, matchEditors } from "../../../editors/registry.ts";
 import { type FocusRequest, type PropertyEditor, propertiesOf } from "../../../editors/types.ts";
 import { px } from "../../px.ts";
+import { Icon } from "../Icon/Icon.tsx";
 import { PropertySearch } from "../PropertySearch/PropertySearch.tsx";
 
 interface PropertyDialogProps {
   /** The selected element. */
   element: EditableElement;
-  /** Its bounding box; the dialog is placed next to it. */
+  /**
+   * Its bounding box. The dialog picks its spot next to it when it opens
+   * (dialogSpot); later changes of the box don't move it.
+   */
   anchor: DOMRect;
   /** Editors to search. Defaults to the built-in registry (overridable for tests). */
   editors?: PropertyEditor[];
@@ -192,20 +196,55 @@ export function PropertyDialog({
   });
   const { width, height } = size;
 
-  // Prefer the right side of the element, then the left; for elements too wide
-  // for either, overlap the element's right edge. Keep it inside the viewport.
+  // Where the dialog sits (see dialogSpot): picked once, when it opens beside
+  // the element, then fixed to the page. Editing the element (growing,
+  // shrinking, moving) never moves it; scrolling moves it with the page; it
+  // only shifts to stay on screen. A window resize picks the spot again.
   const vw = document.documentElement.clientWidth;
   const vh = window.innerHeight;
-  // Whole pixels: a fractional position antialiases the dialog's 1px edges and
-  // clipped shapes differently, so they visibly drift apart at the corners.
-  const left = Math.round(
-    anchor.right + GAP + width <= vw
-      ? anchor.right + GAP
-      : anchor.left - GAP - width >= 0
-        ? anchor.left - GAP - width
-        : Math.max(GAP, vw - GAP - width),
-  );
-  const top = Math.round(Math.min(Math.max(GAP, anchor.top), Math.max(GAP, vh - GAP - height)));
+  const scroll = { x: window.scrollX, y: window.scrollY };
+  const [spot, setSpot] = useState<{ left: number; top: number } | null>(null);
+  // Picked at the first layout (before paint, so the first frame is already in
+  // place), with the dialog's real width and the element's box measured right
+  // then: after a window resize, the `anchor` prop can still be the old layout's.
+  useLayoutEffect(() => {
+    if (spot || !ref.current) return;
+    const box = element.isConnected ? element.getBoundingClientRect() : anchor;
+    setSpot(dialogSpot(box, ref.current.offsetWidth, vw, scroll));
+  });
+  useEffect(() => {
+    const repick = () => setSpot(null);
+    window.addEventListener("resize", repick);
+    return () => window.removeEventListener("resize", repick);
+  }, []);
+  const { left, top } = dialogPosition(spot ?? dialogSpot(anchor, width, vw, scroll), { width, height }, { width: vw, height: vh }, scroll);
+
+  // Dragging the strip along the top edge moves the dialog where the designer
+  // wants it: the spot follows the pointer (in page coordinates, so it still
+  // moves with scrolling), kept on screen like any spot. It lasts for this
+  // selection; selecting another element (or resizing the window) picks a
+  // spot beside it again. Focus stays where it was (the search).
+  const drag = useRef<{ x: number; y: number; from: { left: number; top: number } } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const onDragStart = (e: PointerEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    drag.current = { x: e.clientX, y: e.clientY, from: { left: left + scroll.x, top: top + scroll.y } };
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    setDragging(true);
+  };
+  const onDragMove = (e: PointerEvent) => {
+    const d = drag.current;
+    if (!d) return;
+    const moved = { left: d.from.left + e.clientX - d.x, top: d.from.top + e.clientY - d.y };
+    // Kept on screen: store where it's actually drawn, so the next drag starts there.
+    const shown = dialogPosition(moved, { width, height }, { width: vw, height: vh }, scroll);
+    setSpot({ left: shown.left + scroll.x, top: shown.top + scroll.y });
+  };
+  const onDragEnd = () => {
+    drag.current = null;
+    setDragging(false);
+  };
 
   return (
     <div
@@ -214,9 +253,22 @@ export function PropertyDialog({
       style={{ left: px(left), top: px(top) }}
       role="dialog"
       aria-label="Edit properties"
+      data-dragging={dragging || undefined}
       onKeyDown={onKeyDown}
       onFocusIn={onFocusIn}
     >
+      {/* The drag strip: 12px along the top edge, over the search (it adds no
+          height), with the grip as the visual clue. */}
+      <div
+        class="drag-handle"
+        aria-hidden="true"
+        onPointerDown={onDragStart}
+        onPointerMove={onDragMove}
+        onPointerUp={onDragEnd}
+        onPointerCancel={onDragEnd}
+      >
+        <Icon name="grip" />
+      </div>
       <PropertySearch
         value={query}
         onChange={setQuery}
@@ -256,6 +308,47 @@ export function PropertyDialog({
       )}
     </div>
   );
+}
+
+/**
+ * The dialog's spot beside the element, in page coordinates (viewport +
+ * scroll), picked when it opens: the element's right side, else its left;
+ * for an element too wide for either, overlapping its right edge. Level
+ * with the element's top.
+ */
+export function dialogSpot(
+  anchor: { left: number; right: number; top: number },
+  width: number,
+  viewportWidth: number,
+  scroll: { x: number; y: number },
+): { left: number; top: number } {
+  const left =
+    anchor.right + GAP + width <= viewportWidth
+      ? anchor.right + GAP
+      : anchor.left - GAP - width >= 0
+        ? anchor.left - GAP - width
+        : viewportWidth - GAP - width;
+  return { left: left + scroll.x, top: anchor.top + scroll.y };
+}
+
+/**
+ * Where the dialog is drawn (viewport px) from its spot: moved with the
+ * page's scroll, and kept on screen, 8px from the edges (when scrolling would
+ * take it off, or when it grows taller than the room below). Whole pixels: a
+ * fractional position antialiases the dialog's 1px edges and clipped shapes
+ * differently, so they visibly drift apart at the corners.
+ */
+export function dialogPosition(
+  spot: { left: number; top: number },
+  size: { width: number; height: number },
+  viewport: { width: number; height: number },
+  scroll: { x: number; y: number },
+): { left: number; top: number } {
+  const clamp = (v: number, max: number) => Math.round(Math.min(Math.max(GAP, v), Math.max(GAP, max)));
+  return {
+    left: clamp(spot.left - scroll.x, viewport.width - GAP - size.width),
+    top: clamp(spot.top - scroll.y, viewport.height - GAP - size.height),
+  };
 }
 
 /**

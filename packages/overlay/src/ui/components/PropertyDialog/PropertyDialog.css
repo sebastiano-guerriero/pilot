@@ -13,6 +13,46 @@
     width: 260px;
   }
 
+  /* The drag strip: 12px along the top edge, over the search, full width (the
+     search's empty top padding, so it takes nothing clickable). It moves the
+     dialog (PropertyDialog.tsx). The grip (three dots) is centered across it,
+     3px from the top edge, and the cursor says grab, then grabbing while
+     dragging. */
+  .drag-handle {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 12px;
+    padding-top: 3px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    color: var(--plt-color-contrast-low);
+    cursor: grab;
+    touch-action: none;
+
+    & .icon {
+      pointer-events: none;
+    }
+
+    /* Hovered: the grip lights up (and stays lit while dragging, below). */
+    &:hover {
+      color: var(--plt-color-contrast-high);
+    }
+  }
+
+  :scope[data-dragging],
+  :scope[data-dragging] .drag-handle {
+    cursor: grabbing;
+    user-select: none;
+  }
+
+  :scope[data-dragging] .drag-handle {
+    color: var(--plt-color-contrast-high);
+  }
+
   /* Wrapper for the property editors below the search. */
   .properties {
     padding: 12px 16px;

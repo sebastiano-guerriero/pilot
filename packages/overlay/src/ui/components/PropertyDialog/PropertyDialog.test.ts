@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EDIT_ATTRIBUTE, PREVIEW_ATTRIBUTE } from "../../../dom/preview.ts";
 import { EditHistory } from "../../../edits/history.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../../../editors/types.ts";
-import { PropertyDialog, type WidthPick } from "./PropertyDialog.tsx";
+import { PropertyDialog, type WidthPick, dialogPosition, dialogSpot } from "./PropertyDialog.tsx";
 
 // Stub editors: render their id and the values they receive, expose onChange,
 // record the focus requests they get, and can hand focus back to the search.
@@ -403,7 +403,7 @@ describe("width chip", () => {
       render(h(Host, {}), container);
     });
   };
-  const chip = () => container.querySelector(".widths");
+  const chip = () => container.querySelector('.pill[data-pill="widths"]');
 
   it("`from-1200 ` at the start becomes the chip; the rest is the search", () => {
     const history = new EditHistory();
@@ -434,6 +434,57 @@ describe("width chip", () => {
   it("marks the chip when the window is outside its range", () => {
     mountWithWidths(new EditHistory(), 900, { min: 1200 });
     expect(chip()?.hasAttribute("data-outside")).toBe(true);
+  });
+
+  it("/ opens the modifiers menu; typing filters it", () => {
+    mountWithWidths(new EditHistory(), 1108);
+    const rows = () => [...container.querySelectorAll(".modifier .modifier-name")].map((n) => n.textContent);
+    type("/");
+    expect(rows()).toEqual(["From width", "To width"]);
+    expect(search().getAttribute("aria-expanded")).toBe("true");
+    type("/to");
+    expect(rows()).toEqual(["To width"]);
+    type("/hover");
+    expect(container.querySelector(".modifier-none")).not.toBeNull();
+    type("pt");
+    expect(container.querySelector(".modifiers")).toBeNull();
+  });
+
+  it("↓ and Enter pick a modifier: its syntax goes in the search, then Tab takes the suggested width", () => {
+    mountWithWidths(new EditHistory(), 1108);
+    type("/");
+    key(search(), "ArrowDown");
+    expect(container.querySelector(".modifier[data-active] .modifier-name")?.textContent).toBe("To width");
+    key(search(), "Enter");
+    expect(search().value).toBe("to-");
+    expect(container.querySelector(".modifiers")).toBeNull();
+    expect(container.querySelector(".suggestion")?.textContent).toBe("to-1108");
+    key(search(), "Tab");
+    expect(chip()?.textContent).toContain("to 1108px");
+  });
+
+  it("Esc closes the menu and clears the / text; the dialog stays", () => {
+    let closed = 0;
+    function Host() {
+      const [widths, setWidths] = useState<WidthRange | null>(null);
+      return h(PropertyDialog, {
+        element,
+        anchor: element.getBoundingClientRect(),
+        editors,
+        widths,
+        onWidthsChange: setWidths,
+        viewportWidth: 1108,
+        onClose: () => closed++,
+      });
+    }
+    act(() => {
+      render(h(Host, {}), container);
+    });
+    type("/fr");
+    key(search(), "Escape");
+    expect(container.querySelector(".modifiers")).toBeNull();
+    expect(search().value).toBe("");
+    expect(closed).toBe(0);
   });
 
   it("`from-` suggests the window's width, dimmed; Tab takes it", () => {
@@ -472,3 +523,65 @@ describe("width chip", () => {
     expect(search().value).toBe("pad");
   });
 });
+
+describe("placement", () => {
+  const viewport = { width: 1000, height: 800 };
+  const noScroll = { x: 0, y: 0 };
+
+  it("picks a spot beside the element: right, else left, else overlapping its right edge", () => {
+    expect(dialogSpot({ left: 100, right: 200, top: 50 }, 260, 1000, noScroll)).toEqual({ left: 208, top: 50 });
+    expect(dialogSpot({ left: 700, right: 900, top: 50 }, 260, 1000, noScroll)).toEqual({ left: 432, top: 50 });
+    expect(dialogSpot({ left: 100, right: 950, top: 50 }, 260, 1000, noScroll)).toEqual({ left: 732, top: 50 });
+  });
+
+  it("the spot is in page coordinates: scrolling moves the dialog with the page", () => {
+    const spot = dialogSpot({ left: 100, right: 200, top: 300 }, 260, 1000, { x: 0, y: 100 });
+    expect(spot).toEqual({ left: 208, top: 400 });
+    expect(dialogPosition(spot, { width: 260, height: 200 }, viewport, { x: 0, y: 150 })).toEqual({ left: 208, top: 250 });
+  });
+
+  it("stays on screen, 8px from the edges: scrolled past the top, or grown past the bottom", () => {
+    const spot = { left: 208, top: 400 };
+    expect(dialogPosition(spot, { width: 260, height: 200 }, viewport, { x: 0, y: 600 }).top).toBe(8);
+    expect(dialogPosition(spot, { width: 260, height: 500 }, viewport, noScroll).top).toBe(292);
+  });
+
+  it("editing the element doesn't move the dialog: its box changing later is ignored", () => {
+    const at = (rect: Partial<DOMRect>) => ({ left: 100, right: 200, top: 50, bottom: 80, width: 100, height: 30, ...rect }) as DOMRect;
+    const draw = (anchor: DOMRect) =>
+      act(() => {
+        render(h(PropertyDialog, { element, anchor, editors }), container);
+      });
+    const dialog = () => container.querySelector(".property-dialog") as HTMLElement;
+    draw(at({}));
+    const before = [dialog().style.left, dialog().style.top];
+    draw(at({ right: 400, top: 120, width: 300 })); // the element grew and moved
+    expect([dialog().style.left, dialog().style.top]).toEqual(before);
+  });
+
+  it("dragging the top strip moves the dialog, kept on screen", () => {
+    // happy-dom's page is 0px wide: give it a real width for the horizontal moves.
+    Object.defineProperty(document.documentElement, "clientWidth", { value: 1024, configurable: true });
+    const anchor = { left: 100, right: 200, top: 50, bottom: 80, width: 100, height: 30 } as DOMRect;
+    act(() => {
+      render(h(PropertyDialog, { element, anchor, editors }), container);
+    });
+    const dialog = () => container.querySelector(".property-dialog") as HTMLElement;
+    const handle = container.querySelector(".drag-handle") as HTMLElement;
+    const start = [Number.parseFloat(dialog().style.left), Number.parseFloat(dialog().style.top)] as [number, number];
+    const pointer = (type: string, x: number, y: number) =>
+      act(() => {
+        handle.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true, cancelable: true }));
+      });
+    pointer("pointerdown", 10, 4);
+    expect(dialog().hasAttribute("data-dragging")).toBe(true);
+    pointer("pointermove", 60, 34);
+    expect([Number.parseFloat(dialog().style.left), Number.parseFloat(dialog().style.top)]).toEqual([start[0] + 50, start[1] + 30]);
+    pointer("pointermove", -5000, -5000); // way off screen: held 8px inside
+    expect([dialog().style.left, dialog().style.top]).toEqual(["8px", "8px"]);
+    pointer("pointerup", -5000, -5000);
+    expect(dialog().hasAttribute("data-dragging")).toBe(false);
+    delete (document.documentElement as { clientWidth?: number }).clientWidth;
+  });
+});
+

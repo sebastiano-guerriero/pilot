@@ -1,49 +1,106 @@
 @scope (.property-search) {
   :scope {
     position: relative;
-    display: flex;
-    align-items: center;
   }
 
-  /* The width chip (placeholder styling, pending design). */
-  .widths {
-    flex: none;
+  /* Pills (the search's modifiers: the width chip, more later) in a row of
+     their own above the field, 12px from the dialog's top edge and aligned
+     with the field's text. They wrap when there are many. */
+  .pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 12px 16px 0;
+  }
+
+  /* A pill: the accent, with the background's color for its text, 10px,
+     18px tall with a 4px radius (and the fields' 1px top highlight). Its
+     remove button is the right end: an 8px × whose target is bigger than the
+     icon, with the icon 5px from the pill's edge. */
+  .pill {
     display: flex;
     align-items: center;
-    gap: 2px;
-    height: 22px;
-    margin-inline-start: 12px;
-    padding-inline: 8px 2px;
-    border-radius: 6px;
-    background: var(--plt-color-background-light);
-    color: var(--plt-color-contrast-high);
-    font-size: 11px;
+    height: 18px;
+    padding-inline: 4px 1px;
+    border-radius: 4px;
+    background: var(--plt-color-accent);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 7%);
+    color: var(--plt-color-background);
+    font-size: 10px;
+    line-height: 18px;
     white-space: nowrap;
-
-    /* The window is outside the range: what you see isn't what it's for. */
-    &[data-outside] {
-      background: none;
-      color: var(--plt-color-contrast-low);
-      box-shadow: inset 0 0 0 1px var(--plt-color-contrast-low);
-    }
   }
 
-  .remove {
+  /* 16×18 target, the 8px icon centered in it: 4px of target past the icon,
+     plus the pill's 1px end padding, puts the icon 5px from the edge. */
+  .pill-remove {
     all: unset;
-    width: 18px;
+    width: 16px;
     height: 18px;
     display: grid;
     place-items: center;
-    color: var(--plt-color-contrast-low);
+    /* The pill's text color, at 50% (the whole button's opacity), 100% on hover. */
+    color: var(--plt-color-background);
+    opacity: 0.5;
     cursor: pointer;
 
     &:hover {
-      color: var(--plt-color-contrast-high);
+      opacity: 1;
     }
 
     &:focus-visible {
-      outline: 2px solid var(--plt-color-accent);
+      opacity: 1;
+      outline: 2px solid var(--plt-color-background);
+      outline-offset: -2px;
+      border-radius: 4px;
     }
+  }
+
+  /* The / menu: under the field, inside the dialog (the editors' area is
+     empty while it's open). Rows like the select menu's options (6px radius,
+     the same highlight), with the name and its syntax on the first line and
+     the description below. Placeholder look, pending design. */
+  .modifiers {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    /* 8px around, plus the rows' 8px: their text lines up with the search's (16px in). */
+    padding: 8px;
+    border-top: 1px solid var(--plt-color-border);
+  }
+
+  .modifier {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    column-gap: 8px;
+    row-gap: 2px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+
+    /* Hovered, or highlighted with the keyboard (like the select's options). */
+    &[data-active] {
+      background: hsl(from var(--plt-color-contrast-high) h s l / 10%);
+    }
+  }
+
+  .modifier-name {
+    color: var(--plt-color-contrast-high);
+  }
+
+  .modifier-syntax {
+    color: var(--plt-color-contrast-low);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .modifier-description {
+    grid-column: 1 / -1;
+    color: var(--plt-color-contrast-low);
+  }
+
+  .modifier-none {
+    padding: 6px 8px;
+    color: var(--plt-color-contrast-low);
   }
 
   .field {
@@ -68,10 +125,6 @@
 
   .typed {
     color: transparent;
-  }
-
-  .widths + .field :is(.input, .suggestion) {
-    padding-inline-start: 8px;
   }
 
   .input {

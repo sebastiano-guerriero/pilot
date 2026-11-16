@@ -23,15 +23,15 @@ export type BoxArea = SideArea | GapArea;
 /**
  * Whether showing an area hides the selection's outline, corner dots and
  * label (and a grid's lines and numbers) while the designer interacts with its
- * editor. It depends on the
- * property: the outline sits right on top of padding, border and margin, so
- * it would hide the change happening live; the gap is inside the element,
- * where the outline is no trouble. Decide here for every new kind of area.
+ * editor. The project owner decides per property: padding, margin and the gap
+ * keep the selection (its outline helps place the striped area). Border hides
+ * it, since the outline sits right on top of the border it would cover (no
+ * border editor yet). Decide here for every new kind of area.
  */
 const HIDES_SELECTION: Record<BoxArea["box"], boolean> = {
-  padding: true,
+  padding: false,
   border: true,
-  margin: true,
+  margin: false,
   gap: false,
 };
 
