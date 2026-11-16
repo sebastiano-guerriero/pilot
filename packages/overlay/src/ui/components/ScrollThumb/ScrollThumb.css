@@ -1,0 +1,38 @@
+/* A minimal scrollbar: a thin thumb over the right edge of a scrolling area,
+   absolutely positioned so it takes no room. Hidden until the pointer is over
+   the area or it scrolls. */
+@scope (.scroll-thumb) {
+  :scope {
+    position: absolute;
+    right: 3px;
+    width: 4px;
+    border-radius: 2px;
+    background: hsl(from var(--plt-color-contrast-high) h s l / 0.2);
+    opacity: 0;
+    transition: opacity 0.15s ease-out;
+    touch-action: none;
+    user-select: none;
+  }
+
+  /* A wider target than the 4px drawn, so it's easy to grab. */
+  :scope::before {
+    content: "";
+    position: absolute;
+    inset: 0 -3px;
+  }
+
+  :scope[data-visible] {
+    opacity: 1;
+  }
+
+  :scope:hover,
+  :scope[data-dragging] {
+    background: hsl(from var(--plt-color-contrast-high) h s l / 0.4);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :scope {
+      transition: none;
+    }
+  }
+}

@@ -12,6 +12,7 @@ import { groupOf, inListOrder } from "../../../editors/listOrder.ts";
 import { type FocusRequest, type PropertyEditor, propertiesOf } from "../../../editors/types.ts";
 import { px } from "../../px.ts";
 import { Icon } from "../Icon/Icon.tsx";
+import { ScrollThumb } from "../ScrollThumb/ScrollThumb.tsx";
 import { PropertySearch } from "../PropertySearch/PropertySearch.tsx";
 
 interface PropertyDialogProps {
@@ -199,6 +200,8 @@ export function PropertyDialog({
   // editor appears). Measure it so the placement keeps it on screen. Runs
   // before paint, so the first frame is already placed correctly.
   const ref = useRef<HTMLDivElement>(null);
+  // The scrolling list, for its scroll thumb.
+  const listRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
   useLayoutEffect(() => {
     const width = ref.current?.offsetWidth ?? 0;
@@ -304,7 +307,7 @@ export function PropertyDialog({
           {/* The list scrolls inside the frame; the frame draws the line under the
               search and the fades at the list's top and bottom edges. */}
           <div class="properties-frame">
-            <div class="properties">
+            <div class="properties" ref={listRef}>
               {/* Editors own everything inside `.editor` (see the @scope boundary in the CSS). */}
               {matches.map((match, index) => {
                 // With nothing typed, the list is grouped (LIST_ORDER): each group
@@ -337,6 +340,7 @@ export function PropertyDialog({
             </div>
             <div class="fade" data-edge="top" aria-hidden="true" />
             <div class="fade" data-edge="bottom" aria-hidden="true" />
+            <ScrollThumb target={listRef} />
           </div>
           <footer class="footer" data-area={editorHint ? "editor-hint" : focusArea} aria-live="polite">
             {editorHint ?? <Hint area={focusArea} />}

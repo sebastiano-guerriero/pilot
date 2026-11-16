@@ -24,6 +24,7 @@
 @import "../components/PropertySelect/PropertySelect.css" layer(components);
 @import "../components/Icon/Icon.css" layer(components);
 @import "../components/ScrubHandle/ScrubHandle.css" layer(components);
+@import "../components/ScrollThumb/ScrollThumb.css" layer(components);
 @import "../components/ViewportWidth/ViewportWidth.css" layer(components);
 
 /* Property editors */
