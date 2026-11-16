@@ -49,3 +49,4 @@ The README is the project's living spec. Update it in the same change whenever y
 - Tests are `*.test.ts` next to the source and run with Vitest from the root (`pnpm test`).
 - Before finishing a change, run `pnpm typecheck` and `pnpm test`.
 - Use `pnpm dev` (playground at :5180) to try overlay changes in a browser.
+- To try them in another project, unreleased: `pnpm link-experiment <folder>` once, then `pnpm dev:experiments` (overlay source on :5199, CLI rebuilt on change). README, "Trying Pilot in your own projects, unreleased".

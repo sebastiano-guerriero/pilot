@@ -12,7 +12,9 @@
     "dev": "pnpm --filter playground dev",
     "build": "pnpm -r --filter './packages/*' build",
     "typecheck": "pnpm -r typecheck",
-    "test": "vitest run"
+    "test": "vitest run",
+    "dev:experiments": "pnpm --parallel --filter @pilot/overlay --filter @pilot/cli experiments",
+    "link-experiment": "node scripts/link-experiment.mjs"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.6",

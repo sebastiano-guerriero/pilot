@@ -122,9 +122,9 @@ page (your app in dev, the overlay)          one hub per machine, 127.0.0.1:4747
 | --- | --- | --- |
 | `@pilot/overlay` | [packages/overlay](packages/overlay) | The in-page editor: Shadow DOM mount, launch/quit, toolbar, property search, editor registry. Builds `pilot.js` (API) and `pilot-auto.js` (self-mounting). |
 | `@pilot/protocol` | [packages/protocol](packages/protocol) | Shared `ChangeSet` types and `formatPrompt()`. The clipboard prompt and the MCP tools produce identical text. |
-| `@pilot/cli` | [packages/cli](packages/cli) | The CLI, shipped as `usepilot`'s command: `mcp` (the MCP server agents start, and the hub the page talks to: [hub.ts](packages/cli/src/hub.ts), [server.ts](packages/cli/src/server.ts), [agent.ts](packages/cli/src/agent.ts), [mcp.ts](packages/cli/src/mcp.ts)), `setup` (installs the `/pilot` skill). Bundled into one file by tsup, dependencies included. |
+| `@pilot/cli` | [packages/cli](packages/cli) | The CLI, shipped as `usepilot`'s command: `mcp` (the MCP server agents start, and the hub the page talks to: [hub.ts](packages/cli/src/hub.ts), [server.ts](packages/cli/src/server.ts), [agent.ts](packages/cli/src/agent.ts), [mcp.ts](packages/cli/src/mcp.ts)), `setup` (the `/pilot` skill and MCP server, for this machine or, with `--project`, for the repo: [setup.ts](packages/cli/src/setup.ts)). Bundled into one file by tsup, dependencies included. |
 | `usepilot` | [packages/usepilot](packages/usepilot) | The one published package: the overlay's build (`dist/`) and the CLI's (`cli/`, its `usepilot` command), copied in by its `build` script, which `prepack` runs, hand-written types (`types/`), and the user-facing README (install for Vite and Next.js, use, options). Exports `usepilot` (`mountPilot`) and `usepilot/auto` (mounts with defaults). The CLI joins it later. |
-| `playground` | [apps/playground](apps/playground) | A plain Vite page for developing Pilot. |
+| `playground` | [apps/playground](apps/playground) | A plain Vite page for developing Pilot. For your own projects, see **Trying Pilot in your own projects, unreleased**. |
 | `/pilot` skill | [skills/pilot](skills/pilot) | Instructions the agent follows to launch Pilot and apply change sets. |
 
 ### The change set
@@ -271,17 +271,25 @@ npm install -D usepilot
 if (import.meta.env.DEV) import("usepilot/auto");
 ```
 
-Once per machine, for every project: the `/pilot` skill, and Pilot's MCP server registered with Claude Code (Cursor and others: the same command as an MCP server in their settings).
+Then the agent side, in one of two ways (Cursor and others: `npx -y usepilot mcp` as an MCP server in their settings):
 
-```bash
-npx usepilot setup
-```
+- **For a repo you share** (recommended for teams): from the project's root folder, `npx usepilot setup --project` writes the `/pilot` skill (`.claude/skills/pilot/SKILL.md`) and Pilot's MCP server (`.mcp.json`, added to one that's already there) into the repo. Commit both, and everyone working in it gets `/pilot`; Claude Code asks each of them once to approve the project's MCP server.
 
-```bash
-claude mcp add --scope user pilot -- npx -y usepilot mcp
-```
+  ```bash
+  npx usepilot setup --project
+  ```
 
-Then `/pilot` in any chat. `npx usepilot init` (planned) will add the dev import to the app by itself.
+- **Just for you, in every project:** the skill in your home folder (`~/.claude/skills/pilot/`), and the server registered for your user. Nothing goes in the repo.
+
+  ```bash
+  npx usepilot setup
+  ```
+
+  ```bash
+  claude mcp add --scope user pilot -- npx -y usepilot mcp
+  ```
+
+Both can coexist. Then `/pilot` in a chat in the project's folder. `npx usepilot init` (planned) will add the dev import to the app by itself.
 
 **Names:** Pilot is published as one package, `usepilot` (the plain `pilot` name on npm is an abandoned 2011 library from the Ace editor's authors). The npm organization `usepilot` reserves the `@usepilot/…` scope in case Pilot is ever split into several packages. The site will be `usepilot.design`. The workspace packages (`@pilot/overlay`, `@pilot/protocol`, `@pilot/cli`) are internal and never published under those names: the `usepilot` package will bundle them.
 
@@ -315,6 +323,25 @@ On every load this launches Pilot (even after a Quit), turns on select mode, and
 | `pnpm typecheck` | `tsc` in every workspace package |
 
 Stack: TypeScript, Preact (small, bundled into the overlay, so it never conflicts with the host app's framework), Vite, Vitest, and tsup for the CLI.
+
+### Trying Pilot in your own projects, unreleased
+
+To use the Pilot you're working on in another project (an experiment, a real app) without publishing a version:
+
+1. **Link the project, once:** `pnpm link-experiment <project folder>` ([scripts/link-experiment.mjs](scripts/link-experiment.mjs)). Its `.mcp.json` then starts Pilot's MCP server from this repo's build (`node packages/cli/dist/index.js mcp`, other servers kept), and its `/pilot` skill becomes a link to [skills/pilot](skills/pilot). It prints the loader line for the app:
+
+   ```js
+   if (import.meta.env.DEV) {
+     import(/* @vite-ignore */ "http://localhost:5199/src/auto.ts").catch(() => import("usepilot/auto"));
+   }
+   ```
+
+   The app loads the overlay from this repo when its dev server runs, the npm package when it doesn't, so the line can stay. Keep a single Pilot loader in the app: two would mount whichever loads first.
+2. **While you work:** `pnpm dev:experiments` here. It serves the overlay's source on port 5199 (the overlay's own Vite config, with CORS) and rebuilds the CLI on every change (`tsup --watch`).
+   - Page changes (toolbar, editors, dialog) show in the project on save, with hot reload.
+   - Server changes (hub, tools) need the agent to reconnect the `pilot` MCP server, or a new chat.
+   - Skill changes apply from the next chat.
+3. **Back to the published package:** `pnpm link-experiment <project folder> --unlink` (`npx -y usepilot mcp`, and a copy of the skill), and drop the `5199` import from the loader.
 
 ### Releasing `usepilot`
 

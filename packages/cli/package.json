@@ -11,7 +11,8 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "typecheck": "tsc -p ."
+    "typecheck": "tsc -p .",
+    "experiments": "tsup --watch"
   },
   "devDependencies": {
     "tsup": "^9.0.0"

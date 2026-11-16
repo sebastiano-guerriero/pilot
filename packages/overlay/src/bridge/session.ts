@@ -45,6 +45,11 @@ export interface SessionOptions {
   bridge: string | false;
   /** An agent ran /pilot for this page: launch Pilot. */
   onLaunch(agent: AgentInfo): void;
+  /**
+   * The page found an agent working on it (opened, or reloaded, after the
+   * agent ran /pilot): launch Pilot, unless the designer quit it in this tab.
+   */
+  onAgentsArrived?(): void;
 }
 
 export class PilotSession {
@@ -64,6 +69,7 @@ export class PilotSession {
           onLaunch: options.onLaunch,
           onJob: (job) => this.update(job),
           onConnect: () => this.repost(),
+          onAgentsArrived: options.onAgentsArrived,
         })
       : null;
     this.bridge?.subscribe(() => this.notify());

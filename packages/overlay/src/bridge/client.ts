@@ -21,6 +21,8 @@ export interface BridgeHandlers {
   onJob(job: Job): void;
   /** Connected (again): the page posts its unfinished jobs, in case the hub is new. */
   onConnect(): void;
+  /** An agent works on this page now (on connect, or the first one arriving). */
+  onAgentsArrived?(): void;
 }
 
 /**
@@ -131,6 +133,7 @@ export class BridgeClient {
         this.failures = 0;
         this.setState({ connected: true, agents: event.agents, waiting: event.waiting });
         if (arrived) this.handlers.onConnect();
+        if (arrived && event.agents.length > 0) this.handlers.onAgentsArrived?.();
         break;
       }
       case "launch":

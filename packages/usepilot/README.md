@@ -56,7 +56,17 @@ browser, in development.
 Pilot works with your coding agent: type `/pilot` in a chat, and Pilot opens
 in your app. Design, press **Send**, and the agent applies your edits while
 you keep going. Pilot shows each change until it's really in your code, and
-sends back to the agent what didn't land. Once per machine:
+sends back to the agent what didn't land.
+
+**For a repo you share**: from its root folder, then commit the two files it
+writes (`.claude/skills/pilot/SKILL.md` and `.mcp.json`), so everyone working
+in the repo gets `/pilot`:
+
+```bash
+npx usepilot setup --project
+```
+
+**Just for you, in every project** (nothing goes in the repo):
 
 ```bash
 npx usepilot setup

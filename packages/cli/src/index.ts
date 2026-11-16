@@ -12,7 +12,8 @@ const HELP = `usepilot: take the controls from your coding agent
 
 Usage: npx usepilot <command>
 
-  setup   Install the /pilot skill for Claude Code (every project)
+  setup   Set up /pilot in Claude Code, for every project on this machine
+          (--project: for this repo, to commit, so everyone gets it)
   mcp     Run the MCP server (stdio) agents connect to, and the bridge the
           page talks to. Agents start it: register it with your agent.
   help    Show this message
@@ -43,7 +44,12 @@ switch (command) {
     await runMcp();
     break;
   case "setup":
-    process.stdout.write(await setup());
+    try {
+      process.stdout.write(await setup({ project: process.argv.includes("--project") }));
+    } catch (error) {
+      process.stderr.write(`usepilot setup: ${(error as Error).message}\n`);
+      process.exitCode = 1;
+    }
     break;
   case "init":
     process.stderr.write(`pilot ${command}: not implemented yet.\n`);

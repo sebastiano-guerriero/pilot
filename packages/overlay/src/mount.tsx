@@ -93,6 +93,10 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
   const session = new PilotSession(history, {
     bridge: options.bridge ?? DEFAULT_BRIDGE_URL,
     onLaunch: () => instance.launch(),
+    // A page opened after /pilot: Pilot opens by itself, unless quit in this tab.
+    onAgentsArrived: () => {
+      if (readStoredRunning() !== false) instance.launch();
+    },
   });
 
   const setRunning = (next: boolean) => {

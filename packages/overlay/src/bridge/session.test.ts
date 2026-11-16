@@ -80,6 +80,20 @@ describe("PilotSession", () => {
     expect(s.unsent).toBe(1);
   });
 
+  it("a page opened after /pilot finds the agent: Pilot opens by itself, once", () => {
+    let arrived = 0;
+    const s = new PilotSession(history, { bridge: "http://hub", onLaunch: () => {}, onAgentsArrived: () => arrived++ });
+    (s.bridge as unknown as { EventSourceImpl: unknown }).EventSourceImpl = FakeEventSource;
+    s.start();
+    hub().emit({ type: "agents", agents: [], waiting: 0 });
+    expect(arrived).toBe(0);
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    expect(arrived).toBe(1);
+    // The agent starting and ending waits doesn't count as arriving again.
+    hub().emit({ type: "agents", agents: [agent], waiting: 0 });
+    expect(arrived).toBe(1);
+  });
+
   it("/pilot in the agent launches Pilot", () => {
     session();
     hub().emit({ type: "launch", agent });
