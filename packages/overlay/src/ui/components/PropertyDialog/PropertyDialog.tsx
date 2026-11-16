@@ -1,5 +1,5 @@
 import type { WidthRange } from "@pilot/protocol";
-import type { ComponentChildren } from "preact";
+import { type ComponentChildren, Fragment } from "preact";
 import { declaredValues } from "../../../dom/declared.ts";
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import type { BoxArea } from "../../../dom/boxModel.ts";
@@ -8,6 +8,7 @@ import { clearProperty } from "../../../edits/clear.ts";
 import { clickWidth, partialWidth, takeWidths } from "../../../edits/widths.ts";
 import { EditHistory } from "../../../edits/history.ts";
 import { editors as allEditors, matchEditors } from "../../../editors/registry.ts";
+import { groupOf, inListOrder } from "../../../editors/listOrder.ts";
 import { type FocusRequest, type PropertyEditor, propertiesOf } from "../../../editors/types.ts";
 import { px } from "../../px.ts";
 import { Icon } from "../Icon/Icon.tsx";
@@ -28,6 +29,12 @@ interface PropertyDialogProps {
    * the dev option's. Empty by default.
    */
   initialQuery?: string;
+  /**
+   * With nothing typed, list every editor, with a value or not (true), or
+   * only those for the properties the element has a value for (false).
+   * Defaults to LIST_ALL_EDITORS.
+   */
+  listAll?: boolean;
   /** The search text changed (App keeps it for the next selection). */
   onQueryChange?(query: string): void;
   /** Where changes are applied and recorded. App passes its shared one so undo spans selections. */
@@ -76,6 +83,7 @@ export function PropertyDialog({
   anchor,
   editors = allEditors,
   initialQuery = "",
+  listAll = LIST_ALL_EDITORS,
   onQueryChange,
   history: sharedHistory,
   onClose,
@@ -94,7 +102,10 @@ export function PropertyDialog({
   // list is taken when the search becomes empty and kept while you edit, so
   // clearing a value doesn't make its row vanish under the cursor.
   const empty = !query.trim();
-  const withValues = useMemo(() => (empty ? editorsWithValues(element, editors, history) : []), [element, empty]);
+  const withValues = useMemo(
+    () => (!empty ? [] : listAll ? listedEditors(editors) : editorsWithValues(element, editors, history)),
+    [element, empty, listAll],
+  );
   const matches = empty ? withValues : matchEditors(query, editors);
   const matchKey = matches.map((m) => m.id).join(",");
 
@@ -218,6 +229,14 @@ export function PropertyDialog({
     return () => window.removeEventListener("resize", repick);
   }, []);
   const { left, top } = dialogPosition(spot ?? dialogSpot(anchor, width, vw, scroll), { width, height }, { width: vw, height: vh }, scroll);
+  // When growing pushed it up (the list got taller than the room below),
+  // the spot moves up with it: shrinking afterwards (the / menu, a shorter
+  // list) keeps its top where it is instead of dropping back down.
+  useLayoutEffect(() => {
+    if (!spot) return;
+    const raised = raisedSpot(spot, { width, height }, { width: vw, height: vh }, scroll);
+    if (raised !== spot) setSpot(raised);
+  }, [height]);
 
   // Dragging the strip along the top edge moves the dialog where the designer
   // wants it: the spot follows the pointer (in page coordinates, so it still
@@ -282,24 +301,42 @@ export function PropertyDialog({
         // Wrapper for the property editors shown below the search. Only
         // rendered when something matches, so the empty dialog is just the search.
         <>
-          <div class="properties">
-            {/* Editors own everything inside `.editor` (see the @scope boundary in the CSS). */}
-            {matches.map((match, index) => (
-              <div class="editor" data-editor={match.id} key={match.id}>
-                <MatchedEditor
-                  editor={match}
-                  element={element}
-                  history={history}
-                  widths={widths ?? undefined}
-                  query={query}
-                  focusRequest={focus?.index === index ? focus.request : undefined}
-                  onReturnToSearch={returnToSearch}
-                  onTabOut={(direction) => tabOut(index, direction)}
-                  onHint={setEditorHint}
-                  onInspect={inspectFor(match.id)}
-                />
-              </div>
-            ))}
+          {/* The list scrolls inside the frame; the frame draws the line under the
+              search and the fades at the list's top and bottom edges. */}
+          <div class="properties-frame">
+            <div class="properties">
+              {/* Editors own everything inside `.editor` (see the @scope boundary in the CSS). */}
+              {matches.map((match, index) => {
+                // With nothing typed, the list is grouped (LIST_ORDER): each group
+                // starts with its label, after a dotted line between groups.
+                // Searching shows the matches alone, without labels.
+                const group = empty ? groupOf(match.id) : undefined;
+                const previous = matches[index - 1];
+                const startsGroup = !!group && (!previous || groupOf(previous.id) !== group);
+                return (
+                  <Fragment key={match.id}>
+                    {startsGroup && previous && <div class="group-divider" aria-hidden="true" />}
+                    {startsGroup && <div class="group-label">{group}</div>}
+                    <div class="editor" data-editor={match.id}>
+                      <MatchedEditor
+                        editor={match}
+                        element={element}
+                        history={history}
+                        widths={widths ?? undefined}
+                        query={query}
+                        focusRequest={focus?.index === index ? focus.request : undefined}
+                        onReturnToSearch={returnToSearch}
+                        onTabOut={(direction) => tabOut(index, direction)}
+                        onHint={setEditorHint}
+                        onInspect={inspectFor(match.id)}
+                      />
+                    </div>
+                  </Fragment>
+                );
+              })}
+            </div>
+            <div class="fade" data-edge="top" aria-hidden="true" />
+            <div class="fade" data-edge="bottom" aria-hidden="true" />
           </div>
           <footer class="footer" data-area={editorHint ? "editor-hint" : focusArea} aria-live="polite">
             {editorHint ?? <Hint area={focusArea} />}
@@ -308,6 +345,27 @@ export function PropertyDialog({
       )}
     </div>
   );
+}
+
+/**
+ * Temporary, while many editors are being added and designed together: with
+ * nothing typed, the dialog lists every editor, with a value or not, so they
+ * can all be seen side by side. Set it back to false to list only the
+ * properties the element has a value for (editorsWithValues).
+ */
+export const LIST_ALL_EDITORS = true;
+
+/**
+ * Every editor that can be listed (it writes properties), in LIST_ORDER. One
+ * another editor shows as its rows (display's grid and flex rows) is left to
+ * that one, as in editorsWithValues.
+ */
+function listedEditors(editors: PropertyEditor[]): PropertyEditor[] {
+  // Only rows of editors that are listed themselves count: size shows width
+  // and height as rows, but isn't listed (it writes nothing of its own).
+  const listable = editors.filter((e) => e.properties.length > 0);
+  const embedded = new Set(listable.flatMap((e) => e.embeds ?? []));
+  return inListOrder(listable.filter((e) => !embedded.has(e)));
 }
 
 /**
@@ -352,9 +410,25 @@ export function dialogPosition(
 }
 
 /**
+ * The spot moved up to where the dialog is drawn, when its height (not the
+ * scroll) pushed it above the spot to stay on screen; the same spot otherwise.
+ * Scrolling still only shifts the drawn dialog: a spot pushed up by a
+ * scroll would stay up after scrolling back.
+ */
+export function raisedSpot(
+  spot: { left: number; top: number },
+  size: { width: number; height: number },
+  viewport: { width: number; height: number },
+  scroll: { x: number; y: number },
+): { left: number; top: number } {
+  const top = viewport.height - GAP - size.height + scroll.y;
+  return top < spot.top ? { left: spot.left, top: Math.max(top, GAP + scroll.y) } : spot;
+}
+
+/**
  * The editors for the properties `element` has a value for (from any source:
  * stylesheets, classes, inline styles, Pilot's edits; removed ones don't
- * count), in registry order. An editor another one shows as its rows (gap
+ * count), in LIST_ORDER (editors/listOrder.ts). An editor another one shows as its rows (gap
  * under display: grid) is left to that one.
  */
 function editorsWithValues(element: EditableElement, editors: PropertyEditor[], history: EditHistory): PropertyEditor[] {
@@ -363,7 +437,7 @@ function editorsWithValues(element: EditableElement, editors: PropertyEditor[], 
   const isSet = (p: string) => !!declared[p];
   const shown = editors.filter((e) => e.properties.some(isSet));
   const embedded = new Set(shown.flatMap((e) => e.embeds ?? []));
-  return shown.filter((e) => !embedded.has(e));
+  return inListOrder(shown.filter((e) => !embedded.has(e)));
 }
 
 /**

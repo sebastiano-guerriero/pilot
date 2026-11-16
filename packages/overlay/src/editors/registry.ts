@@ -1,7 +1,9 @@
 import { alignItemsEditor } from "./align/AlignItemsEditor.tsx";
 import { aspectRatioEditor } from "./aspect-ratio/AspectRatioEditor.tsx";
+import { borderRadiusEditor } from "./border-radius/BorderRadiusEditor.tsx";
 import { displayEditor } from "./display/DisplayEditor.tsx";
 import { flexDirectionEditor, flexWrapEditor } from "./flex/FlexEditors.tsx";
+import { flexBasisEditor, flexGrowEditor, flexShrinkEditor } from "./flex-item/FlexItemEditors.tsx";
 import { gapEditor } from "./gap/GapEditor.tsx";
 import { colEndEditor, colSpanEditor, colStartEditor } from "./grid-column/GridColumnEditor.tsx";
 import { gridColumnsEditor } from "./grid-columns/GridColumnsEditor.tsx";
@@ -10,6 +12,18 @@ import { justifyContentEditor } from "./justify/JustifyContentEditor.tsx";
 import { marginEditor } from "./margin/MarginEditor.tsx";
 import { orderEditor } from "./order/OrderEditor.tsx";
 import { paddingEditor } from "./padding/PaddingEditor.tsx";
+import { positionEditor } from "./position/PositionEditor.tsx";
+import { insetEditor } from "./inset/InsetEditor.tsx";
+import {
+  fontFamilyEditor,
+  fontSizeEditor,
+  fontStyleEditor,
+  fontWeightEditor,
+  letterSpacingEditor,
+  lineHeightEditor,
+} from "./typography/TypographyEditors.tsx";
+import { visibilityEditor } from "./visibility/VisibilityEditor.tsx";
+import { zIndexEditor } from "./z-index/ZIndexEditor.tsx";
 import { sizeEditor } from "./size/SizeEditor.tsx";
 import { normalizeQuery } from "./query.ts";
 import type { PropertyEditor } from "./types.ts";
@@ -42,6 +56,20 @@ export const editors: PropertyEditor[] = [
   colStartEditor,
   colEndEditor,
   orderEditor,
+  flexGrowEditor,
+  flexShrinkEditor,
+  flexBasisEditor,
+  positionEditor,
+  insetEditor,
+  zIndexEditor,
+  borderRadiusEditor,
+  visibilityEditor,
+  fontFamilyEditor,
+  fontSizeEditor,
+  fontStyleEditor,
+  fontWeightEditor,
+  lineHeightEditor,
+  letterSpacingEditor,
 ];
 
 /**

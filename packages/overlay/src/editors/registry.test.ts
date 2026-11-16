@@ -136,5 +136,43 @@ describe("abbreviationPenalty", () => {
     for (const q of ["flex-wrap", "flex-nowrap", "flex-wrap-reverse"]) expect(await ids(q), q).toEqual(["flex-wrap"]);
     expect(await ids("flex")).toEqual(["display"]);
   });
+
+  it("typography: by name and Tailwind's font-*, text, italic, leading, tracking", async () => {
+    const { editors } = await import("./registry.ts");
+    const ids = async (q: string) => matchEditors(q, editors).map((e) => e.id);
+    expect(await ids("font")).toEqual(["font-family", "font-size", "font-style", "font-weight"]);
+    for (const [q, id] of [
+      ["font-family", "font-family"],
+      ["font-sans", "font-family"],
+      ["font-size", "font-size"],
+      ["text", "font-size"],
+      ["italic", "font-style"],
+      ["font-bold", "font-weight"],
+      ["weight", "font-weight"],
+      ["line-height", "line-height"],
+      ["leading", "line-height"],
+      ["letter-spacing", "letter-spacing"],
+      ["tracking", "letter-spacing"],
+    ] as const) {
+      expect(await ids(q), q).toEqual([id]);
+    }
+    // size still finds the size editor (width and height), not font-size.
+    expect(await ids("size")).toEqual(["size"]);
+  });
+
+  it("flex-grow, flex-shrink, flex-basis: by name and Tailwind's grow, shrink, basis", async () => {
+    const { editors } = await import("./registry.ts");
+    const ids = async (q: string) => matchEditors(q, editors).map((e) => e.id);
+    for (const [q, id] of [
+      ["flex-grow", "flex-grow"],
+      ["grow", "flex-grow"],
+      ["flex-shrink", "flex-shrink"],
+      ["shrink", "flex-shrink"],
+      ["flex-basis", "flex-basis"],
+      ["basis", "flex-basis"],
+    ] as const) {
+      expect(await ids(q), q).toEqual([id]);
+    }
+  });
 });
 

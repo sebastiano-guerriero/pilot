@@ -85,6 +85,18 @@ export function sourcesOf(property: string): Source[] {
       { property: kind, side: { of: "box", index: boxIndex } },
     ];
   }
+  // inset's sides are `top`, `right`… (no `inset-` prefix), from the same
+  // kinds of sources: inset-block-start, inset-block, inset.
+  if (SIDES.includes(property as Side)) {
+    const side = property as Side;
+    const [longhand, axis] = LOGICAL[side];
+    return [
+      { property },
+      { property: `inset-${longhand}` },
+      { property: `inset-${axis}`, side: { of: "pair", index: side === "top" || side === "left" ? 0 : 1 } },
+      { property: "inset", side: { of: "box", index: SIDES.indexOf(side) } },
+    ];
+  }
   // row-gap and column-gap also come from `gap: <row> <column>` (or one value
   // for both), when CSSOM can't expand it (var()).
   if (property === "row-gap" || property === "column-gap") {

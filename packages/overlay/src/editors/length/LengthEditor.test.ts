@@ -414,4 +414,52 @@ describe("drag to scrub", () => {
     move(97); // 3px up: +3 steps
     expect(changes.at(-1)).toEqual(["width", "2.3rem"]);
   });
+
+  // A line-height row whose computed value follows the edits.
+  const ScrubbedLineHeight = lengthEditor({ property: "line-height", label: "Line height", scrub: true }).component;
+  const mountLineHeight = () =>
+    act(() => {
+      render(
+        h(ScrubbedLineHeight, {
+          element,
+          values: { "line-height": element.style.lineHeight || "normal" },
+          onChange: (p: string, v: string, o?: { gesture?: object }) => {
+            history.apply(element, p, v, o?.gesture);
+            mountLineHeight();
+          },
+          onRevert: (p: string, g: object) => {
+            history.revert(element, p, g);
+            mountLineHeight();
+          },
+        }),
+        container,
+      );
+    });
+
+  it("line-height: unitless drags by tenths, down to 0 and back up right away; em by 0.1", () => {
+    element.style.lineHeight = "1.5";
+    mountLineHeight();
+    down(100);
+    move(95); // 5px up
+    expect(element.style.lineHeight).toBe("2");
+    move(130); // 30px down from the start: 0, not -1.5
+    expect(element.style.lineHeight).toBe("0");
+    move(128); // 2px back up
+    expect(element.style.lineHeight).toBe("0.2");
+    up();
+    element.style.lineHeight = "1.2em";
+    mountLineHeight();
+    down(100);
+    move(98);
+    expect(element.style.lineHeight).toBe("1.4em");
+  });
+
+  it("line-height: from nothing set (normal), drags unitless from 1.2", () => {
+    mountLineHeight();
+    down(100);
+    move(97);
+    expect(element.style.lineHeight).toBe("1.5");
+    move(105); // 5px below the start: 0.7, not held at 0
+    expect(element.style.lineHeight).toBe("0.7");
+  });
 });

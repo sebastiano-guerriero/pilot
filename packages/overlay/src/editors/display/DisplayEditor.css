@@ -1,9 +1,0 @@
-/* Display editor: the display row, plus the grid rows when grid is picked,
-   spaced like the dialog's editors (8px). */
-@scope (.display-editor) {
-  :scope {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-}

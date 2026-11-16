@@ -113,11 +113,11 @@ describe("grid rows", () => {
   it("are editors of their own: grid-columns, gap, justify-content, align-items, flex-direction, flex-wrap", () => {
     expect(displayEditor.embeds?.map((e) => e.id)).toEqual([
       "grid-columns",
+      "flex-direction",
+      "flex-wrap",
       "gap",
       "justify-content",
       "align-items",
-      "flex-direction",
-      "flex-wrap",
     ]);
     expect(gridColumnsEditor.properties).toEqual(["grid-template-columns"]);
   });

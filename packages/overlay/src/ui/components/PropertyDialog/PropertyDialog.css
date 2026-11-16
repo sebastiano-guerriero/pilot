@@ -11,6 +11,11 @@
     box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.1), var(--plt-shadow-lg);
     overflow: hidden;
     width: 260px;
+    /* Never taller than the window (8px from each edge): the properties
+       scroll instead, the search and the footer stay. */
+    max-height: calc(100vh - 16px);
+    display: flex;
+    flex-direction: column;
   }
 
   /* The drag strip: 12px along the top edge, over the search, full width (the
@@ -54,12 +59,59 @@
   }
 
   /* Wrapper for the property editors below the search. */
+  /* Holds the scrolling list, the line under the search, and the fades. */
+  .properties-frame {
+    position: relative;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--plt-color-border);
+  }
+
   .properties {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 12px 16px;
     display: flex;
     flex-direction: column;
     gap: 8px;
-    border-top: 1px solid var(--plt-color-border);
+  }
+
+  /* Rows fade out over 12px as they scroll under the lines above and below:
+     the dialog's background, going transparent toward the list. Separate
+     elements, not a mask on the list, so what opens out of it (a select's
+     menu) isn't cut off. 12px is the list's own padding, so nothing fades
+     when it doesn't scroll. Above the rows, below a menu (z-index 1). */
+  .fade {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 12px;
+    pointer-events: none;
+  }
+
+  .fade[data-edge="top"] {
+    top: 0;
+    background: linear-gradient(to bottom, var(--plt-color-background), transparent);
+  }
+
+  .fade[data-edge="bottom"] {
+    bottom: 0;
+    background: linear-gradient(to top, var(--plt-color-background), transparent);
+  }
+
+  /* The empty search's list is grouped (LIST_ORDER): a label starts each
+     group (the group's name, contrast-low), and a dotted line, like the
+     footer's, separates groups. */
+  .group-label {
+    color: var(--plt-color-contrast-low);
+    user-select: none;
+  }
+
+  .group-divider {
+    border-top: 1px dotted var(--plt-color-border);
+    margin-block: 4px;
   }
 
   /* Helper message below the properties: the keys for what the designer is

@@ -1,19 +1,27 @@
 import type { SideArea } from "../../dom/boxModel.ts";
+import type { IconName } from "../../ui/components/Icon/Icon.tsx";
 import type { PropertyEditor } from "../types.ts";
 import { type SplitPart, splitEditor } from "../split/SplitEditor.tsx";
 
 export type SideName = "top" | "right" | "bottom" | "left";
 const SIDES: SideName[] = ["top", "right", "bottom", "left"];
 
-/** A four-sided property (padding, margin), as a split editor of its sides. */
+/** A four-sided property (padding, margin, inset), as a split editor of its sides. */
 export interface SidesConfig {
   id: string;
   label: string;
   title: string;
   /** The shorthand: `padding`. Its sides are `padding-top`… */
   shorthand: string;
-  /** The box-model area each side's field shows on the page. */
-  box: SideArea["box"];
+  /** Each side's property, when it isn't `<shorthand>-<side>` (inset's are `top`, `left`…). */
+  sideProperty?: (side: SideName) => string;
+  /**
+   * The view button's icons: `<icons>-all` for one value, `<icons>-top`… for
+   * each side. Defaults to the box sides (`sides-all`, `side-top`…).
+   */
+  icons?: "inset";
+  /** The box-model area each side's field shows on the page; none when absent. */
+  box?: SideArea["box"];
   /** Tailwind's aliases: all sides, each side, each axis, the logical sides (start/end). */
   aliases: { all: string; top: string; right: string; bottom: string; left: string; x: string; y: string; start: string; end: string };
 }
@@ -37,10 +45,10 @@ export function sidesEditor(config: SidesConfig): PropertyEditor {
   };
   const parts: SplitPart[] = SIDES.map((side) => ({
     key: side,
-    property: `${s}-${side}`,
+    property: config.sideProperty?.(side) ?? `${s}-${side}`,
     label: `${config.title} ${side}`,
-    icon: `side-${side}`,
-    area: { box: config.box, side },
+    icon: (config.icons ? `${config.icons}-${side}` : `side-${side}`) as IconName,
+    area: config.box ? { box: config.box, side } : undefined,
     aliases: [a[side], ...logical[side]],
   }));
   return splitEditor({
@@ -48,7 +56,7 @@ export function sidesEditor(config: SidesConfig): PropertyEditor {
     label: config.label,
     title: config.title,
     shorthand: s,
-    icon: "sides-all",
+    icon: config.icons ? `${config.icons}-all` : "sides-all",
     allAliases: [a.all],
     parts,
     pairs: [

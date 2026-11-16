@@ -1,6 +1,6 @@
 import { useRef } from "preact/hooks";
 import { cssProperty } from "../../css/properties.ts";
-import { scrubIncrement, stepValue } from "../../css/values.ts";
+import { scrubIncrement, stepSize, stepValue } from "../../css/values.ts";
 import type { PropertyEditorProps } from "../types.ts";
 
 /** What a drag changes. */
@@ -38,9 +38,11 @@ export function useScrub({ onChange, onRevert }: Pick<PropertyEditorProps, "onCh
     }
     const d = drag.current;
     const increment = scrubIncrement(startText);
+    // What one step moves the value by (a unitless line-height steps by tenths).
+    const moved = increment * stepSize(property, startText, d.base);
     let offset = steps - d.shift;
-    if (!cssProperty(property).negative && Number.isFinite(d.start) && d.start + offset * increment < 0) {
-      const floor = -d.start / increment;
+    if (!cssProperty(property).negative && Number.isFinite(d.start) && d.start + offset * moved < 0) {
+      const floor = -d.start / moved;
       d.shift += offset - floor;
       offset = floor;
     }

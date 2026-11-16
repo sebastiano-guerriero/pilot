@@ -29,4 +29,4 @@
 /* Property editors */
 @import "../../editors/split/SplitEditor.css" layer(components);
 @import "../../editors/size/SizeEditor.css" layer(components);
-@import "../../editors/display/DisplayEditor.css" layer(components);
+@import "../../editors/reveal/RevealEditor.css" layer(components);

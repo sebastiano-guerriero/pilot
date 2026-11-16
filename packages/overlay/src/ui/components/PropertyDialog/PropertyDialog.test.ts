@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EDIT_ATTRIBUTE, PREVIEW_ATTRIBUTE } from "../../../dom/preview.ts";
 import { EditHistory } from "../../../edits/history.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../../../editors/types.ts";
-import { PropertyDialog, type WidthPick, dialogPosition, dialogSpot } from "./PropertyDialog.tsx";
+import { PropertyDialog, type WidthPick, dialogPosition, dialogSpot, raisedSpot } from "./PropertyDialog.tsx";
 
 // Stub editors: render their id and the values they receive, expose onChange,
 // record the focus requests they get, and can hand focus back to the search.
@@ -54,7 +54,8 @@ afterEach(() => {
 const mount = () =>
   act(() => {
     render(
-      h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors, onClose: () => closed++ }),
+      // listAll off: these tests are about what the search shows.
+      h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors, listAll: false, onClose: () => closed++ }),
       container,
     );
   });
@@ -357,14 +358,15 @@ describe("declared values", () => {
     element.className = "box";
     element.style.opacity = "0.5";
     act(() => {
-      render(h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors }), container);
+      render(h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors, listAll: false }), container);
     });
-    // opacity (inline) and gap (stylesheet), in registry order; padding has no value.
-    expect(editorIds()).toEqual(["opacity", "gap"]);
+    // gap (stylesheet) and opacity (inline), in LIST_ORDER (layout before
+    // appearance); padding has no value.
+    expect(editorIds()).toEqual(["gap", "opacity"]);
     type("pad");
     expect(editorIds()).toEqual(["padding"]);
     type("");
-    expect(editorIds()).toEqual(["opacity", "gap"]);
+    expect(editorIds()).toEqual(["gap", "opacity"]);
     style.remove();
   });
 
@@ -374,7 +376,7 @@ describe("declared values", () => {
     const gap = stub("gap", ["gap"]);
     const display: PropertyEditor = { ...stub("display", ["display"]), embeds: [gap] };
     act(() => {
-      render(h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors: [display, gap] }), container);
+      render(h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors: [display, gap], listAll: false }), container);
     });
     expect(editorIds()).toEqual(["display"]);
   });
@@ -546,6 +548,22 @@ describe("placement", () => {
     expect(dialogPosition(spot, { width: 260, height: 500 }, viewport, noScroll).top).toBe(292);
   });
 
+  it("growing past the bottom moves the spot up with it, so shrinking keeps the top", () => {
+    const spot = { left: 208, top: 400 };
+    // 500px tall: pushed up to 292, and the spot moves there.
+    const raised = raisedSpot(spot, { width: 260, height: 500 }, viewport, noScroll);
+    expect(raised).toEqual({ left: 208, top: 292 });
+    // Shrunk to 100px (the / menu): drawn at the raised spot, not back at 400.
+    expect(dialogPosition(raised, { width: 260, height: 100 }, viewport, noScroll).top).toBe(292);
+    // Room enough: the spot stays.
+    expect(raisedSpot(spot, { width: 260, height: 200 }, viewport, noScroll)).toBe(spot);
+    // In page coordinates, and never above the window's top edge.
+    expect(raisedSpot({ left: 208, top: 700 }, { width: 260, height: 900 }, viewport, { x: 0, y: 100 })).toEqual({
+      left: 208,
+      top: 108,
+    });
+  });
+
   it("editing the element doesn't move the dialog: its box changing later is ignored", () => {
     const at = (rect: Partial<DOMRect>) => ({ left: 100, right: 200, top: 50, bottom: 80, width: 100, height: 30, ...rect }) as DOMRect;
     const draw = (anchor: DOMRect) =>
@@ -582,6 +600,34 @@ describe("placement", () => {
     pointer("pointerup", -5000, -5000);
     expect(dialog().hasAttribute("data-dragging")).toBe(false);
     delete (document.documentElement as { clientWidth?: number }).clientWidth;
+  });
+
+  it("with nothing typed, the list is grouped: a label per group; searching shows no labels", async () => {
+    const { editors: registry } = await import("../../../editors/registry.ts");
+    element.style.width = "100px";
+    element.style.paddingTop = "4px";
+    act(() => {
+      render(h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors: registry, listAll: false }), container);
+    });
+    const labels = () => [...container.querySelectorAll(".group-label")].map((l) => l.textContent);
+    expect(labels()).toEqual(["Layout"]);
+    expect(container.querySelector(".group-divider")).toBeNull(); // one group: nothing to separate
+    type("pad");
+    expect(labels()).toEqual([]);
+  });
+
+  it("listAll (the default for now): with nothing typed, every editor, with a value or not, in list order", async () => {
+    const { editors: registry } = await import("../../../editors/registry.ts");
+    act(() => {
+      render(h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors: registry }), container);
+    });
+    const ids = editorIds();
+    expect(ids[0]).toBe("display");
+    expect(ids.slice(0, 7)).toEqual(["display", "width", "min-width", "max-width", "height", "min-height", "max-height"]);
+    expect(ids).toContain("padding");
+    expect(ids).toContain("aspect-ratio");
+    expect(ids).not.toContain("gap"); // shown by display, as its row
+    expect(ids).not.toContain("size"); // writes nothing of its own
   });
 });
 

@@ -57,6 +57,10 @@ export interface CssPropertyInfo {
    * What the value is (css/values.ts parses, shows and steps each kind):
    * - "length" (the default): `120` is px, units, math (width, padding…);
    * - "integer": a whole number, no unit (order);
+   * - "number": a number, no unit, decimals allowed (flex-grow, flex-shrink);
+   * - "line-height": a bare number stays unitless (`1.5`); lengths and
+   *   percentages as usual. Unitless values step by tenths.
+   * - "font-family": a list of font names, as typed (case kept). Not stepped.
    * - "grid-line": a line number (not 0), `span 2`, or `auto` (grid-column-start/end);
    * - "grid-span": how many columns an item spans, for the grid-column
    *   shorthand: `3` writes `span 3 / span 3` (Tailwind's col-span-3), `full`
@@ -64,7 +68,7 @@ export interface CssPropertyInfo {
    * - "ratio": a width / height ratio (aspect-ratio): `16/9`, `16 / 9` or
    *   `16:9` write `16 / 9`; one number (`1.5`) is that ratio to 1. Not stepped.
    */
-  kind?: "length" | "integer" | "grid-line" | "grid-span" | "ratio";
+  kind?: "length" | "integer" | "number" | "line-height" | "font-family" | "grid-line" | "grid-span" | "ratio";
 }
 
 const SIZE_KEYWORDS = ["auto", "fit-content", "min-content", "max-content", "stretch"];
@@ -97,6 +101,18 @@ export const FLEX_DIRECTION_VALUES = ["row", "row-reverse", "column", "column-re
 /** flex-wrap's options, in menu order. */
 export const FLEX_WRAP_VALUES = ["nowrap", "wrap", "wrap-reverse"] as const;
 
+/** position's options, in menu order. */
+export const POSITION_VALUES = ["static", "relative", "absolute", "fixed", "sticky"] as const;
+
+/** font-style's options, in menu order. */
+export const FONT_STYLE_VALUES = ["normal", "italic", "oblique"] as const;
+
+/** The font weights the select offers, thin to black. */
+export const FONT_WEIGHTS = ["100", "200", "300", "400", "500", "600", "700", "800", "900"] as const;
+
+/** visibility's options, in menu order. */
+export const VISIBILITY_VALUES = ["visible", "hidden", "collapse"] as const;
+
 export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   display: { initial: "inline", keywords: [...DISPLAY_VALUES], negative: false },
   "grid-template-columns": { initial: "none", keywords: ["none"], negative: false },
@@ -108,6 +124,9 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   "flex-direction": { initial: "row", keywords: [...FLEX_DIRECTION_VALUES], negative: false },
   "flex-wrap": { initial: "nowrap", keywords: [...FLEX_WRAP_VALUES], negative: false },
   order: { initial: "0", keywords: [], negative: true, kind: "integer" },
+  "flex-grow": { initial: "0", keywords: [], negative: false, kind: "number" },
+  "flex-shrink": { initial: "1", keywords: [], negative: false, kind: "number" },
+  "flex-basis": { initial: "auto", keywords: ["content", ...SIZE_KEYWORDS], negative: false },
   "grid-column": { initial: "auto", keywords: ["auto"], negative: false, kind: "grid-span" },
   "grid-column-start": { initial: "auto", keywords: ["auto"], negative: true, kind: "grid-line" },
   "grid-column-end": { initial: "auto", keywords: ["auto"], negative: true, kind: "grid-line" },
@@ -120,6 +139,22 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   "aspect-ratio": { initial: "auto", keywords: ["auto"], negative: false, kind: "ratio" },
   ...sides((side) => `padding-${side}`, { initial: "0", keywords: [], negative: false }),
   ...sides((side) => `margin-${side}`, { initial: "0", keywords: ["auto"], negative: true }),
+  position: { initial: "static", keywords: [...POSITION_VALUES], negative: false },
+  "z-index": { initial: "auto", keywords: ["auto"], negative: true, kind: "integer" },
+  visibility: { initial: "visible", keywords: [...VISIBILITY_VALUES], negative: false },
+  "border-radius": { initial: "0", keywords: [], negative: false },
+  "font-family": { initial: "", keywords: [], negative: false, kind: "font-family" },
+  "font-size": {
+    initial: "medium",
+    keywords: ["xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large", "xxx-large", "smaller", "larger"],
+    negative: false,
+  },
+  "font-style": { initial: "normal", keywords: [...FONT_STYLE_VALUES], negative: false },
+  "font-weight": { initial: "normal", keywords: ["normal", "bold", "bolder", "lighter"], negative: false, kind: "number" },
+  "line-height": { initial: "normal", keywords: ["normal"], negative: false, kind: "line-height" },
+  "letter-spacing": { initial: "normal", keywords: ["normal"], negative: true },
+  // inset's sides: the offsets of a positioned element.
+  ...sides((side) => side, { initial: "auto", keywords: ["auto"], negative: true }),
 };
 
 /** The same info for the four sides of a box property. */

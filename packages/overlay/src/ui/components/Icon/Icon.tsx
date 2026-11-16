@@ -37,18 +37,62 @@ const BARS = {
 const sides = (...names: Array<keyof typeof BARS>) => layout(names.map((n) => BARS[n]));
 
 /**
- * A gap icon: the cell (a 12×12 square, contrast-high at 20%) and an accent
- * bar (2px) through its middle for each gap it stands for: a horizontal one
- * for the gap between rows, a vertical one for the gap between columns.
+ * An inset icon: the frame, and an accent bar (2px) from the side it stands
+ * for to the center. Top is designed; the other sides rotate it.
  */
-const GAP_BARS = { row: "M12 5V7H0V5H12Z", column: "M5 0H7V12H5V0Z" } as const;
-const gap = (...bars: Array<keyof typeof GAP_BARS>) => ({
+const INSET_BARS = {
+  top: { x: 5, y: 0, w: 2, h: 6 },
+  right: { x: 6, y: 5, w: 6, h: 2 },
+  bottom: { x: 5, y: 6, w: 2, h: 6 },
+  left: { x: 0, y: 5, w: 6, h: 2 },
+} as const;
+const insets = (...names: Array<keyof typeof INSET_BARS>) => layout(names.map((n) => INSET_BARS[n]));
+
+/**
+ * A gap icon: the cells (contrast-high at 20%) on either side of each gap,
+ * and an accent bar (2px) through the middle for each gap it stands for: a
+ * horizontal one for the gap between rows (gap-y), a vertical one for the
+ * gap between columns (gap-x). Both and the row gap are designed; the column
+ * gap rotates the row gap.
+ */
+type Rect = { x: number; y: number; w: number; h: number };
+const GAP_ICONS = {
+  all: {
+    cells: [
+      { x: 0, y: 0, w: 4, h: 4 },
+      { x: 8, y: 0, w: 4, h: 4 },
+      { x: 0, y: 8, w: 4, h: 4 },
+      { x: 8, y: 8, w: 4, h: 4 },
+    ],
+    bars: [
+      { x: 5, y: 0, w: 2, h: 12 },
+      { x: 0, y: 5, w: 12, h: 2 },
+    ],
+  },
+  row: {
+    cells: [
+      { x: 0, y: 0, w: 12, h: 4 },
+      { x: 0, y: 8, w: 12, h: 4 },
+    ],
+    bars: [{ x: 0, y: 5, w: 12, h: 2 }],
+  },
+  column: {
+    cells: [
+      { x: 0, y: 0, w: 4, h: 12 },
+      { x: 8, y: 0, w: 4, h: 12 },
+    ],
+    bars: [{ x: 5, y: 0, w: 2, h: 12 }],
+  },
+} satisfies Record<string, { cells: Rect[]; bars: Rect[] }>;
+const gap = (kind: keyof typeof GAP_ICONS) => ({
   size: 12,
   body: (
     <>
-      <path d="M12 0V12H0V0H12Z" fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
-      {bars.map((b) => (
-        <path key={b} d={GAP_BARS[b]} fill="var(--plt-color-accent)" />
+      {GAP_ICONS[kind].cells.map(({ x, y, w, h }) => (
+        <rect key={`${x},${y}`} x={x} y={y} width={w} height={h} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+      ))}
+      {GAP_ICONS[kind].bars.map(({ x, y, w, h }) => (
+        <rect key={`${x},${y},${w}`} x={x} y={y} width={w} height={h} fill="var(--plt-color-accent)" />
       ))}
     </>
   ),
@@ -156,8 +200,14 @@ const ICONS = {
   "side-right": sides("right"),
   "side-bottom": sides("bottom"),
   "side-left": sides("left"),
-  // Gaps: both (the designed icon), then the row gap and the column gap alone.
-  "gap-all": gap("column", "row"),
+  // Inset sides: top is designed; right, bottom, left and all four are derived.
+  "inset-all": insets("top", "right", "bottom", "left"),
+  "inset-top": insets("top"),
+  "inset-right": insets("right"),
+  "inset-bottom": insets("bottom"),
+  "inset-left": insets("left"),
+  // Gaps: both and the row gap (gap-y) are designed; the column gap (gap-x) rotates the row gap.
+  "gap-all": gap("all"),
   "gap-row": gap("row"),
   "gap-column": gap("column"),
   // flex-direction: row and column are designed; the reverses mirror them.

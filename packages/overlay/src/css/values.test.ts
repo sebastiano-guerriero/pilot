@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 import { cssProperty, LENGTH_UNITS } from "./properties.ts";
-import { displayValue, parseValue, scrubIncrement, stepValue } from "./values.ts";
+import { displayValue, parseValue, scrubIncrement, stepSize, stepValue } from "./values.ts";
 
 describe("parseValue", () => {
   it("takes a bare number as px", () => {
@@ -90,6 +90,82 @@ describe("scrubIncrement", () => {
 });
 
 describe("other kinds of value", () => {
+  it("flex-grow and flex-shrink: numbers without a unit, decimals too, never negative", () => {
+    expect(parseValue("flex-grow", "1")).toBe("1");
+    expect(parseValue("flex-grow", "0.5")).toBe("0.5");
+    expect(parseValue("flex-grow", ".5")).toBe("0.5");
+    expect(parseValue("flex-shrink", "0")).toBe("0");
+    expect(parseValue("flex-grow", "-1")).toBeNull();
+    expect(parseValue("flex-grow", "2px")).toBeNull();
+    expect(stepValue("flex-grow", "0.5", 1, "0.5")).toBe("1.5");
+    expect(stepValue("flex-grow", "", 1, "0")).toBe("1");
+    expect(stepValue("flex-shrink", "0", -1, "0")).toBe("0");
+  });
+
+  it("font-family: names as typed, case kept, joined with commas", () => {
+    expect(parseValue("font-family", "Inter")).toBe("Inter");
+    expect(parseValue("font-family", "  Inter ,sans-serif ")).toBe("Inter, sans-serif");
+    expect(parseValue("font-family", '"Geist Mono", monospace')).toBe('"Geist Mono", monospace');
+    expect(parseValue("font-family", "var(--font-sans)")).toBe("var(--font-sans)");
+    expect(parseValue("font-family", "Inherit")).toBe("inherit");
+    expect(parseValue("font-family", "Inter,")).toBeNull();
+    expect(stepValue("font-family", "Inter", 1, undefined)).toBeNull();
+  });
+
+  it("line-height: a bare number stays unitless and steps by tenths; lengths as usual", () => {
+    expect(parseValue("line-height", "1.5")).toBe("1.5");
+    expect(parseValue("line-height", "24px")).toBe("24px");
+    expect(parseValue("line-height", "150%")).toBe("150%");
+    expect(parseValue("line-height", "normal")).toBe("normal");
+    expect(parseValue("line-height", "-1")).toBeNull();
+    expect(stepValue("line-height", "1.5", 1, "24px")).toBe("1.6");
+    expect(stepValue("line-height", "1.5", 10, "24px")).toBe("2.5");
+    expect(stepValue("line-height", "24px", 1, "24px")).toBe("25px");
+    expect(stepValue("line-height", "", 1, "normal")).toBe("1.3");
+    expect(stepValue("line-height", "1.2em", 0.2, "19px")).toBe("1.4em");
+    expect(stepSize("line-height", "1.5")).toBe(0.1);
+    expect(stepSize("line-height", "24px")).toBe(1);
+    expect(stepSize("width", "1.5")).toBe(1);
+    expect(stepSize("line-height", "", "normal")).toBe(0.1);
+    expect(stepSize("line-height", "", "24px")).toBe(1);
+  });
+
+  it("font-size, font-weight, letter-spacing", () => {
+    expect(parseValue("font-size", "16")).toBe("16px");
+    expect(parseValue("font-size", "1.25rem")).toBe("1.25rem");
+    expect(parseValue("font-size", "larger")).toBe("larger");
+    expect(parseValue("font-size", "-2")).toBeNull();
+    expect(parseValue("font-weight", "450")).toBe("450");
+    expect(parseValue("font-weight", "bold")).toBe("bold");
+    expect(parseValue("font-weight", "-100")).toBeNull();
+    expect(parseValue("letter-spacing", "-0.02em")).toBe("-0.02em");
+    expect(parseValue("letter-spacing", "normal")).toBe("normal");
+  });
+
+  it("border-radius: a length or a percentage, never negative", () => {
+    expect(parseValue("border-radius", "8")).toBe("8px");
+    expect(parseValue("border-radius", "50%")).toBe("50%");
+    expect(parseValue("border-radius", "-4")).toBeNull();
+    expect(stepValue("border-radius", "", 1, "0px")).toBe("1px");
+  });
+
+  it("flex-basis: a length or a size keyword", () => {
+    expect(parseValue("flex-basis", "200")).toBe("200px");
+    expect(parseValue("flex-basis", "50%")).toBe("50%");
+    expect(parseValue("flex-basis", "auto")).toBe("auto");
+    expect(parseValue("flex-basis", "content")).toBe("content");
+    expect(parseValue("flex-basis", "-10")).toBeNull();
+  });
+
+  it("z-index: whole numbers, negatives and auto; steps from auto start at 0", () => {
+    expect(parseValue("z-index", "10")).toBe("10");
+    expect(parseValue("z-index", "-1")).toBe("-1");
+    expect(parseValue("z-index", "auto")).toBe("auto");
+    expect(parseValue("z-index", "2px")).toBeNull();
+    expect(stepValue("z-index", "auto", 1, "auto")).toBe("1");
+    expect(stepValue("z-index", "0", -1, "0")).toBe("-1");
+  });
+
   it("order: whole numbers, no unit, negatives allowed", () => {
     expect(parseValue("order", "3")).toBe("3");
     expect(parseValue("order", "-1")).toBe("-1");

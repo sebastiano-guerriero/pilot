@@ -54,6 +54,14 @@ describe("shorthands and logical properties", () => {
       "margin-block",
       "margin",
     ]);
+    // inset's sides have no prefix: `top` comes from inset-block-start, inset-block, inset.
+    expect(sourcesOf("top")).toEqual([
+      { property: "top" },
+      { property: "inset-block-start" },
+      { property: "inset-block", side: { of: "pair", index: 0 } },
+      { property: "inset", side: { of: "box", index: 0 } },
+    ]);
+    expect(sourcesOf("left").map((s) => s.property)).toEqual(["left", "inset-inline-start", "inset-inline", "inset"]);
     expect(sourcesOf("width")).toEqual([{ property: "width" }]);
   });
 

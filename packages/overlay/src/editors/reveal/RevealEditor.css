@@ -1,0 +1,9 @@
+/* A revealing editor (display, position): the select's row, plus the rows its
+   value reveals, spaced like the dialog's editors (8px). */
+@scope (.reveal-editor) {
+  :scope {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+}

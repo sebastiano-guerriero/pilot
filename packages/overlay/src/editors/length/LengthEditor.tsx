@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { cssProperty } from "../../css/properties.ts";
 import { displayValue, parseValue, stepValue } from "../../css/values.ts";
 import type { BoxArea } from "../../dom/boxModel.ts";
 import { type InputDraft, PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
@@ -83,6 +84,8 @@ export function LengthEditor({
   // height for those families (max-width: none), or 0 (gap: normal).
   const stepBase = () => {
     if (computed && Number.isFinite(Number.parseFloat(computed))) return computed;
+    // line-height: normal steps from 1.2, unitless (css/values.ts), not 0px.
+    if (cssProperty(property).kind === "line-height") return computed ?? "normal";
     const size = /^(?:min-|max-)?(width|height)$/.exec(property)?.[1];
     return size ? getComputedStyle(element).getPropertyValue(size) : "0px";
   };

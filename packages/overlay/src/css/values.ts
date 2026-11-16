@@ -64,9 +64,10 @@ function spanCount(value: string): string | null {
 export function parseValue(property: string, text: string): string | null {
   let t = text.trim().toLowerCase().replace(/\s+/g, " ");
   if (!t) return null;
+  const info = cssProperty(property);
+  if (info.kind === "font-family") return supported(property, parseFontFamily(text, t));
   t = unwrapCalc(t) ?? t; // typed calc(): we add it back where needed
 
-  const info = cssProperty(property);
   const isKeyword = info.keywords.includes(t) || (GLOBAL_KEYWORDS as readonly string[]).includes(t);
   let candidate: string | null = null;
   if (isKeyword || FUNCTION.test(t)) candidate = t;
@@ -76,20 +77,72 @@ export function parseValue(property: string, text: string): string | null {
     if (lengthPattern(info.negative).test(t)) candidate = t;
     else if (isMath(t)) candidate = `calc(${normalizeMath(t)})`;
   }
-  if (!candidate) return null;
+  return supported(property, candidate);
+}
 
+/** The candidate, if the browser accepts it for `property` (where `CSS.supports` is real). */
+function supported(property: string, candidate: string | null): string | null {
+  if (!candidate) return null;
   if (typeof CSS !== "undefined" && typeof CSS.supports === "function" && !CSS.supports(property, candidate)) return null;
   return candidate;
 }
 
+/**
+ * A font-family list as typed, case kept (`Inter, sans-serif`): the names
+ * trimmed and joined with ", ". Global keywords and var() as they are.
+ */
+function parseFontFamily(text: string, lower: string): string | null {
+  if ((GLOBAL_KEYWORDS as readonly string[]).includes(lower)) return lower;
+  const typed = text.trim().replace(/\s+/g, " ");
+  if (FUNCTION.test(lower)) return typed;
+  const names = splitTopLevel(typed).map((n) => n.trim());
+  return names.every((n) => n) ? names.join(", ") : null;
+}
+
+/** Split on commas that aren't inside quotes or parentheses. */
+function splitTopLevel(text: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let quote: string | null = null;
+  let current = "";
+  for (const ch of text) {
+    if (quote) {
+      if (ch === quote) quote = null;
+    } else if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    else if (ch === "," && depth === 0) {
+      parts.push(current);
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  parts.push(current);
+  return parts;
+}
+
 /** parseValue for the kinds that aren't lengths (keywords and functions are handled before). */
-function parseOther(kind: "integer" | "grid-line" | "grid-span" | "ratio", negative: boolean, t: string): string | null {
+function parseOther(kind: "integer" | "number" | "line-height" | "grid-line" | "grid-span" | "ratio", negative: boolean, t: string): string | null {
   const integer = /^-?\d+$/.test(t) ? Number(t) : null;
   const span = t.match(/^span ?(\d+)$/);
   switch (kind) {
     case "integer":
       if (integer !== null) return negative || integer >= 0 ? String(integer) : null;
       return isMath(t) ? `calc(${normalizeMath(t)})` : null;
+    case "number": {
+      // A plain number, no unit, decimals allowed (flex-grow: 0.5).
+      const number = /^-?\d*\.?\d+$/.test(t) ? Number(t) : null;
+      if (number !== null) return negative || number >= 0 ? String(number) : null;
+      return isMath(t) ? `calc(${normalizeMath(t)})` : null;
+    }
+    case "line-height": {
+      // A bare number stays unitless (a multiple of the font size), unlike
+      // lengths, where it would be px; lengths and percentages as usual.
+      if (/^\d*\.?\d+$/.test(t)) return String(Number(t));
+      if (lengthPattern(false).test(t)) return t;
+      return isMath(t) ? `calc(${normalizeMath(t)})` : null;
+    }
     case "grid-line":
       // Lines are numbered from 1 (or from -1 at the end): there's no line 0.
       if (integer !== null) return integer !== 0 ? String(integer) : null;
@@ -128,7 +181,12 @@ export function normalizeRatio(text: string): string | null {
 export function stepValue(property: string, text: string, delta: number, computed: string | undefined): string | null {
   const info = cssProperty(property);
   const t = displayValue(text.trim().toLowerCase(), property);
-  if (info.kind && info.kind !== "length") return stepOther(info.kind, info, t, Math.round(delta), computed);
+  if (info.kind === "font-family") return null; // names: nothing to step
+  // Whole steps for the other kinds, except line-height, whose lengths drag
+  // finely like any length (0.1em).
+  if (info.kind && info.kind !== "length") {
+    return stepOther(info.kind, info, t, info.kind === "line-height" ? delta : Math.round(delta), computed);
+  }
   const match = t.match(/^(-?\d*\.?\d+)([a-z%]*)$/);
   let n: number;
   let unit: string;
@@ -151,12 +209,13 @@ export function stepValue(property: string, text: string, delta: number, compute
 /**
  * stepValue for the kinds that aren't lengths, by whole numbers:
  * - integer: from an empty field, from the computed value (order: 0);
+ * - number: the same, by whole numbers, keeping decimals (0.5 → 1.5);
  * - grid-line: skips 0 (1 → -1); `span N` steps N, from 1; from empty or
  *   `auto`, ↑ gives 1 and ↓ gives -1;
  * - grid-span: the count, from 1 (the default: ↓ on an empty field writes nothing).
  */
 function stepOther(
-  kind: "integer" | "grid-line" | "grid-span" | "ratio",
+  kind: "integer" | "number" | "line-height" | "grid-line" | "grid-span" | "ratio",
   info: { keywords: string[]; negative: boolean },
   t: string,
   delta: number,
@@ -169,6 +228,28 @@ function stepOther(
       const n = integer ?? (blank ? Number.parseInt(computed ?? "", 10) || 0 : null);
       if (n === null) return null;
       return String(info.negative ? n + delta : Math.max(0, n + delta));
+    }
+    case "number": {
+      const number = /^-?\d*\.?\d+$/.test(t) ? Number(t) : null;
+      const n = number ?? (blank ? Number.parseFloat(computed ?? "") || 0 : null);
+      if (n === null) return null;
+      const next = Math.round((n + delta) * 100) / 100;
+      return String(info.negative ? next : Math.max(0, next));
+    }
+    case "line-height": {
+      // Unitless by tenths (1.5 → 1.6, Shift: 2.5); lengths by whole units,
+      // keeping the unit. From normal (or nothing set), unitless from 1.2,
+      // about what normal is.
+      const unitless = t.match(/^\d*\.?\d+$/);
+      const length = t.match(/^(\d*\.?\d+)([a-z%]+)$/);
+      const round = (n: number) => Math.max(0, Math.round(n * 100) / 100);
+      if (unitless) return String(round(Number(t) + delta / 10));
+      if (length && (LENGTH_UNITS as readonly string[]).includes(length[2] as string)) {
+        return `${round(Number(length[1]) + delta)}${length[2]}`;
+      }
+      if (!blank) return null;
+      const px = computed?.match(/^(\d*\.?\d+)px$/);
+      return px ? `${round(Number(px[1]) + delta)}px` : String(round(1.2 + delta / 10));
     }
     case "grid-line": {
       const span = t.match(/^span (\d+)$/);
@@ -225,6 +306,18 @@ const FINE_UNITS = ["em", "rem", "lh", "rlh", "ex", "ch", "cm", "in", "pc"];
  * How much one drag step (scrub) changes a value: 0.1 for font-relative
  * units like rem, where 1 is a big jump, 1 otherwise (px, %, vw…).
  */
+/**
+ * How much the value moves for a step of 1: 0.1 for a unitless line-height
+ * (it steps by tenths; an empty field too, unless it steps from a computed px
+ * value), 1 otherwise. Drags use it to stop at 0.
+ */
+export function stepSize(property: string, text: string, computed?: string): number {
+  if (cssProperty(property).kind !== "line-height") return 1;
+  const t = displayValue(text.trim());
+  const unitless = /^\d*\.?\d+$/.test(t) || ((t === "" || t === "normal") && !/px$/.test(computed ?? ""));
+  return unitless ? 0.1 : 1;
+}
+
 export function scrubIncrement(text: string): number {
   const unit = displayValue(text.trim().toLowerCase()).match(/^-?\d*\.?\d+([a-z%]*)$/)?.[1] ?? "";
   return FINE_UNITS.includes(unit) ? 0.1 : 1;

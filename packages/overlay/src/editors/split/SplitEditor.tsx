@@ -19,8 +19,8 @@ export interface SplitPart {
   label: string;
   /** Its icon in the view button (sides view): `side-top`, `gap-row`. */
   icon: IconName;
-  /** What its field shows on the page while hovered or focused. */
-  area: BoxArea;
+  /** What its field shows on the page while hovered or focused; nothing when absent (inset). */
+  area?: BoxArea;
   /**
    * Search words that land on this part (besides its property): Tailwind's
    * (`pt`, `gap-y`) and the logical properties for it (`padding-block-start`).
@@ -172,7 +172,8 @@ export function SplitEditor({
   const inspecting = focused ?? hovered;
   useLayoutEffect(() => {
     if (!inspecting) return onInspect?.(null);
-    onInspect?.(inspecting === "all" ? parts.map((p) => p.area) : [partOf(inspecting).area]);
+    const areas = (inspecting === "all" ? parts : [partOf(inspecting)]).flatMap((p) => (p.area ? [p.area] : []));
+    onInspect?.(areas.length ? areas : null);
   }, [inspecting]);
   useEffect(() => () => onInspect?.(null), []);
 
