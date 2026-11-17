@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import type { AgentInfo, ChangeResult, PageEvent } from "@pilot/protocol";
+import type { AgentInfo, ChangeResult, PageEvent, WidthCheck } from "@pilot/protocol";
 import { BRIDGE_VERSION, originKey } from "@pilot/protocol";
 import { Hub, type JobPost } from "./hub.ts";
 
@@ -10,14 +10,15 @@ import { Hub, type JobPost } from "./hub.ts";
  * - GET  /events                SSE: agents, launch, job updates for the page's origin
  * - POST /jobs                  a job (JobPost)
  * - POST /jobs/:id/cancel       take a job back
- * - POST /jobs/:id/retry        a done job's changes that didn't come out right: one follow-up
+ * - POST /jobs/:id/retry        a done job's changes that didn't come out right (or a task's problems): one follow-up
+ * - POST /checks/:requestId     the answer to a width check an agent asked for (`check` event)
  * The page's origin comes from the `Origin` header the browser always sends,
  * never from the request. Jobs are only taken from an origin an agent works
  * on (it ran /pilot for it), so another website can't hand prompts to the
  * agent.
  *
  * Agents (`pilot mcp` processes that aren't the hub, see agent.ts):
- * - POST /agents/register | /agents/launch | /agents/wait | /agents/done | /agents/leave
+ * - POST /agents/register | /agents/launch | /agents/wait | /agents/done | /agents/check | /agents/leave
  * Refused for any request with an `Origin` (browsers send one; Node doesn't).
  *
  * GET /health tells a `pilot mcp` that the port is Pilot's.
@@ -106,8 +107,21 @@ async function handle(hub: Hub, req: IncomingMessage, res: ServerResponse): Prom
     const job =
       action === "cancel"
         ? hub.cancel(origin, decodeURIComponent(id))
-        : hub.retry(origin, decodeURIComponent(id), ((data as { differences?: ChangeResult[] }).differences ?? []).slice(0, 200));
+        : hub.retry(
+            origin,
+            decodeURIComponent(id),
+            ((data as { differences?: ChangeResult[] }).differences ?? []).slice(0, 200),
+            stringsOf((data as { issues?: unknown }).issues),
+          );
     return job ? json(res, 200, { job }) : json(res, 409, { error: `can't ${action} this job` });
+  }
+  const checkRoute = path.match(/^\/checks\/([^/]+)$/);
+  if (checkRoute) {
+    const check = (data as { check?: WidthCheck }).check;
+    if (!check || !Array.isArray(check.widths)) return json(res, 400, { error: "check needed" });
+    return hub.checkResult(origin, decodeURIComponent(checkRoute[1] as string), check)
+      ? json(res, 200, { ok: true })
+      : json(res, 409, { error: "no check waits for this" });
   }
   return json(res, 404, { error: "not found" });
 }
@@ -153,12 +167,26 @@ async function handleAgent(hub: Hub, action: string, data: unknown, req: Incomin
     case "done":
       if (!d.jobId) return json(res, 400, { error: "jobId needed" });
       return json(res, 200, { job: hub.done(d.agent.id, d.jobId, d.notes) });
+    case "check": {
+      if (!d.jobId) return json(res, 400, { error: "jobId needed" });
+      const check = await hub.check(d.jobId, Math.min(d.timeoutMs ?? CHECK_TIMEOUT, 2 * 60_000));
+      return json(res, 200, { check });
+    }
     case "leave":
       hub.unregister(d.agent.id);
       return json(res, 200, { ok: true });
     default:
       return json(res, 404, { error: "not found" });
   }
+}
+
+/** How long a width check may take: frames loading the page at each width. */
+export const CHECK_TIMEOUT = 60_000;
+
+/** Up to 100 strings of at most 2000 characters, from a page's post; undefined for anything else. */
+function stringsOf(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((v): v is string => typeof v === "string").slice(0, 100).map((v) => v.slice(0, 2000));
 }
 
 function json(res: ServerResponse, status: number, data: unknown): void {

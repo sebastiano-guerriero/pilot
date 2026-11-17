@@ -8,6 +8,12 @@
       "port": 5180
     },
     {
+      "name": "lab-responsive",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "../pilot-lab-responsive", "run", "dev"],
+      "port": 5183
+    },
+    {
       "name": "experiments",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["dev:experiments"],

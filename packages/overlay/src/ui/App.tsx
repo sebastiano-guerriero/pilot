@@ -3,7 +3,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "preact/hoo
 import { type BoxArea, hidesSelection } from "../dom/boxModel.ts";
 import { type EditableElement, isEditable } from "../dom/target.ts";
 import { formatPrompt } from "@pilot/protocol";
-import { buildChangeSet, copyText } from "../edits/changeSet.ts";
+import { buildChangeSet, buildRequest, copyText } from "../edits/changeSet.ts";
 import { type EditHistory, historyShortcut } from "../edits/history.ts";
 import { clickWidth } from "../edits/widths.ts";
 import type { PilotDevOptions } from "../mount.tsx";
@@ -128,6 +128,10 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // With an agent on this page, the button sends the changes not sent yet;
   // without one, it copies the prompt (everything in effect).
   const sendToAgent = !!session?.canSendToAgent;
+  // Make responsive: a job of its own for the agent working on this page,
+  // or, with none, its prompt on the clipboard (the same text either way).
+  const makeResponsive = (element: Element) =>
+    sendToAgent ? !!session?.request(element, "responsive") : copyText(formatPrompt(buildRequest(element, "responsive")));
   // Jobs not finished yet: waiting, an agent applying, checking the page.
   const pending = (session?.jobs ?? []).filter((j) => j.status === "queued" || j.status === "working" || (j.status === "done" && !j.checked)).length;
   // The job list opens from the toolbar's jobs button, and closes when there's nothing left in progress.
@@ -244,7 +248,15 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
           />
           {/* After the dialog (same layer: DOM order decides), so the button's
               tooltip shows over the dialog when they meet. */}
-          {!hideSelection && <SelectionActions rect={selectedRect} domOpen={domOpen} onShowInDom={() => setDomOpen((open) => !open)} />}
+          {!hideSelection && (
+            <SelectionActions
+              rect={selectedRect}
+              domOpen={domOpen}
+              onShowInDom={() => setDomOpen((open) => !open)}
+              responsiveMode={sendToAgent ? "send" : "copy"}
+              onMakeResponsive={() => makeResponsive(selected.element)}
+            />
+          )}
         </>
       )}
       {/* The hover comes after the selection, so its label is drawn over the

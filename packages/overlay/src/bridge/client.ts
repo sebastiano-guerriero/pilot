@@ -1,4 +1,4 @@
-import type { AgentInfo, ChangeResult, Job, PageEvent } from "@pilot/protocol";
+import type { AgentInfo, ChangeResult, Job, PageEvent, WidthCheck } from "@pilot/protocol";
 import { DEFAULT_BRIDGE_PORT } from "@pilot/protocol";
 
 /** Where the hub listens (see packages/cli: `pilot mcp`). */
@@ -23,6 +23,8 @@ export interface BridgeHandlers {
   onConnect(): void;
   /** An agent works on this page now (on connect, or the first one arriving). */
   onAgentsArrived?(): void;
+  /** An agent asks for a width check of a job's element (answered with postCheck). */
+  onCheck?(requestId: string, jobId: string): void;
 }
 
 /**
@@ -71,17 +73,26 @@ export class BridgeClient {
   }
 
   /** Posts a job. False when the hub isn't reachable or refused it (no agent on this page). */
-  postJob(job: Pick<Job, "id" | "changeSet" | "status" | "agent" | "attempt" | "differences">): Promise<boolean> {
+  postJob(job: Pick<Job, "id" | "changeSet" | "status" | "agent" | "attempt" | "differences" | "issues">): Promise<boolean> {
     return this.post("/jobs", job);
+  }
+
+  /** The answer to a width check the agent asked for. */
+  postCheck(requestId: string, check: WidthCheck): Promise<boolean> {
+    return this.post(`/checks/${encodeURIComponent(requestId)}`, { check });
   }
 
   cancel(jobId: string): Promise<boolean> {
     return this.post(`/jobs/${encodeURIComponent(jobId)}/cancel`, {});
   }
 
-  /** Sends a done job back once, as a follow-up with what didn't come out right. False when the hub refused. */
-  retry(jobId: string, differences: ChangeResult[]): Promise<boolean> {
-    return this.post(`/jobs/${encodeURIComponent(jobId)}/retry`, { differences });
+  /**
+   * Sends a done job back once, as a follow-up with what didn't come out
+   * right: the changes that differ, or a task's problems (`issues`). False
+   * when the hub refused.
+   */
+  retry(jobId: string, differences: ChangeResult[], issues?: string[]): Promise<boolean> {
+    return this.post(`/jobs/${encodeURIComponent(jobId)}/retry`, { differences, issues });
   }
 
   private async post(path: string, body: object): Promise<boolean> {
@@ -141,6 +152,9 @@ export class BridgeClient {
         break;
       case "job":
         this.handlers.onJob(event.job);
+        break;
+      case "check":
+        this.handlers.onCheck?.(event.requestId, event.jobId);
         break;
     }
   }

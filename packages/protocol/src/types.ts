@@ -101,6 +101,24 @@ export interface ElementEdit {
   changes: StyleChange[];
 }
 
+/**
+ * A task for the agent about one element, sent instead of edits: the
+ * selection's Make responsive action. The agent works out the changes
+ * itself (formatPrompt spells out how); there are no designer values, so
+ * Pilot can't check the result and takes the agent's word.
+ */
+export interface ResponsiveRequest {
+  kind: "responsive";
+  target: ElementTarget;
+  /**
+   * The viewport widths the page's media queries test, in CSS px, ascending
+   * (Pilot reads them from its stylesheets). Empty when it has none.
+   */
+  breakpoints: number[];
+}
+
+export type AgentRequest = ResponsiveRequest;
+
 export interface ChangeSet {
   id: string;
   /** ISO timestamp. */
@@ -111,6 +129,8 @@ export interface ChangeSet {
     viewport: { width: number; height: number };
   };
   edits: ElementEdit[];
+  /** A task instead of edits (then `edits` is empty): see AgentRequest. */
+  request?: AgentRequest;
   /** Free-form note from the designer ("make this feel lighter", etc.). */
   note?: string;
 }

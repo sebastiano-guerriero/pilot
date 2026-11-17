@@ -5,6 +5,31 @@ import { EditHistory } from "../edits/history.ts";
 import { inlinePreview } from "../test/inlinePreview.ts";
 import { PilotSession } from "./session.ts";
 
+// The width checks load the page in frames: the test DOM has no layout, so they're stubbed.
+const widths = vi.hoisted(() => ({
+  snapshots: 0,
+  checks: [] as Array<{ problems: number }>,
+}));
+vi.mock("../checks/widths.ts", async (actual) => {
+  const real = await actual<typeof import("../checks/widths.ts")>();
+  return {
+    ...real,
+    snapshotAt: async () => {
+      widths.snapshots++;
+      return { width: 1024, elements: [] };
+    },
+    checkWidths: async (_url: string, selector: string, ws: number[], designerWidth: number) => {
+      const problems = widths.checks.shift()?.problems ?? 0;
+      return {
+        selector,
+        designerWidth,
+        widths: ws.map((width) => ({ width, found: true, issues: problems && width === 375 ? ["`div` sticks out of the viewport by 40px."] : [], notes: [] })),
+        problems,
+      };
+    },
+  };
+});
+
 /** A stand-in for the browser's EventSource: the test plays the hub. */
 class FakeEventSource {
   static last: FakeEventSource | null = null;
@@ -112,6 +137,58 @@ describe("PilotSession", () => {
     expect(posted.changeSet.edits[0]?.changes).toEqual([expect.objectContaining({ property: "padding-top", to: "20px" })]);
     expect(s.unsent).toBe(0);
     expect(el.style.paddingTop).toBe("20px");
+  });
+
+  it("Make responsive: a job of its own for the element, apart from the changes, with a baseline at the designer's width", async () => {
+    vi.useFakeTimers();
+    widths.snapshots = 0;
+    const s = session();
+    expect(s.request(el, "responsive")).toBeNull(); // no agent yet
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    history.apply(el, "padding-top", "20px");
+    const sent = s.request(el, "responsive") as { id: string };
+    const posted = posts.at(-1)?.body as { id: string; changeSet: { edits: unknown[]; request: { kind: string; target: { selector: string } } } };
+    expect(posted.id).toBe(sent.id);
+    expect(posted.changeSet.edits).toEqual([]);
+    expect(posted.changeSet.request).toEqual(expect.objectContaining({ kind: "responsive", breakpoints: expect.any(Array) }));
+    expect(posted.changeSet.request.target.selector).toBeTruthy();
+    // The designer's change isn't part of it: still waiting for Send.
+    expect(s.unsent).toBe(1);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(widths.snapshots).toBe(1);
+    expect(s.jobs[0]?.baseline).toEqual({ width: 1024, elements: [] });
+  });
+
+  it("the agent asks for a width check: the page that has the job answers it", async () => {
+    widths.checks = [{ problems: 0 }];
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    const sent = s.request(el, "responsive") as { id: string };
+    hub().emit({ type: "check", requestId: "r1", jobId: sent.id });
+    hub().emit({ type: "check", requestId: "r2", jobId: "another-tabs-job" });
+    await vi.waitFor(() => expect(posts.some((p) => p.url === "http://hub/checks/r1")).toBe(true));
+    const answer = posts.find((p) => p.url === "http://hub/checks/r1")?.body as { check: { problems: number; widths: unknown[] } };
+    expect(answer.check.problems).toBe(0);
+    expect(answer.check.widths.length).toBeGreaterThan(1);
+    expect(posts.some((p) => p.url === "http://hub/checks/r2")).toBe(false);
+  });
+
+  it("a task done: Pilot checks the widths; problems go back once as a follow-up, then Pilot takes what the code gives", async () => {
+    vi.useFakeTimers();
+    widths.checks = [{ problems: 1 }, { problems: 1 }];
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    const sent = s.request(el, "responsive") as { id: string };
+    hub().emit({ type: "job", job: job({ id: sent.id, status: "done", agent, notes: "Stacks below 768px" }) });
+    await vi.advanceTimersByTimeAsync(1_000);
+    const retry = posts.find((p) => p.url.endsWith(`/jobs/${sent.id}/retry`))?.body as { issues: string[] };
+    expect(retry.issues).toEqual(["375px: `div` sticks out of the viewport by 40px."]);
+    expect(s.jobs[0]).toEqual(expect.objectContaining({ status: "queued", attempt: 2 }));
+    // The follow-up done: still a problem, but Pilot takes what the code gives now.
+    hub().emit({ type: "job", job: job({ id: sent.id, status: "done", agent, attempt: 2 }) });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(s.jobs[0]).toEqual(expect.objectContaining({ status: "done", checked: true }));
+    expect(posts.filter((p) => p.url.endsWith("/retry")).length).toBe(1);
   });
 
   it("the agent's done: the page checks the job, settles what landed, reports how it came out", async () => {

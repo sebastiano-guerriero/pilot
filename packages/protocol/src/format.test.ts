@@ -106,4 +106,19 @@ describe("formatPrompt", () => {
     expect(withStates).toContain("| Property | From | To | Widths | State |");
     expect(withStates).toContain("| `color` | *not set* | `red` | every width | hover, active |");
   });
+
+  it("make responsive: a task for one element, with the page's breakpoints and the steps", () => {
+    const target = changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"];
+    const text = formatPrompt({ ...changeSet, note: undefined, edits: [], request: { kind: "responsive", target, breakpoints: [640, 768, 1024] } });
+    expect(text).toContain("# Pilot: make responsive");
+    expect(text).toContain("## `main > section.hero > h1`");
+    expect(text).toContain("- Selector: `section.hero > h1`");
+    expect(text).toContain("breakpoints (the widths its media queries test): 640px, 768px, 1024px");
+    expect(text).toContain("**Find similar components**");
+    expect(text).toContain("**Check every width with `pilot_check_widths`**");
+    expect(text).toContain("An advanced task");
+    expect(text).not.toContain("| Property |");
+    // No breakpoints in the page's CSS.
+    expect(formatPrompt({ ...changeSet, edits: [], request: { kind: "responsive", target, breakpoints: [] } })).toContain("media queries test): none found");
+  });
 });

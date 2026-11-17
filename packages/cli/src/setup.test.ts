@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -49,5 +49,17 @@ describe("usepilot setup", () => {
 
   it("--project outside the app's folder says so", async () => {
     expect(await setup({ project: true, cwd: dir })).toContain("No package.json here");
+  });
+
+  it("a skill folder that links to a Pilot checkout is replaced, not written through", async () => {
+    const checkout = join(dir, "checkout");
+    await mkdir(checkout);
+    await writeFile(join(checkout, "SKILL.md"), "the checkout's own skill");
+    await mkdir(join(dir, ".claude", "skills"), { recursive: true });
+    await symlink(checkout, join(dir, ".claude", "skills", "pilot"), "dir");
+    await setup({ home: dir });
+    expect(await readFile(join(checkout, "SKILL.md"), "utf8")).toBe("the checkout's own skill");
+    expect((await lstat(join(dir, ".claude", "skills", "pilot"))).isSymbolicLink()).toBe(false);
+    expect(await read(".claude", "skills", "pilot", "SKILL.md")).toContain("name: pilot");
   });
 });

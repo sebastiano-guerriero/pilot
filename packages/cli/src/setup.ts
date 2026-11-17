@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
 import skill from "../../../skills/pilot/SKILL.md";
@@ -71,10 +71,21 @@ Then, in a Claude Code chat in this folder: /pilot
 }
 
 async function writeSkill(dir: string): Promise<string> {
+  // A link (to a Pilot checkout, while developing it): replaced by a folder
+  // of its own, so the published skill isn't written into the checkout.
+  if (await isLink(dir)) await unlink(dir);
   await mkdir(dir, { recursive: true });
   const file = join(dir, "SKILL.md");
   await writeFile(file, skill);
   return file;
+}
+
+async function isLink(path: string): Promise<boolean> {
+  try {
+    return (await lstat(path)).isSymbolicLink();
+  } catch {
+    return false;
+  }
 }
 
 /**

@@ -657,10 +657,10 @@ describe("placement", () => {
     expect(labels()).toEqual([]);
   });
 
-  it("listAll (the default for now): with nothing typed, every editor, with a value or not, in list order", async () => {
+  it("listAll (off by default): with nothing typed, every editor, with a value or not, in list order", async () => {
     const { editors: registry } = await import("../../../editors/registry.ts");
     act(() => {
-      render(h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors: registry }), container);
+      render(h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors: registry, listAll: true }), container);
     });
     const ids = editorIds();
     expect(ids[0]).toBe("display");

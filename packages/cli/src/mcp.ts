@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { basename } from "node:path";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AgentInfo, Job } from "@pilot/protocol";
-import { DEFAULT_BRIDGE_PORT, formatPrompt, originOf } from "@pilot/protocol";
+import { DEFAULT_BRIDGE_PORT, formatPrompt, formatWidthCheck, originOf } from "@pilot/protocol";
 import { z } from "zod";
 import { Bridge } from "./agent.ts";
 
@@ -36,7 +36,7 @@ export const INSTRUCTIONS = `Pilot lets the designer edit the running app in the
 The loop, when the user runs /pilot or asks to hand the design over:
 1. Call pilot_launch with the URL of the page the designer works on (the app's dev server, e.g. http://localhost:5173). Pilot opens in that page.
 2. Call pilot_wait_for_edits. It returns a job when the designer presses Send, or "no edits yet" after a while: then call it again. (In Claude Code a long wait moves to the background: the job arrives as its result.)
-3. Apply the job's edits to the source, in the project's conventions (see the job's guidelines).
+3. Apply the job's edits to the source, in the project's conventions (see the job's guidelines). Edits are basic: every value is given, so be fast (no screenshots or browser checks: Pilot checks the page). A "make responsive" job is an advanced task: make one element work at every viewport width. Its prompt lists the steps; check the result with pilot_check_widths (numbers for every width, instead of screenshots). In Claude Code, hand advanced tasks to an Opus subagent unless you run on Opus.
 4. Call pilot_done with the job id and short notes (values you approximated, anything you did differently). Then call pilot_wait_for_edits again.
 
 Keep looping until the user interrupts you. Pilot keeps previewing each job's changes until you call pilot_done, then checks them against the page's real CSS: changes that didn't land come back once as a follow-up job with what the page gives instead.`;
@@ -58,10 +58,15 @@ function agentLabel(clientName: string | undefined, cwd: string): string {
 
 /** What the agent reads for a job: the change set's prompt (or the follow-up), then what to do when done. */
 export function jobPrompt(job: Job): string {
-  const body = job.attempt === 2 && job.differences?.length ? followUp(job) : formatPrompt(job.changeSet);
+  const body =
+    job.attempt === 2 && job.issues?.length
+      ? taskFollowUp(job)
+      : job.attempt === 2 && job.differences?.length
+        ? followUp(job)
+        : formatPrompt(job.changeSet);
   return `${body}
 ---
-Pilot job \`${job.id}\`. When you've applied it, call \`pilot_done\` with \`jobId: "${job.id}"\` and short notes (values you approximated, anything you did differently). Then call \`pilot_wait_for_edits\` again for the next job.
+Pilot job \`${job.id}\`. When you've applied it, call \`pilot_done\` with \`jobId: "${job.id}"\` and short notes (${job.changeSet.request ? "what changed at which widths, which widths you checked in a browser, anything left for the designer" : "values you approximated, anything you did differently"}). Then call \`pilot_wait_for_edits\` again for the next job.
 `;
 }
 
@@ -87,6 +92,28 @@ export function followUp(job: Job): string {
     "",
     "Fix them: the usual causes are a rule that overrides yours (more specific, later, or in a media query), an edit in the wrong file or component, or a missed change. If you chose a different value on purpose (a token or the nearest step in the project's scale), keep it and say so in your notes. Pilot takes what the code gives after this.",
   );
+  return lines.join("\n");
+}
+
+/**
+ * A task's follow-up (Make responsive): the problems Pilot's width check
+ * found once the agent was done, then the task again for reference.
+ */
+export function taskFollowUp(job: Job): string {
+  const target = job.changeSet.request?.target;
+  const lines = [
+    "# Pilot: make responsive, follow-up",
+    "",
+    `You made \`${target?.path ?? "the element"}\` responsive, but Pilot's width check (the page measured at each width) still finds these problems:`,
+    "",
+    ...(job.issues ?? []).map((i) => `- ${i}`),
+    "",
+    "Fix them, then run `pilot_check_widths` to confirm before `pilot_done`. If one is deliberate, keep it and say why in your notes. Pilot takes what the code gives after this.",
+    "",
+    "The task, for reference:",
+    "",
+    formatPrompt(job.changeSet),
+  ];
   return lines.join("\n");
 }
 
@@ -194,6 +221,32 @@ export function createPilotServer(options: { port?: number; cwd?: string; waitMs
         return text("Done. Pilot is checking the changes in the page. Call pilot_wait_for_edits for the next job.");
       } catch (error) {
         return text(`Pilot couldn't report the job done: ${(error as Error).message}`, true);
+      }
+    },
+  );
+
+  server.registerTool(
+    "pilot_check_widths",
+    {
+      title: "Check an element at every width",
+      description:
+        "For a Make responsive job: Pilot loads the page in hidden frames at a phone width, each breakpoint and just below it, a wide desktop and the designer's width, and measures the job's element in each. Returns each width's size and layout, and problems (sticking out of the viewport, spilling out of its parent, clipped content, overlaps), plus what changed at the designer's width. Use it instead of screenshots; fix the problems and run it again until it finds none.",
+      inputSchema: {
+        jobId: z.string().describe("The Make responsive job's id, from pilot_wait_for_edits."),
+      },
+    },
+    async ({ jobId }) => {
+      try {
+        const check = await bridge.check(jobId);
+        if (!check) {
+          return text(
+            `Pilot couldn't check job ${jobId}: no page answered. The page with Pilot must be open (the designer's tab), and the job must be a Make responsive one. If you can, check the widths in a browser instead.`,
+            true,
+          );
+        }
+        return text(formatWidthCheck(check));
+      } catch (error) {
+        return text(`Pilot couldn't run the width check: ${(error as Error).message}`, true);
       }
     },
   );

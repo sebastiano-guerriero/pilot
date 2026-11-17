@@ -207,6 +207,22 @@ const ICONS = {
       </g>
     ),
   },
+  // Make responsive, on the selection: a frame with a two-way arrow across it.
+  responsive: {
+    size: 12,
+    body: (
+      <g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 7.5L2.5 6L4 4.5" />
+        <path d="M8 7.5L9.5 6L8 4.5" />
+        <path
+          d="M3.7 10.5H8.3C9.42011 10.5 9.98016 10.5 10.408 10.282C10.7843 10.0903 11.0903 9.78431 11.282 9.40798C11.5 8.98016 11.5 8.42011 11.5 7.3V4.7C11.5 3.5799 11.5 3.01984 11.282 2.59202C11.0903 2.21569 10.7843 1.90973 10.408 1.71799C9.98016 1.5 9.42011 1.5 8.3 1.5L3.7 1.5C2.57989 1.5 2.01984 1.5 1.59202 1.71799C1.21569 1.90973 0.909734 2.21569 0.717987 2.59202C0.5 3.01984 0.5 3.57989 0.5 4.7V7.3C0.5 8.4201 0.5 8.98016 0.717987 9.40798C0.909734 9.78431 1.21569 10.0903 1.59202 10.282C2.01984 10.5 2.57989 10.5 3.7 10.5Z"
+          stroke-linecap="butt"
+          stroke-linejoin="miter"
+        />
+        <path d="M2.5 6H9.5" />
+      </g>
+    ),
+  },
   // The dialog's drag strip: three dots in a row (10×2).
   grip: {
     size: [10, 2],

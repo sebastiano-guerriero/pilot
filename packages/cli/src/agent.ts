@@ -1,7 +1,7 @@
-import type { AgentInfo, Job } from "@pilot/protocol";
+import type { AgentInfo, Job, WidthCheck } from "@pilot/protocol";
 import { BRIDGE_VERSION } from "@pilot/protocol";
 import type { Hub, WaitResult } from "./hub.ts";
-import { localAgents, startHub, type HubServer } from "./server.ts";
+import { CHECK_TIMEOUT, localAgents, startHub, type HubServer } from "./server.ts";
 
 /**
  * An agent's way to the hub (one per `pilot mcp` process). The first process
@@ -16,6 +16,7 @@ export interface HubApi {
   launch(agent: AgentInfo, origin: string): Promise<number>;
   wait(agent: AgentInfo, origin: string, timeoutMs: number, signal?: AbortSignal): Promise<WaitResult>;
   done(agent: AgentInfo, jobId: string, notes?: string): Promise<Job | null>;
+  check(agent: AgentInfo, jobId: string, timeoutMs: number): Promise<WidthCheck | null>;
   leave(agent: AgentInfo): Promise<void>;
 }
 
@@ -36,6 +37,9 @@ class LocalApi implements HubApi {
   }
   async done(agent: AgentInfo, jobId: string, notes?: string) {
     return this.hub.done(agent.id, jobId, notes);
+  }
+  check(_agent: AgentInfo, jobId: string, timeoutMs: number) {
+    return this.hub.check(jobId, timeoutMs);
   }
   async leave(agent: AgentInfo) {
     localAgents.delete(agent.id);
@@ -67,6 +71,9 @@ class RemoteApi implements HubApi {
   }
   async done(agent: AgentInfo, jobId: string, notes?: string) {
     return (await this.post<{ job: Job | null }>("done", { agent, jobId, notes })).job;
+  }
+  async check(agent: AgentInfo, jobId: string, timeoutMs: number) {
+    return (await this.post<{ check: WidthCheck | null }>("check", { agent, jobId, timeoutMs })).check;
   }
   async leave(agent: AgentInfo) {
     await this.post("leave", { agent });
@@ -119,6 +126,11 @@ export class Bridge {
 
   done(jobId: string, notes?: string): Promise<Job | null> {
     return this.call((api) => api.done(this.agent, jobId, notes));
+  }
+
+  /** Pilot's width check of a task's element, measured by the page (null: no page answered). */
+  check(jobId: string, timeoutMs = CHECK_TIMEOUT): Promise<WidthCheck | null> {
+    return this.call((api) => api.check(this.agent, jobId, timeoutMs));
   }
 
   async close(): Promise<void> {

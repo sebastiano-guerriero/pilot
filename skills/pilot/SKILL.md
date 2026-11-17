@@ -19,6 +19,13 @@ Keep looping until the user asks you to stop. Keep your messages between jobs sh
 
 ## Applying a job
 
+Jobs come in two kinds:
+
+- **Edits** (basic): the designer set every value; you only translate them. **Speed is what matters**: go straight to the code, apply, call `pilot_done`. No screenshots, browser checks, builds or tests: Pilot checks the page itself and sends back what didn't land.
+- **Tasks** (advanced), like **Make responsive**: the designer selected an element and asked for an outcome (work at every viewport width). They need judgment more than speed. The prompt has the steps. Check the result with `pilot_check_widths` (numbers for every width, no screenshots needed). In Claude Code, unless you already run on Opus, hand the task to a subagent with `model: "opus"`, then call `pilot_done` with its notes. Pilot checks the widths again when you're done; problems come back once as a follow-up.
+
+### Edits
+
 The values are **intent, not code**. Translate them into this project's conventions:
 
 - **Tailwind:** the closest utility or theme value (`border-radius: 12px` → `rounded-xl`, `padding-top: 24px` → `pt-6`). Arbitrary values only when nothing fits.

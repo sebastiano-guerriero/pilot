@@ -142,4 +142,43 @@ describe("Hub", () => {
     hub.sweep();
     expect(hub.hasAgents(APP)).toBe(false);
   });
+
+  it("a width check: the job's pages get a check event, the page's answer goes to the agent", async () => {
+    const hub = new Hub();
+    hub.register(a, APP);
+    const p = page(hub);
+    const other = page(hub, "http://localhost:3000");
+    hub.postJob(APP, { id: "j1", changeSet: changeSet("j1") });
+    const asked = hub.check("j1", 5_000);
+    const event = p.events.find((e) => e.type === "check");
+    expect(event).toEqual(expect.objectContaining({ type: "check", jobId: "j1" }));
+    expect(other.events.some((e) => e.type === "check")).toBe(false);
+    const requestId = (event as { requestId: string }).requestId;
+    const check = { selector: ".card", designerWidth: 1200, widths: [], problems: 0 };
+    // Another origin can't answer it.
+    expect(hub.checkResult("http://localhost:3000", requestId, check)).toBe(false);
+    expect(hub.checkResult(APP, requestId, check)).toBe(true);
+    expect(await asked).toEqual(check);
+    // Answered once.
+    expect(hub.checkResult(APP, requestId, check)).toBe(false);
+  });
+
+  it("a width check with no page open, or for an unknown job, is null at once", async () => {
+    const hub = new Hub();
+    hub.register(a, APP);
+    hub.postJob(APP, { id: "j1", changeSet: changeSet("j1") });
+    expect(await hub.check("j1", 5_000)).toBeNull();
+    page(hub);
+    expect(await hub.check("nope", 5_000)).toBeNull();
+  });
+
+  it("a task's follow-up carries the width check's problems", async () => {
+    const hub = new Hub();
+    hub.register(a, APP);
+    hub.postJob(APP, { id: "j1", changeSet: changeSet("j1") });
+    await hub.wait(a, APP, 1_000);
+    hub.done("a", "j1");
+    const job = hub.retry(APP, "j1", [], ["375px: `div` sticks out of the viewport by 40px."]);
+    expect(job).toEqual(expect.objectContaining({ status: "queued", attempt: 2, issues: ["375px: `div` sticks out of the viewport by 40px."] }));
+  });
 });

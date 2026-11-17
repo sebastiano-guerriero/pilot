@@ -1,4 +1,5 @@
-import type { AgentInfo, ChangeResult, ChangeSet, Job, PageEvent } from "@pilot/protocol";
+import { randomUUID } from "node:crypto";
+import type { AgentInfo, ChangeResult, ChangeSet, Job, PageEvent, WidthCheck } from "@pilot/protocol";
 import { originKey } from "@pilot/protocol";
 
 /**
@@ -29,6 +30,7 @@ export interface JobPost {
   /** A follow-up the page posts again (see Hub.retry). */
   attempt?: number;
   differences?: ChangeResult[];
+  issues?: string[];
 }
 
 /** What `wait` returns: the job taken, or none (timed out). */
@@ -48,11 +50,18 @@ interface Waiter {
   resolve(job: Job | null): void;
 }
 
+/** A width check an agent asked for, waiting for the page's answer. */
+interface PendingCheck {
+  origin: string;
+  resolve(check: WidthCheck | null): void;
+}
+
 export class Hub {
   private agents = new Map<string, Agent>();
   private pages = new Set<PageConnection>();
   private jobs = new Map<string, Job>();
   private waiters: Waiter[] = [];
+  private checks = new Map<string, PendingCheck>();
 
   constructor(private now: () => number = Date.now) {}
 
@@ -129,6 +138,36 @@ export class Hub {
     return job;
   }
 
+  /**
+   * An agent asks for Pilot's width check of a task's element: the open
+   * pages of the job's origin get a `check` event, and the one that has the
+   * job measures it and posts the answer (checkResult). Null when no page
+   * is open, the hub doesn't know the job, or no answer comes in `timeoutMs`.
+   */
+  check(jobId: string, timeoutMs: number): Promise<WidthCheck | null> {
+    const job = this.jobs.get(jobId);
+    if (!job) return Promise.resolve(null);
+    const requestId = randomUUID();
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => finish(null), timeoutMs);
+      const finish = (check: WidthCheck | null) => {
+        clearTimeout(timer);
+        this.checks.delete(requestId);
+        resolve(check);
+      };
+      this.checks.set(requestId, { origin: job.origin, resolve: finish });
+      if (!this.sendTo(job.origin, { type: "check", requestId, jobId })) finish(null);
+    });
+  }
+
+  /** A page's answer to a width check: false when nothing waits for it from that origin. */
+  checkResult(origin: string, requestId: string, check: WidthCheck): boolean {
+    const pending = this.checks.get(requestId);
+    if (!pending || pending.origin !== originKey(origin)) return false;
+    pending.resolve(check);
+    return true;
+  }
+
   // Pages
 
   addPage(page: PageConnection): () => void {
@@ -168,6 +207,7 @@ export class Hub {
       agent: stillWorking || post.attempt === 2 ? post.agent : undefined,
       attempt: post.attempt ?? 1,
       differences: post.differences,
+      issues: post.issues,
       createdAt: at,
       updatedAt: at,
     };
@@ -186,15 +226,16 @@ export class Hub {
   }
 
   /**
-   * Some changes of a done job didn't come out as the designer set them: the
-   * job goes back to the queue once, as a follow-up with the `differences`,
+   * Some changes of a done job didn't come out as the designer set them (or
+   * a task's width check found problems, `issues`): the job goes back to
+   * the queue once, as a follow-up with the `differences`,
    * preferably to the agent that did it. Null when it can't (not done, or
    * already a follow-up: then the page takes what the code gives).
    */
-  retry(origin: string, jobId: string, differences: ChangeResult[]): Job | null {
+  retry(origin: string, jobId: string, differences: ChangeResult[], issues?: string[]): Job | null {
     const job = this.jobs.get(jobId);
     if (!job || job.origin !== originKey(origin) || job.status !== "done" || (job.attempt ?? 1) >= 2) return null;
-    this.update(job, { status: "queued", attempt: 2, differences, notes: undefined });
+    this.update(job, { status: "queued", attempt: 2, differences, issues, notes: undefined });
     this.dispatch(job.origin);
     return job;
   }

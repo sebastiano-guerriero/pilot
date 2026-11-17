@@ -12,8 +12,8 @@ import type { ChangeSet } from "./types.ts";
 
 export const DEFAULT_BRIDGE_PORT = 4747;
 
-/** Bumped when the hub's HTTP API changes incompatibly. */
-export const BRIDGE_VERSION = 1;
+/** Bumped when the hub's HTTP API changes incompatibly. 2: width checks (`/agents/check`, `/checks/:id`). */
+export const BRIDGE_VERSION = 2;
 
 /**
  * - queued: sent by the designer, waiting for an agent;
@@ -50,6 +50,8 @@ export interface Job {
   attempt?: number;
   /** For the follow-up: what the page gave instead of what the designer set. */
   differences?: ChangeResult[];
+  /** For a task's follow-up: what Pilot's width check found (see WidthCheck). */
+  issues?: string[];
   /** ISO timestamps. */
   createdAt: string;
   updatedAt: string;
@@ -70,6 +72,43 @@ export interface ChangeResult {
   actual?: string;
 }
 
+/**
+ * Pilot's width check for a task about one element (Make responsive): the
+ * page loads itself in hidden frames at each width and measures the element
+ * there, so the agent gets numbers instead of screenshots. Problems the
+ * element already has at the designer's width are left out: that width is
+ * the designer's, as they see it.
+ */
+export interface WidthCheck {
+  /** The element's selector. */
+  selector: string;
+  /** The designer's window width when they asked. */
+  designerWidth: number;
+  widths: WidthReport[];
+  /**
+   * What changed at the designer's width since they asked (computed styles
+   * of the element and what's inside it), when Pilot took a baseline. The
+   * task should leave that width as it was.
+   */
+  changedAtDesignerWidth?: string[];
+  /** Problems to fix: the issues of every width, and anything changed at the designer's width. */
+  problems: number;
+}
+
+/** The element at one viewport width. */
+export interface WidthReport {
+  width: number;
+  /** Whether the selector found the element in the page loaded at that width. */
+  found: boolean;
+  /** `1216×420`, and its layout: `grid, 3 columns`, `flex row, wraps`, `block`. */
+  size?: string;
+  layout?: string;
+  /** Problems with the element or what's inside it: sticking out of the viewport, clipped, overlapping… */
+  issues: string[];
+  /** Worth knowing, not problems: tap targets under 24px, the page scrolling sideways because of other elements. */
+  notes: string[];
+}
+
 /** Events the hub sends a page (Server-Sent Events on GET /events). */
 export type PageEvent =
   /** On connect and whenever agents come or go for this page's origin. */
@@ -77,7 +116,9 @@ export type PageEvent =
   /** An agent ran /pilot for this page: launch Pilot. */
   | { type: "launch"; agent: AgentInfo }
   /** A job changed (taken, done…). */
-  | { type: "job"; job: Job };
+  | { type: "job"; job: Job }
+  /** An agent asks for a width check of a job's element: the page that has the job posts it to `/checks/:requestId`. */
+  | { type: "check"; requestId: string; jobId: string };
 
 /** `{ origin }` an agent works on, from a URL: `http://localhost:5173/about` → `http://localhost:5173`. */
 export function originOf(url: string): string | null {

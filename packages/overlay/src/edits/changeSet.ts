@@ -1,4 +1,5 @@
-import type { ChangeSet, ElementEdit, StyleChange } from "@pilot/protocol";
+import type { AgentRequest, ChangeSet, ElementEdit, StyleChange } from "@pilot/protocol";
+import { pageBreakpoints } from "../dom/breakpoints.ts";
 import { declaredValue } from "../dom/declared.ts";
 import { describeElement } from "../dom/target.ts";
 import { sourceOf } from "./clear.ts";
@@ -44,6 +45,24 @@ export function buildChangeSet(history: EditHistory, options: { unsent?: boolean
       viewport: { width: window.innerWidth, height: window.innerHeight },
     },
     edits: [...edits.values()],
+  };
+}
+
+/**
+ * A task for the agent about one element, as a change set with no edits
+ * (see AgentRequest): Make responsive, with the page's breakpoints.
+ */
+export function buildRequest(element: Element, kind: AgentRequest["kind"], options: { id?: string } = {}): ChangeSet {
+  return {
+    id: options.id ?? `cs_${Date.now().toString(36)}`,
+    createdAt: new Date().toISOString(),
+    page: {
+      url: location.href,
+      title: document.title,
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+    },
+    edits: [],
+    request: { kind, target: describeElement(element), breakpoints: pageBreakpoints() },
   };
 }
 

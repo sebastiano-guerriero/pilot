@@ -379,12 +379,11 @@ export function PropertyDialog({
 }
 
 /**
- * Temporary, while many editors are being added and designed together: with
- * nothing typed, the dialog lists every editor, with a value or not, so they
- * can all be seen side by side. Set it back to false to list only the
- * properties the element has a value for (editorsWithValues).
+ * With nothing typed, the dialog lists only the properties the element has
+ * a value for (editorsWithValues). True lists every editor, with a value or
+ * not, side by side: handy while many editors are added and designed together.
  */
-export const LIST_ALL_EDITORS = true;
+export const LIST_ALL_EDITORS = false;
 
 const NO_STATES: ElementState[] = [];
 

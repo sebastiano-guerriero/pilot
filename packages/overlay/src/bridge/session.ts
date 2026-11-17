@@ -1,5 +1,6 @@
-import type { AgentInfo, ChangeResult, ChangeSet, Job, JobStatus } from "@pilot/protocol";
-import { buildChangeSet } from "../edits/changeSet.ts";
+import type { AgentInfo, AgentRequest, ChangeResult, ChangeSet, Job, JobStatus, WidthCheck } from "@pilot/protocol";
+import { checkWidths, problemLines, snapshotAt, type StyleSnapshot, widthsToCheck } from "../checks/widths.ts";
+import { buildChangeSet, buildRequest } from "../edits/changeSet.ts";
 import type { EditHistory } from "../edits/history.ts";
 import { watchJob } from "../edits/verify.ts";
 import { BridgeClient, type BridgeState } from "./client.ts";
@@ -34,11 +35,19 @@ export interface JobRecord {
   differences?: ChangeResult[];
   /** Checked and accepted: what shows is the code. */
   checked?: boolean;
+  /** For a task's follow-up: what Pilot's width check found (see Job.issues). */
+  issues?: string[];
+  /** A task: its element's styles at the designer's width before the job, to tell what the agent changed there. */
+  baseline?: StyleSnapshot;
+  /** A task: Pilot's last width check of it (the agent's, or the one after done). */
+  check?: WidthCheck;
 }
 
 const STORAGE_KEY = "pilot:jobs";
 /** How long a job whose changes all landed stays in the list. */
 const APPLIED_LINGER = 8_000;
+/** How long after a task is done Pilot checks it: hot reload's time. */
+const TASK_SETTLE = 800;
 
 export interface SessionOptions {
   /** The hub's URL, or false for no bridge (Send is never offered: Copy prompt only). */
@@ -70,6 +79,7 @@ export class PilotSession {
           onJob: (job) => this.update(job),
           onConnect: () => this.repost(),
           onAgentsArrived: options.onAgentsArrived,
+          onCheck: (requestId, jobId) => void this.answerCheck(requestId, jobId),
         })
       : null;
     this.bridge?.subscribe(() => this.notify());
@@ -118,9 +128,34 @@ export class PilotSession {
    */
   send(): JobRecord | null {
     if (!this.canSendToAgent || !this.unsent) return null;
-    const id = `job_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    const id = newJobId();
     const changeSet = buildChangeSet(this.history, { unsent: true, id });
     this.history.send(id);
+    return this.post(id, changeSet);
+  }
+
+  /**
+   * A task for the agent about one element (Make responsive), as a job of
+   * its own, apart from the changes: nothing of the history goes with it.
+   * Null when no agent works on this page. When done there's nothing to
+   * check (no designer values): it's accepted on the agent's word.
+   */
+  request(element: Element, kind: AgentRequest["kind"]): JobRecord | null {
+    if (!this.canSendToAgent) return null;
+    const id = newJobId();
+    const job = this.post(id, buildRequest(element, kind, { id }));
+    // The element at the designer's width as the code has it now (no
+    // previews), while the agent starts: to tell what it changed there.
+    const { page, request } = job.changeSet;
+    if (request) {
+      void snapshotAt(page.url, request.target.selector, page.viewport.width).then((baseline) => {
+        if (baseline && this.jobs.some((j) => j.id === id)) this.patch(id, { baseline });
+      });
+    }
+    return job;
+  }
+
+  private post(id: string, changeSet: ChangeSet): JobRecord {
     const job: JobRecord = { id, changeSet, status: "queued", createdAt: new Date().toISOString() };
     this.jobs = [...this.jobs, job];
     this.save();
@@ -162,6 +197,24 @@ export class PilotSession {
     if (becameDone) this.verify(this.jobs.find((j) => j.id === job.id) as JobRecord);
   }
 
+  /** A task's width check, now (`pilot_check_widths`, and after done). */
+  private runCheck(job: JobRecord): Promise<WidthCheck> | null {
+    const { page, request } = job.changeSet;
+    if (!request) return null;
+    const width = page.viewport.width;
+    return checkWidths(page.url, request.target.selector, widthsToCheck(request.breakpoints, width), width, job.baseline);
+  }
+
+  /** The agent asked for a width check of one of this page's jobs (other tabs' jobs are theirs to answer). */
+  private async answerCheck(requestId: string, jobId: string): Promise<void> {
+    const job = this.jobs.find((j) => j.id === jobId);
+    const running = job && this.runCheck(job);
+    if (!running) return;
+    const check = await running;
+    this.patch(jobId, { check });
+    void this.bridge?.postCheck(requestId, check);
+  }
+
   /** Connected (again): post the jobs the hub may not know (a new hub after a takeover). */
   private repost(): void {
     for (const job of this.jobs) {
@@ -173,6 +226,7 @@ export class PilotSession {
           agent: job.agent,
           attempt: job.attempt,
           differences: job.differences,
+          issues: job.issues,
         });
       }
     }
@@ -186,29 +240,58 @@ export class PilotSession {
    */
   private verify(job: JobRecord): void {
     if (this.watching.has(job.id)) return;
+    if (job.changeSet.request) return this.verifyTask(job);
     const stop = watchJob(this.history, job.id, (results) => {
       this.watching.delete(job.id);
       const differences = results.filter((r) => r.outcome === "differs");
       if (differences.length && (job.attempt ?? 1) < 2) return this.followUp(job.id, differences);
-      this.history.settle(job.id);
-      this.patch(job.id, { checked: true });
-      const t = setTimeout(() => {
-        this.timers.delete(t);
-        this.dismiss(job.id);
-      }, APPLIED_LINGER);
-      this.timers.add(t);
+      this.accept(job.id);
     });
     this.watching.set(job.id, stop);
   }
 
-  /** Back to the agent, once, with what the page gives instead. Its changes stay previewed meanwhile. */
-  private followUp(jobId: string, differences: ChangeResult[]): void {
-    this.patch(jobId, { status: "queued", attempt: 2, differences, notes: undefined });
+  /**
+   * A done task (Make responsive): Pilot runs the width check once hot
+   * reload had a moment. Problems go back to the agent once, as a
+   * follow-up; after it, Pilot takes what the code gives.
+   */
+  private verifyTask(job: JobRecord): void {
+    let stopped = false;
+    this.watching.set(job.id, () => {
+      stopped = true;
+    });
+    const t = setTimeout(async () => {
+      this.timers.delete(t);
+      const current = this.jobs.find((j) => j.id === job.id);
+      const check = current && (await this.runCheck(current));
+      if (stopped || !current || !check) return;
+      this.watching.delete(job.id);
+      this.patch(job.id, { check });
+      if (check.problems && (current.attempt ?? 1) < 2) return this.followUp(job.id, [], problemLines(check));
+      this.accept(job.id);
+    }, TASK_SETTLE);
+    this.timers.add(t);
+  }
+
+  /** Checked and accepted: it settles, and leaves the list after a moment. */
+  private accept(jobId: string): void {
+    this.history.settle(jobId);
+    this.patch(jobId, { checked: true });
+    const t = setTimeout(() => {
+      this.timers.delete(t);
+      this.dismiss(jobId);
+    }, APPLIED_LINGER);
+    this.timers.add(t);
+  }
+
+  /** Back to the agent, once, with what the page gives instead (or a task's problems). Its changes stay previewed meanwhile. */
+  private followUp(jobId: string, differences: ChangeResult[], issues?: string[]): void {
+    this.patch(jobId, { status: "queued", attempt: 2, differences, issues, notes: undefined });
     const job = this.jobs.find((j) => j.id === jobId) as JobRecord;
-    void this.bridge?.retry(jobId, differences).then((ok) => {
+    void this.bridge?.retry(jobId, differences, issues).then((ok) => {
       // The hub doesn't have it as done (a new hub, after a takeover): post the follow-up as a job.
       if (!ok) {
-        void this.bridge?.postJob({ id: jobId, changeSet: job.changeSet, status: "queued", agent: job.agent, attempt: 2, differences });
+        void this.bridge?.postJob({ id: jobId, changeSet: job.changeSet, status: "queued", agent: job.agent, attempt: 2, differences, issues });
       }
     });
   }
@@ -230,6 +313,10 @@ export class PilotSession {
   private notify(): void {
     for (const listener of this.listeners) listener();
   }
+}
+
+function newJobId(): string {
+  return `job_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
 function load(): JobRecord[] {

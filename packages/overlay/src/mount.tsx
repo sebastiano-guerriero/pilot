@@ -1,4 +1,5 @@
 import { render } from "preact";
+import { isProbeFrame } from "./checks/widths.ts";
 import { DEFAULT_BRIDGE_URL } from "./bridge/client.ts";
 import { PilotSession } from "./bridge/session.ts";
 import { persistentHistory, resolveTarget } from "./edits/persist.ts";
@@ -70,6 +71,8 @@ const STORAGE_KEY = "pilot:running";
 export function mountPilot(options: PilotOptions = {}): PilotInstance {
   // On the server (an SSR framework rendering the module): nothing to mount.
   if (typeof window === "undefined" || typeof document === "undefined") return INERT;
+  // One of Pilot's own frames, measuring the page at another width (checks/widths.ts).
+  if (isProbeFrame()) return INERT;
   const existing = (window as WindowWithPilot).__pilot;
   if (existing) return existing;
 
