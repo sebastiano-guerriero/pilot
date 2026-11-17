@@ -2,7 +2,7 @@ import type { AgentRequest, ChangeSet, CommentMessage, ElementEdit, StyleChange 
 import { pageBreakpoints } from "../dom/breakpoints.ts";
 import { declaredValue } from "../dom/declared.ts";
 import { describeElement } from "../dom/target.ts";
-import { TEXT_PROPERTY, normalizeText } from "../dom/text.ts";
+import { normalizeText, textRunOf } from "../dom/text.ts";
 import { sourceOf } from "./clear.ts";
 import type { EditHistory, RecordedChange } from "./history.ts";
 
@@ -15,7 +15,7 @@ import type { EditHistory, RecordedChange } from "./history.ts";
  *   matches, its @media).
  * - A removal says so (`removed`), with the removed value and its source.
  * - `widths`, when the change is for some widths only.
- * - A text change is the edit's `text`: the page's own text and the new one.
+ * - Text changes are the edit's `texts`: per text run, the page's own text and the new one.
  * Elements still on the page are described afresh; one that isn't (another
  * page of the app, or re-rendered) keeps the description taken when it was
  * first changed. `unsent`: only the changes not sent to the agent yet (what
@@ -35,9 +35,10 @@ export function buildChangeSet(
       edit = { target: element.isConnected ? describeElement(element) : change.target, changes: [] };
       edits.set(element, edit);
     }
-    if (property === TEXT_PROPERTY) {
-      const from = element.isConnected ? history.pageText(element) : (change.from ?? "");
-      edit.text = { from: normalizeText(from), to: normalizeText(value) };
+    const run = textRunOf(property);
+    if (run !== null) {
+      const from = element.isConnected ? history.pageText(element, run) : (change.from ?? "");
+      (edit.texts ??= []).push({ from: normalizeText(from), to: normalizeText(value) });
       continue;
     }
     const page = removal ? null : element.isConnected ? declaredValue(element, property, states) : null;

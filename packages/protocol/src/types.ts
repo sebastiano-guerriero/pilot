@@ -97,8 +97,10 @@ export type StyleSource =
     };
 
 /**
- * The designer rewrote the element's text (double-click, inline): its copy,
- * not its style. Whitespace runs are one space, trimmed.
+ * The designer rewrote some of the element's text (double-click, inline):
+ * its copy, not its style. The whole text of an element that has only text,
+ * or one run of it between child elements (the text before a `<code>`).
+ * Whitespace runs are one space, trimmed.
  */
 export interface TextChange {
   /** The page's own text before the edit. */
@@ -111,8 +113,8 @@ export interface ElementEdit {
   target: ElementTarget;
   /** CSS changes; empty when only the text changed. */
   changes: StyleChange[];
-  /** A new text for the element, when the designer edited it. */
-  text?: TextChange;
+  /** New texts for the element, when the designer edited them (one per text run). */
+  texts?: TextChange[];
 }
 
 /**

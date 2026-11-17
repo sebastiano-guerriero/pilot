@@ -74,11 +74,40 @@ describe("editText", () => {
 
   it("finish() from outside ends it once (the selection moved)", () => {
     const results: Array<string | null> = [];
-    const finish = editText(heading, null, (t) => results.push(t));
+    const { finish } = editText(heading, null, (t) => results.push(t));
     finish(true);
     finish(true);
     key("Enter");
     expect(results).toEqual(["Ship faster"]);
+  });
+});
+
+describe("editing a run inside an element with child elements", () => {
+  it("only the run is editable, in a span that goes away afterwards; the rest is untouched", () => {
+    document.body.innerHTML = `<p>A sample page, <code>/pilot</code> launches it.</p>`;
+    const p = document.querySelector("p") as HTMLParagraphElement;
+    const [before, code, after] = [...p.childNodes];
+    let done: string | null = "";
+    const { host } = editText(p, null, (t) => {
+      done = t;
+    }, [after as Text]);
+    expect(host.localName).toBe("span");
+    expect(host.getAttribute("contenteditable")).toMatch(/plaintext-only|true/);
+    expect(p.hasAttribute("contenteditable")).toBe(false);
+    expect(host.firstChild).toBe(after);
+    (after as Text).data = " starts it.";
+    host.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    expect(done).toBe(" starts it.");
+    expect([...p.childNodes]).toEqual([before, code, after]);
+    expect(p.innerHTML).toBe("A sample page, <code>/pilot</code> launches it.");
+  });
+
+  it("commitText records it for that run", () => {
+    document.body.innerHTML = `<p>A sample page, <code>/pilot</code> launches it.</p>`;
+    const p = document.querySelector("p") as HTMLParagraphElement;
+    commitText(history, p, " starts it.", 1);
+    expect(history.changes()).toMatchObject([{ property: "text:1", value: " starts it.", from: " launches it." }]);
+    expect(p.innerHTML).toBe("A sample page, <code>/pilot</code> starts it.");
   });
 });
 

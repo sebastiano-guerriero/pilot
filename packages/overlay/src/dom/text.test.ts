@@ -6,7 +6,7 @@ import { EditHistory } from "../edits/history.ts";
 import { checkJob } from "../edits/verify.ts";
 import { inlinePreview } from "../test/inlinePreview.ts";
 import { describeElement } from "./target.ts";
-import { TEXT_PROPERTY, holdText, isTextOnly, normalizeText, pageTextContent } from "./text.ts";
+import { TEXT_PROPERTY, holdText, isTextOnly, normalizeText, pageTextContent, textProperty, textRunAt, textRunOf, textRuns } from "./text.ts";
 
 let button: HTMLButtonElement;
 let label: Text;
@@ -119,7 +119,7 @@ describe("a text change in the history, the change set and the check", () => {
     history.apply(button, TEXT_PROPERTY, "Start free trial");
     history.apply(button, "padding-top", "12px");
     const [edit] = buildChangeSet(history).edits;
-    expect(edit?.text).toEqual({ from: "Get started", to: "Start free trial" });
+    expect(edit?.texts).toEqual([{ from: "Get started", to: "Start free trial" }]);
     expect(edit?.target.text).toBe("Get started");
     expect(edit?.changes.map((c) => c.property)).toEqual(["padding-top"]);
   });
@@ -127,8 +127,7 @@ describe("a text change in the history, the change set and the check", () => {
   it("the prompt says it: from and to, quoted", () => {
     history.apply(button, TEXT_PROPERTY, 'Say "hi"');
     const prompt = formatPrompt(buildChangeSet(history));
-    expect(prompt).toContain('- From: "Get started"');
-    expect(prompt).toContain('- To: "Say \\"hi\\""');
+    expect(prompt).toContain('- "Get started" → "Say \\"hi\\""');
     expect(prompt).not.toContain("| Property |"); // no CSS changes, no table
   });
 
@@ -137,7 +136,7 @@ describe("a text change in the history, the change set and the check", () => {
     const saved = JSON.parse(JSON.stringify(history.serialize()));
     const elsewhere = new EditHistory(inlinePreview());
     elsewhere.load(saved, () => document.createElement("button"));
-    expect(buildChangeSet(elsewhere).edits[0]?.text).toEqual({ from: "Get started", to: "Start free trial" });
+    expect(buildChangeSet(elsewhere).edits[0]?.texts).toEqual([{ from: "Get started", to: "Start free trial" }]);
   });
 
   it("checked by the page's own text: differs until the page has the new text, whitespace aside", () => {
@@ -147,6 +146,54 @@ describe("a text change in the history, the change set and the check", () => {
       { selector: expect.any(String), property: "text", expected: "Start free trial", outcome: "differs", actual: "Get started" },
     ]);
     pageWrites(label, "\n    Start free trial\n  "); // the agent changed the source; hot reload re-rendered it
+    expect(checkJob(history, "j1").results[0]?.outcome).toBe("landed");
+  });
+});
+
+describe("text runs: the text between an element's child elements", () => {
+  let p: HTMLParagraphElement;
+  beforeEach(() => {
+    p = document.createElement("p");
+    p.innerHTML = "A sample page, <code>/pilot</code> launches it.";
+    document.body.append(p);
+  });
+
+  it("each run has its index and property; text inside a child element is that child's", () => {
+    expect(textRuns(p).map((r) => r.map((n) => n.data).join(""))).toEqual(["A sample page, ", " launches it."]);
+    const [before, , after] = [...p.childNodes];
+    expect(textRunAt(p, before as Text)?.run).toBe(0);
+    expect(textRunAt(p, after as Text)?.run).toBe(1);
+    expect(textRunAt(p, p.querySelector("code")?.firstChild as Text)).toBeNull();
+    expect([textProperty(0), textProperty(1)]).toEqual(["text", "text:1"]);
+    expect([textRunOf("text"), textRunOf("text:1"), textRunOf("padding")]).toEqual([0, 1, null]);
+  });
+
+  it("a comment doesn't break a run (React's `<!-- -->` between texts); whitespace-only runs aren't edited", () => {
+    p.innerHTML = "Hello <!-- -->Ada<b>!</b> ";
+    expect(textRuns(p).map((r) => r.length)).toEqual([2, 1]);
+    expect(textRunAt(p, p.lastChild)).toBeNull();
+  });
+
+  it("a run's change shows in that run only, the child elements untouched, and is listed by its texts", () => {
+    const code = p.querySelector("code") as HTMLElement;
+    history.apply(p, textProperty(1), " starts it.");
+    history.apply(p, textProperty(0), "A demo page, ");
+    expect(p.innerHTML).toBe("A demo page, <code>/pilot</code> starts it.");
+    expect(p.querySelector("code")).toBe(code);
+    expect(history.pageText(p, 1)).toBe(" launches it.");
+    expect(buildChangeSet(history).edits[0]?.texts).toEqual([
+      { from: "launches it.", to: "starts it." },
+      { from: "A sample page,", to: "A demo page," },
+    ]);
+    history.undo();
+    expect(p.innerHTML).toBe("A sample page, <code>/pilot</code> starts it.");
+  });
+
+  it("checked per run", () => {
+    history.apply(p, textProperty(1), " starts it.");
+    history.send("j1");
+    expect(checkJob(history, "j1").results[0]).toMatchObject({ property: "text:1", outcome: "differs", actual: "launches it." });
+    (p.lastChild as Text).data = " starts it."; // the page re-rendered with the new source
     expect(checkJob(history, "j1").results[0]?.outcome).toBe("landed");
   });
 });

@@ -1,6 +1,6 @@
 import type { ChangeResult } from "@pilot/protocol";
 import { PREVIEW_ATTRIBUTE } from "../dom/preview.ts";
-import { TEXT_PROPERTY, normalizeText } from "../dom/text.ts";
+import { normalizeText, textRunOf } from "../dom/text.ts";
 import type { EditHistory, RecordedChange } from "./history.ts";
 import { inWidths } from "./widths.ts";
 
@@ -31,19 +31,20 @@ export interface JobCheck {
 export function checkJob(history: EditHistory, jobId: string, width = window.innerWidth): JobCheck {
   const changes = history.changes({ job: jobId });
   const checkable = changes.filter((c) => c.element.isConnected && !c.states?.length && inWidths(c.widths ?? null, width));
-  const css = checkable.filter((c) => c.property !== TEXT_PROPERTY);
+  const isText = (c: RecordedChange) => textRunOf(c.property) !== null;
+  const css = checkable.filter((c) => !isText(c));
   const read = () => css.map((c) => computed(c.element, c.property));
   const actualCss = history.probe([], read);
   const expectedCss = history.probe(changes, read);
   // A text change: the page's own text (Pilot's left out) against the designer's.
   const actual = checkable.map((c) =>
-    c.property === TEXT_PROPERTY ? normalizeText(history.pageText(c.element)) : actualCss[css.indexOf(c)],
+    isText(c) ? normalizeText(history.pageText(c.element, textRunOf(c.property) ?? 0)) : actualCss[css.indexOf(c)],
   );
-  const expected = checkable.map((c) => (c.property === TEXT_PROPERTY ? normalizeText(c.value) : expectedCss[css.indexOf(c)]));
+  const expected = checkable.map((c) => (isText(c) ? normalizeText(c.value) : expectedCss[css.indexOf(c)]));
   const check: JobCheck = { results: [], landed: [], differs: [], unchecked: [] };
   for (const c of changes) {
     const i = checkable.indexOf(c);
-    const expectedValue = c.removal ? "removed" : c.property === TEXT_PROPERTY ? normalizeText(c.value) : c.value;
+    const expectedValue = c.removal ? "removed" : isText(c) ? normalizeText(c.value) : c.value;
     const base = { selector: c.target.selector, property: c.property, expected: expectedValue };
     if (i < 0) {
       check.unchecked.push(c);
