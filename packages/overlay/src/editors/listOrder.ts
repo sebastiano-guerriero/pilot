@@ -35,6 +35,7 @@ export const LIST_ORDER: ReadonlyArray<{ group: string; entries: readonly ListEn
       "aspect-ratio",
       "padding",
       "margin",
+      "overflow",
       "order",
       // a flex item's share of the space
       "flex-grow",
@@ -44,6 +45,7 @@ export const LIST_ORDER: ReadonlyArray<{ group: string; entries: readonly ListEn
       "grid-column",
       "grid-column-start",
       "grid-column-end",
+      "object-fit",
     ],
   },
   {
@@ -52,20 +54,21 @@ export const LIST_ORDER: ReadonlyArray<{ group: string; entries: readonly ListEn
       // `*`: rows for every value, and for none.
       { id: "position", rows: { "*": ["inset"] } },
       "z-index",
+      "isolation",
     ],
   },
   {
     group: "Appearance",
-    entries: ["border-radius"],
+    entries: ["background-color", "border-radius", "opacity"],
+  },
+  {
+    group: "Typography",
+    entries: ["color", "font-family", "font-size", "font-style", "font-weight", "line-height", "letter-spacing", "text-align"],
   },
   {
     // What's drawn of the element (mask, clip-path… will join it).
     group: "Visibility",
     entries: ["visibility"],
-  },
-  {
-    group: "Typography",
-    entries: ["font-family", "font-size", "font-style", "font-weight", "line-height", "letter-spacing", "text-align", "color"],
   },
 ];
 

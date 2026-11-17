@@ -11,8 +11,16 @@ function hasAlpha(color: string): boolean {
   return /^#[0-9a-f]{8}$/i.test(color) || /^rgba?\([^)]*(?:,[^,)]*){3}\)$/i.test(color) || /^rgba?\([^)]*\/[^)]*\)$/i.test(color);
 }
 
+/** What a color editor edits, and how it's labeled. */
+interface ColorConfig {
+  /** The property it writes: `color`, `background-color`. */
+  property: string;
+  /** The row's label, when it isn't the property (`bg-color`). */
+  name?: string;
+}
+
 /**
- * `color`, in two fields sharing the value area: the color (a swatch, then
+ * A color property (`color`, `background-color`), in two fields sharing the value area: the color (a swatch, then
  * its hex, or how the page names it: `var(--brand)`) and its opacity, 0–100,
  * in a 45px field with a drag handle. Both write one value (css/colors.ts):
  * `#000000`, `#00000080` at 50%, or `color-mix(…)` for a named color below
@@ -25,9 +33,11 @@ function hasAlpha(color: string): boolean {
  *   clearing the opacity makes it 100.
  * Tab goes color → opacity → next editor.
  */
-function ColorEditor(props: PropertyEditorProps) {
+function ColorEditor({ config, ...props }: PropertyEditorProps & { config: ColorConfig }) {
   const { onChange, onRevert, values, focusRequest, onReturnToSearch, onTabOut } = props;
-  const value = declaredOf(props, "color");
+  const { property } = config;
+  const label = config.name ?? property;
+  const value = declaredOf(props, property);
   const { color, opacity } = splitColor(value);
   const colorRef = useRef<HTMLInputElement>(null);
   const opacityRef = useRef<HTMLInputElement>(null);
@@ -42,24 +52,24 @@ function ColorEditor(props: PropertyEditorProps) {
   const tabOut = (direction: 1 | -1) => (onTabOut ? onTabOut(direction) : onReturnToSearch?.());
 
   const write = (next: string, gesture?: object) => {
-    if (next !== value) onChange("color", next, gesture ? { gesture } : undefined);
+    if (next !== value) onChange(property, next, gesture ? { gesture } : undefined);
   };
   const setOpacity = (o: number, gesture?: object) => {
     if (color) write(joinColor(color, o), gesture);
   };
 
   const swatch = color ? (
-    <span class="color-swatch" style={{ background: values?.color || "transparent" }} />
+    <span class="color-swatch" style={{ background: values?.[property] || "transparent" }} />
   ) : (
     <Icon name="layout-empty" />
   );
 
   return (
-    <PropertyRow label="color">
+    <PropertyRow label={label}>
       <div class="color-editor">
         <PropertyInputText
           value={color}
-          label="color"
+          label={label}
           icon={swatch}
           inputRef={colorRef}
           onCommit={(text) => {
@@ -74,7 +84,7 @@ function ColorEditor(props: PropertyEditorProps) {
         />
         <PropertyInputText
           value={opacity === null ? "" : String(opacity)}
-          label="color opacity"
+          label={`${label} opacity`}
           inputRef={opacityRef}
           onCommit={(text) => {
             if (!text.trim()) return setOpacity(100);
@@ -85,7 +95,7 @@ function ColorEditor(props: PropertyEditorProps) {
           onScrub={(steps, startText, gesture) => {
             const start = parseOpacity(startText) ?? opacity ?? 100;
             const next = Math.min(100, Math.max(0, start + steps));
-            if (next === start) return onRevert?.("color", gesture);
+            if (next === start) return onRevert?.(property, gesture);
             setOpacity(next, gesture);
           }}
           onSubmit={onReturnToSearch}
@@ -96,9 +106,28 @@ function ColorEditor(props: PropertyEditorProps) {
   );
 }
 
-export const colorEditor: PropertyEditor = {
-  id: "color",
-  label: "Color",
-  properties: ["color"],
-  component: ColorEditor,
-};
+/** Define a color editor for `property` (see ColorEditor). */
+export function colorEditor(definition: { label: string; aliases?: string[] } & ColorConfig): PropertyEditor {
+  const { property, name, ...rest } = definition;
+  const config: ColorConfig = { property, name };
+  return {
+    id: property,
+    properties: [property],
+    component: (props: PropertyEditorProps) => <ColorEditor {...props} config={config} />,
+    ...rest,
+  };
+}
+
+/** The text's color. */
+export const textColorEditor = colorEditor({ property: "color", label: "Color" });
+
+/**
+ * background-color, labeled `bg-color` (the full name doesn't fit the row's
+ * label). Found by its name, the label, and Tailwind's `bg`.
+ */
+export const backgroundColorEditor = colorEditor({
+  property: "background-color",
+  name: "bg-color",
+  label: "Background color",
+  aliases: ["bg", "bg-color"],
+});

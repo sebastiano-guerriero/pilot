@@ -407,6 +407,39 @@ describe("drag to scrub", () => {
     expect(element.style.gap).toBe("3px");
   });
 
+  // An opacity row (0–100, kind percent) whose computed value follows the edits.
+  const ScrubbedOpacity = lengthEditor({ property: "opacity", label: "Opacity", scrub: true }).component;
+  const mountOpacity = () =>
+    act(() => {
+      render(
+        h(ScrubbedOpacity, {
+          element,
+          values: { opacity: element.style.opacity || "1" },
+          onChange: (p: string, v: string, o?: { gesture?: object }) => {
+            history.apply(element, p, v, o?.gesture);
+            mountOpacity();
+          },
+          onRevert: (p: string, g: object) => {
+            history.revert(element, p, g);
+            mountOpacity();
+          },
+        }),
+        container,
+      );
+    });
+
+  it("opacity shows 0–100 and stops at 100: dragging further doesn't count, turning back goes down right away", () => {
+    element.style.opacity = "90%";
+    mountOpacity();
+    expect(input().value).toBe("90");
+    down(100);
+    move(80); // 20px up: 100, not 110
+    expect(element.style.opacity).toBe("100%");
+    move(83); // 3px back down
+    expect(element.style.opacity).toBe("97%");
+    expect(input().value).toBe("97");
+  });
+
   it("rem and other font-relative units step by 0.1", () => {
     element.style.width = "2rem";
     mountScrub();

@@ -143,6 +143,30 @@
     display: none;
   }
 
+  /* Rows fade out as they scroll under the header's line and the panel's
+     bottom edge, as in the property dialog (PropertyDialog.css): the panel's
+     background, going transparent toward the list. Each fade is no taller
+     than the list's padding on its side (6px above, 12px of the 14px below),
+     so nothing fades while the list doesn't scroll. */
+  .fade {
+    position: absolute;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+  }
+
+  .fade[data-edge="top"] {
+    top: 0;
+    height: 6px;
+    background: linear-gradient(to bottom, var(--plt-color-background), transparent);
+  }
+
+  .fade[data-edge="bottom"] {
+    bottom: 0;
+    height: 12px;
+    background: linear-gradient(to top, var(--plt-color-background), transparent);
+  }
+
   .row {
     display: flex;
     align-items: center;

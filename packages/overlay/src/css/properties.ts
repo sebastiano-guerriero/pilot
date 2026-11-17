@@ -67,8 +67,12 @@ export interface CssPropertyInfo {
    *   writes `1 / -1` (first line to last). Shown back as `3` and `full`.
    * - "ratio": a width / height ratio (aspect-ratio): `16/9`, `16 / 9` or
    *   `16:9` write `16 / 9`; one number (`1.5`) is that ratio to 1. Not stepped.
+   * - "percent": 0–100, shown without the % (opacity, like the color
+   *   editor's): `50` or `50%` write `50%`, a fraction (`0.5`, `.25`) is
+   *   that share of 100, kept within 0–100. The page's `0.5` shows as 50.
+   *   Steps by whole numbers.
    */
-  kind?: "length" | "integer" | "number" | "line-height" | "font-family" | "grid-line" | "grid-span" | "ratio";
+  kind?: "length" | "integer" | "number" | "line-height" | "font-family" | "grid-line" | "grid-span" | "ratio" | "percent";
 }
 
 const SIZE_KEYWORDS = ["auto", "fit-content", "min-content", "max-content", "stretch"];
@@ -116,6 +120,15 @@ export const TEXT_ALIGN_VALUES = ["left", "center", "right", "justify"] as const
 /** visibility's options, in menu order. */
 export const VISIBILITY_VALUES = ["visible", "hidden", "collapse"] as const;
 
+/** overflow's options, in menu order. */
+export const OVERFLOW_VALUES = ["visible", "hidden", "clip", "scroll", "auto"] as const;
+
+/** object-fit's options, in menu order. */
+export const OBJECT_FIT_VALUES = ["fill", "contain", "cover", "none", "scale-down"] as const;
+
+/** isolation's options, in menu order. */
+export const ISOLATION_VALUES = ["auto", "isolate"] as const;
+
 export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   display: { initial: "inline", keywords: [...DISPLAY_VALUES], negative: false },
   "grid-template-columns": { initial: "none", keywords: ["none"], negative: false },
@@ -140,12 +153,16 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   "min-height": { initial: "auto", keywords: SIZE_KEYWORDS, negative: false },
   "max-height": { initial: "none", keywords: ["none", ...SIZE_KEYWORDS.filter((k) => k !== "auto")], negative: false },
   "aspect-ratio": { initial: "auto", keywords: ["auto"], negative: false, kind: "ratio" },
+  "object-fit": { initial: "fill", keywords: [...OBJECT_FIT_VALUES], negative: false },
+  overflow: { initial: "visible", keywords: [...OVERFLOW_VALUES], negative: false },
+  isolation: { initial: "auto", keywords: [...ISOLATION_VALUES], negative: false },
   ...sides((side) => `padding-${side}`, { initial: "0", keywords: [], negative: false }),
   ...sides((side) => `margin-${side}`, { initial: "0", keywords: ["auto"], negative: true }),
   position: { initial: "static", keywords: [...POSITION_VALUES], negative: false },
   "z-index": { initial: "auto", keywords: ["auto"], negative: true, kind: "integer" },
   visibility: { initial: "visible", keywords: [...VISIBILITY_VALUES], negative: false },
   "border-radius": { initial: "0", keywords: [], negative: false },
+  opacity: { initial: "1", keywords: [], negative: false, kind: "percent" },
   "font-family": { initial: "", keywords: [], negative: false, kind: "font-family" },
   "font-size": {
     initial: "medium",
@@ -159,6 +176,7 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   "text-align": { initial: "start", keywords: ["start", "end", ...TEXT_ALIGN_VALUES], negative: false },
   // Edited by its own editor (css/colors.ts), not as a length.
   color: { initial: "canvastext", keywords: ["currentcolor", "transparent"], negative: false },
+  "background-color": { initial: "transparent", keywords: ["currentcolor", "transparent"], negative: false },
   // inset's sides: the offsets of a positioned element.
   ...sides((side) => side, { initial: "auto", keywords: ["auto"], negative: true }),
 };

@@ -302,6 +302,10 @@ export function DomTree({ selected, onHover, onSelect, onClose }: DomTreeProps) 
             </div>
           ))}
         </div>
+        {/* Rows fade out at the list's top and bottom edges as they scroll, like
+            the property dialog's list. Below the scroll thumbs. */}
+        <div class="fade" data-edge="top" aria-hidden="true" />
+        <div class="fade" data-edge="bottom" aria-hidden="true" />
         <ScrollThumb target={listRef} />
         <ScrollThumb target={listRef} axis="x" />
       </div>

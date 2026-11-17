@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EditHistory } from "../../edits/history.ts";
 import { inlinePreview } from "../../test/inlinePreview.ts";
 import { matchEditors } from "../registry.ts";
-import { colorEditor } from "./ColorEditor.tsx";
+import { backgroundColorEditor, textColorEditor } from "./ColorEditor.tsx";
 
 let element: HTMLElement;
 let container: HTMLElement;
@@ -15,7 +15,7 @@ let changes: Array<[string, string]>;
 const mount = () =>
   act(() => {
     render(
-      h(colorEditor.component, {
+      h(textColorEditor.component, {
         element,
         values: { color: "rgb(0, 0, 0)" },
         onChange: (p: string, v: string, o?: { gesture?: object }) => {
@@ -114,6 +114,47 @@ describe("color editor", () => {
   });
 
   it("is found by color", () => {
+    expect(matchEditors("color").map((e) => e.id)).toEqual(["color"]);
+  });
+});
+
+describe("bg-color editor", () => {
+  const mountBg = () =>
+    act(() => {
+      render(
+        h(backgroundColorEditor.component, {
+          element,
+          values: { "background-color": element.style.backgroundColor || "rgba(0, 0, 0, 0)" },
+          onChange: (p: string, v: string, o?: { gesture?: object }) => {
+            changes.push([p, v]);
+            history.apply(element, p, v, o?.gesture);
+            mountBg();
+          },
+          onRevert: (p: string, g: object) => {
+            history.revert(element, p, g);
+            mountBg();
+          },
+        }),
+        container,
+      );
+    });
+
+  it("works like color, on background-color, labeled bg-color", () => {
+    mountBg();
+    expect(container.textContent).toContain("bg-color");
+    expect(field("bg-color").value).toBe("");
+    commit(field("bg-color"), "ff0000");
+    expect(changes.at(-1)).toEqual(["background-color", "#ff0000"]);
+    commit(field("bg-color opacity"), "50");
+    expect(changes.at(-1)).toEqual(["background-color", "#ff000080"]);
+    commit(field("bg-color"), "");
+    expect(changes.at(-1)).toEqual(["background-color", ""]);
+  });
+
+  it("is found by background-color, bg-color and Tailwind's bg; color still finds just color", () => {
+    for (const q of ["background-color", "bg-color", "bg", "background"]) {
+      expect(matchEditors(q).map((e) => e.id), q).toEqual(["background-color"]);
+    }
     expect(matchEditors("color").map((e) => e.id)).toEqual(["color"]);
   });
 });

@@ -45,6 +45,18 @@ describe("searchEditors", () => {
     }
   });
 
+  it("finds object-fit, isolation and overflow by their names and Tailwind's", async () => {
+    const { editors } = await import("./registry.ts");
+    const cases: Record<string, string[]> = {
+      "object-fit": ["object-fit", "object", "object-cover", "object-scale-down"],
+      isolation: ["isolation", "isolate", "isolation-auto"],
+      overflow: ["overflow", "overflow-hidden", "overflow-auto"],
+    };
+    for (const [id, queries] of Object.entries(cases)) {
+      for (const q of queries) expect(searchEditors(q, editors)[0]?.id, q).toBe(id);
+    }
+  });
+
   it("returns everything for an empty query", () => {
     expect(searchEditors("  ", list)).toHaveLength(3);
   });

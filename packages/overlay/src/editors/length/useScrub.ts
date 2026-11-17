@@ -21,8 +21,8 @@ export interface ScrubTarget {
  * - From an empty field: it steps from the base (the computed value, 0 for
  *   gap, so the first step up is 1px), and never goes back to empty: only
  *   deleting the field's text does that.
- * - At the minimum (0, unless negatives are allowed), dragging further doesn't
- *   count: turning back moves the value right away.
+ * - At the minimum (0, unless negatives are allowed), or a percent's 100,
+ *   dragging further doesn't count: turning back moves the value right away.
  * What it steps from is fixed when the drag starts (the computed value
  * changes with every step, so it can't be read again mid-drag).
  */
@@ -45,6 +45,12 @@ export function useScrub({ onChange, onRevert }: Pick<PropertyEditorProps, "onCh
       const floor = -d.start / moved;
       d.shift += offset - floor;
       offset = floor;
+    }
+    // A percent (opacity) stops at 100 the same way.
+    if (cssProperty(property).kind === "percent" && Number.isFinite(d.start) && d.start + offset * moved > 100) {
+      const ceiling = (100 - d.start) / moved;
+      d.shift += offset - ceiling;
+      offset = ceiling;
     }
     if (offset === 0 && startText) return onRevert?.(writes, gesture);
     const next = stepValue(property, startText, offset * increment, d.base);

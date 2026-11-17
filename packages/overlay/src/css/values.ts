@@ -30,9 +30,14 @@ const BINARY_PLUS_MINUS = new RegExp(String.raw`(?<=(?:\d|\))(?:${UNIT})?)\s*([+
 /**
  * The value as the field shows it: an outer `calc(…)` is left out. For a
  * column span (grid-column), `span 3 / span 3` shows as `3` and `1 / -1` as
- * `full`, the way they're typed.
+ * `full`, the way they're typed. A percent (opacity) shows 0–100 without
+ * the %: `50%` and `0.5` both show as `50`.
  */
 export function displayValue(value: string, property?: string): string {
+  if (property && cssProperty(property).kind === "percent") {
+    const percent = percentOf(value.trim());
+    if (percent !== null) return String(percent);
+  }
   if (property && cssProperty(property).kind === "grid-span") {
     const v = value.trim().replace(/\s+/g, " ");
     if (v === "1 / -1") return "full";
@@ -42,6 +47,19 @@ export function displayValue(value: string, property?: string): string {
   const inner = unwrapCalc(value.trim());
   return inner ?? value;
 }
+
+/**
+ * A percent value (opacity) as a number from 0 to 100: `50%` → 50, a bare
+ * number as CSS reads it, a fraction of 1 (`0.5` → 50). Null for anything else.
+ */
+function percentOf(value: string): number | null {
+  const percent = value.match(/^(\d*\.?\d+)%$/);
+  if (percent) return round2(Math.min(100, Number(percent[1])));
+  if (/^\d*\.?\d+$/.test(value)) return round2(Math.min(1, Number(value)) * 100);
+  return null;
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
  * How many columns a grid-column value spans, when it ends in `span N`
@@ -123,7 +141,7 @@ function splitTopLevel(text: string): string[] {
 }
 
 /** parseValue for the kinds that aren't lengths (keywords and functions are handled before). */
-function parseOther(kind: "integer" | "number" | "line-height" | "grid-line" | "grid-span" | "ratio", negative: boolean, t: string): string | null {
+function parseOther(kind: NonLengthKind, negative: boolean, t: string): string | null {
   const integer = /^-?\d+$/.test(t) ? Number(t) : null;
   const span = t.match(/^span ?(\d+)$/);
   switch (kind) {
@@ -156,8 +174,19 @@ function parseOther(kind: "integer" | "number" | "line-height" | "grid-line" | "
     }
     case "ratio":
       return normalizeRatio(t);
+    case "percent": {
+      // `50` and `50%` are 50%; a fraction of 1 written with a point (`0.5`,
+      // `.25`, `1.0`) is that share, as CSS would read it. Within 0–100.
+      const m = t.match(/^(\d*\.?\d+)(%?)$/);
+      if (!m) return isMath(t) ? `calc(${normalizeMath(t)})` : null;
+      const n = Number(m[1]);
+      const fraction = !m[2] && (m[1] as string).includes(".") && n <= 1;
+      return `${round2(Math.min(100, fraction ? n * 100 : n))}%`;
+    }
   }
 }
+
+type NonLengthKind = "integer" | "number" | "line-height" | "grid-line" | "grid-span" | "ratio" | "percent";
 
 /**
  * A width / height ratio, as CSS writes it: `16/9`, `16 / 9`, `16:9` →
@@ -180,7 +209,9 @@ export function normalizeRatio(text: string): string | null {
  */
 export function stepValue(property: string, text: string, delta: number, computed: string | undefined): string | null {
   const info = cssProperty(property);
-  const t = displayValue(text.trim().toLowerCase(), property);
+  // A percent's text is the field's, already 0–100: showing it again would
+  // read `50` as a CSS fraction.
+  const t = info.kind === "percent" ? text.trim().toLowerCase() : displayValue(text.trim().toLowerCase(), property);
   if (info.kind === "font-family") return null; // names: nothing to step
   // Whole steps for the other kinds, except line-height, whose lengths drag
   // finely like any length (0.1em).
@@ -212,10 +243,12 @@ export function stepValue(property: string, text: string, delta: number, compute
  * - number: the same, by whole numbers, keeping decimals (0.5 → 1.5);
  * - grid-line: skips 0 (1 → -1); `span N` steps N, from 1; from empty or
  *   `auto`, ↑ gives 1 and ↓ gives -1;
- * - grid-span: the count, from 1 (the default: ↓ on an empty field writes nothing).
+ * - grid-span: the count, from 1 (the default: ↓ on an empty field writes nothing);
+ * - percent: by whole numbers within 0–100, from the computed value (opacity's
+ *   `1` is 100).
  */
 function stepOther(
-  kind: "integer" | "number" | "line-height" | "grid-line" | "grid-span" | "ratio",
+  kind: NonLengthKind,
   info: { keywords: string[]; negative: boolean },
   t: string,
   delta: number,
@@ -268,6 +301,14 @@ function stepOther(
     }
     case "ratio":
       return null;
+    case "percent": {
+      // `t` is the field's text, 0–100 (`50` or `50%`); an empty field steps
+      // from the computed value, a fraction (opacity's `1` is 100).
+      const shown = t.match(/^(\d*\.?\d+)%?$/);
+      const n = blank ? (percentOf(computed ?? "") ?? 100) : shown ? Number(shown[1]) : null;
+      if (n === null) return null;
+      return `${Math.min(100, Math.max(0, Math.round(n + delta)))}%`;
+    }
   }
 }
 

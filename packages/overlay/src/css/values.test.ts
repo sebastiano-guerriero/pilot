@@ -239,3 +239,35 @@ describe("ratio (aspect-ratio)", () => {
   });
 });
 
+
+describe("percent (opacity)", () => {
+  it("50 and 50% write 50%; a fraction is its share of 100; within 0–100", () => {
+    expect(parseValue("opacity", "50")).toBe("50%");
+    expect(parseValue("opacity", "50%")).toBe("50%");
+    expect(parseValue("opacity", "0.5")).toBe("50%");
+    expect(parseValue("opacity", ".25")).toBe("25%");
+    expect(parseValue("opacity", "1")).toBe("1%");
+    expect(parseValue("opacity", "1.0")).toBe("100%");
+    expect(parseValue("opacity", "0")).toBe("0%");
+    expect(parseValue("opacity", "150")).toBe("100%");
+    expect(parseValue("opacity", "-10")).toBeNull();
+    expect(parseValue("opacity", "var(--fade)")).toBe("var(--fade)");
+  });
+
+  it("shows 0–100 without the %, the page's fractions too", () => {
+    expect(displayValue("50%", "opacity")).toBe("50");
+    expect(displayValue("0.5", "opacity")).toBe("50");
+    expect(displayValue("1", "opacity")).toBe("100");
+    expect(displayValue("0", "opacity")).toBe("0");
+    expect(displayValue("var(--fade)", "opacity")).toBe("var(--fade)");
+  });
+
+  it("steps the field's 0–100 by whole numbers within 0–100, an empty field from the computed fraction", () => {
+    expect(stepValue("opacity", "50", -1, "0.5")).toBe("49%");
+    expect(stepValue("opacity", "50%", 1, "0.5")).toBe("51%");
+    expect(stepValue("opacity", "1", 1, "0.01")).toBe("2%");
+    expect(stepValue("opacity", "100%", 1, "1")).toBe("100%");
+    expect(stepValue("opacity", "0%", -1, "0")).toBe("0%");
+    expect(stepValue("opacity", "", -1, "1")).toBe("99%");
+  });
+});

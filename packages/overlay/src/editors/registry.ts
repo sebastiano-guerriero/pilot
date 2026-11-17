@@ -5,7 +5,7 @@ import { displayEditor } from "./display/DisplayEditor.tsx";
 import { flexDirectionEditor, flexWrapEditor } from "./flex/FlexEditors.tsx";
 import { flexBasisEditor, flexGrowEditor, flexShrinkEditor } from "./flex-item/FlexItemEditors.tsx";
 import { gapEditor } from "./gap/GapEditor.tsx";
-import { colorEditor } from "./color/ColorEditor.tsx";
+import { backgroundColorEditor, textColorEditor } from "./color/ColorEditor.tsx";
 import { colEndEditor, colSpanEditor, colStartEditor } from "./grid-column/GridColumnEditor.tsx";
 import { gridColumnsEditor } from "./grid-columns/GridColumnsEditor.tsx";
 import { heightEditor, maxHeightEditor, minHeightEditor } from "./height/HeightEditor.tsx";
@@ -15,6 +15,10 @@ import { orderEditor } from "./order/OrderEditor.tsx";
 import { paddingEditor } from "./padding/PaddingEditor.tsx";
 import { positionEditor } from "./position/PositionEditor.tsx";
 import { insetEditor } from "./inset/InsetEditor.tsx";
+import { isolationEditor } from "./isolation/IsolationEditor.tsx";
+import { objectFitEditor } from "./object-fit/ObjectFitEditor.tsx";
+import { opacityEditor } from "./opacity/OpacityEditor.tsx";
+import { overflowEditor } from "./overflow/OverflowEditor.tsx";
 import {
   fontFamilyEditor,
   fontSizeEditor,
@@ -61,10 +65,15 @@ export const editors: PropertyEditor[] = [
   flexGrowEditor,
   flexShrinkEditor,
   flexBasisEditor,
+  objectFitEditor,
+  overflowEditor,
+  isolationEditor,
   positionEditor,
   insetEditor,
   zIndexEditor,
+  backgroundColorEditor,
   borderRadiusEditor,
+  opacityEditor,
   visibilityEditor,
   fontFamilyEditor,
   fontSizeEditor,
@@ -73,7 +82,7 @@ export const editors: PropertyEditor[] = [
   lineHeightEditor,
   letterSpacingEditor,
   textAlignEditor,
-  colorEditor,
+  textColorEditor,
 ];
 
 /**
