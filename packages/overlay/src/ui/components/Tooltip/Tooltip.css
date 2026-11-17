@@ -1,0 +1,76 @@
+/* A tooltip over its trigger (Tooltip.tsx): 22px tall, 6px padding, 11px
+   text, 5px radius, in the background color, with a 1px white ring at 10%
+   and the large shadow. 4px from the trigger, centered on it. */
+@scope (.tooltip-anchor) {
+  :scope {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .tooltip {
+    position: absolute;
+    left: 50%;
+    bottom: 100%;
+    margin-bottom: 4px;
+    translate: -50% 0;
+    height: 22px;
+    padding-inline: 6px;
+    line-height: 22px;
+    border-radius: 5px;
+    background: var(--plt-color-background);
+    color: var(--plt-color-contrast-high);
+    font-size: 11px;
+    white-space: nowrap;
+    /* The property dialog's 1px white ring at 10%, over the large shadow. */
+    box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.1), var(--plt-shadow-lg);
+    pointer-events: none;
+    /* Closed: faded out and a touch smaller, scaled from the side that
+       faces the trigger. Closing is quick (0.1s, easing in), after 40ms:
+       the time to cross to a neighboring trigger, whose tooltip then makes
+       this one vanish at once ([data-instant]) instead of fading. */
+    opacity: 0;
+    visibility: hidden;
+    scale: 0.96;
+    transform-origin: 50% 100%;
+    transition:
+      opacity 0.1s ease-in 40ms,
+      scale 0.1s ease-in 40ms,
+      visibility 0.1s 40ms;
+
+    &[data-side="bottom"] {
+      bottom: auto;
+      top: 100%;
+      margin-bottom: 0;
+      margin-top: 4px;
+      transform-origin: 50% 0;
+    }
+  }
+
+  /* Open: Tooltip.tsx decides when (the pause on hover, shared by all
+     tooltips in delay.ts). It fades in and grows to full size over 0.2s on
+     a soft ease-out (easeOutQuint). */
+  .tooltip[data-open] {
+    opacity: 1;
+    visibility: visible;
+    scale: 1;
+    transition:
+      opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      scale 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      visibility 0s;
+  }
+
+  /* Moving between triggers: no transition at all (as Base UI does). The
+     new one is there at once, the one left behind gone at once, so sweeping
+     along the toolbar doesn't lag behind the pointer. */
+  .tooltip[data-instant] {
+    transition: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tooltip,
+    .tooltip[data-open] {
+      scale: 1;
+      transition: none;
+    }
+  }
+}

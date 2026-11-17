@@ -1,5 +1,5 @@
-/* Actions on the selection, at its top-left corner. Placeholder look,
-   pending the design: shaped like the hover label. */
+/* Actions on the selection, above its top-right corner: 20px accent
+   buttons, their icon in the background color. */
 @scope (.selection-actions) {
   :scope {
     position: fixed;
@@ -10,25 +10,18 @@
 
   .action {
     all: unset;
+    display: grid;
+    place-items: center;
+    width: 20px;
     height: 20px;
-    padding-inline: 6px;
-    border-radius: 4px;
-    background: var(--plt-color-background);
-    color: var(--plt-color-contrast-high);
-    font-size: var(--plt-text-base);
-    line-height: 20px;
-    cursor: pointer;
-    user-select: none;
-    box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.1);
-  }
-
-  .action:hover,
-  .action[aria-pressed="true"] {
+    border-radius: 5px;
     background: var(--plt-color-accent);
     color: var(--plt-color-background);
+    cursor: pointer;
   }
 
   .action:focus-visible {
     outline: 2px solid var(--plt-color-accent);
+    outline-offset: 2px;
   }
 }

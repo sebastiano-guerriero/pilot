@@ -21,6 +21,18 @@
     inset: 0 -3px;
   }
 
+  /* Sideways: over the bottom edge, 3px in, 4px tall. */
+  :scope[data-axis="x"] {
+    right: auto;
+    bottom: 3px;
+    width: auto;
+    height: 4px;
+  }
+
+  :scope[data-axis="x"]::before {
+    inset: -3px 0;
+  }
+
   :scope[data-visible] {
     opacity: 1;
   }

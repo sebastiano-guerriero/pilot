@@ -32,17 +32,25 @@ export function thumbGeometry({ scrollTop, scrollHeight, clientHeight }: Scroll)
 interface ScrollThumbProps {
   /** The element that scrolls (its native scrollbar hidden in its own CSS). */
   target: RefObject<HTMLElement | null>;
+  /**
+   * `y` (default): up and down, over the right edge. `x`: sideways, over the
+   * bottom edge (the same measures, along the width: `thumbGeometry` reads
+   * them as top / height).
+   */
+  axis?: "x" | "y";
 }
 
 /**
  * A minimal scrollbar for `target`: just a thumb, drawn over its right edge
+ * (or its bottom edge, `axis: "x"`)
  * (absolutely positioned in the target's positioned parent), so it takes no
  * room and the layout is the same in every browser, whatever its own
  * scrollbars do. It shows while the pointer is over the area or it's
  * scrolling, and can be dragged. Wheel, trackpad and keys scroll the target
  * itself, as usual.
  */
-export function ScrollThumb({ target }: ScrollThumbProps) {
+export function ScrollThumb({ target, axis = "y" }: ScrollThumbProps) {
+  const x = axis === "x";
   const [scroll, setScroll] = useState<Scroll>({ scrollTop: 0, scrollHeight: 0, clientHeight: 0 });
   const [hovered, setHovered] = useState(false);
   const [scrolling, setScrolling] = useState(false);
@@ -55,7 +63,9 @@ export function ScrollThumb({ target }: ScrollThumbProps) {
     const el = target.current;
     if (!el) return;
     const measure = () => {
-      const next = { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight };
+      const next = x
+        ? { scrollTop: el.scrollLeft, scrollHeight: el.scrollWidth, clientHeight: el.clientWidth }
+        : { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight };
       setScroll((s) =>
         s.scrollTop === next.scrollTop && s.scrollHeight === next.scrollHeight && s.clientHeight === next.clientHeight ? s : next,
       );
@@ -99,7 +109,7 @@ export function ScrollThumb({ target }: ScrollThumbProps) {
       children?.disconnect();
       clearTimeout(linger.current);
     };
-  }, [target.current]);
+  }, [target.current, axis]);
   useEffect(() => () => clearTimeout(linger.current), []);
 
   // Dragging the thumb scrolls the area by the same share of its range.
@@ -110,7 +120,7 @@ export function ScrollThumb({ target }: ScrollThumbProps) {
   const onPointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
     e.preventDefault();
-    drag.current = { y: e.clientY, scrollTop: scroll.scrollTop };
+    drag.current = { y: x ? e.clientX : e.clientY, scrollTop: scroll.scrollTop };
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
     setDragging(true);
   };
@@ -120,7 +130,11 @@ export function ScrollThumb({ target }: ScrollThumbProps) {
     if (!el || !d) return;
     const track = scroll.clientHeight - 2 * INSET - geometry.height;
     const range = scroll.scrollHeight - scroll.clientHeight;
-    if (track > 0) el.scrollTop = d.scrollTop + ((e.clientY - d.y) * range) / track;
+    const at = d.scrollTop + (((x ? e.clientX : e.clientY) - d.y) * range) / track;
+    if (track > 0) {
+      if (x) el.scrollLeft = at;
+      else el.scrollTop = at;
+    }
   };
   const onPointerUp = () => {
     drag.current = null;
@@ -133,7 +147,8 @@ export function ScrollThumb({ target }: ScrollThumbProps) {
       aria-hidden="true"
       data-visible={hovered || scrolling || dragging ? "" : undefined}
       data-dragging={dragging ? "" : undefined}
-      style={{ top: px(geometry.top), height: px(geometry.height) }}
+      data-axis={axis}
+      style={x ? { left: px(geometry.top), width: px(geometry.height) } : { top: px(geometry.top), height: px(geometry.height) }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

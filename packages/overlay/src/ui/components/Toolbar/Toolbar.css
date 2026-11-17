@@ -54,6 +54,56 @@
     color: var(--plt-color-background);
   }
 
+  /* Copy prompt (no agent): the copy icon, which morphs into a check once
+     the prompt is copied, and back after 1.5s (Toolbar.tsx). Both icons are
+     stacked; the copy one shrinks, blurs and fades out as the check grows
+     in, its stroke drawing itself from the short end (pathLength 1). */
+  .copy-morph {
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+
+    & > .icon {
+      grid-area: 1 / 1;
+      transition:
+        opacity 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+        scale 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+        filter 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+  }
+
+  .morph-check {
+    opacity: 0;
+    scale: 0.5;
+    filter: blur(2px);
+
+    & path {
+      stroke-dasharray: 1;
+      stroke-dashoffset: 1;
+      transition: stroke-dashoffset 0.15s ease-in;
+    }
+  }
+
+  .copy-morph[data-done] {
+    & .morph-copy {
+      opacity: 0;
+      scale: 0.5;
+      filter: blur(2px);
+    }
+
+    & .morph-check {
+      opacity: 1;
+      scale: 1;
+      filter: none;
+    }
+
+    & .morph-check path {
+      stroke-dashoffset: 0;
+      transition: stroke-dashoffset 0.3s cubic-bezier(0.22, 1, 0.36, 1) 0.06s;
+    }
+  }
+
   /* The jobs in progress. Its slot grows from nothing as it arrives, so the
      toolbar widens (and stays centered); the button, then its pill, scale in. */
   .jobs-slot {
@@ -138,6 +188,11 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .copy-morph > .icon,
+    .copy-morph .morph-check path {
+      transition: none;
+    }
+
     .jobs-slot,
     .jobs,
     .pill,

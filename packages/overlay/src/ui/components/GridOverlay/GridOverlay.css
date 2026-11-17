@@ -34,10 +34,12 @@
      in a short row, nor the column numbers at a corner. */
   .number {
     padding: 2px 4px;
-    border-radius: 4px;
+    border-radius: 5px;
     background: var(--plt-color-accent);
     color: var(--plt-color-background);
     font-size: var(--plt-text-base);
+    /* Every digit the same width: two-digit numbers all take the same room. */
+    font-variant-numeric: tabular-nums;
     line-height: 1;
     white-space: nowrap;
   }

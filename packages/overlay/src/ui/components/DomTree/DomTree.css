@@ -1,19 +1,80 @@
-/* The DOM tree: the page's elements as a tree, docked to the left, full
-   height. Placeholder look, pending the design. */
+/* The DOM tree: the page's elements as a tree, on the left, as tall as its
+   rows (up to its max-height: the window's, or what it was resized to). Its
+   spot and max-height are set inline (DomTree.tsx). Placeholder look,
+   pending the design. */
 @scope (.dom-tree) {
   :scope {
     position: fixed;
-    top: 8px;
-    bottom: 8px;
-    left: 8px;
     z-index: var(--plt-z-ui);
     width: 240px;
+    /* Room below the list, so the horizontal scroll thumb sits clear of the
+       panel's rounded bottom edge (7px up: these 4px and its own 3px). */
+    padding-bottom: 4px;
     display: flex;
     flex-direction: column;
     border-radius: 12px;
     background: var(--plt-color-background);
     box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.1), var(--plt-shadow-lg);
     overflow: hidden;
+  }
+
+  /* The drag strip: 12px along the top edge, over the header's empty top,
+     full width. It moves the panel sideways (DomTree.tsx). As in the
+     property dialog (PropertyDialog.css): the grip centered, 3px from the
+     top edge, contrast-low, lit when hovered or dragging; grab cursor. */
+  .drag-handle {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 12px;
+    padding-top: 3px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    color: var(--plt-color-contrast-low);
+    cursor: grab;
+    touch-action: none;
+
+    & .icon {
+      pointer-events: none;
+    }
+
+    &:hover {
+      color: var(--plt-color-contrast-high);
+    }
+  }
+
+  :scope[data-dragging="move"],
+  :scope[data-dragging="move"] .drag-handle {
+    cursor: grabbing;
+    user-select: none;
+  }
+
+  :scope[data-dragging="move"] .drag-handle {
+    color: var(--plt-color-contrast-high);
+  }
+
+  /* The resize strip: 6px along the bottom edge, full width, over the
+     panel's bottom padding (clear of the horizontal scroll thumb above it).
+     Dragging it sets the panel's height (DomTree.tsx). No visual of its own
+     yet: the resize cursor says it. */
+  .resize-handle {
+    position: absolute;
+    z-index: 1;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 6px;
+    cursor: ns-resize;
+    touch-action: none;
+  }
+
+  :scope[data-dragging="resize"],
+  :scope[data-dragging="resize"] .resize-handle {
+    cursor: ns-resize;
+    user-select: none;
   }
 
   .header {
@@ -26,8 +87,11 @@
     user-select: none;
   }
 
+  /* Above the drag strip, which its top 2px meet. */
   .close {
     all: unset;
+    position: relative;
+    z-index: 2;
     display: grid;
     place-items: center;
     width: 20px;
@@ -53,20 +117,25 @@
     flex-direction: column;
   }
 
-  /* Rows as wide as their content (deep, long ones too), at least the
-     panel's width: the list scrolls sideways (trackpad, Shift+wheel), and a
-     row's background spans all of it. 1px between rows. */
+  /* One column, as wide as the widest row (at least the panel): every row
+     spans it, so they all end at the same edge. The list scrolls sideways
+     (trackpad, Shift+wheel) when the widest is wider than the panel. 1px
+     between rows. */
   .rows {
     flex: 1;
     min-height: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
+    display: grid;
+    /* auto: at least the widest row (rows don't wrap), stretched to the
+       panel when they're all narrower. */
+    grid-template-columns: auto;
+    align-content: start;
     gap: 1px;
     overflow: auto;
     overscroll-behavior: contain;
     scrollbar-width: none;
-    padding: 6px;
+    /* 14px below: the last row clears the horizontal scroll thumb (it
+       spans 3-7px from the bottom) by 7px. */
+    padding: 6px 6px 14px;
     outline: none;
   }
 
@@ -75,9 +144,6 @@
   }
 
   .row {
-    flex: none;
-    min-width: 100%;
-    width: max-content;
     display: flex;
     align-items: center;
     gap: 4px;
@@ -100,6 +166,8 @@
     color: var(--plt-color-background);
   }
 
+  .row[aria-selected="true"] .identifiers,
+  .row[aria-selected="true"] .details,
   .row[aria-selected="true"] .text,
   .row[aria-selected="true"] .toggle {
     color: hsl(from var(--plt-color-background) h s l / 0.4);
@@ -125,11 +193,20 @@
     rotate: 0deg;
   }
 
-  .name {
+  /* The row's description: the tag in full contrast; its identifiers,
+     details and text dimmed (contrast-low). The identifiers and details sit
+     right after the tag, as written in code; the text after a space. */
+  .label {
     flex: none;
   }
 
+  .identifiers,
+  .details,
   .text {
     color: var(--plt-color-contrast-low);
+  }
+
+  .text {
+    margin-left: 6px;
   }
 }

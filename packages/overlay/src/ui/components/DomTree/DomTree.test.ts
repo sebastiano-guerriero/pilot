@@ -2,7 +2,7 @@
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { DomTree } from "./DomTree.tsx";
+import { DomTree, panelPosition } from "./DomTree.tsx";
 
 let container: HTMLElement;
 let page: HTMLElement;
@@ -40,7 +40,7 @@ afterEach(() => {
   render(null, container);
 });
 
-const rows = () => [...container.querySelectorAll(".row")].map((r) => `${r.getAttribute("aria-level")}:${r.querySelector(".name")?.textContent}${r.getAttribute("aria-selected") === "true" ? "*" : ""}`);
+const rows = () => [...container.querySelectorAll(".row")].map((r) => `${r.getAttribute("aria-level")}:${r.querySelector(".tag")?.textContent}${r.querySelector(".identifiers")?.textContent ?? ""}${r.getAttribute("aria-selected") === "true" ? "*" : ""}`);
 const tree = () => container.querySelector('[role="tree"]') as HTMLElement;
 const key = (k: string) =>
   act(() => {
@@ -57,7 +57,7 @@ describe("DomTree", () => {
   it("hovering a row highlights its element; clicking selects it", () => {
     selected = page.querySelector("#hero");
     mount();
-    const h1 = [...container.querySelectorAll(".row")].find((r) => r.querySelector(".name")?.textContent === "h1") as HTMLElement;
+    const h1 = [...container.querySelectorAll(".row")].find((r) => r.querySelector(".tag")?.textContent === "h1") as HTMLElement;
     act(() => {
       h1.dispatchEvent(new PointerEvent("pointerenter"));
     });
@@ -84,5 +84,19 @@ describe("DomTree", () => {
     mount();
     key("Escape");
     expect(closed).toBe(1);
+  });
+});
+
+describe("panelPosition", () => {
+  const viewport = { width: 1000, height: 800 };
+  it("opens 8px from the left edge, centered top to bottom", () => {
+    expect(panelPosition(null, 300, viewport)).toEqual({ left: 8, top: 250 });
+  });
+  it("keeps a spot as it is while it fits", () => {
+    expect(panelPosition({ left: 200, top: 100 }, 300, viewport)).toEqual({ left: 200, top: 100 });
+  });
+  it("moves up, and in from the edges, to stay on screen", () => {
+    expect(panelPosition({ left: 900, top: 600 }, 300, viewport)).toEqual({ left: 1000 - 240 - 8, top: 800 - 300 - 8 });
+    expect(panelPosition({ left: -50, top: -20 }, 300, viewport)).toEqual({ left: 8, top: 8 });
   });
 });

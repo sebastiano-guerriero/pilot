@@ -22,7 +22,7 @@ afterEach(() => {
   page.remove();
 });
 
-const cursor = () => host.querySelector('[aria-label="Select an element"]') as HTMLButtonElement;
+const cursor = () => host.querySelector('[aria-label="Select element"]') as HTMLButtonElement;
 const selecting = () => cursor().getAttribute("aria-pressed") === "true";
 const dialogOpen = () => host.querySelector(".property-dialog") !== null;
 const esc = (target: EventTarget = document.body) =>

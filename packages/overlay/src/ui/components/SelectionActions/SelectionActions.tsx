@@ -1,4 +1,6 @@
 import { px } from "../../px.ts";
+import { Icon } from "../Icon/Icon.tsx";
+import { Tooltip } from "../Tooltip/Tooltip.tsx";
 
 interface SelectionActionsProps {
   /** The selected element's box (viewport px). */
@@ -8,33 +10,36 @@ interface SelectionActionsProps {
   onShowInDom(): void;
 }
 
-/** The actions' row height and its gap to the selection, in px. */
-const HEIGHT = 20;
+/** The actions' size and their gap to the selection, in px. */
+const SIZE = 20;
 const GAP = 4;
 
 /**
- * Actions on the selection, at its top-left corner (the corner the selection
- * keeps free of a label): today Show in DOM, which opens the DOM tree on the
- * selected element. Above the element, or inside its corner when it touches
- * the top of the window. Placeholder look, pending the design.
+ * Actions on the selection, above its top-right corner, right-aligned with
+ * it: today Show in DOM (a 20px `</>` button), which opens the DOM tree on
+ * the selected element. Inside the corner when the element touches the top
+ * of the window (the tooltip then goes below, so it stays on screen).
  */
 export function SelectionActions({ rect, domOpen, onShowInDom }: SelectionActionsProps) {
-  const inside = rect.top < HEIGHT + GAP;
+  const inside = rect.top < SIZE + GAP;
+  const right = Math.round(inside ? rect.right - GAP : rect.right);
   return (
     <div
       class="selection-actions"
-      style={{ left: px(Math.round(rect.left)), top: px(Math.round(inside ? rect.top + GAP : rect.top - HEIGHT - GAP)) }}
+      style={{ left: px(right - SIZE), top: px(Math.round(inside ? rect.top + GAP : rect.top - SIZE - GAP)) }}
     >
-      <button
-        type="button"
-        class="action"
-        aria-pressed={domOpen}
-        title="The page's elements as a tree, to select any of them (Alt+D)"
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={onShowInDom}
-      >
-        Show in DOM
-      </button>
+      <Tooltip text="Show in DOM" side={inside ? "bottom" : "top"}>
+        <button
+          type="button"
+          class="action"
+          aria-label="Show in DOM (Alt+D)"
+          aria-pressed={domOpen}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onShowInDom}
+        >
+          <Icon name="code" />
+        </button>
+      </Tooltip>
     </div>
   );
 }

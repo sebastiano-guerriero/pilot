@@ -176,6 +176,16 @@ const ICONS = {
     size: 8,
     body: <path d="M1.5 4L3.25 6L6.5 1.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" />,
   },
+  // Closing a panel (the DOM tree): an ×.
+  close: {
+    size: 8,
+    body: (
+      <g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M7 7L1 1" />
+        <path d="M1 7L7 1" />
+      </g>
+    ),
+  },
   // A pill's remove button: a small ×.
   "close-small": {
     size: 8,
@@ -183,6 +193,17 @@ const ICONS = {
       <g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
         <path d="M2 6L6 2" />
         <path d="M6 6L2 2" />
+      </g>
+    ),
+  },
+  // Show in DOM, on the selection: `</>`.
+  code: {
+    size: 12,
+    body: (
+      <g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9L0.5 6L3 3" />
+        <path d="M9 9L11.5 6L9 3" />
+        <path d="M5 9L7 3" />
       </g>
     ),
   },
@@ -275,6 +296,39 @@ const ICONS = {
           fill="currentColor"
         />
       </>
+    ),
+  },
+  // Toolbar, copy mode (no agent): Copy prompt (Nucleo UI clone-2, filled,
+  // 18px), which morphs into copied (Nucleo UI check, outline, 12px) once
+  // the prompt is on the clipboard. The check's path has pathLength 1, so
+  // CSS can draw it in (Toolbar.css).
+  copy: {
+    size: 18,
+    body: (
+      <>
+        <path
+          d="M3.5 12.8828V7.75C3.5 5.4067 5.4067 3.5 7.75 3.5H12.8829C12.554 2.3494 11.5048 1.5 10.25 1.5H4.25C2.7334 1.5 1.5 2.7334 1.5 4.25V10.25C1.5 11.5049 2.3494 12.5542 3.5 12.8828Z"
+          fill="currentColor"
+          data-color="color-2"
+        />
+        <path
+          d="M13.75 5H7.75C6.23122 5 5 6.23122 5 7.75V13.75C5 15.2688 6.23122 16.5 7.75 16.5H13.75C15.2688 16.5 16.5 15.2688 16.5 13.75V7.75C16.5 6.23122 15.2688 5 13.75 5Z"
+          fill="currentColor"
+        />
+      </>
+    ),
+  },
+  copied: {
+    size: 12,
+    body: (
+      <path
+        d="m1.76,7.004l2.25,3L10.24,1.746"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        pathLength={1}
+      />
     ),
   },
   // Toolbar (Nucleo UI, filled, 18px): Clear changes.

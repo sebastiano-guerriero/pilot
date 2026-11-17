@@ -128,7 +128,6 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // With an agent on this page, the button sends the changes not sent yet;
   // without one, it copies the prompt (everything in effect).
   const sendToAgent = !!session?.canSendToAgent;
-  const agentName = session?.state.agents[0]?.label;
   // Jobs not finished yet: waiting, an agent applying, checking the page.
   const pending = (session?.jobs ?? []).filter((j) => j.status === "queued" || j.status === "working" || (j.status === "done" && !j.checked)).length;
   // The job list opens from the toolbar's jobs button, and closes when there's nothing left in progress.
@@ -165,9 +164,16 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     if (selected && !selected.element.isConnected) setSelected(null);
   }, [selected, selectedRect]);
 
+  // Esc that drops the selection (the dialog hides) closes the DOM tree too.
+  const dismiss = () => {
+    setSelected(null);
+    setDomOpen(false);
+  };
+
   // Esc, one level at a time:
-  // - something selected: clear the selection (inside the dialog, the dialog
-  //   handles Esc itself: editor → search → clear → close);
+  // - something selected: clear the selection and close the DOM tree (inside
+  //   the dialog, the dialog handles Esc itself: editor → search → clear →
+  //   close, which does the same);
   // - only the select tool on, nothing selected: turn the tool off.
   useEffect(() => {
     if (!selected && !selecting) return;
@@ -176,7 +182,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
       if (selected) {
         if (e.composedPath().includes(host)) return;
         e.preventDefault();
-        setSelected(null);
+        dismiss();
       } else {
         e.preventDefault();
         setSelecting(false);
@@ -216,7 +222,6 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
             />
           )}
           {inspect && <BoxAreas element={selected.element} areas={inspect} />}
-          {!hideSelection && <SelectionActions rect={selectedRect} domOpen={domOpen} onShowInDom={() => setDomOpen((open) => !open)} />}
           {!hideSelection && <GridOverlay element={selected.element} part="numbers" orParent />}
           <PropertyDialog
             key={selected.key}
@@ -227,7 +232,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
               lastQuery.current = query;
             }}
             history={history}
-            onClose={() => setSelected(null)}
+            onClose={dismiss}
             onInspect={setInspect}
             widths={widths}
             onWidthsChange={setWidths}
@@ -237,6 +242,9 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
             widthPick={widthPick}
             autoFocus={selected.from !== "dom"}
           />
+          {/* After the dialog (same layer: DOM order decides), so the button's
+              tooltip shows over the dialog when they meet. */}
+          {!hideSelection && <SelectionActions rect={selectedRect} domOpen={domOpen} onShowInDom={() => setDomOpen((open) => !open)} />}
         </>
       )}
       {/* The hover comes after the selection, so its label is drawn over the
@@ -255,7 +263,6 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
       {domOpen && (
         <DomTree
           selected={selected?.element ?? null}
-          nameAttributes={nameAttributes}
           onHover={setDomHover}
           onSelect={pickFromDom}
           onClose={() => setDomOpen(false)}
@@ -273,7 +280,6 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
         selecting={selecting}
         onToggleSelect={toggleSelect}
         mode={sendToAgent ? "send" : "copy"}
-        agentName={agentName}
         canSend={sendToAgent ? (session?.unsent ?? 0) > 0 : hasChanges}
         onSend={sendToAgent ? () => !!session?.send() : copyPrompt}
         pending={pending}

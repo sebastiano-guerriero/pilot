@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ancestorsWithin, domRows } from "./domTree.ts";
+import { ancestorsWithin, describe as describeRow, domRows } from "./domTree.ts";
 
 let root: HTMLElement;
 beforeEach(() => {
@@ -17,7 +17,8 @@ beforeEach(() => {
 });
 afterEach(() => root.remove());
 
-const names = (rows: ReturnType<typeof domRows>) => rows.map((r) => `${"  ".repeat(r.depth)}${r.name}${r.text ? ` "${r.text}"` : ""}`);
+const names = (rows: ReturnType<typeof domRows>) =>
+  rows.map((r) => `${"  ".repeat(r.depth)}${r.tag}${r.identifiers ?? ""}${r.details ? `(${r.details})` : ""}${r.text ? ` "${r.text}"` : ""}`);
 
 describe("layers", () => {
   it("collapsed: the root's children, without scripts or Pilot", () => {
@@ -48,5 +49,31 @@ describe("layers", () => {
   it("the ancestors to expand to show an element", () => {
     const link = root.querySelector(".btn") as Element;
     expect(ancestorsWithin(link, root).map((e) => e.tagName.toLowerCase())).toEqual(["section", "div"]);
+  });
+
+  it("describes each row: identifiers always (id, data-*, no classes), what it points at, its text", () => {
+    const el = (html: string) => {
+      const t = document.createElement("template");
+      t.innerHTML = html;
+      return t.content.firstElementChild as Element;
+    };
+    expect(describeRow(el(`<div id="hero" class="flex p-4" data-slot="card-header" data-open data-pilot-edit="3">Hi</div>`))).toEqual({
+      tag: "div",
+      identifiers: "#hero[data-slot=card-header][data-open]",
+      text: "Hi",
+    });
+    expect(describeRow(el(`<a class="nav" href="${location.origin}/about#team">About</a>`))).toEqual({
+      tag: "a",
+      details: 'href="/about#team"',
+      text: "About",
+    });
+    // A long URL keeps its end: the file name.
+    const long = "https://cdn.example.com/a/very/long/path/to/the/images/hero-large.jpg";
+    expect(describeRow(el(`<img src="${long}">`)).details).toBe(`src="…${long.slice(-39)}"`);
+    expect(describeRow(el(`<input type="email" name="email">`)).details).toBe('type="email" name="email"');
+    expect(describeRow(el(`<input>`)).details).toBe('type="text"');
+    // No text of its own: its aria-label says what it is.
+    expect(describeRow(el(`<button type="button" aria-label="Close"><svg></svg></button>`)).details).toBe('type="button" aria-label="Close"');
+    expect(describeRow(el(`<div role="dialog" data-state="open"></div>`))).toEqual({ tag: "div", identifiers: "[data-state=open]", details: 'role="dialog"' });
   });
 });
