@@ -142,9 +142,9 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   useEffect(() => setInspect(null), [selected?.key]);
 
   const [, refresh] = useReducer((n: number) => n + 1, 0);
-  // Whether there's anything to copy: the toolbar's button follows the history.
-  const [hasChanges, setHasChanges] = useState(() => history.changes().length > 0);
-  useEffect(() => history.subscribe(() => setHasChanges(history.changes().length > 0)), [history]);
+  // How many changes there are to copy: the toolbar's button follows the history.
+  const [changeCount, setChangeCount] = useState(() => history.changes().length);
+  useEffect(() => history.subscribe(() => setChangeCount(history.changes().length)), [history]);
   // Copy prompt: the change set, as the text the agent gets (the same text the
   // MCP path will send: formatPrompt), on the clipboard.
   const copyPrompt = () => copyText(formatPrompt(buildChangeSet(history)));
@@ -155,6 +155,9 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // With an agent on this page, the button sends the changes not sent yet;
   // without one, it copies the prompt (everything in effect).
   const sendToAgent = !!session?.canSendToAgent;
+  // What Send would send: the changes not sent yet, less those waiting for a
+  // job on their element; Copy prompt copies everything in effect.
+  const sendCount = sendToAgent ? (session?.unsent ?? 0) - (session?.heldCount ?? 0) : changeCount;
   // Send: what went, and what waits for a job still on its element (it goes once that's finished).
   const sendChanges = (): boolean | string => {
     if (!session) return false;
@@ -515,7 +518,8 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
         onTool={onTool}
         attention={session?.attention.length ?? 0}
         mode={sendToAgent ? "send" : "copy"}
-        canSend={sendToAgent ? (session?.unsent ?? 0) > (session?.heldCount ?? 0) : hasChanges}
+        canSend={sendCount > 0}
+        sendCount={sendCount}
         onSend={sendToAgent ? sendChanges : copyPrompt}
         pending={pending}
         onNextJob={nextJob}

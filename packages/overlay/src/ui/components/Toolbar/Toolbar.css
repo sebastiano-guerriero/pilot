@@ -86,12 +86,6 @@
     }
   }
 
-  /* Send, with something to send: the strong one. */
-  .send[data-ready] {
-    background: var(--plt-color-accent);
-    color: var(--plt-color-background);
-  }
-
   /* Copy prompt (no agent): the copy icon, which morphs into a check once
      the prompt is copied, and back after 1.5s (Toolbar.tsx). Both icons are
      stacked; the copy one shrinks, blurs and fades out as the check grows
@@ -168,18 +162,22 @@
     animation: spin 1s linear infinite;
   }
 
+  /* A count on a button's top-right corner (comments to review, changes
+     to send, jobs in progress): 10px tall, a 1px ring in the toolbar's
+     background so it reads where it overlaps the button. */
   .pill {
     position: absolute;
-    top: 0;
-    right: 0;
+    top: -1px;
+    right: -1px;
     height: 10px;
     min-width: 10px;
-    padding-inline: 3px;
+    padding-inline: 2px;
     box-sizing: border-box;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 4px;
+    box-shadow: 0 0 0 1px var(--plt-color-background);
     background: var(--plt-color-accent);
     color: var(--plt-color-background);
     font-size: 8px;
@@ -193,6 +191,8 @@
   .divider {
     width: 1px;
     height: 16px;
+    /* With the toolbar's 4px gap: 8px on each side. */
+    margin-inline: 4px;
     background: hsl(from var(--plt-color-contrast-high) h s l / 0.15);
   }
 

@@ -31,12 +31,12 @@ afterEach(() => {
 });
 
 describe("Toolbar", () => {
-  it("the tools, a divider, Send, a divider, quit; Send is disabled with nothing to send", () => {
+  it("comment, a divider, select, Send, a divider, quit; Send is disabled with nothing to send", () => {
     draw();
     expect([...container.querySelectorAll(".toolbar .button, .toolbar .divider")].map((e) => e.className)).toEqual([
       "button",
-      "button",
       "divider",
+      "button",
       "button send",
       "divider",
       "button",
@@ -51,6 +51,14 @@ describe("Toolbar", () => {
     expect(send().disabled).toBe(false);
     expect(send().hasAttribute("data-ready")).toBe(true);
     expect(tip(send())?.textContent).toBe("Send to agent");
+  });
+
+  it("Send shows how many changes it would send in a pill, not as an accent button", () => {
+    draw({ canSend: true, sendCount: 3 } as Partial<typeof props>);
+    expect(send().querySelector(".pill")?.textContent).toBe("3");
+    expect(send().getAttribute("aria-label")).toBe("Send to agent (3 changes)");
+    draw({ canSend: false, sendCount: 0 } as Partial<typeof props>);
+    expect(send().querySelector(".pill")).toBeNull();
   });
 
   it("comments to review: a pill on the Comment button, with how many", () => {

@@ -32,6 +32,8 @@ interface ToolbarProps {
   mode: "send" | "copy";
   /** There's something to send (or copy): the button lights up. */
   canSend: boolean;
+  /** How many changes Send would send (or Copy prompt copy): a pill on the button. */
+  sendCount?: number;
   /**
    * Send or copy; resolves to whether it worked, or to what the tooltip
    * says instead of "Sent" ("Sends when the agent is done").
@@ -51,9 +53,9 @@ interface ToolbarProps {
 /**
  * The only UI visible while Pilot runs: select, Send, the jobs in progress
  * (only while there are some, with how many in a pill), a divider, quit.
- * The two tools (Comment, Select) are divided from Send too.
- * Send is the strong one: accent when there's something to send, dimmed
- * when there isn't.
+ * Comment is divided from Select and Send too.
+ * Send shows how many changes it would send in a pill (like the comments
+ * to review), and is dimmed when there's nothing to send.
  */
 export function Toolbar({
   tool,
@@ -61,6 +63,7 @@ export function Toolbar({
   attention = 0,
   mode,
   canSend,
+  sendCount = 0,
   onSend,
   pending,
   onNextJob,
@@ -163,6 +166,7 @@ export function Toolbar({
           )}
         </button>
       </Tooltip>
+      <span class="divider" aria-hidden="true" />
       <Tooltip text="Select element" gap={TIP_GAP}>
         <button
           type="button"
@@ -175,13 +179,12 @@ export function Toolbar({
           <Icon name="select" />
         </button>
       </Tooltip>
-      <span class="divider" aria-hidden="true" />
       {/* After a send or copy, its tooltip says so for a moment, hovered or not. */}
       <Tooltip text={done ? doneText : canSend ? action : idle} gap={TIP_GAP} forceOpen={!!done}>
         <button
           type="button"
           class="button send"
-          aria-label={done ? doneText : mode === "send" ? "Send to agent" : "Copy prompt"}
+          aria-label={done ? doneText : `${mode === "send" ? "Send to agent" : "Copy prompt"}${sendCount ? ` (${sendCount} ${sendCount === 1 ? "change" : "changes"})` : ""}`}
           data-mode={mode}
           data-ready={canSend || undefined}
           disabled={!canSend}
@@ -198,6 +201,11 @@ export function Toolbar({
             </span>
           ) : (
             <Icon name="send" />
+          )}
+          {canSend && sendCount > 0 && (
+            <span class="pill" aria-hidden="true">
+              {sendCount}
+            </span>
           )}
         </button>
       </Tooltip>
