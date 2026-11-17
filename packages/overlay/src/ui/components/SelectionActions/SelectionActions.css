@@ -22,9 +22,30 @@
 
   /* A job is on the element: a square like the actions, its loader
      (Nucleo UI loader-4) turning a dot at a time; where the job stands is
-     in the tooltip. Not a button: nothing to click. */
+     in the tooltip. A button while the job can be cancelled. */
   .busy {
     cursor: default;
+  }
+
+  /* Hovered (or focused) while the job can still be taken back: an X, and
+     a click cancels it. */
+  .busy .cancel {
+    display: none;
+  }
+
+  button.busy {
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      & .spinner {
+        display: none;
+      }
+
+      & .cancel {
+        display: block;
+      }
+    }
   }
 
   .spinner {

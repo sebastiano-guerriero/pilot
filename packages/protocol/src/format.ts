@@ -245,5 +245,11 @@ export function formatWidthCheck(check: WidthCheck): string {
     lines.push("", `Changed at the designer's width (${check.designerWidth}px), which should look as it did:`);
     for (const c of check.changedAtDesignerWidth) lines.push(`- ${c}`);
   }
+  if (check.source === "copy") {
+    lines.push(
+      "",
+      "Measured on a copy of the page as the designer has it, with scripts off: layout that only changes through JavaScript (a menu a script toggles, components that measure themselves) isn't reflected here.",
+    );
+  }
   return `${lines.join("\n")}\n`;
 }

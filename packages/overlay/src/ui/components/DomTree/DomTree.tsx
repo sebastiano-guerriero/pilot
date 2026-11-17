@@ -30,11 +30,18 @@ type Spot = { left: number; top: number };
 const remembered: { spot: Spot | null; maxHeight: number | null } = { spot: null, maxHeight: null };
 
 /**
- * Where the panel is drawn: its spot (or, with none, 8px from the left edge
- * and centered top to bottom), kept on screen, 8px from the window's edges.
+ * Where the panel is drawn: its spot (or, with none, 8px from the left edge,
+ * its top level with the selected element's, `alignTop`, like the property
+ * dialog; centered top to bottom with nothing selected), kept on screen, 8px
+ * from the window's edges.
  */
-export function panelPosition(spot: Spot | null, height: number, viewport: { width: number; height: number }): Spot {
-  const want = spot ?? { left: EDGE, top: Math.round((viewport.height - height) / 2) };
+export function panelPosition(
+  spot: Spot | null,
+  height: number,
+  viewport: { width: number; height: number },
+  alignTop?: number,
+): Spot {
+  const want = spot ?? { left: EDGE, top: Math.round(alignTop ?? (viewport.height - height) / 2) };
   return {
     left: Math.max(EDGE, Math.min(want.left, viewport.width - WIDTH - EDGE)),
     top: Math.max(EDGE, Math.min(want.top, viewport.height - height - EDGE)),
@@ -76,7 +83,8 @@ export function DomTree({ selected, onHover, onSelect, onClose }: DomTreeProps) 
 
   // Size and place. The panel is as tall as its rows, up to the height it
   // was resized to and the window's (8px from each edge); its rows scroll
-  // beyond that. It opens 8px from the left edge, centered top to bottom.
+  // beyond that. It opens 8px from the left edge, its top level with the
+  // selected element's (centered top to bottom with nothing selected).
   // Its top then stays put as rows open and close (the rows under the
   // pointer don't jump), and only moves up when growing would take it off
   // screen; that sticks, so shrinking keeps the top where it is, like the
@@ -96,9 +104,10 @@ export function DomTree({ selected, onHover, onSelect, onClose }: DomTreeProps) 
     const h = panelRef.current?.offsetHeight ?? 0;
     if (h !== height) setHeight(h);
     if (!h) return;
-    // Fix the spot once measured: centered on the height it opens with, or
-    // moved to stay on screen.
-    const shown = panelPosition(spot, h, viewport);
+    // Fix the spot once measured: level with the selection (or centered on
+    // the height it opens with), or moved to stay on screen. Only when it
+    // opens: picking rows then doesn't move it under the pointer.
+    const shown = panelPosition(spot, h, viewport, spot ? undefined : selected?.getBoundingClientRect().top);
     if (!spot || spot.left !== shown.left || spot.top !== shown.top) setSpot(shown);
   });
   const limit = Math.min(maxHeight ?? Number.POSITIVE_INFINITY, viewport.height - 2 * EDGE);

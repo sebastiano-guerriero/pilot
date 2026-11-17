@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatPrompt } from "./format.ts";
+import { formatPrompt, formatWidthCheck } from "./format.ts";
 import type { ChangeSet } from "./types.ts";
 
 const changeSet: ChangeSet = {
@@ -139,5 +139,29 @@ describe("formatPrompt", () => {
     // The first comment has no thread before it.
     const first = formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, thread: thread.slice(0, 1), breakpoints: [] } });
     expect(first).not.toContain("The thread so far");
+  });
+});
+
+describe("formatWidthCheck", () => {
+  const check = {
+    selector: "#features",
+    designerWidth: 1280,
+    widths: [
+      { width: 375, found: true, size: "343×900", layout: "grid, 1 column", issues: ["`div.card` sticks out of the viewport 40px on the right."], notes: [] },
+      { width: 1280, found: true, size: "1200×400", layout: "grid, 3 columns", issues: [], notes: [] },
+    ],
+    problems: 1,
+  };
+
+  it("lists each width with its problems", () => {
+    const text = formatWidthCheck(check);
+    expect(text).toContain("1 problem to fix");
+    expect(text).toContain("- 375px: 343×900, grid, 1 column\n  - Problem: `div.card` sticks out");
+    expect(text).toContain("- 1280px (the designer's width): 1200×400, grid, 3 columns. OK");
+  });
+
+  it("measured on a copy of the page, it says JavaScript-driven layout isn't reflected", () => {
+    expect(formatWidthCheck({ ...check, source: "copy" })).toContain("with scripts off");
+    expect(formatWidthCheck({ ...check, source: "load" })).not.toContain("with scripts off");
   });
 });

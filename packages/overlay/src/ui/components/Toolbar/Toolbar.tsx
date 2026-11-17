@@ -17,8 +17,14 @@ export type Tool = "select" | "comment" | null;
 interface ToolbarProps {
   /** The tool on (its button is pressed). */
   tool: Tool;
-  /** A tool's button was clicked: on, or off when it was on. */
+  /**
+   * A tool's button was clicked: on (keeping the selection). Clicking the
+   * one that's on doesn't turn it off (Esc does): Comment's goes to the next
+   * thread that needs the designer (see `attention`), Select's does nothing.
+   */
   onTool(tool: Exclude<Tool, null>): void;
+  /** Comment threads that need the designer (the agent spoke last): a pill on the Comment button. */
+  attention?: number;
   /**
    * What the Send button does: `send` the changes not sent yet to the agent
    * working on this page (it ran /pilot), or `copy` the prompt (no agent).
@@ -33,9 +39,8 @@ interface ToolbarProps {
   onSend(): Promise<boolean | string> | boolean | string | void;
   /** Jobs not finished yet (waiting, an agent applying, checking): the jobs button shows while there are any. */
   pending: number;
-  /** The job list is open. */
-  jobsOpen: boolean;
-  onToggleJobs(): void;
+  /** The jobs button: scroll to the next job's elements (see App's nextJob). */
+  onNextJob(): void;
   onQuit(): void;
   /** Where it was dragged to (null: centered at the bottom). */
   spot?: ToolbarSpot | null;
@@ -46,18 +51,19 @@ interface ToolbarProps {
 /**
  * The only UI visible while Pilot runs: select, Send, the jobs in progress
  * (only while there are some, with how many in a pill), a divider, quit.
+ * The two tools (Comment, Select) are divided from Send too.
  * Send is the strong one: accent when there's something to send, dimmed
  * when there isn't.
  */
 export function Toolbar({
   tool,
   onTool,
+  attention = 0,
   mode,
   canSend,
   onSend,
   pending,
-  jobsOpen,
-  onToggleJobs,
+  onNextJob,
   onQuit,
   spot = null,
   onMove,
@@ -140,16 +146,21 @@ export function Toolbar({
       >
         <Icon name="grip" />
       </div>
-      <Tooltip text="Comment" gap={TIP_GAP}>
+      <Tooltip text={attention ? `${attention} ${attention === 1 ? "comment" : "comments"} to review` : "Comment"} gap={TIP_GAP}>
         <button
           type="button"
           class="button"
           aria-pressed={tool === "comment"}
-          aria-label="Comment"
+          aria-label={attention ? `Comment: ${attention} to review, go to the next` : "Comment"}
           aria-keyshortcuts="Alt+C"
           onClick={() => onTool("comment")}
         >
           <Icon name="comment" />
+          {attention > 0 && (
+            <span class="pill" aria-hidden="true">
+              {attention}
+            </span>
+          )}
         </button>
       </Tooltip>
       <Tooltip text="Select element" gap={TIP_GAP}>
@@ -164,6 +175,7 @@ export function Toolbar({
           <Icon name="select" />
         </button>
       </Tooltip>
+      <span class="divider" aria-hidden="true" />
       {/* After a send or copy, its tooltip says so for a moment, hovered or not. */}
       <Tooltip text={done ? doneText : canSend ? action : idle} gap={TIP_GAP} forceOpen={!!done}>
         <button
@@ -195,9 +207,8 @@ export function Toolbar({
             <button
               type="button"
               class="button jobs"
-              aria-label={`${jobs.count} ${jobs.count === 1 ? "job" : "jobs"} in progress`}
-              aria-expanded={jobsOpen}
-              onClick={onToggleJobs}
+              aria-label={`${jobs.count} ${jobs.count === 1 ? "job" : "jobs"} in progress: show the next`}
+              onClick={onNextJob}
             >
               <Icon name="loader" class="spinner" />
               <span class="pill" aria-hidden="true">

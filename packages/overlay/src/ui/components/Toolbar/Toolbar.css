@@ -176,20 +176,24 @@
     min-width: 10px;
     padding-inline: 3px;
     box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border-radius: 4px;
     background: var(--plt-color-accent);
     color: var(--plt-color-background);
     font-size: 8px;
     font-weight: 700;
-    line-height: 10px;
-    text-align: center;
+    line-height: 1;
     animation: pop-in 0.2s ease-out 0.1s both;
   }
 
+  /* Between the tools and Send, and before Quit: contrast-high at 15%
+     (the border token's 12.5%, a little stronger). */
   .divider {
     width: 1px;
     height: 16px;
-    background: var(--plt-color-border);
+    background: hsl(from var(--plt-color-contrast-high) h s l / 0.15);
   }
 
   /* The slot's width, and the gap before it, grow from nothing. */

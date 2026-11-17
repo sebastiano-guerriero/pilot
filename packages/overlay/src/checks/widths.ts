@@ -2,10 +2,21 @@ import type { WidthCheck, WidthReport } from "@pilot/protocol";
 import { describe } from "../dom/domTree.ts";
 
 /**
- * Pilot's width check, for a task about one element (Make responsive): the
- * page loads itself in hidden frames, one per viewport width, and Pilot
- * measures the element in each, so the agent gets numbers instead of
- * screenshots. It looks for:
+ * Pilot's width check, for a task about one element (Make responsive): Pilot
+ * lays the page out at each viewport width in a hidden frame and measures
+ * the element there, so the agent gets numbers instead of screenshots.
+ * - The frame holds a **copy of the page as the designer has it** (its HTML
+ *   and styles, an open modal included), with scripts off: no analytics,
+ *   requests or sockets run, nothing reloads. Pilot's previews and UI are
+ *   left out, so it measures the code. Layout that only changes through
+ *   JavaScript (a menu a script toggles, components measuring themselves)
+ *   doesn't respond in it.
+ * - When the copy doesn't have the element (shadow DOM, say), the frame
+ *   loads the page's URL instead, once.
+ * - Either way it's one frame, resized from width to width: media queries
+ *   follow the frame's width.
+ *
+ * It looks for:
  * - problems: the element (or something in it) sticking out of the viewport
  *   or out of its parent, clipping its content, overlapping a sibling;
  * - notes: content scrolling sideways in a scroll container (often the
@@ -16,8 +27,8 @@ import { describe } from "../dom/domTree.ts";
  * the computed styles of the element and what's in it, before the job
  * (`snapshotAt`) and after (in `checkWidths`), and lists what changed.
  *
- * The frames are named PROBE_NAME, so Pilot doesn't mount inside them
- * (mount.tsx). Same origin only: they load the page the task was asked on.
+ * The frame is named PROBE_NAME, so Pilot doesn't mount inside it when it
+ * loads the URL (mount.tsx). Same origin only: the page the task was asked on.
  */
 
 /** The name of the frames Pilot loads the page in: Pilot doesn't mount there. */
@@ -30,8 +41,10 @@ const DESKTOP = 1440;
 const FRAME_HEIGHT = 800;
 /** Widths at most; past that, the "just below a breakpoint" ones go. */
 const MAX_WIDTHS = 12;
-/** Frames loading at once. */
-const PARALLEL = 3;
+/** Pilot's own element on the page (mount.tsx's HOST_TAG): left out of the copy. */
+const PILOT_HOST = "pilot-root";
+/** Pilot's preview stylesheet (dom/preview.ts' PREVIEW_ATTRIBUTE): left out of the copy, which measures the code. */
+const PREVIEW_STYLES = "style[data-pilot-preview]";
 /** The elements measured at most (the element first, then what's in it, in document order). */
 const MAX_ELEMENTS = 600;
 /** Under this width, it's a touch screen: small tap targets get a note. */
@@ -92,12 +105,13 @@ export function isProbeFrame(): boolean {
   }
 }
 
-/** The element's styles at the designer's width, before the job (null when it can't load or find it). */
+/** The element's styles at the designer's width, before the job (null when it can't find it). */
 export async function snapshotAt(url: string, selector: string, width: number): Promise<StyleSnapshot | null> {
-  return inFrame(url, width, selector, (doc) => {
+  const laid = await atWidths(url, selector, [width], (doc) => {
     const root = doc.querySelector(selector);
     return root ? snapshot(root, width) : null;
   });
+  return laid?.results.get(width) ?? null;
 }
 
 /**
@@ -111,20 +125,16 @@ export async function checkWidths(
   designerWidth: number,
   baseline?: StyleSnapshot | null,
 ): Promise<WidthCheck> {
-  const measured = new Map<number, Measured>();
   let after: StyleSnapshot | null = null;
-  await pool(widths, PARALLEL, async (width) => {
-    const m = await inFrame(url, width, selector, (doc) => {
-      const result = measure(doc, selector, width);
-      if (width === designerWidth) {
-        const root = doc.querySelector(selector);
-        if (root) after = snapshot(root, width);
-      }
-      return result;
-    });
-    measured.set(width, m ?? { found: false, problems: [], notes: [] });
+  const laid = await atWidths(url, selector, widths, (doc, width) => {
+    if (width === designerWidth) {
+      const root = doc.querySelector(selector);
+      if (root) after = snapshot(root, width);
+    }
+    return measure(doc, selector, width);
   });
-  return buildCheck(selector, widths, designerWidth, measured, baseline ? compareSnapshots(baseline, after) : undefined);
+  const measured = new Map<number, Measured>(laid?.results ?? []);
+  return buildCheck(selector, widths, designerWidth, measured, baseline ? compareSnapshots(baseline, after) : undefined, laid?.source);
 }
 
 /** One width, measured. Problems have a key (kind and element), to leave out the ones the designer's width has too. */
@@ -143,6 +153,7 @@ export function buildCheck(
   designerWidth: number,
   measured: Map<number, Measured>,
   changedAtDesignerWidth?: string[],
+  source?: PageSource,
 ): WidthCheck {
   const accepted = new Set(measured.get(designerWidth)?.problems.map((p) => p.key) ?? []);
   const reports: WidthReport[] = widths.map((width) => {
@@ -157,6 +168,7 @@ export function buildCheck(
     designerWidth,
     widths: reports,
     ...(changedAtDesignerWidth?.length && { changedAtDesignerWidth }),
+    ...(source && { source }),
     problems,
   };
 }
@@ -346,16 +358,49 @@ export function compareSnapshots(before: StyleSnapshot, after: StyleSnapshot | n
   return out.slice(0, 20);
 }
 
-// Frames
+// The frame
+
+/** How the check got the page: a copy of it as the designer has it (scripts off), or loaded from its URL (the fallback). */
+export type PageSource = "copy" | "load";
 
 /**
- * Loads the page (`url`, same origin) in a hidden frame `width` wide, waits for `selector` (the
- * app may render after load), and runs `fn` on its document. Null when it
- * doesn't load in time.
+ * The page laid out at each of `widths` in one hidden frame, resized from
+ * width to width, `fn` run at each: the copy of the page (see pageCopy), or,
+ * when the copy doesn't have `selector`, the page loaded from `url`, once.
+ * Null when neither has it in time.
  */
-async function inFrame<T>(url: string, width: number, selector: string, fn: (doc: Document) => T): Promise<T | null> {
+async function atWidths<T>(
+  url: string,
+  selector: string,
+  widths: readonly number[],
+  fn: (doc: Document, width: number) => T,
+): Promise<{ source: PageSource; results: Map<number, T> } | null> {
+  for (const source of ["copy", "load"] as const) {
+    const frame = probeFrame(widths[0] ?? DESKTOP, source);
+    try {
+      const doc = await (source === "copy" ? openCopy(frame, selector) : openUrl(frame, url, selector));
+      if (!doc) continue;
+      const results = new Map<number, T>();
+      for (const width of widths) {
+        frame.style.width = `${width}px`;
+        await settle(source);
+        results.set(width, fn(doc, width));
+      }
+      return { source, results };
+    } catch {
+      // The next way, or none.
+    } finally {
+      frame.remove();
+    }
+  }
+  return null;
+}
+
+/** A hidden frame, off screen, `width` wide; for the copy, with scripts off (sandboxed, same origin so Pilot can measure it). */
+function probeFrame(width: number, source: PageSource): HTMLIFrameElement {
   const frame = document.createElement("iframe");
   frame.name = PROBE_NAME;
+  if (source === "copy") frame.setAttribute("sandbox", "allow-same-origin");
   frame.setAttribute("aria-hidden", "true");
   frame.tabIndex = -1;
   Object.assign(frame.style, {
@@ -368,29 +413,87 @@ async function inFrame<T>(url: string, width: number, selector: string, fn: (doc
     visibility: "hidden",
     pointerEvents: "none",
   });
+  return frame;
+}
+
+/** The copy of the page in `frame`, once its stylesheets, images and fonts are in; null when it doesn't have `selector`. */
+async function openCopy(frame: HTMLIFrameElement, selector: string): Promise<Document | null> {
+  const loaded = loadOf(frame);
+  frame.srcdoc = pageCopy();
+  document.documentElement.append(frame);
+  if (!(await within(loaded, 15_000))) return null;
+  const doc = frame.contentDocument;
+  if (!doc?.querySelector(selector)) return null;
+  await within(doc.fonts?.ready ?? Promise.resolve(), 2_000);
+  return doc;
+}
+
+/** The page loaded from `url` in `frame` (scripts on), once `selector` is there (the app may render after load). */
+async function openUrl(frame: HTMLIFrameElement, url: string, selector: string): Promise<Document | null> {
+  const loaded = loadOf(frame);
+  frame.src = url;
+  document.documentElement.append(frame);
+  if (!(await within(loaded, 15_000))) return null;
+  const doc = frame.contentDocument;
+  if (!doc) return null;
+  for (let t = 0; t < 40 && !doc.querySelector(selector); t++) await sleep(100);
+  if (!doc.querySelector(selector)) return null;
+  await within(doc.fonts?.ready ?? Promise.resolve(), 2_000);
+  return doc;
+}
+
+/**
+ * The page as the designer has it now, as an HTML document to put in a
+ * frame: its elements (state included: an open modal, classes and inline
+ * styles set by scripts), without scripts, Pilot's UI, its previews (the
+ * check measures the code) or Pilot's other frames. Styles a script added
+ * through the CSSOM (CSS-in-JS), which a `<style>`'s text doesn't hold, are
+ * written out, and so are adopted stylesheets. A `<base>` keeps relative
+ * URLs (stylesheets, images, fonts) pointing where they did.
+ */
+export function pageCopy(source: Document = document): string {
+  const root = source.documentElement.cloneNode(true) as HTMLElement;
+  // CSSOM rules: paired with the copy's <style>s before anything is removed (same order).
+  const live = Array.from(source.querySelectorAll("style"));
+  const copied = Array.from(root.querySelectorAll("style"));
+  live.forEach((style, i) => {
+    const target = copied[i];
+    const text = rulesOf(style.sheet);
+    if (target && text && !style.textContent?.trim()) target.textContent = text;
+  });
+  for (const el of root.querySelectorAll(`script, noscript, ${PILOT_HOST}, iframe[name="${PROBE_NAME}"], ${PREVIEW_STYLES}`)) el.remove();
+  const head = root.querySelector("head") ?? root.insertBefore(source.createElement("head"), root.firstChild);
+  const adopted = (source.adoptedStyleSheets ?? []).map(rulesOf).filter(Boolean).join("\n");
+  if (adopted) {
+    const style = source.createElement("style");
+    style.textContent = adopted;
+    head.append(style);
+  }
+  if (!head.querySelector("base")) {
+    const base = source.createElement("base");
+    base.href = source.location?.href ?? "";
+    head.prepend(base);
+  }
+  return `<!doctype html>${root.outerHTML}`;
+}
+
+/** A stylesheet's rules as text ("" when they can't be read: another origin's). */
+function rulesOf(sheet: CSSStyleSheet | null | undefined): string {
   try {
-    const loaded = new Promise<void>((resolve) => frame.addEventListener("load", () => resolve(), { once: true }));
-    frame.src = url;
-    document.documentElement.append(frame);
-    if (!(await within(loaded, 15_000))) return null;
-    const doc = frame.contentDocument;
-    if (!doc) return null;
-    for (let t = 0; t < 40 && !doc.querySelector(selector); t++) await sleep(100);
-    await within(doc.fonts?.ready ?? Promise.resolve(), 2_000);
-    await sleep(50);
-    return fn(doc);
+    return sheet ? Array.from(sheet.cssRules, (r) => r.cssText).join("\n") : "";
   } catch {
-    return null;
-  } finally {
-    frame.remove();
+    return "";
   }
 }
 
-async function pool<T>(items: readonly T[], size: number, run: (item: T) => Promise<void>): Promise<void> {
-  const queue = [...items];
-  await Promise.all(Array.from({ length: Math.min(size, queue.length) }, async () => {
-    for (let item = queue.shift(); item !== undefined; item = queue.shift()) await run(item);
-  }));
+/** After a resize: the frame laid out at its new width (and, with scripts on, a moment for them to react). */
+async function settle(source: PageSource): Promise<void> {
+  await within(new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))), 100);
+  if (source === "load") await sleep(100);
+}
+
+function loadOf(frame: HTMLIFrameElement): Promise<void> {
+  return new Promise<void>((resolve) => frame.addEventListener("load", () => resolve(), { once: true }));
 }
 
 function within(promise: Promise<unknown>, ms: number): Promise<boolean> {

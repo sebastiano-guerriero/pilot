@@ -18,13 +18,28 @@ interface SelectionActionsProps {
   /** Make responsive; resolves to how it went (false: it didn't). None: not offered. */
   onMakeResponsive?(): Promise<RequestOutcome> | RequestOutcome;
   /**
-   * A job isn't finished on the element (see PilotSession.jobOn): where it
-   * stands, in words ("Make responsive: Claude Code is working"). The
-   * loader takes the corner, with this in its tooltip, and the actions that
-   * send a job aren't offered meanwhile (the element doesn't get a second
-   * one). Show in DOM stays, on the loader's left.
+   * A job isn't finished on the element (see PilotSession.jobOn). The
+   * loader takes the corner (`text`, where the job stands: "Make
+   * responsive: Claude Code is working", is its label), and the actions
+   * that send a job aren't offered meanwhile (the element doesn't get a
+   * second one). Show in DOM stays, on the loader's left. With `onCancel`
+   * (the agent isn't done yet), hovering the loader turns it into an X, its
+   * tooltip says "Cancel job", and a click takes the job back. Once the
+   * agent is done (Pilot checking), the tooltip says where it stands.
    */
-  busy?: string;
+  busy?: Busy;
+  /**
+   * The element has an unresolved comment thread: a comment icon on the
+   * corner (the far right, after the loader if there's one; the actions
+   * on its left), that opens the thread.
+   */
+  onOpenThread?(): void;
+}
+
+/** A job on the element: where it stands, and how to take it back (none once the agent is done). */
+export interface Busy {
+  text: string;
+  onCancel?(): void;
 }
 
 /**
@@ -40,6 +55,21 @@ const OUTCOME_TEXT = { sent: "Sent to agent", copied: "Prompt copied", open: "Al
 const SIZE = 20;
 const GAP = 4;
 
+/**
+ * Where `count` actions sit for an element's box (viewport px): one 20px
+ * square each, 4px apart, right-aligned with it, 4px above its top edge (or
+ * inside it, 4px in, when it touches the top of the window). What other
+ * overlays keep clear of (the hover label).
+ */
+export function actionsBox(rect: DOMRect, count: number): { left: number; top: number; right: number; bottom: number; inside: boolean } {
+  const inside = rect.top < SIZE + GAP;
+  const width = count * SIZE + Math.max(count - 1, 0) * 4;
+  // Not rounded: on the same fractional pixels as the element's outline and label.
+  const right = inside ? rect.right - GAP : rect.right;
+  const top = inside ? rect.top + GAP : rect.top - SIZE - GAP;
+  return { left: right - width, top, right, bottom: top + SIZE, inside };
+}
+
 /** How long Make responsive's tooltip says how it went ("Sent to agent"…), in ms. */
 const DONE_FOR = 1500;
 
@@ -50,18 +80,25 @@ const DONE_FOR = 1500;
  * its own; its prompt copied when no agent works on the page), then Show in
  * DOM (opens the DOM tree on the selected element). While a job is on the
  * element (`busy`), its loader takes the corner and Make responsive isn't
- * offered; busy elements that aren't selected get the loader alone. Inside
+ * offered; with an unresolved comment thread, a comment icon takes the
+ * corner and opens it. Elements that aren't selected get these
+ * two alone, so they're found on the page. Inside
  * the corner when the element touches the top of the window (the tooltips
  * then go below, so they stay on screen).
  */
-export function SelectionActions({ rect, domOpen = false, onShowInDom, responsiveMode = "send", onMakeResponsive, busy }: SelectionActionsProps) {
-  const inside = rect.top < SIZE + GAP;
+export function SelectionActions({
+  rect,
+  domOpen = false,
+  onShowInDom,
+  responsiveMode = "send",
+  onMakeResponsive,
+  busy,
+  onOpenThread,
+}: SelectionActionsProps) {
   const responsive = !busy && !!onMakeResponsive;
-  // The row: one 20px square per item, 4px apart.
-  const count = Number(responsive) + Number(!!onShowInDom) + Number(!!busy);
-  const ROW = count * SIZE + (count - 1) * 4;
-  const right = Math.round(inside ? rect.right - GAP : rect.right);
-  const side = inside ? "bottom" : "top";
+  const count = Number(responsive) + Number(!!onShowInDom) + Number(!!onOpenThread) + Number(!!busy);
+  const box = actionsBox(rect, count);
+  const side = box.inside ? "bottom" : "top";
   // After Make responsive, its tooltip says how it went for a moment.
   const [outcome, setOutcome] = useState<Exclude<RequestOutcome, false> | null>(null);
   useEffect(() => {
@@ -71,10 +108,7 @@ export function SelectionActions({ rect, domOpen = false, onShowInDom, responsiv
   }, [outcome]);
   if (!count) return null;
   return (
-    <div
-      class="selection-actions"
-      style={{ left: px(right - ROW), top: px(Math.round(inside ? rect.top + GAP : rect.top - SIZE - GAP)) }}
-    >
+    <div class="selection-actions" style={{ left: px(box.left), top: px(box.top) }}>
       {responsive && (
         <Tooltip text={outcome ? OUTCOME_TEXT[outcome] : "Make responsive"} side={side} forceOpen={!!outcome}>
           <button
@@ -105,11 +139,32 @@ export function SelectionActions({ rect, domOpen = false, onShowInDom, responsiv
           </button>
         </Tooltip>
       )}
-      {busy && (
-        <Tooltip text={busy} side={side}>
-          <span class="action busy" role="status" aria-label={busy} tabIndex={0}>
-            <Icon name="busy" class="spinner" />
-          </span>
+      {busy &&
+        (busy.onCancel ? (
+          <Tooltip text="Cancel job" side={side}>
+            <button
+              type="button"
+              class="action busy"
+              aria-label={`Cancel job (${busy.text})`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={busy.onCancel}
+            >
+              <Icon name="busy" class="spinner" />
+              <Icon name="close" class="cancel" />
+            </button>
+          </Tooltip>
+        ) : (
+          <Tooltip text={busy.text} side={side}>
+            <span class="action busy" role="status" aria-label={busy.text} tabIndex={0}>
+              <Icon name="busy" class="spinner" />
+            </span>
+          </Tooltip>
+        ))}
+      {onOpenThread && (
+        <Tooltip text="Open comment" side={side}>
+          <button type="button" class="action" aria-label="Open comment" onMouseDown={(e) => e.preventDefault()} onClick={onOpenThread}>
+            <Icon name="thread" />
+          </button>
         </Tooltip>
       )}
     </div>

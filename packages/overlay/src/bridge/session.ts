@@ -246,8 +246,18 @@ export class PilotSession {
     return [...found].map(([element, job]) => ({ element, job }));
   }
 
+  /** Jobs not finished yet (see jobOn), oldest first: the agents' queue, then what's being checked. */
+  get openJobs(): JobRecord[] {
+    return this.jobs.filter(unfinished);
+  }
+
+  /** Whether a job can still be taken back: before the agent says it's done (see cancel). */
+  canCancel(job: JobRecord): boolean {
+    return job.status === "queued" || job.status === "working";
+  }
+
   /** The elements a job is on (see jobElements), on the page. */
-  private elementsOf(job: JobRecord): Element[] {
+  elementsOf(job: JobRecord): Element[] {
     const known = this.jobElements.get(job.id)?.filter((e) => e.isConnected);
     if (known?.length) return known;
     const selectors = job.changeSet.request ? [job.changeSet.request.target.selector] : job.changeSet.edits.map((e) => e.target.selector);
@@ -340,6 +350,15 @@ export class PilotSession {
     const messages = thread.messages.map((m) => (m.from === "designer" && (m.waiting || !m.jobId) ? { ...m, jobId: id, waiting: undefined } : m));
     this.patchThread(threadId, { messages });
     return { job, changeSet };
+  }
+
+  /**
+   * Threads that need the designer: the agent spoke last (its reply came).
+   * Replying (back to the agent) or resolving (gone) takes one off; opening
+   * it doesn't. In the order the threads started, oldest first.
+   */
+  get attention(): CommentThread[] {
+    return this.threads.filter(needsYou);
   }
 
   /** Where a thread's latest comment stands: its job, while Pilot still lists it. */
@@ -575,6 +594,11 @@ export class PilotSession {
   private notify(): void {
     for (const listener of this.listeners) listener();
   }
+}
+
+/** The agent spoke last in the thread: it's the designer's turn (reply or resolve). */
+export function needsYou(thread: CommentThread): boolean {
+  return thread.messages.at(-1)?.from === "agent";
 }
 
 /** Not finished yet: waiting, an agent on it, being checked, or its follow-up. */

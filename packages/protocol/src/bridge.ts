@@ -91,6 +91,12 @@ export interface WidthCheck {
    * task should leave that width as it was.
    */
   changedAtDesignerWidth?: string[];
+  /**
+   * How Pilot got the page: `copy`, a copy of it as the designer has it,
+   * with scripts off (layout that only changes through JavaScript doesn't
+   * respond in it); `load`, loaded from its URL (the copy didn't have the element).
+   */
+  source?: "copy" | "load";
   /** Problems to fix: the issues of every width, and anything changed at the designer's width. */
   problems: number;
 }

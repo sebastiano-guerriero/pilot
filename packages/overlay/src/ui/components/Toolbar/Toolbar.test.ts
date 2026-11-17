@@ -12,8 +12,7 @@ const props = {
   canSend: false,
   onSend: () => true,
   pending: 0,
-  jobsOpen: false,
-  onToggleJobs: () => {},
+  onNextJob: () => {},
   onQuit: () => {},
 };
 const draw = (patch: Partial<typeof props> = {}) => act(() => render(h(Toolbar, { ...props, ...patch }), container));
@@ -32,11 +31,12 @@ afterEach(() => {
 });
 
 describe("Toolbar", () => {
-  it("select, Send, divider, quit; Send is disabled with nothing to send", () => {
+  it("the tools, a divider, Send, a divider, quit; Send is disabled with nothing to send", () => {
     draw();
     expect([...container.querySelectorAll(".toolbar .button, .toolbar .divider")].map((e) => e.className)).toEqual([
       "button",
       "button",
+      "divider",
       "button send",
       "divider",
       "button",
@@ -53,11 +53,21 @@ describe("Toolbar", () => {
     expect(tip(send())?.textContent).toBe("Send to agent");
   });
 
+  it("comments to review: a pill on the Comment button, with how many", () => {
+    draw({ tool: "comment" });
+    const comment = container.querySelector('[aria-keyshortcuts="Alt+C"]') as HTMLButtonElement;
+    expect(comment.querySelector(".pill")).toBeNull();
+    expect(tip(comment)?.textContent).toBe("Comment");
+    draw({ tool: "comment", attention: 2 } as Partial<typeof props>);
+    expect(comment.querySelector(".pill")?.textContent).toBe("2");
+    expect(tip(comment)?.textContent).toBe("2 comments to review");
+  });
+
   it("jobs in progress: the jobs button, with their number, after Send; it leaves once they're done", () => {
     vi.useFakeTimers();
     draw({ pending: 2 });
     expect(jobs()?.textContent).toBe("2");
-    expect(jobs()?.getAttribute("aria-label")).toBe("2 jobs in progress");
+    expect(jobs()?.getAttribute("aria-label")).toBe("2 jobs in progress: show the next");
     expect(tip(jobs())?.textContent).toBe("2 jobs running");
     draw({ pending: 0 });
     // Still there for its exit animation, then gone.

@@ -11,11 +11,47 @@
     background: hsl(from var(--plt-color-accent) h s l / 7%);
   }
 
+  /* The jobs button landed on this job's element: it blinks twice, then
+     fades (0.9s, FLASH_MS in App.tsx). Shown still for that long with
+     reduced motion. Placeholder look, pending the design. */
+  :scope[data-variant="flash"] {
+    /* 2px in all: the 1px border, and a 1px outline outside it (the box
+       doesn't move). */
+    outline: 1px solid var(--plt-color-accent);
+    background: hsl(from var(--plt-color-accent) h s l / 15%);
+    animation: flash 0.9s ease-out forwards;
+  }
+
+  @keyframes flash {
+    0%,
+    40% {
+      opacity: 1;
+    }
+
+    20%,
+    60% {
+      opacity: 0.15;
+    }
+
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :scope[data-variant="flash"] {
+      animation: none;
+    }
+  }
+
+  /* 4px from the outline's outer edge, like the selection's actions
+     (SelectionActions): the label sits in the box's padding area, inside
+     the 1px border, hence the 5px and 3px. */
   .label {
     position: absolute;
     left: -1px;
     bottom: 100%;
-    margin-bottom: 4px;
+    margin-bottom: 5px;
     /* 20px tall, like the viewport width button (ViewportWidth.css). */
     height: 20px;
     padding-inline: 4px;
@@ -25,18 +61,44 @@
     color: var(--plt-color-background);
     font-size: var(--plt-text-base);
     white-space: nowrap;
+    display: flex;
+    box-sizing: border-box;
 
     /* Element touches the top of the viewport: the label goes inside the box. */
     &[data-inside] {
       bottom: auto;
-      top: 4px;
-      left: 4px;
+      top: 3px;
+      left: 3px;
       margin: 0;
     }
   }
 
+  /* Beside corner icons: the name is cut ("…") when the label hits its
+     max-width (set inline by Highlight.tsx), the size drops first. */
+  .name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .size {
+    flex: none;
+    margin-left: 4px;
+    overflow: hidden;
     opacity: 0.4;
+  }
+
+  .label[data-compact] .size {
+    max-width: 0;
+    margin-left: 0;
+  }
+
+  /* No room beside the corner icons: below the box. */
+  .label[data-below] {
+    bottom: auto;
+    top: 100%;
+    margin-bottom: 0;
+    margin-top: 5px;
   }
 
   /* Round markers on the selected element's corners, centered on the 1px

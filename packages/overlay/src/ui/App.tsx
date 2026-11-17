@@ -13,11 +13,10 @@ import { BoxAreas } from "./components/BoxAreas/BoxAreas.tsx";
 import { GridOverlay } from "./components/GridOverlay/GridOverlay.tsx";
 import { Highlight } from "./components/Highlight/Highlight.tsx";
 import { PropertyDialog, type WidthPick } from "./components/PropertyDialog/PropertyDialog.tsx";
-import type { JobRecord, PilotSession } from "../bridge/session.ts";
-import { JobList, statusText, whatText } from "./components/JobList/JobList.tsx";
+import type { CommentThread, JobRecord, PilotSession } from "../bridge/session.ts";
+import { statusText, whatText } from "./components/JobList/JobList.tsx";
 import { DomTree } from "./components/DomTree/DomTree.tsx";
-import { type RequestOutcome, SelectionActions } from "./components/SelectionActions/SelectionActions.tsx";
-import { CommentPins, type Pin } from "./components/CommentPins/CommentPins.tsx";
+import { actionsBox, type Busy, type RequestOutcome, SelectionActions } from "./components/SelectionActions/SelectionActions.tsx";
 import { type CommentOutcome, CommentWidget } from "./components/CommentWidget/CommentWidget.tsx";
 import { type Tool, Toolbar } from "./components/Toolbar/Toolbar.tsx";
 import { ViewportWidth } from "./components/ViewportWidth/ViewportWidth.tsx";
@@ -52,7 +51,7 @@ interface AppProps {
  */
 export function App({ host, dev, nameAttributes, history, session, onReattach, onQuit }: AppProps) {
   // The tool that picks elements: Select (the property dialog) or Comment
-  // (the comment widget, and the comment pins); null: the page as it is.
+  // (the comment widget); null: the page as it is.
   const [tool, setTool] = useState<Tool>(dev ? "select" : null);
   const selecting = tool !== null;
   const commenting = tool === "comment";
@@ -166,34 +165,70 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   };
   // The job on the selected element, if one isn't finished: its actions give way to where it stands.
   const selectedJob = selected && session ? session.jobOn(selected.element) : null;
-  const busyText = selectedJob ? jobText(selectedJob) : undefined;
-  const busy = session?.busy.filter((b) => b.element !== selected?.element) ?? [];
+  const busyOf = (job: JobRecord): Busy => ({
+    text: jobText(job),
+    onCancel: session?.canCancel(job) ? () => session.cancel(job.id) : undefined,
+  });
+  const selectedBusy = selectedJob ? busyOf(selectedJob) : undefined;
+  // What shows on elements' top-right corners, selected or not: a job's
+  // loader, and the comment icon of an unresolved thread (unless its
+  // comment is with the agent: its loader says so then). Both come with the
+  // element's outline.
+  const marks = new Map<Element, { job?: JobRecord; thread?: CommentThread }>();
+  for (const { element, job } of session?.busy ?? []) marks.set(element, { job });
+  for (const thread of session?.threads ?? []) {
+    const job = session?.threadJob(thread);
+    if (job && job.status !== "cancelled" && !job.checked) continue; // with the agent
+    const element = session?.threadElement(thread);
+    if (element) marks.set(element, { ...marks.get(element), thread });
+  }
+  /** How many icons sit on `element`'s corner (the hover label stops before them). */
+  const marksOn = (element: Element) => {
+    const mark = marks.get(element);
+    return Number(!!mark?.job) + Number(!!mark?.thread);
+  };
   // Make responsive: a job of its own for the agent working on this page,
   // or, with none, its prompt on the clipboard (the same text either way).
   // Asked again while that element's job isn't finished: nothing new is
-  // sent, and the job list opens on it.
+  // sent (the loader shows instead of the button by then anyway).
   const makeResponsive = async (element: Element): Promise<RequestOutcome> => {
     if (!sendToAgent) return (await copyText(formatPrompt(buildRequest(element, "responsive")))) ? "copied" : false;
-    if (session?.openTask(element, "responsive")) {
-      setJobsOpen(true);
-      return "open";
-    }
+    if (session?.openTask(element, "responsive")) return "open";
     return session?.request(element, "responsive") ? "sent" : false;
   };
   // Jobs not finished yet: waiting, an agent applying, checking the page.
   const pending = (session?.jobs ?? []).filter((j) => j.status === "queued" || j.status === "working" || (j.status === "done" && !j.checked)).length;
-  // Where the designer dragged the toolbar (null: centered at the bottom),
-  // kept through reloads; the job list goes with it.
+  // Where the designer dragged the toolbar (null: centered at the bottom), kept through reloads.
   const [toolbarSpot, setToolbarSpot] = useState<ToolbarSpot | null>(loadSpot);
   const moveToolbar = (spot: ToolbarSpot) => {
     setToolbarSpot(spot);
     saveSpot(spot);
   };
-  // The job list opens from the toolbar's jobs button, and closes when there's nothing left in progress.
-  const [jobsOpen, setJobsOpen] = useState(false);
-  useEffect(() => {
-    if (!pending) setJobsOpen(false);
-  }, [pending]);
+  // The toolbar's jobs button goes to the next job: its elements scrolled
+  // into view (the first one, centered, unless all of it is in view), then
+  // flashed. Oldest first, as the agents take them, wrapping around after
+  // the last; jobs with no element on this page (made on another one, or
+  // re-rendered away) are skipped.
+  const lastJob = useRef<string | null>(null);
+  const [flash, setFlash] = useState<{ elements: Element[]; key: number } | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const nextJob = () => {
+    if (!session) return;
+    const open = session.openJobs.map((job) => ({ job, elements: session.elementsOf(job) })).filter((j) => j.elements.length);
+    if (!open.length) return;
+    const next = open[(open.findIndex((j) => j.job.id === lastJob.current) + 1) % open.length] as (typeof open)[number];
+    lastJob.current = next.job.id;
+    goTo(next.elements);
+  };
+  /** Scroll to `elements` (the first one), then flash them all. */
+  const goTo = (elements: Element[]) => {
+    void scrollTo(elements[0] as Element).then(() => {
+      clearTimeout(flashTimer.current);
+      setFlash((prev) => ({ elements, key: (prev?.key ?? 0) + 1 }));
+      flashTimer.current = setTimeout(() => setFlash(null), FLASH_MS);
+    });
+  };
+  useEffect(() => () => clearTimeout(flashTimer.current), []);
 
   // Cmd/Ctrl+Z undoes the last property change, Cmd/Ctrl+Shift+Z (or Ctrl+Y)
   // redoes it. Left alone when there's nothing to undo/redo, and when the
@@ -253,13 +288,37 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [selected, selecting, host]);
 
-  // A tool's button: on (switching from the other one keeps the selection:
-  // the same element, edited or commented), or off when it was on.
+  // A tool's button (or its Option shortcut): on, switching from the other
+  // one keeps the selection (the same element, edited or commented).
+  // Clicking the one that's on doesn't turn it off (Esc does, once nothing
+  // is selected): Comment's goes to the next thread that needs the
+  // designer, Select's does nothing.
   const onTool = (next: Exclude<Tool, null>) => {
-    if (tool === next) {
-      setSelected(null);
-      setTool(null);
-    } else setTool(next);
+    if (tool !== next) setTool(next);
+    else if (next === "comment") nextThread();
+  };
+
+  // Threads that need the designer (the agent spoke last), oldest first,
+  // wrapping around after the last: each one opened, scrolled to (unless
+  // it's in view) and flashed, as the jobs button does. Threads whose element isn't on this page are skipped.
+  const lastThread = useRef<string | null>(null);
+  const openThread = (element: Element) => {
+    if (!isEditable(element)) return;
+    onReattach?.();
+    setTool("comment");
+    setSelected((prev) => (prev?.element === element ? prev : { element, key: (prev?.key ?? 0) + 1 }));
+  };
+  const nextThread = () => {
+    if (!session) return;
+    const open = session.attention.flatMap((thread) => {
+      const element = session.threadElement(thread);
+      return element ? [{ thread, element }] : [];
+    });
+    if (!open.length) return;
+    const next = open[(open.findIndex((t) => t.thread.id === lastThread.current) + 1) % open.length] as (typeof open)[number];
+    lastThread.current = next.thread.id;
+    goTo([next.element]);
+    openThread(next.element);
   };
   const onToolRef = useRef(onTool);
   onToolRef.current = onTool;
@@ -277,31 +336,60 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     if (job || waiting) return "sent";
     return (await copyText(formatPrompt(changeSet))) ? "copied" : false;
   };
-  const pins: Pin[] =
-    commenting && session
-      ? session.threads.flatMap((t) => {
-          const element = session.threadElement(t);
-          return element ? [{ id: t.id, element, status: session.threadJob(t)?.status, selected: element === selected?.element }] : [];
-        })
-      : [];
 
   const hideSelection = !!inspect?.some(hidesSelection);
+
+  // Where the selection's actions are (see SelectionActions), for the hover
+  // label to keep clear of: Make responsive (unless a job is on it), Show in
+  // DOM, its loader, its thread's icon.
+  const selectionActions =
+    selected && selectedRect && (commenting || !hideSelection)
+      ? actionsBox(
+          selectedRect,
+          Number(!selectedJob) + 1 + Number(!!marks.get(selected.element)?.thread) + Number(!!selectedJob),
+        )
+      : null;
+  /**
+   * How wide a hovered element's label may be (see Highlight's labelRoom):
+   * up to its own corner icons, and up to the selection's actions when they
+   * sit along the label's row (a parent hovered while its child is selected).
+   */
+  const labelPlace = (element: Element, rect: DOMRect): { labelRoom?: number; labelShift?: number } => {
+    // The label's row (Highlight.css): it starts at the box's left edge,
+    // 4px above its top (or 4px down inside it), like the actions.
+    const start = rect.left;
+    let room = Infinity;
+    let shift = 0;
+    const own = cornerWidth(marksOn(element));
+    if (own) room = rect.width - own;
+    const box = element === selected?.element ? null : selectionActions;
+    const top = rect.top < 24 ? rect.top + 4 : rect.top - 24;
+    if (box && box.top < top + 20 && box.bottom > top && box.right > start) {
+      room = Math.min(room, box.left - 4 - start);
+      // On one row with them: lined up, not a pixel or two off.
+      shift = box.top - top;
+    }
+    return { labelRoom: room === Infinity ? undefined : room, labelShift: shift || undefined };
+  };
 
   return (
     <>
       {/* Elements a job is on (other than the selection, which shows it
           itself): their outline and their loader, until it's finished. */}
-      {busy.map(({ element, job }) => (
-        <BusyOutline key={job.id + elementKey(element)} element={element} status={jobText(job)} />
+      {[...marks].map(([element, { job, thread }]) =>
+        element === selected?.element ? null : (
+          <CornerMarks
+            key={elementKey(element)}
+            element={element}
+            busy={job && busyOf(job)}
+            onOpenThread={thread && (() => openThread(element))}
+          />
+        ),
+      )}
+      {/* The jobs button's flash on the next job's elements. */}
+      {flash?.elements.map((element) => (
+        <FlashOutline key={`${flash.key}-${elementKey(element)}`} element={element} />
       ))}
-      {/* The Comment tool: pins on the elements with a thread; the selected
-          one gets its thread in the comment widget. */}
-      <CommentPins
-        pins={pins}
-        onOpen={(element) => {
-          if (isEditable(element)) setSelected((prev) => (prev?.element === element ? prev : { element, key: (prev?.key ?? 0) + 1 }));
-        }}
-      />
       {selected && selectedRect && commenting && (
         <>
           <Highlight element={selected.element} rect={selectedRect} variant="selected" label={false} />
@@ -313,7 +401,15 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
             status={threadStatus}
             agentName={threadJob?.agent?.label ?? session?.state.agents[0]?.label}
             onSend={(text) => sendComment(selected.element, text)}
-            onResolve={thread ? () => session?.resolve(thread.id) : undefined}
+            // Resolved: the thread goes, and the widget closes (the next one is the Comment button's click away).
+            onResolve={
+              thread
+                ? () => {
+                    session?.resolve(thread.id);
+                    dismiss();
+                  }
+                : undefined
+            }
             onClose={dismiss}
             autoFocus={selected.from !== "dom"}
           />
@@ -323,7 +419,9 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
             onShowInDom={() => setDomOpen((open) => !open)}
             responsiveMode={sendToAgent ? "send" : "copy"}
             onMakeResponsive={() => makeResponsive(selected.element)}
-            busy={busyText}
+            busy={selectedBusy}
+            // The thread is open already: its icon stays, as everywhere.
+            onOpenThread={marks.get(selected.element)?.thread ? () => setTool("comment") : undefined}
           />
         </>
       )}
@@ -377,7 +475,9 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
               onShowInDom={() => setDomOpen((open) => !open)}
               responsiveMode={sendToAgent ? "send" : "copy"}
               onMakeResponsive={() => makeResponsive(selected.element)}
-              busy={busyText}
+              busy={selectedBusy}
+              // A thread waiting for the designer: its icon switches to Comment, which opens it.
+              onOpenThread={marks.get(selected.element)?.thread ? () => setTool("comment") : undefined}
             />
           )}
         </>
@@ -386,11 +486,11 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
           selection's outline, dots and grid lines (same layer: DOM order decides).
           The dialog and the toolbar are on a higher layer either way. */}
       {domHover && domHoverRect && domHover !== selected?.element && (
-        <Highlight element={domHover} rect={domHoverRect} variant="hover" nameAttributes={nameAttributes} />
+        <Highlight element={domHover} rect={domHoverRect} variant="hover" nameAttributes={nameAttributes} {...labelPlace(domHover, domHoverRect)} />
       )}
       {hovered && hoverRect && !domHover && (
         <>
-          <Highlight element={hovered} rect={hoverRect} variant="hover" nameAttributes={nameAttributes} />
+          <Highlight element={hovered} rect={hoverRect} variant="hover" nameAttributes={nameAttributes} {...labelPlace(hovered, hoverRect)} />
           {/* A hovered grid shows its lines; numbers come with the selection. */}
           <GridOverlay element={hovered} part="lines" />
         </>
@@ -410,18 +510,15 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
           selected ? setWidthPick({ width, shift }) : setWidths((current) => clickWidth(current, width, shift))
         }
       />
-      {session && jobsOpen && session.jobs.length > 0 && (
-        <JobList jobs={session.jobs} onCancel={(id) => session.cancel(id)} toolbar={toolbarSpot} />
-      )}
       <Toolbar
         tool={tool}
         onTool={onTool}
+        attention={session?.attention.length ?? 0}
         mode={sendToAgent ? "send" : "copy"}
         canSend={sendToAgent ? (session?.unsent ?? 0) > (session?.heldCount ?? 0) : hasChanges}
         onSend={sendToAgent ? sendChanges : copyPrompt}
         pending={pending}
-        jobsOpen={jobsOpen}
-        onToggleJobs={() => setJobsOpen((open) => !open)}
+        onNextJob={nextJob}
         onQuit={onQuit}
         spot={toolbarSpot}
         onMove={moveToolbar}
@@ -447,16 +544,56 @@ export function toolShortcut(code: string): Exclude<Tool, null> | null {
   return code === "KeyC" ? "comment" : code === "KeyV" ? "select" : null;
 }
 
-/** An element a job is on, not selected: its outline, and its loader on the top-right corner (where the job stands in the tooltip). */
-function BusyOutline({ element, status }: { element: Element; status: string }) {
+/**
+ * What an element that isn't selected shows: its outline, and on its
+ * top-right corner a job's loader (hover for an X that cancels it) and the
+ * comment icon of an unresolved thread (which opens it).
+ */
+function CornerMarks({ element, busy, onOpenThread }: { element: Element; busy?: Busy; onOpenThread?(): void }) {
   const rect = useElementRect(element);
   if (!rect) return null;
   return (
     <>
       <Highlight element={element} rect={rect} variant="busy" label={false} />
-      <SelectionActions rect={rect} busy={status} />
+      <SelectionActions rect={rect} busy={busy} onOpenThread={onOpenThread} />
     </>
   );
+}
+
+/** The width of `count` corner icons (20px, 4px apart), and the 4px before them; 0 for none. */
+function cornerWidth(count: number): number {
+  return count ? count * 20 + (count - 1) * 4 + 4 : 0;
+}
+
+/** How long the jobs button's flash lasts, in ms (Highlight.css, `flash`). */
+const FLASH_MS = 900;
+
+/** The jobs button's flash on an element (Highlight's `flash` variant). */
+function FlashOutline({ element }: { element: Element }) {
+  const rect = useElementRect(element);
+  return rect ? <Highlight element={element} rect={rect} variant="flash" label={false} /> : null;
+}
+
+/**
+ * Scrolls `element` to the middle of the window (smoothly, unless the
+ * designer asked for reduced motion), unless all of it is in view already.
+ * Resolves once the scroll is over (`scrollend`, or 700ms at most).
+ */
+function scrollTo(element: Element): Promise<void> {
+  const rect = element.getBoundingClientRect();
+  if (rect.top >= 0 && rect.bottom <= window.innerHeight && rect.left >= 0 && rect.right <= window.innerWidth) return Promise.resolve();
+  const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  element.scrollIntoView({ block: "center", inline: "nearest", behavior: reduced ? "auto" : "smooth" });
+  if (reduced) return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      window.removeEventListener("scrollend", done, true);
+      resolve();
+    };
+    const timer = setTimeout(done, 700);
+    window.addEventListener("scrollend", done, true);
+  });
 }
 
 /** A key per element, for lists of them (the same element keeps its key). */

@@ -89,8 +89,13 @@ describe("DomTree", () => {
 
 describe("panelPosition", () => {
   const viewport = { width: 1000, height: 800 };
-  it("opens 8px from the left edge, centered top to bottom", () => {
+  it("opens 8px from the left edge, centered top to bottom with nothing selected", () => {
     expect(panelPosition(null, 300, viewport)).toEqual({ left: 8, top: 250 });
+  });
+  it("opens level with the selected element's top, kept on screen", () => {
+    expect(panelPosition(null, 300, viewport, 340.4)).toEqual({ left: 8, top: 340 });
+    expect(panelPosition(null, 300, viewport, 700)).toEqual({ left: 8, top: 800 - 300 - 8 });
+    expect(panelPosition(null, 300, viewport, -120)).toEqual({ left: 8, top: 8 });
   });
   it("keeps a spot as it is while it fits", () => {
     expect(panelPosition({ left: 200, top: 100 }, 300, viewport)).toEqual({ left: 200, top: 100 });

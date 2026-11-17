@@ -196,31 +196,43 @@ const ICONS = {
       </g>
     ),
   },
-  // Show in DOM, on the selection: `</>`.
+  // Show in DOM, on the selection: `< >`.
   code: {
     size: 12,
     body: (
-      <g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 9L0.5 6L3 3" />
-        <path d="M9 9L11.5 6L9 3" />
-        <path d="M5 9L7 3" />
+      <g fill="currentColor">
+        <path d="M7.81078 10.1891C7.61878 10.1891 7.42679 10.1161 7.28079 9.96908C6.98779 9.67608 6.98779 9.20108 7.28079 8.90808L10.1898 5.99908L7.28079 3.09008C6.98779 2.79708 6.98779 2.32208 7.28079 2.02908C7.57379 1.73608 8.04879 1.73608 8.34179 2.02908L11.7808 5.46808C12.0738 5.76108 12.0738 6.23608 11.7808 6.52908L8.34179 9.96808C8.19579 10.1141 8.00378 10.1881 7.81178 10.1881L7.81078 10.1891Z" />
+        <path d="M4.18924 10.1891C3.99724 10.1891 3.80524 10.1161 3.65924 9.96905L0.220238 6.53005C-0.0727617 6.23705 -0.0727617 5.76205 0.220238 5.46905L3.65924 2.03005C3.95224 1.73705 4.42724 1.73705 4.72024 2.03005C5.01324 2.32305 5.01324 2.79805 4.72024 3.09105L1.81124 6.00005L4.72024 8.90905C5.01324 9.20205 5.01324 9.67705 4.72024 9.97005C4.57424 10.1161 4.38224 10.1901 4.19024 10.1901L4.18924 10.1891Z" />
       </g>
     ),
   },
-  // Make responsive, on the selection: a frame with a two-way arrow across it.
+  // Make responsive, on the selection: a window with a two-way arrow below it.
   responsive: {
     size: 12,
     body: (
-      <g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M4 7.5L2.5 6L4 4.5" />
-        <path d="M8 7.5L9.5 6L8 4.5" />
-        <path
-          d="M3.7 10.5H8.3C9.42011 10.5 9.98016 10.5 10.408 10.282C10.7843 10.0903 11.0903 9.78431 11.282 9.40798C11.5 8.98016 11.5 8.42011 11.5 7.3V4.7C11.5 3.5799 11.5 3.01984 11.282 2.59202C11.0903 2.21569 10.7843 1.90973 10.408 1.71799C9.98016 1.5 9.42011 1.5 8.3 1.5L3.7 1.5C2.57989 1.5 2.01984 1.5 1.59202 1.71799C1.21569 1.90973 0.909734 2.21569 0.717987 2.59202C0.5 3.01984 0.5 3.57989 0.5 4.7V7.3C0.5 8.4201 0.5 8.98016 0.717987 9.40798C0.909734 9.78431 1.21569 10.0903 1.59202 10.282C2.01984 10.5 2.57989 10.5 3.7 10.5Z"
-          stroke-linecap="butt"
-          stroke-linejoin="miter"
-        />
-        <path d="M2.5 6H9.5" />
-      </g>
+      <>
+        <path d="M3.25 4.5C3.66421 4.5 4 4.16421 4 3.75C4 3.33579 3.66421 3 3.25 3C2.83579 3 2.5 3.33579 2.5 3.75C2.5 4.16421 2.83579 4.5 3.25 4.5Z" fill="currentColor" />
+        <path d="M5.75 4.5C6.16421 4.5 6.5 4.16421 6.5 3.75C6.5 3.33579 6.16421 3 5.75 3C5.33579 3 5 3.33579 5 3.75C5 4.16421 5.33579 4.5 5.75 4.5Z" fill="currentColor" />
+        <g stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M0.75 9.25H11.25" />
+          <path d="M2.5 7.5L0.75 9.25L2.5 11" />
+          <path d="M9.5 7.5L11.25 9.25L9.5 11" />
+          <path d="M11.25 5.5V3.25C11.25 2.14543 10.3546 1.25 9.25 1.25H2.75C1.64543 1.25 0.75 2.14543 0.75 3.25V5.5" />
+        </g>
+      </>
+    ),
+  },
+  // An unresolved comment thread, on the element's corner (SelectionActions): a speech bubble.
+  thread: {
+    size: 12,
+    body: (
+      <path
+        d="M1 6V10C1 10.5523 1.44772 11 2 11H6C8.76142 11 11 8.76142 11 6C11 3.23858 8.76142 1 6 1C3.23858 1 1 3.23858 1 6Z"
+        fill="currentColor"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
     ),
   },
   // The dialog's drag strip: three dots in a row (10×2).

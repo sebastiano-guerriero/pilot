@@ -1,5 +1,6 @@
+// @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
-import { buildCheck, compareSnapshots, type Measured, problemLines, type StyleSnapshot, widthsToCheck } from "./widths.ts";
+import { buildCheck, compareSnapshots, type Measured, pageCopy, problemLines, type StyleSnapshot, widthsToCheck } from "./widths.ts";
 
 describe("widthsToCheck", () => {
   it("a phone, each breakpoint and 1px below it, a wide desktop, and the designer's width", () => {
@@ -61,5 +62,29 @@ describe("compareSnapshots", () => {
   it("says when what's inside changed, or the element is gone", () => {
     expect(compareSnapshots(snap([{}, {}]), snap([{}]))).toEqual(["what's inside the element changed: 2 elements before, 1 now."]);
     expect(compareSnapshots(snap([{}]), null)).toEqual(["the element isn't found there anymore."]);
+  });
+});
+
+describe("pageCopy", () => {
+  it("the page as it is, without scripts, Pilot's UI or its previews, with a base for relative URLs", () => {
+    const doc = document.implementation.createHTMLDocument("Page");
+    doc.body.innerHTML = `
+      <div class="modal" data-open="true" style="width: 300px">Open modal</div>
+      <script>track()</script>
+      <noscript>No JS</noscript>
+      <pilot-root></pilot-root>`;
+    const preview = doc.createElement("style");
+    preview.setAttribute("data-pilot-preview", "");
+    preview.textContent = ".modal { padding: 99px !important; }";
+    doc.head.append(preview);
+    const own = doc.createElement("style");
+    own.textContent = ".modal { color: red; }";
+    doc.head.append(own);
+    const html = pageCopy(doc);
+    expect(html.startsWith("<!doctype html>")).toBe(true);
+    expect(html).toContain('<div class="modal" data-open="true" style="width: 300px">Open modal</div>');
+    expect(html).toContain(".modal { color: red; }");
+    for (const gone of ["<script", "track()", "<noscript", "pilot-root", "99px"]) expect(html).not.toContain(gone);
+    expect(html).toMatch(/<head><base href=/);
   });
 });

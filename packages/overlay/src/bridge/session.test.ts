@@ -281,15 +281,19 @@ describe("PilotSession", () => {
     expect(posted.changeSet.request.kind).toBe("comment");
     expect(posted.changeSet.request.thread.map((m) => m.text)).toEqual(["Make it the brand green"]);
     expect(s.threadJob(thread)?.status).toBe("queued");
+    expect(s.attention).toEqual([]); // with the agent
     hub().emit({ type: "job", job: job({ id: (sent as { id: string }).id, status: "done", agent, notes: "Done: text-brand." }) });
     await vi.advanceTimersByTimeAsync(0);
+    // The agent spoke last: the designer's turn.
+    expect(s.attention.map((t) => t.id)).toEqual([thread.id]);
     const replied = s.threadFor(el);
     expect(replied?.messages.map((m) => [m.from, m.text])).toEqual([
       ["designer", "Make it the brand green"],
       ["agent", "Done: text-brand."],
     ]);
-    // The reply goes in the next comment's thread.
+    // The reply goes in the next comment's thread; replying takes it off the designer's list.
     s.comment(el, "A bit lighter");
+    expect(s.attention).toEqual([]);
     const next = posts.at(-1)?.body as { changeSet: { request: { thread: Array<{ from: string; text: string }> } } };
     expect(next.changeSet.request.thread.map((m) => m.from)).toEqual(["designer", "agent", "designer"]);
     // Resolved: the thread goes.
