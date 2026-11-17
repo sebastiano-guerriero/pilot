@@ -1,8 +1,9 @@
+import type { ElementState } from "@pilot/protocol";
 import { normalizeQuery } from "../editors/query.ts";
 
 /**
  * Search modifiers: what the `/` menu offers in the search field. A modifier
- * changes what the next changes are for (today: some viewport widths), and
+ * changes what the next changes are for (some viewport widths, element states), and
  * shows as a pill above the field. The menu is how they're discovered: each
  * row says what the modifier does and the syntax it stands for, so next time
  * it can be typed directly (`from-1280 `).
@@ -24,6 +25,8 @@ export interface Modifier {
    * window's width then shows dimmed after it, and Tab takes it).
    */
   insert: string;
+  /** For a state: picking it sets the pill right away (nothing left to type). */
+  state?: ElementState;
 }
 
 export const MODIFIERS: Modifier[] = [
@@ -41,6 +44,17 @@ export const MODIFIERS: Modifier[] = [
     syntax: "to-767",
     insert: "to-",
   },
+  { id: "hover", name: "Hover", description: "The pointer is over it", syntax: "hover:", insert: "hover:", state: "hover" },
+  { id: "focus", name: "Focus", description: "It has focus", syntax: "focus:", insert: "focus:", state: "focus" },
+  {
+    id: "focus-visible",
+    name: "Focus visible",
+    description: "Focused from the keyboard",
+    syntax: "focus-visible:",
+    insert: "focus-visible:",
+    state: "focus-visible",
+  },
+  { id: "active", name: "Active", description: "Being pressed", syntax: "active:", insert: "active:", state: "active" },
 ];
 
 /** The search text opens the menu: it starts with `/` (no property does). */

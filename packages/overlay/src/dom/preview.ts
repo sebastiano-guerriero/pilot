@@ -1,3 +1,5 @@
+import type { ElementState } from "@pilot/protocol";
+import { stateSelector } from "../edits/states.ts";
 import type { WidthRange } from "@pilot/protocol";
 
 /**
@@ -30,17 +32,30 @@ export const PREVIEW_ATTRIBUTE = "data-pilot-preview";
 export const EDIT_ATTRIBUTE = "data-pilot-edit";
 const LAYER = "pilot-preview";
 
-/** One declaration to show: on `element`, for `widths` (none: every width). */
+/** One declaration to show: on `element`, for `widths` (none: every width) and `states` (none: as it is). */
 export interface PreviewRule {
   element: Element;
   property: string;
   value: string;
   widths?: WidthRange;
+  states?: ElementState[];
+}
+
+/**
+ * An element shown in some states while the designer edits them (state
+ * pills set): the page's own declarations for those states (`page`, see
+ * forcedDeclarations), and Pilot's changes for them, apply without the
+ * pointer or focus being there, like the browser's "force state".
+ */
+export interface Forced {
+  element: Element;
+  states: ElementState[];
+  page: Array<{ property: string; value: string }>;
 }
 
 /** Where EditHistory shows its changes. Given every rule in effect, in order, each time. */
 export interface Preview {
-  render(rules: PreviewRule[]): void;
+  render(rules: PreviewRule[], forced?: Forced | null): void;
 }
 
 const ids = new WeakMap<Element, number>();
@@ -50,18 +65,38 @@ const marked = new Set<Element>();
 
 /** The stylesheet preview. One per page: every EditHistory shares the same sheets. */
 export const stylesheetPreview: Preview = {
-  render(rules) {
+  render(rules, forced) {
     const byRoot = new Map<Document | ShadowRoot, string[]>();
     const used = new Set<Element>();
+    const add = (element: Element, text: string, widths?: WidthRange, states = "") => {
+      const root = element.getRootNode() as Document | ShadowRoot;
+      if (!byRoot.has(root)) byRoot.set(root, []);
+      const selector = `[${EDIT_ATTRIBUTE}="${idOf(element)}"]${states}`;
+      const media = widths && mediaQuery(widths);
+      byRoot.get(root)?.push(media ? `@media ${media} { ${selector} { ${text} } }` : `${selector} { ${text} }`);
+      used.add(element);
+    };
+    // A change for some states is a rule for those states (`:hover:active`),
+    // more specific than the element's own, as the agent's will be.
     for (const rule of rules) {
       const text = declaration(rule.property, rule.value);
-      if (!text) continue;
-      const root = rule.element.getRootNode() as Document | ShadowRoot;
-      if (!byRoot.has(root)) byRoot.set(root, []);
-      const selector = `[${EDIT_ATTRIBUTE}="${idOf(rule.element)}"]`;
-      const media = rule.widths && mediaQuery(rule.widths);
-      byRoot.get(root)?.push(media ? `@media ${media} { ${selector} { ${text} } }` : `${selector} { ${text} }`);
-      used.add(rule.element);
+      if (text) add(rule.element, text, rule.widths, stateSelector(rule.states));
+    }
+    // Forced states, last so they win: the page's own declarations for the
+    // states, then Pilot's changes for any of them (fewer states first, as
+    // their selectors are less specific), without the pseudo-classes.
+    if (forced) {
+      for (const { property, value } of forced.page) {
+        const text = declaration(property, value);
+        if (text) add(forced.element, text);
+      }
+      const inStates = rules
+        .filter((r) => r.element === forced.element && r.states?.length && r.states.every((s) => forced.states.includes(s)))
+        .sort((a, b) => (a.states?.length ?? 0) - (b.states?.length ?? 0));
+      for (const rule of inStates) {
+        const text = declaration(rule.property, rule.value);
+        if (text) add(rule.element, text, rule.widths);
+      }
     }
     for (const element of used) {
       element.setAttribute(EDIT_ATTRIBUTE, String(idOf(element)));

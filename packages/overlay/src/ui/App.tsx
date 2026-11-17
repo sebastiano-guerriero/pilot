@@ -1,4 +1,4 @@
-import type { WidthRange } from "@pilot/protocol";
+import type { ElementState, WidthRange } from "@pilot/protocol";
 import { useCallback, useEffect, useReducer, useRef, useState } from "preact/hooks";
 import { type BoxArea, hidesSelection } from "../dom/boxModel.ts";
 import { type EditableElement, isEditable } from "../dom/target.ts";
@@ -15,6 +15,8 @@ import { Highlight } from "./components/Highlight/Highlight.tsx";
 import { PropertyDialog, type WidthPick } from "./components/PropertyDialog/PropertyDialog.tsx";
 import type { PilotSession } from "../bridge/session.ts";
 import { JobList } from "./components/JobList/JobList.tsx";
+import { DomTree } from "./components/DomTree/DomTree.tsx";
+import { SelectionActions } from "./components/SelectionActions/SelectionActions.tsx";
 import { Toolbar } from "./components/Toolbar/Toolbar.tsx";
 import { ViewportWidth } from "./components/ViewportWidth/ViewportWidth.tsx";
 import { useViewportWidth } from "./useViewportWidth.ts";
@@ -47,7 +49,8 @@ interface AppProps {
  */
 export function App({ host, dev, nameAttributes, history, session, onReattach, onQuit }: AppProps) {
   const [selecting, setSelecting] = useState(!!dev);
-  const [selected, setSelected] = useState<{ element: EditableElement; key: number } | null>(() => {
+  // `from: "dom"`: picked in the DOM tree, which keeps focus (the dialog doesn't take it).
+  const [selected, setSelected] = useState<{ element: EditableElement; key: number; from?: "dom" } | null>(() => {
     if (!dev) return null;
     const element = document.querySelector(dev.select);
     if (isEditable(element)) return { element, key: 1 };
@@ -67,6 +70,8 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // Set in the search (`from-1200 `) or by clicking the viewport width; it
   // stays, across selections and with nothing selected, until it's removed.
   const [widths, setWidths] = useState<WidthRange | null>(null);
+  // The state pills: the element states changes are for, together. Kept across selections, like the chip.
+  const [states, setStates] = useState<ElementState[]>([]);
   const viewportWidth = useViewportWidth();
   // A click on the viewport width. With the dialog open, it goes to the
   // dialog, which sets the chip (a `from`/`to` typed in the search decides it).
@@ -76,6 +81,33 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     onReattach?.(); // the page may have re-rendered since: changes find their elements again
     setSelected((prev) => (prev?.element === element ? prev : { element, key: (prev?.key ?? 0) + 1 }));
   }, []);
+
+  // The DOM tree: the page's elements as a tree, to select any of them
+  // (Alt+D, or the selection's Show in DOM action). Hovering a row highlights its
+  // element; picking one selects it, scrolled into view.
+  const [domOpen, setDomOpen] = useState(false);
+  const [domHover, setDomHover] = useState<Element | null>(null);
+  const pickFromDom = useCallback((element: Element) => {
+    if (!isEditable(element)) return;
+    onReattach?.();
+    element.scrollIntoView({ block: "nearest", inline: "nearest" });
+    setSelected((prev) => (prev?.element === element ? prev : { element, key: (prev?.key ?? 0) + 1, from: "dom" }));
+  }, []);
+  useEffect(() => {
+    if (!domOpen) setDomHover(null);
+  }, [domOpen]);
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!e.altKey || e.metaKey || e.ctrlKey || e.code !== "KeyD") return;
+      // Not while typing in the page's own fields (Pilot's are fine: Alt+D types nothing there).
+      if (!e.composedPath().includes(host) && isTextField(document.activeElement)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setDomOpen((open) => !open);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [host]);
 
   // Areas of the selected element an editor wants shown (e.g. the padding
   // being hovered or dragged); while set, they replace the selection highlight.
@@ -126,6 +158,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   const hovered = useElementPicker(selecting, host, onPick);
   const hoverRect = useElementRect(hovered !== selected?.element ? hovered : null);
   const selectedRect = useElementRect(selected?.element ?? null);
+  const domHoverRect = useElementRect(domHover);
 
   // The selected element disappeared (re-render, HMR): drop the selection.
   useEffect(() => {
@@ -183,6 +216,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
             />
           )}
           {inspect && <BoxAreas element={selected.element} areas={inspect} />}
+          {!hideSelection && <SelectionActions rect={selectedRect} domOpen={domOpen} onShowInDom={() => setDomOpen((open) => !open)} />}
           {!hideSelection && <GridOverlay element={selected.element} part="numbers" orParent />}
           <PropertyDialog
             key={selected.key}
@@ -197,20 +231,35 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
             onInspect={setInspect}
             widths={widths}
             onWidthsChange={setWidths}
+            states={states}
+            onStatesChange={setStates}
             viewportWidth={viewportWidth}
             widthPick={widthPick}
+            autoFocus={selected.from !== "dom"}
           />
         </>
       )}
       {/* The hover comes after the selection, so its label is drawn over the
           selection's outline, dots and grid lines (same layer: DOM order decides).
           The dialog and the toolbar are on a higher layer either way. */}
-      {hovered && hoverRect && (
+      {domHover && domHoverRect && domHover !== selected?.element && (
+        <Highlight element={domHover} rect={domHoverRect} variant="hover" nameAttributes={nameAttributes} />
+      )}
+      {hovered && hoverRect && !domHover && (
         <>
           <Highlight element={hovered} rect={hoverRect} variant="hover" nameAttributes={nameAttributes} />
           {/* A hovered grid shows its lines; numbers come with the selection. */}
           <GridOverlay element={hovered} part="lines" />
         </>
+      )}
+      {domOpen && (
+        <DomTree
+          selected={selected?.element ?? null}
+          nameAttributes={nameAttributes}
+          onHover={setDomHover}
+          onSelect={pickFromDom}
+          onClose={() => setDomOpen(false)}
+        />
       )}
       <ViewportWidth
         width={viewportWidth}

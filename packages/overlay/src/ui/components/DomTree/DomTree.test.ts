@@ -1,0 +1,88 @@
+// @vitest-environment happy-dom
+import { h, render } from "preact";
+import { act } from "preact/test-utils";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { DomTree } from "./DomTree.tsx";
+
+let container: HTMLElement;
+let page: HTMLElement;
+let selected: Element | null;
+let hovered: Element | null;
+let closed: number;
+
+const mount = () =>
+  act(() => {
+    render(
+      h(DomTree, {
+        selected,
+        onHover: (el: Element | null) => (hovered = el),
+        onSelect: (el: Element) => {
+          selected = el;
+          mount();
+        },
+        onClose: () => closed++,
+      }),
+      container,
+    );
+  });
+
+beforeEach(() => {
+  document.body.innerHTML = "";
+  page = document.createElement("main");
+  page.innerHTML = `<section id="hero"><h1>Title</h1><div class="actions"><a>One</a><a>Two</a></div></section><footer id="foot"></footer>`;
+  container = document.createElement("pilot-root");
+  document.body.append(page, container);
+  selected = null;
+  hovered = null;
+  closed = 0;
+});
+afterEach(() => {
+  render(null, container);
+});
+
+const rows = () => [...container.querySelectorAll(".row")].map((r) => `${r.getAttribute("aria-level")}:${r.querySelector(".name")?.textContent}${r.getAttribute("aria-selected") === "true" ? "*" : ""}`);
+const tree = () => container.querySelector('[role="tree"]') as HTMLElement;
+const key = (k: string) =>
+  act(() => {
+    tree().dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+  });
+
+describe("DomTree", () => {
+  it("opens down to the selection, one level into it", () => {
+    selected = page.querySelector(".actions");
+    mount();
+    expect(rows()).toEqual(["1:main", "2:section#hero", "3:h1", "3:div*", "4:a", "4:a", "2:footer#foot"]);
+  });
+
+  it("hovering a row highlights its element; clicking selects it", () => {
+    selected = page.querySelector("#hero");
+    mount();
+    const h1 = [...container.querySelectorAll(".row")].find((r) => r.querySelector(".name")?.textContent === "h1") as HTMLElement;
+    act(() => {
+      h1.dispatchEvent(new PointerEvent("pointerenter"));
+    });
+    expect(hovered).toBe(page.querySelector("h1"));
+    act(() => h1.click());
+    expect(selected).toBe(page.querySelector("h1"));
+  });
+
+  it("↓/↑ select the next/previous row; ← goes to the parent; → opens a row", () => {
+    selected = page.querySelector("h1");
+    mount();
+    key("ArrowDown");
+    expect(selected).toBe(page.querySelector(".actions"));
+    key("ArrowRight");
+    key("ArrowRight");
+    expect(selected).toBe(page.querySelector(".actions a"));
+    key("ArrowLeft");
+    expect(selected).toBe(page.querySelector(".actions"));
+    key("ArrowUp");
+    expect(selected).toBe(page.querySelector("h1"));
+  });
+
+  it("Esc closes it", () => {
+    mount();
+    key("Escape");
+    expect(closed).toBe(1);
+  });
+});

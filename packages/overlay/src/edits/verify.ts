@@ -12,8 +12,10 @@ import { inWidths } from "./widths.ts";
  * changes previewed (what the designer saw). Both are measured in the same
  * task, so nothing flickers (EditHistory.probe).
  *
- * A change for other viewport widths than the window's, or on an element
- * that isn't on this page, can't be checked now: `unchecked`.
+ * A change for other viewport widths than the window's, for an element
+ * state (Pilot can't put the element in a real hover or focus to measure
+ * it), or on an element that isn't on this page, can't be checked now:
+ * `unchecked`.
  */
 export interface JobCheck {
   results: ChangeResult[];
@@ -24,7 +26,7 @@ export interface JobCheck {
 
 export function checkJob(history: EditHistory, jobId: string, width = window.innerWidth): JobCheck {
   const changes = history.changes({ job: jobId });
-  const checkable = changes.filter((c) => c.element.isConnected && inWidths(c.widths ?? null, width));
+  const checkable = changes.filter((c) => c.element.isConnected && !c.states?.length && inWidths(c.widths ?? null, width));
   const read = () => checkable.map((c) => computed(c.element, c.property));
   const actual = history.probe([], read);
   const expected = history.probe(changes, read);

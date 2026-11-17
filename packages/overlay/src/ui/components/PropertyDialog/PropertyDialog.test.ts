@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import type { WidthRange } from "@pilot/protocol";
+import type { ElementState, WidthRange } from "@pilot/protocol";
 import { h, render } from "preact";
 import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
@@ -388,6 +388,7 @@ describe("width chip", () => {
   const mountWithWidths = (history: EditHistory, viewportWidth = 1440, initial: WidthRange | null = null) => {
     function Host() {
       const [widths, setWidths] = useState<WidthRange | null>(initial);
+      const [states, setStates] = useState<ElementState[]>([]);
       const [widthPick, setWidthPick] = useState<WidthPick | undefined>();
       pick = setWidthPick;
       return h(PropertyDialog, {
@@ -398,6 +399,8 @@ describe("width chip", () => {
         history,
         widths,
         onWidthsChange: setWidths,
+        states,
+        onStatesChange: setStates,
         viewportWidth,
       });
     }
@@ -406,6 +409,44 @@ describe("width chip", () => {
     });
   };
   const chip = () => container.querySelector('.pill[data-pill="widths"]');
+  const statePills = () => [...container.querySelectorAll('.pill[data-pill="state"] .pill-label')].map((p) => p.textContent);
+
+  it("`hover:` at the start becomes a state pill; states combine, with widths too, in any order", () => {
+    mountWithWidths(new EditHistory());
+    type("hover");
+    expect(statePills()).toEqual([]);
+    type("active:hover:from-768 opa");
+    expect(statePills()).toEqual(["hover", "active"]);
+    expect(chip()?.textContent).toContain("from 768px");
+    expect(search().value).toBe("opa");
+  });
+
+  it("the / menu sets a state right away; Backspace at the start removes the last pill, states first", () => {
+    mountWithWidths(new EditHistory(), 1440, { min: 768 });
+    type("/foc");
+    key(search(), "ArrowDown");
+    key(search(), "Enter");
+    expect(statePills()).toEqual(["focus-visible"]);
+    expect(search().value).toBe("");
+    key(search(), "Backspace");
+    expect(statePills()).toEqual([]);
+    expect(chip()).not.toBeNull();
+    key(search(), "Backspace");
+    expect(chip()).toBeNull();
+  });
+
+  it("a change made with state pills is for those states", () => {
+    const history = new EditHistory();
+    mountWithWidths(history);
+    type("hover:active:opacity");
+    act(() => (container.querySelector('[data-editor="opacity"] .stub') as HTMLButtonElement).click());
+    expect(history.changes().map((c) => [c.property, c.value, c.states])).toEqual([["opacity", "0.5", ["hover", "active"]]]);
+    // Its rule is for those states; while the pills are set, the element shows them.
+    const sheet = document.querySelector(`style[${PREVIEW_ATTRIBUTE}]`)?.textContent ?? "";
+    expect(sheet).toContain(":hover:active { opacity: 0.5 !important; }");
+    expect(sheet).toMatch(/\[data-pilot-edit="\d+"\] \{ opacity: 0\.5 !important; \}/);
+    history.clear();
+  });
 
   it("`from-1200 ` at the start becomes the chip; the rest is the search", () => {
     const history = new EditHistory();
@@ -442,11 +483,11 @@ describe("width chip", () => {
     mountWithWidths(new EditHistory(), 1108);
     const rows = () => [...container.querySelectorAll(".modifier .modifier-name")].map((n) => n.textContent);
     type("/");
-    expect(rows()).toEqual(["From width", "To width"]);
+    expect(rows()).toEqual(["From width", "To width", "Hover", "Focus", "Focus visible", "Active"]);
     expect(search().getAttribute("aria-expanded")).toBe("true");
     type("/to");
     expect(rows()).toEqual(["To width"]);
-    type("/hover");
+    type("/xyz");
     expect(container.querySelector(".modifier-none")).not.toBeNull();
     type("pt");
     expect(container.querySelector(".modifiers")).toBeNull();

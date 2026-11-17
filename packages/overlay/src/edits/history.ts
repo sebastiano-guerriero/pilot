@@ -1,5 +1,7 @@
-import type { ElementTarget, StyleSource, WidthRange } from "@pilot/protocol";
-import { type Preview, stylesheetPreview } from "../dom/preview.ts";
+import type { ElementState, ElementTarget, StyleSource, WidthRange } from "@pilot/protocol";
+import { sortStates } from "@pilot/protocol";
+import { type Forced, type Preview, stylesheetPreview } from "../dom/preview.ts";
+import { sameStates } from "./states.ts";
 import { type EditableElement, describeElement } from "../dom/target.ts";
 import { inWidths } from "./widths.ts";
 
@@ -31,6 +33,8 @@ interface Entry {
   removal?: Removal;
   /** The viewport widths it's for (the search's width chip). None: every width. */
   widths?: WidthRange;
+  /** The element states it's for, together (the search's state pills). None: the element as it is. */
+  states?: ElementState[];
   /**
    * The job it was sent in (Send to the agent, see bridge/jobs.ts): sent
    * changes stay on the page until the agent is done and they're checked,
@@ -49,6 +53,7 @@ export interface RecordedChange {
   value: string;
   removal?: Removal;
   widths?: WidthRange;
+  states?: ElementState[];
   /** The job it was sent in; none when not sent yet. */
   job?: string;
 }
@@ -93,6 +98,8 @@ export class EditHistory {
   private done: Step[] = [];
   private undone: Step[] = [];
   private listeners = new Set<() => void>();
+  /** An element shown in its states while they're edited (see Forced). Not saved. */
+  private forced: Forced | null = null;
 
   constructor(private readonly preview: Preview = stylesheetPreview) {}
 
@@ -173,21 +180,22 @@ export class EditHistory {
     property: string,
     value: string,
     gesture?: object,
-    options: { removal?: Removal; widths?: WidthRange } = {},
+    options: { removal?: Removal; widths?: WidthRange; states?: readonly ElementState[] } = {},
   ): void {
     const { removal, widths } = options;
+    const states = options.states?.length ? sortStates(options.states) : undefined;
     const last = this.done.at(-1);
     const step = gesture && last?.gesture === gesture ? last : undefined;
     const existing = step?.entries.find(
-      (e) => e.element === element && e.property === property && sameWidths(e.widths, widths),
+      (e) => e.element === element && e.property === property && sameWidths(e.widths, widths) && sameStates(e.states, states),
     );
     if (existing) {
       existing.value = value;
       existing.removal = removal;
     } else {
-      const current = this.currentFor(element, property, widths);
+      const current = this.currentFor(element, property, widths, states);
       if (!removal && !current?.removal && (current?.value ?? "") === value) return;
-      const entry: Entry = { element, target: this.targetOf(element), path: location.pathname, property, value, removal, widths };
+      const entry: Entry = { element, target: this.targetOf(element), path: location.pathname, property, value, removal, widths, states };
       if (step) step.entries.push(entry);
       else this.done.push({ gesture, entries: [entry] });
     }
@@ -205,7 +213,16 @@ export class EditHistory {
     return this.rules()
       .filter((r) => r.value !== "")
       .filter((r) => (filter.unsent ? !r.job : true) && (filter.job === undefined || r.job === filter.job))
-      .map(({ element, target, property, value, removal, widths, job }) => ({ element, target, property, value, removal, widths, job }));
+      .map(({ element, target, property, value, removal, widths, states, job }) => ({
+        element,
+        target,
+        property,
+        value,
+        removal,
+        widths,
+        states,
+        job,
+      }));
   }
 
   /**
@@ -263,7 +280,7 @@ export class EditHistory {
     try {
       return measure();
     } finally {
-      this.preview.render(this.rules().map((r) => (r.value === "" ? { ...r, value: "revert-layer" } : r)));
+      this.preview.render(this.previewRules(), this.forced);
     }
   }
 
@@ -274,8 +291,8 @@ export class EditHistory {
    * (`grid-column-start` from `grid-column`). What a field shows over the
    * page's own CSS.
    */
-  valueOf(element: EditableElement, property: string, width = window.innerWidth): string | null {
-    const rule = this.activeRule(element, property, width);
+  valueOf(element: EditableElement, property: string, width = window.innerWidth, states?: readonly ElementState[]): string | null {
+    const rule = this.activeRule(element, property, width, states);
     return rule ? valueIn(rule, property) || null : null;
   }
 
@@ -284,8 +301,8 @@ export class EditHistory {
    * (the window's, by default): the change in effect there is a removal. The
    * field then shows nothing, and the change set says "remove".
    */
-  removalOf(element: EditableElement, property: string, width = window.innerWidth): Removal | null {
-    const rule = this.activeRule(element, property, width);
+  removalOf(element: EditableElement, property: string, width = window.innerWidth, states?: readonly ElementState[]): Removal | null {
+    const rule = this.activeRule(element, property, width, states);
     return rule?.property === property ? (rule.removal ?? null) : null;
   }
 
@@ -354,10 +371,13 @@ export class EditHistory {
           const replaced =
             prior.element === entry.element &&
             sameWidths(prior.widths, entry.widths) &&
+            sameStates(prior.states, entry.states) &&
             (prior.property === entry.property || covered.includes(prior.property));
           if (replaced) out.splice(i, 1);
         }
-        const needed = entry.value !== "" || out.some((r) => r.element === entry.element && sets(r, entry.property));
+        const needed =
+          entry.value !== "" ||
+          out.some((r) => r.element === entry.element && sameStates(r.states, entry.states) && sets(r, entry.property));
         if (needed) out.push(entry);
       }
     }
@@ -365,8 +385,26 @@ export class EditHistory {
   }
 
   private render(): void {
-    this.preview.render(this.rules().map((r) => (r.value === "" ? { ...r, value: "revert-layer" } : r)));
+    this.preview.render(this.previewRules(), this.forced);
     for (const listener of this.listeners) listener();
+  }
+
+  private previewRules() {
+    return this.rules().map((r) => (r.value === "" ? { ...r, value: "revert-layer" } : r));
+  }
+
+  /**
+   * Show `forced.element` in its states while they're edited (the search's
+   * state pills), or stop (null). Not a change: nothing is recorded.
+   */
+  setForced(forced: Forced | null): void {
+    const same =
+      forced?.element === this.forced?.element &&
+      sameStates(forced?.states, this.forced?.states) &&
+      JSON.stringify(forced?.page) === JSON.stringify(this.forced?.page);
+    if (same) return;
+    this.forced = forced;
+    this.preview.render(this.previewRules(), this.forced);
   }
 
   /** The element's description: the one taken at its first change, so all its changes agree. */
@@ -379,11 +417,11 @@ export class EditHistory {
   }
 
   /** The rule that wins for `property` on `element` at `width`: the latest that sets it there. */
-  private activeRule(element: EditableElement, property: string, width: number): Entry | undefined {
+  private activeRule(element: EditableElement, property: string, width: number, states?: readonly ElementState[]): Entry | undefined {
     const rules = this.rules();
     for (let i = rules.length - 1; i >= 0; i--) {
       const r = rules[i] as Entry;
-      if (r.element === element && sets(r, property) && inWidths(r.widths ?? null, width)) return r;
+      if (r.element === element && sameStates(r.states, states) && sets(r, property) && inWidths(r.widths ?? null, width)) return r;
     }
     return undefined;
   }
@@ -392,11 +430,16 @@ export class EditHistory {
    * What Pilot sets `property` to for exactly these widths (the latest rule
    * for them that sets it), to tell a change from a no-op.
    */
-  private currentFor(element: EditableElement, property: string, widths?: WidthRange): { value: string; removal?: Removal } | undefined {
+  private currentFor(
+    element: EditableElement,
+    property: string,
+    widths?: WidthRange,
+    states?: readonly ElementState[],
+  ): { value: string; removal?: Removal } | undefined {
     const rules = this.rules();
     for (let i = rules.length - 1; i >= 0; i--) {
       const r = rules[i] as Entry;
-      if (r.element !== element || !sameWidths(r.widths, widths) || !sets(r, property)) continue;
+      if (r.element !== element || !sameWidths(r.widths, widths) || !sameStates(r.states, states) || !sets(r, property)) continue;
       return { value: valueIn(r, property), removal: r.property === property ? r.removal : undefined };
     }
     return undefined;

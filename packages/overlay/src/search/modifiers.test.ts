@@ -11,11 +11,14 @@ describe("modifiers", () => {
   });
 
   it("/ alone lists them all; typing filters by name word or syntax", () => {
-    expect(ids("/")).toEqual(["from-width", "to-width"]);
+    expect(ids("/")).toEqual(["from-width", "to-width", "hover", "focus", "focus-visible", "active"]);
     expect(ids("/fr")).toEqual(["from-width"]);
     expect(ids("/to")).toEqual(["to-width"]);
     expect(ids("/width")).toEqual(["from-width", "to-width"]);
     expect(ids("/from-7")).toEqual(["from-width"]);
-    expect(ids("/hover")).toEqual([]);
+    expect(ids("/hover")).toEqual(["hover"]);
+    expect(ids("/focus")).toEqual(["focus", "focus-visible"]);
+    expect(ids("/visible")).toEqual(["focus-visible"]);
+    expect(ids("/xyz")).toEqual([]);
   });
 });

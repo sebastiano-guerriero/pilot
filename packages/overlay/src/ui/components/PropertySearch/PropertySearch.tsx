@@ -1,6 +1,7 @@
-import { describeWidths, type WidthRange } from "@pilot/protocol";
+import { describeWidths, type ElementState, type WidthRange } from "@pilot/protocol";
 import type { RefObject } from "preact";
 import { useEffect, useState } from "preact/hooks";
+import { takeStates } from "../../../edits/states.ts";
 import { inWidths, takeWidths, widthSuggestion } from "../../../edits/widths.ts";
 import { isModifierQuery, matchModifiers } from "../../../search/modifiers.ts";
 import { Icon } from "../Icon/Icon.tsx";
@@ -17,6 +18,12 @@ interface PropertySearchProps {
   onWidthsChange?(widths: WidthRange | null): void;
   /** The window's width now, to show when it's outside the chip's range. */
   viewportWidth?: number;
+  /** The state pills: the element states changes are for, together. [] for none. */
+  states?: ElementState[];
+  /** The state pills changed: typed (`hover:`), picked in the `/` menu, or removed. */
+  onStatesChange?(states: ElementState[]): void;
+  /** Take focus when it appears (default). False when the selection came from somewhere that keeps focus (the DOM tree). */
+  autoFocus?: boolean;
 }
 
 /**
@@ -32,21 +39,48 @@ export function PropertySearch({
   widths = null,
   onWidthsChange,
   viewportWidth,
+  states = [],
+  onStatesChange,
+  autoFocus = true,
 }: PropertySearchProps) {
   useEffect(() => {
+    if (!autoFocus) return;
     inputRef.current?.focus();
     inputRef.current?.select();
   }, []);
 
-  // `from-1200 ` / `to-767 ` at the start becomes the chip; the rest is the search.
+  // Modifiers typed at the start become pills: `from-1200 ` / `to-767 ` the
+  // width chip, `hover:` / `active:`… a state; the rest is the search. They
+  // can come in any order (`hover:from-768 `).
   const onInput = (e: Event) => {
     const input = e.currentTarget as HTMLInputElement;
-    const taken = onWidthsChange ? takeWidths(input.value, widths) : null;
-    if (taken?.range) {
-      onWidthsChange?.(taken.range);
-      input.value = taken.rest;
-      onChange(taken.rest);
-    } else onChange(input.value);
+    let rest = input.value;
+    let range = widths;
+    let nextStates = states;
+    let taken = false;
+    for (;;) {
+      const w = onWidthsChange ? takeWidths(rest, range) : null;
+      if (w?.range) {
+        range = w.range;
+        rest = w.rest;
+        taken = true;
+        continue;
+      }
+      const s = onStatesChange ? takeStates(rest, nextStates) : null;
+      if (s?.states) {
+        nextStates = s.states;
+        rest = s.rest;
+        taken = true;
+        continue;
+      }
+      break;
+    }
+    if (taken) {
+      if (range !== widths) onWidthsChange?.(range);
+      if (nextStates !== states) onStatesChange?.(nextStates);
+      input.value = rest;
+    }
+    onChange(rest);
   };
 
   // `from-` (or `to-`) suggests the window's width, dimmed after the text.
@@ -63,7 +97,11 @@ export function PropertySearch({
   const pick = (index: number) => {
     const modifier = options[index];
     if (!modifier) return;
-    onChange(modifier.insert);
+    // A state is complete as picked: its pill right away. A width needs its number typed.
+    if (modifier.state) {
+      onStatesChange?.(takeStates(modifier.insert, states).states ?? states);
+      onChange("");
+    } else onChange(modifier.insert);
     inputRef.current?.focus();
   };
 
@@ -95,9 +133,11 @@ export function PropertySearch({
       onChange("");
       return;
     }
-    if (e.key === "Backspace" && widths && input.selectionStart === 0 && input.selectionEnd === 0) {
+    // Backspace at the very start removes the last pill: a state, then the width chip.
+    if (e.key === "Backspace" && (states.length || widths) && input.selectionStart === 0 && input.selectionEnd === 0) {
       e.preventDefault();
-      onWidthsChange?.(null);
+      if (states.length) onStatesChange?.(states.slice(0, -1));
+      else onWidthsChange?.(null);
       return;
     }
     onKeyDown?.(e);
@@ -106,35 +146,59 @@ export function PropertySearch({
   const outside = !!widths && viewportWidth !== undefined && !inWidths(widths, viewportWidth);
 
   return (
-    <div class="property-search" data-pills={widths ? "" : undefined}>
+    <div class="property-search" data-pills={widths || states.length ? "" : undefined}>
       {/* Pills: the search's modifiers (today the width chip), in a row of their
           own above the field, so more can sit side by side. */}
-      {widths && (
+      {(widths || states.length > 0) && (
         <div class="pills">
-          <span
-            class="pill"
-            data-pill="widths"
-            data-outside={outside || undefined}
-            title={
-              outside
-                ? `The window (${viewportWidth}px) is outside this range: what you see isn't what these changes are for`
-                : "Changes are for these viewport widths. Backspace at the start of the field removes it."
-            }
-          >
-            <span class="pill-label">{describeWidths(widths)}</span>
-            <button
-              type="button"
-              class="pill-remove"
-              aria-label="Changes for every width"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                onWidthsChange?.(null);
-                inputRef.current?.focus();
-              }}
+          {widths && (
+            <span
+              class="pill"
+              data-pill="widths"
+              data-outside={outside || undefined}
+              title={
+                outside
+                  ? `The window (${viewportWidth}px) is outside this range: what you see isn't what these changes are for`
+                  : "Changes are for these viewport widths. Backspace at the start of the field removes it."
+              }
             >
-              <Icon name="close-small" />
-            </button>
-          </span>
+              <span class="pill-label">{describeWidths(widths)}</span>
+              <button
+                type="button"
+                class="pill-remove"
+                aria-label="Changes for every width"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onWidthsChange?.(null);
+                  inputRef.current?.focus();
+                }}
+              >
+                <Icon name="close-small" />
+              </button>
+            </span>
+          )}
+          {states.map((state) => (
+            <span
+              key={state}
+              class="pill"
+              data-pill="state"
+              title="Changes are for this element state (all the state pills together). Backspace at the start of the field removes the last pill."
+            >
+              <span class="pill-label">{state}</span>
+              <button
+                type="button"
+                class="pill-remove"
+                aria-label={`Not only ${state}`}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onStatesChange?.(states.filter((s) => s !== state));
+                  inputRef.current?.focus();
+                }}
+              >
+                <Icon name="close-small" />
+              </button>
+            </span>
+          ))}
         </div>
       )}
       <div class="field">

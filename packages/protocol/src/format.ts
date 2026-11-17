@@ -1,4 +1,4 @@
-import type { ChangeSet, ElementEdit, StyleChange, WidthRange } from "./types.ts";
+import type { ChangeSet, ElementEdit, ElementState, StyleChange, WidthRange } from "./types.ts";
 
 /**
  * Turn a change set into instructions a coding agent can follow.
@@ -17,6 +17,7 @@ export function formatPrompt(changeSet: ChangeSet): string {
     "- Prefer an existing token or utility when it matches the value (or is within a pixel or two); mention any value you had to approximate.",
     "- Change only the listed elements. If an element is a shared component, ask before changing every instance.",
     "- Widths are viewport widths in CSS px, both ends included. Use this project's breakpoints when one matches (or is within a few pixels), else a custom media query, and say which. \"Every width\" means no media query: the value holds at every viewport width, and no existing media query should override it.",
+    "- A State is the element state the change is for, all of them together (\"hover, active\": hovered and pressed). Use the project's own form: Tailwind's variants (`hover:`, `focus-visible:`, `hover:active:`), `:hover` and the like in CSS. Without a state, the change is for the element as it is (any state).",
     "",
     `Page: ${page.url} (${page.title || "untitled"}) at ${page.viewport.width}x${page.viewport.height}`,
   ];
@@ -42,15 +43,27 @@ function formatEdit(edit: ElementEdit, n: number): string[] {
       .join(" in ");
     out.push(`- Source hint: ${where}`);
   }
-  out.push("", "| Property | From | To | Widths |", "| --- | --- | --- | --- |");
+  // The State column only when a change has one, so most prompts stay as they were.
+  const withStates = changes.some((c) => c.states?.length);
+  out.push(
+    "",
+    withStates ? "| Property | From | To | Widths | State |" : "| Property | From | To | Widths |",
+    withStates ? "| --- | --- | --- | --- | --- |" : "| --- | --- | --- | --- |",
+  );
   for (const c of changes) {
     const to = c.removed ? "*removed*" : `\`${c.to}\``;
     const from = c.from ? `\`${c.from}\`` : "*not set*";
-    out.push(`| \`${c.property}\` | ${from} | ${to} | ${c.widths ? describeWidths(c.widths) : "every width"} |`);
+    const widths = c.widths ? describeWidths(c.widths) : "every width";
+    out.push(`| \`${c.property}\` | ${from} | ${to} | ${widths} |${withStates ? ` ${describeStates(c.states)} |` : ""}`);
   }
   const notes = changes.flatMap((c) => [c.removed && removalNote(c), mediaNote(c)].filter((n): n is string => !!n));
   if (notes.length) out.push("", ...notes.map((n) => `- ${n}`));
   return out;
+}
+
+/** The states in words, as the prompt and Pilot's pills write them: `hover, active`; "—" for none. */
+export function describeStates(states: readonly ElementState[] | undefined): string {
+  return states?.length ? states.join(", ") : "—";
 }
 
 /**

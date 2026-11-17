@@ -1,4 +1,4 @@
-import type { StyleSource, WidthRange } from "@pilot/protocol";
+import type { ElementState, StyleSource, WidthRange } from "@pilot/protocol";
 import { type Declared, declaredValue, declaredWithout, mediaOf } from "../dom/declared.ts";
 import type { EditableElement } from "../dom/target.ts";
 import type { EditHistory } from "./history.ts";
@@ -28,9 +28,11 @@ export function clearProperty(
   gesture?: object,
   /** The viewport widths it's for (the search's width chip). None: every width. */
   widths?: WidthRange,
+  /** The element states it's for (the search's state pills). None: the element as it is. */
+  states?: readonly ElementState[],
 ): void {
-  const page = declaredValue(element, property);
-  if (!page) return history.apply(element, property, "", gesture, { widths });
+  const page = declaredValue(element, property, states);
+  if (!page) return history.apply(element, property, "", gesture, { widths, states });
 
   // Without the removed declaration: for the app's style attribute, the
   // stylesheets' value; for a rule, everything else (the style attribute
@@ -39,11 +41,15 @@ export function clearProperty(
   // styles (declared.ts), and revert falls back to them.
   const rule = page.source !== "inline" ? page.rule : undefined;
   const next = rule
-    ? declaredWithout(element, property, { inline: false, skip: [rule] })
-    : declaredWithout(element, property, { inline: true });
-  history.apply(element, property, next?.value ?? "revert", gesture, {
+    ? declaredWithout(element, property, { inline: false, skip: [rule] }, states)
+    : declaredWithout(element, property, { inline: true }, states);
+  // For a state, nothing left for it means the element's own value: `revert-layer`
+  // lets the element's rules (and Pilot's for it) show through.
+  const fallback = states?.length ? "revert-layer" : "revert";
+  history.apply(element, property, next?.value ?? fallback, gesture, {
     removal: { from: page.value, source: sourceOf(element, page) },
     widths,
+    states,
   });
 }
 

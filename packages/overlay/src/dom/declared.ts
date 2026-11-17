@@ -1,3 +1,4 @@
+import { type ElementState, STATES, sortStates } from "@pilot/protocol";
 import { isPreviewSheet } from "./preview.ts";
 
 /**
@@ -22,6 +23,21 @@ import { isPreviewSheet } from "./preview.ts";
  */
 
 /** A declaration that applies to the element. */
+/**
+ * Which rules count, by the element states in their selector (`:hover`,
+ * `:focus`, `:focus-visible`, `:active` on the element itself):
+ * - none (the default): rules for the element as it is, without states, even
+ *   while it happens to be hovered;
+ * - `exact`: rules for exactly these states (what a field shows with state pills);
+ * - `subset`: rules for any of these states, alone or together (what applies
+ *   while the element is in all of them: how Pilot shows the state, see
+ *   forcedDeclarations).
+ */
+export interface StateFilter {
+  states: readonly ElementState[];
+  mode: "exact" | "subset";
+}
+
 export interface Declared {
   value: string;
   important: boolean;
@@ -127,15 +143,34 @@ export function pickSide(text: string, side: { of: "box" | "pair"; index: number
 }
 
 /** The declared value of each property, or null where nothing declares it. */
-export function declaredValues(element: Element, properties: string[]): Record<string, Declared | null> {
-  const rules = matchedRules(element);
+export function declaredValues(element: Element, properties: string[], states?: readonly ElementState[]): Record<string, Declared | null> {
+  const rules = matchedRules(element, states?.length ? { states, mode: "exact" } : undefined);
   const inline = (element as HTMLElement).style as CSSStyleDeclaration | undefined;
   return Object.fromEntries(properties.map((p) => [p, resolve(p, inline, rules)]));
 }
 
 /** The declared value of one property, or null. */
-export function declaredValue(element: Element, property: string): Declared | null {
-  return declaredValues(element, [property])[property] ?? null;
+export function declaredValue(element: Element, property: string, states?: readonly ElementState[]): Declared | null {
+  return declaredValues(element, [property], states)[property] ?? null;
+}
+
+/**
+ * What the page's own CSS gives the element while it's in `states` (hovered
+ * and pressed…), from its rules for those states: each property they set,
+ * with the cascade's winner. How Pilot shows the state while the designer
+ * edits it (the mouse is on Pilot's dialog, not on the element).
+ */
+export function forcedDeclarations(element: Element, states: readonly ElementState[]): Array<{ property: string; value: string }> {
+  if (!states.length) return [];
+  const rules = matchedRules(element, { states, mode: "subset" });
+  const properties = new Set<string>();
+  for (const rule of rules) for (let i = 0; i < rule.style.length; i++) properties.add(rule.style.item(i));
+  const out: Array<{ property: string; value: string }> = [];
+  for (const property of properties) {
+    const found = resolve(property, undefined, rules);
+    if (found) out.push({ property, value: found.value });
+  }
+  return out;
 }
 
 /**
@@ -148,9 +183,14 @@ export function declaredWithout(
   element: Element,
   property: string,
   without: { inline: boolean; skip?: CSSStyleDeclaration[] },
+  states?: readonly ElementState[],
 ): Declared | null {
-  const rules = matchedRules(element).filter((r) => !without.skip?.includes(r.style));
-  const inline = without.inline ? undefined : ((element as HTMLElement).style as CSSStyleDeclaration | undefined);
+  const rules = matchedRules(element, states?.length ? { states, mode: "exact" } : undefined).filter(
+    (r) => !without.skip?.includes(r.style),
+  );
+  // A state's rules come on top of the element's own: without them, it's the
+  // element's value (not "nothing"), so no inline style for a state.
+  const inline = without.inline || states?.length ? undefined : ((element as HTMLElement).style as CSSStyleDeclaration | undefined);
   return resolve(property, inline, rules);
 }
 
@@ -243,10 +283,10 @@ function compare(a: number[], b: number[]): number {
  */
 let cache: { element: Element; signature: string; rules: MatchedRule[] } | null = null;
 
-export function matchedRules(element: Element): MatchedRule[] {
-  const signature = signatureOf(element);
+export function matchedRules(element: Element, filter?: StateFilter): MatchedRule[] {
+  const signature = `${signatureOf(element)}|${filter ? `${filter.mode}:${filter.states.join(",")}` : ""}`;
   if (cache?.element === element && cache.signature === signature) return cache.rules;
-  const rules = collect(element);
+  const rules = collect(element, filter);
   cache = { element, signature, rules };
   queueMicrotask(() => {
     cache = null;
@@ -290,6 +330,8 @@ function sheetsOf(element: Element): CSSStyleSheet[] {
 
 interface Walk {
   element: Element;
+  /** Which rules count by their states (see StateFilter); none: rules without states. */
+  filter?: StateFilter;
   out: MatchedRule[];
   order: number;
   /** Layer order per parent layer name ("" = top level): name → index. */
@@ -299,8 +341,8 @@ interface Walk {
   media: Map<string, boolean>;
 }
 
-function collect(element: Element): MatchedRule[] {
-  const walk: Walk = { element, out: [], order: 0, layers: new Map(), anonymous: 0, media: new Map() };
+function collect(element: Element, filter?: StateFilter): MatchedRule[] {
+  const walk: Walk = { element, filter, out: [], order: 0, layers: new Map(), anonymous: 0, media: new Map() };
   for (const sheet of sheetsOf(element)) walkSheet(walk, sheet, "", null);
   return walk.out;
 }
@@ -409,9 +451,16 @@ function addIfMatching(walk: Walk, style: CSSStyleDeclaration, selectors: string
   const order = walk.order++;
   let best: { selector: string; specificity: Specificity } | null = null;
   for (const selector of selectors) {
+    // The states on the element itself decide whether the rule counts; the
+    // rest of the selector must match the element as it is.
+    const subject = subjectStates(selector);
+    const filter = walk.filter;
+    if (!filter && subject.states.length) continue;
+    if (filter?.mode === "exact" && !sameStateSet(subject.states, filter.states)) continue;
+    if (filter?.mode === "subset" && (!subject.states.length || !subject.states.every((s) => filter.states.includes(s)))) continue;
     let matches = false;
     try {
-      matches = walk.element.matches(selector);
+      matches = walk.element.matches(filter ? subject.stripped : selector);
     } catch {
       // A selector this browser can't parse: it can't apply either.
     }
@@ -420,6 +469,55 @@ function addIfMatching(walk: Walk, style: CSSStyleDeclaration, selectors: string
     if (!best || compare(s, best.specificity) > 0) best = { selector, specificity: s };
   }
   if (best) walk.out.push({ style, selector: best.selector, specificity: best.specificity, layer: layerPath(walk, layer), order });
+}
+
+const STATE_NAMES: readonly ElementState[] = STATES;
+
+/**
+ * The element states a selector puts on its subject (the last compound):
+ * `.btn:hover:active` → hover, active, and the selector without them
+ * (`.btn`). Pseudo-classes inside :not(), :is()… or on an ancestor
+ * (`.card:hover .title`) aren't the element's own state.
+ */
+export function subjectStates(selector: string): { states: ElementState[]; stripped: string } {
+  // The last compound starts after the last combinator outside brackets and quotes.
+  let depth = 0;
+  let quote: string | null = null;
+  let start = 0;
+  for (let i = 0; i < selector.length; i++) {
+    const ch = selector[i] as string;
+    if (quote) {
+      if (ch === quote) quote = null;
+    } else if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === "(" || ch === "[") depth++;
+    else if (ch === ")" || ch === "]") depth--;
+    else if (depth === 0 && (ch === " " || ch === ">" || ch === "+" || ch === "~")) start = i + 1;
+  }
+  const head = selector.slice(0, start);
+  const compound = selector.slice(start);
+  const states: ElementState[] = [];
+  let rest = "";
+  depth = 0;
+  for (let i = 0; i < compound.length; i++) {
+    const ch = compound[i] as string;
+    if (ch === "(" || ch === "[") depth++;
+    else if (ch === ")" || ch === "]") depth--;
+    if (depth === 0 && ch === ":" && compound[i + 1] !== ":") {
+      const name = /^[\w-]+/.exec(compound.slice(i + 1))?.[0] ?? "";
+      const after = compound[i + 1 + name.length];
+      if ((STATE_NAMES as readonly string[]).includes(name) && after !== "(") {
+        states.push(name as ElementState);
+        i += name.length;
+        continue;
+      }
+    }
+    rest += ch;
+  }
+  return { states: sortStates(states), stripped: `${head}${rest || "*"}` };
+}
+
+function sameStateSet(a: readonly ElementState[], b: readonly ElementState[]): boolean {
+  return a.length === b.length && a.every((s) => b.includes(s));
 }
 
 /**

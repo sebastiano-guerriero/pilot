@@ -1,6 +1,6 @@
-import type { WidthRange } from "@pilot/protocol";
+import type { ElementState, WidthRange } from "@pilot/protocol";
 import { type ComponentChildren, Fragment } from "preact";
-import { declaredValues } from "../../../dom/declared.ts";
+import { declaredValues, forcedDeclarations } from "../../../dom/declared.ts";
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import type { BoxArea } from "../../../dom/boxModel.ts";
 import type { EditableElement } from "../../../dom/target.ts";
@@ -51,6 +51,19 @@ interface PropertyDialogProps {
   widths?: WidthRange | null;
   /** The chip was typed in the search or removed. */
   onWidthsChange?(widths: WidthRange | null): void;
+  /**
+   * The state pills: the element states changes are for, together ([]: the
+   * element as it is). App keeps them across selections, until removed.
+   * While set, the element is shown in those states.
+   */
+  states?: ElementState[];
+  /** The state pills were typed, picked or removed. */
+  onStatesChange?(states: ElementState[]): void;
+  /**
+   * Focus the search when the dialog opens (default). False when the
+   * selection came from the DOM tree, which keeps focus for its arrow keys.
+   */
+  autoFocus?: boolean;
   /** The window's width now (see ViewportWidth). */
   viewportWidth?: number;
   /**
@@ -91,12 +104,22 @@ export function PropertyDialog({
   onInspect,
   widths = null,
   onWidthsChange,
+  states = NO_STATES,
+  onStatesChange,
+  autoFocus = true,
   viewportWidth,
   widthPick,
 }: PropertyDialogProps) {
   const [query, setQueryState] = useState(initialQuery);
   const [ownHistory] = useState(() => new EditHistory());
   const history = sharedHistory ?? ownHistory;
+  // With state pills, the element is shown in those states (the pointer is
+  // on the dialog, not on it): the page's own rules for them, and Pilot's.
+  const stateKey = states.join(",");
+  useEffect(() => {
+    history.setForced(states.length ? { element, states, page: forcedDeclarations(element, states) } : null);
+  }, [element, stateKey]);
+  useEffect(() => () => history.setForced(null), []);
   // The editors shown for the query: the best matches, plus their family
   // (`w` → width, min-width, max-width). See matchEditors. With nothing
   // typed: the editors for every property the element has a value for. That
@@ -298,7 +321,10 @@ export function PropertyDialog({
         inputRef={searchRef}
         widths={widths}
         onWidthsChange={onWidthsChange}
+        states={states}
+        onStatesChange={onStatesChange}
         viewportWidth={viewportWidth}
+        autoFocus={autoFocus}
       />
       {matches.length > 0 && (
         // Wrapper for the property editors shown below the search. Only
@@ -326,6 +352,7 @@ export function PropertyDialog({
                         element={element}
                         history={history}
                         widths={widths ?? undefined}
+                        states={states}
                         query={query}
                         focusRequest={focus?.index === index ? focus.request : undefined}
                         onReturnToSearch={returnToSearch}
@@ -358,6 +385,8 @@ export function PropertyDialog({
  * properties the element has a value for (editorsWithValues).
  */
 export const LIST_ALL_EDITORS = true;
+
+const NO_STATES: ElementState[] = [];
 
 /**
  * Every editor that can be listed (it writes properties), in LIST_ORDER. One
@@ -450,12 +479,20 @@ function editorsWithValues(element: EditableElement, editors: PropertyEditor[], 
  * else "". A removed property shows nothing: the element doesn't set it (the
  * page shows what applies without it). See clearProperty.
  */
-function fieldValues(element: EditableElement, properties: string[], history: EditHistory): Record<string, string> {
-  const page = declaredValues(element, properties);
+function fieldValues(
+  element: EditableElement,
+  properties: string[],
+  history: EditHistory,
+  states?: readonly ElementState[],
+): Record<string, string> {
+  // With state pills: the values for exactly those states (Pilot's, else the
+  // page's rules for them); empty when nothing sets one for them.
+  const page = declaredValues(element, properties, states);
+  const width = window.innerWidth;
   return Object.fromEntries(
     properties.map((p) => [
       p,
-      history.removalOf(element, p) ? "" : (history.valueOf(element, p) ?? page[p]?.value ?? ""),
+      history.removalOf(element, p, width, states) ? "" : (history.valueOf(element, p, width, states) ?? page[p]?.value ?? ""),
     ]),
   );
 }
@@ -489,6 +526,7 @@ function MatchedEditor({
   element,
   history,
   widths,
+  states,
   query,
   focusRequest,
   onReturnToSearch,
@@ -500,6 +538,7 @@ function MatchedEditor({
   element: EditableElement;
   history: EditHistory;
   widths?: WidthRange;
+  states?: ElementState[];
   query?: string;
   focusRequest?: FocusRequest;
   onReturnToSearch(): void;
@@ -511,7 +550,7 @@ function MatchedEditor({
   const computed = getComputedStyle(element);
   const properties = propertiesOf(editor);
   const values = Object.fromEntries(properties.map((p) => [p, computed.getPropertyValue(p)]));
-  const declared = fieldValues(element, properties, history);
+  const declared = fieldValues(element, properties, history, states);
   const Editor = editor.component;
   return (
     <Editor
@@ -520,9 +559,9 @@ function MatchedEditor({
       declared={declared}
       onChange={(property, value, options) => {
         // Cleared: the element doesn't set it (a removal, when the page's CSS does).
-        // Recorded for the chip's widths (none: every width).
-        if (value === "") clearProperty(history, element, property, options?.gesture, widths);
-        else history.apply(element, property, value, options?.gesture, { widths });
+        // Recorded for the chip's widths (none: every width) and the state pills (none: as it is).
+        if (value === "") clearProperty(history, element, property, options?.gesture, widths, states);
+        else history.apply(element, property, value, options?.gesture, { widths, states });
         rerender(0);
       }}
       onRevert={(property, gesture) => {

@@ -93,4 +93,17 @@ describe("formatPrompt", () => {
     );
     expect(prompt).toContain("Widths are viewport widths in CSS px, both ends included.");
   });
+
+  it("adds a State column only when a change has states", () => {
+    const set = (states?: Array<"hover" | "active">) => ({
+      id: "x",
+      createdAt: "",
+      page: { url: "http://localhost/", title: "", viewport: { width: 1, height: 1 } },
+      edits: [{ target: { selector: ".b", path: "a.b", tag: "a", classes: ["b"] }, changes: [{ property: "color", from: "", to: "red", states }] }],
+    });
+    expect(formatPrompt(set())).not.toContain("| State |");
+    const withStates = formatPrompt(set(["hover", "active"]));
+    expect(withStates).toContain("| Property | From | To | Widths | State |");
+    expect(withStates).toContain("| `color` | *not set* | `red` | every width | hover, active |");
+  });
 });

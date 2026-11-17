@@ -51,6 +51,23 @@ export interface StyleChange {
    * width chip in Pilot's search). Absent: every width.
    */
   widths?: WidthRange;
+  /**
+   * The element states the change is for, together (`["hover", "active"]`:
+   * hovered and pressed), in STATES order. Absent: the element as it is.
+   */
+  states?: ElementState[];
+}
+
+/** The element states a change can be for: CSS's pseudo-classes, Tailwind's variants. */
+export type ElementState = "hover" | "focus" | "focus-visible" | "active";
+
+/** Every state, in the order they're written (Tailwind's variant order: `hover:focus:active:`). */
+export const STATES: readonly ElementState[] = ["hover", "focus", "focus-visible", "active"];
+
+/** States in STATES order, each once. */
+export function sortStates(states: Iterable<ElementState>): ElementState[] {
+  const set = new Set(states);
+  return STATES.filter((s) => set.has(s));
 }
 
 /**

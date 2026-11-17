@@ -21,17 +21,18 @@ import type { EditHistory } from "./history.ts";
 export function buildChangeSet(history: EditHistory, options: { unsent?: boolean; id?: string } = {}): ChangeSet {
   const edits = new Map<Element, ElementEdit>();
   for (const change of history.changes({ unsent: options.unsent })) {
-    const { element, property, value, removal, widths } = change;
+    const { element, property, value, removal, widths, states } = change;
     let edit = edits.get(element);
     if (!edit) {
       edit = { target: element.isConnected ? describeElement(element) : change.target, changes: [] };
       edits.set(element, edit);
     }
-    const page = removal ? null : element.isConnected ? declaredValue(element, property) : null;
+    const page = removal ? null : element.isConnected ? declaredValue(element, property, states) : null;
     const styleChange: StyleChange = removal
       ? { property, from: removal.from, to: "", removed: true, source: removal.source }
       : { property, from: page?.value ?? "", to: value, ...(page && { source: sourceOf(element, page) }) };
     if (widths) styleChange.widths = widths;
+    if (states?.length) styleChange.states = states;
     edit.changes.push(styleChange);
   }
   return {
