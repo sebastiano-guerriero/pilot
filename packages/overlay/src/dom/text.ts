@@ -1,56 +1,102 @@
 /**
- * Text edits: the designer double-clicks a text element and types (see
- * select/inlineText.ts). The change is recorded like a CSS one, under the
- * reserved property TEXT_PROPERTY, and shown on the page here.
+ * Text edits: the designer double-clicks a text and types (see
+ * select/inlineText.ts). The change is recorded like a CSS one, under a
+ * reserved property (textProperty), and shown on the page here.
  *
- * CSS can't replace an element's text, so the preview writes it into the
- * element's own text nodes: the first one gets the text, the others are
- * emptied. The nodes themselves are kept (never replaced), so a framework
- * that holds them (React, Vue…) still finds them, and Pilot can tell what
- * the page itself writes into them: a MutationObserver watches the elements
- * Pilot shows text on, and a write that isn't Pilot's is the page's new
- * text (a re-render, hot reload after the agent changed the source). It
- * becomes the page's own text, and Pilot's is shown over it again until the
- * job is checked (edits/verify.ts compares the two).
+ * What's edited is a **text run**: the text between an element's child
+ * elements, one or more text nodes in a row (comments between them don't
+ * break it). `<p>A sample page, <code>/pilot</code> launches it.</p>` has
+ * two runs, "A sample page, " (0) and " launches it." (1); a text-only
+ * element has one, its whole text. Each run is a change of its own: the
+ * property is `text` for run 0 and `text:N` for run N.
+ *
+ * CSS can't replace text, so the preview writes it into the run's own text
+ * nodes: the first one gets the text, the others are emptied. The nodes
+ * themselves are kept (never replaced or removed), so a framework that holds
+ * them (React, Vue…) still finds them, the runs keep their places, and Pilot
+ * can tell what the page itself writes into them: a MutationObserver watches
+ * the elements Pilot shows text on, and a write that isn't Pilot's is the
+ * page's new text (a re-render, hot reload after the agent changed the
+ * source). It becomes the page's own text, and Pilot's is shown over it
+ * again until the job is checked (edits/verify.ts compares the two).
  */
 
-/** The reserved property of a text change in the history and the change set. Not a CSS property. */
+/** The reserved property of a text change (run 0) in the history. Not a CSS property. */
 export const TEXT_PROPERTY = "text";
 
-/** Marks the element being edited inline: its cursor, and no focus ring (the selection outline shows it). */
+/** The history property of the element's text run `run`: `text`, `text:1`, `text:2`… */
+export function textProperty(run: number): string {
+  return run === 0 ? TEXT_PROPERTY : `${TEXT_PROPERTY}:${run}`;
+}
+
+/** The text run a history property is for, or null when it isn't a text change. */
+export function textRunOf(property: string): number | null {
+  if (property === TEXT_PROPERTY) return 0;
+  const match = /^text:(\d+)$/.exec(property);
+  return match ? Number(match[1]) : null;
+}
+
+/** Marks what's being edited inline: its cursor, and no focus ring (the selection outline shows it). */
 export const TEXT_EDIT_ATTRIBUTE = "data-pilot-text";
 
-/** A text to show on an element in place of its own. */
+/** A text to show in place of an element's text run. */
 export interface TextRule {
   element: Element;
+  run: number;
   text: string;
 }
 
 /** Where EditHistory shows its text changes. Given every text change in effect, each time. */
 export interface TextPreview {
   render(rules: TextRule[]): void;
-  /** The element's own text, as the page has it without Pilot's (whitespace as is). */
-  pageText(element: Element): string;
+  /** The text of the element's run `run`, as the page has it without Pilot's (whitespace as is). */
+  pageText(element: Element, run: number): string;
 }
 
 /** Tags whose text isn't the copy a designer edits inline. */
 const NOT_TEXT = new Set(["script", "style", "textarea", "select", "option", "optgroup", "title", "noscript", "template", "iframe"]);
 
+/** The element's text runs: its text nodes, grouped between its child elements. */
+export function textRuns(element: Element): Text[][] {
+  const runs: Text[][] = [];
+  let current: Text[] | null = null;
+  for (const node of element.childNodes) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (!current) runs.push((current = []));
+      current.push(node as Text);
+    } else if (node.nodeType === Node.ELEMENT_NODE) current = null;
+  }
+  return runs;
+}
+
+const runText = (nodes: readonly Text[]) => nodes.map((n) => n.data).join("");
+
+/** Whether `element` is one the designer can edit text in: HTML, its text the page's copy, not the page's own editor. */
+function canEditIn(element: Element): element is HTMLElement {
+  return element instanceof HTMLElement && !NOT_TEXT.has(element.localName) && !element.isContentEditable;
+}
+
 /**
- * Whether the designer can edit `element`'s text inline: an HTML element
- * whose content is text only (no element inside it, `<br>` included), and
- * some of it visible (not just whitespace). A paragraph with a `<strong>`
- * inside isn't; its parts are, one at a time.
+ * Whether `element`'s content is text only (no element inside it, `<br>`
+ * included), some of it visible: the whole element is edited, as itself.
  */
 export function isTextOnly(element: Element): element is HTMLElement {
-  if (!(element instanceof HTMLElement) || NOT_TEXT.has(element.localName)) return false;
-  if (element.isContentEditable) return false; // the page's own editor
-  let text = "";
-  for (const node of element.childNodes) {
-    if (node.nodeType === Node.ELEMENT_NODE) return false;
-    if (node.nodeType === Node.TEXT_NODE) text += (node as Text).data;
-  }
-  return text.trim() !== "";
+  if (!canEditIn(element)) return false;
+  const runs = textRuns(element);
+  return runs.length === 1 && element.children.length === 0 && runText(runs[0] as Text[]).trim() !== "";
+}
+
+/**
+ * The text run of `element` that `node` (the text under the pointer) is
+ * in, when the designer can edit it: some of it visible. Null for text in a
+ * child element (that one's own run), or an element that can't be edited.
+ */
+export function textRunAt(element: Element, node: Node | null): { run: number; nodes: Text[] } | null {
+  if (!node || node.nodeType !== Node.TEXT_NODE || node.parentNode !== element || !canEditIn(element)) return null;
+  const runs = textRuns(element);
+  const run = runs.findIndex((nodes) => nodes.includes(node as Text));
+  const nodes = runs[run];
+  return nodes && runText(nodes).trim() !== "" ? { run, nodes } : null;
 }
 
 /** Text as the prompt and the checks compare it: whitespace runs as one space, trimmed, no-break spaces as spaces. */
@@ -60,9 +106,9 @@ export function normalizeText(text: string): string {
 
 /** The page's own text of each text node Pilot writes into. */
 const originals = new WeakMap<Text, string>();
-/** The elements Pilot shows text on now: their text nodes, and the text shown. */
-const shown = new Map<Element, { nodes: Text[]; text: string }>();
-/** Elements being edited inline: what happens in them is the designer typing, not the page. */
+/** The elements Pilot shows text on now: per run, its text nodes and the text shown. */
+const shown = new Map<Element, Map<number, { nodes: Text[]; text: string }>>();
+/** Elements text is being edited in: what happens in them is the designer typing, not the page. */
 const held = new Set<Element>();
 
 let observer: MutationObserver | null = null;
@@ -97,28 +143,33 @@ function handle(records: MutationRecord[]): void {
     touched.add(element);
   }
   for (const element of touched) {
-    const entry = shown.get(element);
-    if (entry) show(element, entry.text);
+    for (const [run, entry] of shown.get(element) ?? []) show(element, run, entry.text);
   }
 }
 
-const ownTextNodes = (element: Element): Text[] => [...element.childNodes].filter((n): n is Text => n.nodeType === Node.TEXT_NODE);
-
-function show(element: Element, text: string): void {
-  let entry = shown.get(element);
-  const nodes = ownTextNodes(element);
-  const same = entry && entry.nodes.length === nodes.length && entry.nodes.every((n, i) => n === nodes[i]);
+function show(element: Element, run: number, text: string): void {
+  const runs = shown.get(element) ?? new Map<number, { nodes: Text[]; text: string }>();
+  shown.set(element, runs);
+  let entry = runs.get(run);
+  const nodes = textRuns(element)[run];
+  if (!nodes && !(run === 0 && element.childNodes.length === 0)) {
+    // The run isn't there anymore (the page changed the element): nothing to show it in.
+    if (entry) restore(element, run);
+    return;
+  }
+  const current = nodes ?? [];
+  const same = entry && entry.nodes.length === current.length && entry.nodes.every((n, i) => n === current[i]);
   if (!entry || !same) {
-    // First time, or the page replaced its text nodes: what's in them now is its own text.
-    for (const node of nodes) if (!originals.has(node)) originals.set(node, node.data);
-    if (!nodes.length) {
+    // First time, or the page replaced the run's text nodes: what's in them now is its own text.
+    for (const node of current) if (!originals.has(node)) originals.set(node, node.data);
+    if (!current.length) {
       const node = document.createTextNode("");
       originals.set(node, "");
       element.append(node);
-      nodes.push(node);
+      current.push(node);
     }
-    entry = { nodes, text };
-    shown.set(element, entry);
+    entry = { nodes: current, text };
+    runs.set(run, entry);
   }
   entry.text = text;
   const [first, ...rest] = entry.nodes;
@@ -126,9 +177,11 @@ function show(element: Element, text: string): void {
   for (const node of rest) if (node.data !== "") node.data = "";
 }
 
-function restore(element: Element): void {
-  const entry = shown.get(element);
-  shown.delete(element);
+function restore(element: Element, run: number): void {
+  const runs = shown.get(element);
+  const entry = runs?.get(run);
+  runs?.delete(run);
+  if (runs && !runs.size) shown.delete(element);
   for (const node of entry?.nodes ?? []) {
     const own = originals.get(node);
     originals.delete(node);
@@ -147,20 +200,33 @@ function observeShown(): void {
 export const domTextPreview: TextPreview = {
   render(rules) {
     flush();
-    const wanted = new Map<Element, string>();
-    for (const rule of rules) if (rule.element.isConnected) wanted.set(rule.element, rule.text);
+    const wanted = new Map<Element, Map<number, string>>();
+    for (const { element, run, text } of rules) {
+      if (!element.isConnected) continue;
+      if (!wanted.has(element)) wanted.set(element, new Map());
+      wanted.get(element)?.set(run, text);
+    }
     quiet(() => {
-      for (const element of [...shown.keys()]) if (!wanted.has(element) && !held.has(element)) restore(element);
-      for (const [element, text] of wanted) {
-        if (held.has(element)) {
-          const entry = shown.get(element);
-          if (entry) entry.text = text; // shown once the edit is over
-        } else show(element, text);
+      for (const [element, runs] of [...shown]) {
+        if (held.has(element)) continue;
+        for (const run of [...runs.keys()]) if (!wanted.get(element)?.has(run)) restore(element, run);
+      }
+      for (const [element, runs] of wanted) {
+        for (const [run, text] of runs) {
+          if (held.has(element)) {
+            const entry = shown.get(element)?.get(run);
+            if (entry) entry.text = text; // shown once the edit is over
+          } else show(element, run, text);
+        }
       }
     });
     observeShown();
   },
-  pageText: pageTextContent,
+  pageText(element, run) {
+    flush();
+    const nodes = shown.get(element)?.get(run)?.nodes ?? textRuns(element)[run] ?? [];
+    return nodes.map((n) => originals.get(n) ?? n.data).join("");
+  },
 };
 
 /**

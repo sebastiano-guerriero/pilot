@@ -1,7 +1,7 @@
 import type { ElementState, ElementTarget, StyleSource, WidthRange } from "@pilot/protocol";
 import { sortStates } from "@pilot/protocol";
 import { type Forced, type Preview, stylesheetPreview } from "../dom/preview.ts";
-import { TEXT_PROPERTY, type TextPreview, domTextPreview } from "../dom/text.ts";
+import { type TextPreview, domTextPreview, textRunOf } from "../dom/text.ts";
 import { sameStates } from "./states.ts";
 import { type EditableElement, describeElement } from "../dom/target.ts";
 import { inWidths } from "./widths.ts";
@@ -43,7 +43,7 @@ interface Entry {
    */
   job?: string;
   /**
-   * A text change (`property` is TEXT_PROPERTY): the page's own text when it
+   * A text change (`property` is a text run's, see textProperty): the page's own text when it
    * was made, for the change set while the element isn't on the page.
    */
   from?: string;
@@ -290,7 +290,7 @@ export class EditHistory {
    * what the page gives against what a job asked for (edits/verify.ts).
    */
   probe<T>(changes: RecordedChange[], measure: () => T): T {
-    this.preview.render(changes.filter((c) => c.property !== TEXT_PROPERTY).map((c) => (c.value === "" ? { ...c, value: "revert-layer" } : c)));
+    this.preview.render(changes.filter((c) => textRunOf(c.property) === null).map((c) => (c.value === "" ? { ...c, value: "revert-layer" } : c)));
     try {
       return measure();
     } finally {
@@ -402,8 +402,8 @@ export class EditHistory {
     this.preview.render(this.previewRules(), this.forced);
     this.text.render(
       this.rules()
-        .filter((r) => r.property === TEXT_PROPERTY && r.value !== "")
-        .map((r) => ({ element: r.element, text: r.value })),
+        .filter((r) => textRunOf(r.property) !== null && r.value !== "")
+        .map((r) => ({ element: r.element, run: textRunOf(r.property) ?? 0, text: r.value })),
     );
     for (const listener of this.listeners) listener();
   }
@@ -411,16 +411,17 @@ export class EditHistory {
   /** The stylesheet's rules: the CSS changes (text changes are shown by the text preview). */
   private previewRules() {
     return this.rules()
-      .filter((r) => r.property !== TEXT_PROPERTY)
+      .filter((r) => textRunOf(r.property) === null)
       .map((r) => (r.value === "" ? { ...r, value: "revert-layer" } : r));
   }
 
   /**
-   * `element`'s own text, as the page has it without Pilot's text change:
-   * what a text change is checked against (edits/verify.ts) and its `from`.
+   * The text of `element`'s run `run` (0: the first, a text-only element's
+   * whole text), as the page has it without Pilot's text change: what a text
+   * change is checked against (edits/verify.ts) and its `from`.
    */
-  pageText(element: EditableElement): string {
-    return this.text.pageText(element);
+  pageText(element: EditableElement, run = 0): string {
+    return this.text.pageText(element, run);
   }
 
   /**

@@ -1,26 +1,40 @@
 import { TEXT_EDIT_ATTRIBUTE, holdText } from "../dom/text.ts";
 
 /**
- * Inline text editing: a double-click on a text-only element (dom/text.ts,
- * isTextOnly) makes its text editable where it is, with the word under the
- * pointer selected, as a double-click does in any text. The element is
- * `contenteditable` while it's edited (plain text only), then exactly as it
- * was: its attributes and its text nodes are put back, and the history's
- * text preview shows the result (dom/text.ts). Nothing the designer types
+ * Inline text editing: a double-click on a text (dom/text.ts) makes it
+ * editable where it is, with the word under the pointer selected, as a
+ * double-click does in any text. What's edited is:
+ * - a text-only element (isTextOnly): the element itself, `contenteditable`
+ *   while it's edited;
+ * - a text run inside an element with child elements (`run`, the text
+ *   before a `<code>`): just that run, inside a `<span contenteditable>`
+ *   put around its nodes while it's edited, so the child elements around
+ *   it can't be typed over or deleted.
+ *
+ * Plain text only. Afterwards the element is exactly as it was: its
+ * attributes, its nodes and their text are put back (the span goes), and
+ * the history's text preview shows the result. Nothing the designer types
  * reaches the page's own handlers (select mode, useElementPicker).
  *
- * - Enter, or leaving the element (a click elsewhere, focus moving to
- *   Pilot's dialog): done, `onDone(text)` with what's in it now.
+ * - Enter, or leaving the text (a click elsewhere, focus moving to Pilot's
+ *   dialog): done, `onDone(text)` with what's in it now.
  * - Esc: cancelled, `onDone(null)`; the text is as it was.
  *
- * Returns `finish(commit)`, to end the edit from outside (the selection
- * changed, the tool turned off).
+ * Returns what's editable (`host`: the element, or the span) and
+ * `finish(commit)`, to end the edit from outside (the selection changed,
+ * the tool turned off).
  */
+export interface TextEdit {
+  host: HTMLElement;
+  finish(commit: boolean): void;
+}
+
 export function editText(
   element: HTMLElement,
   at: { x: number; y: number } | null,
   onDone: (text: string | null) => void,
-): (commit: boolean) => void {
+  run?: readonly Text[],
+): TextEdit {
   const release = holdText(element);
   // Everything that's put back afterwards: the nodes, their text, the attributes.
   const nodes = [...element.childNodes];
@@ -28,27 +42,47 @@ export function editText(
   const editable = element.getAttribute("contenteditable");
   const spellcheck = element.getAttribute("spellcheck");
 
-  element.setAttribute("contenteditable", plaintextOnly() ? "plaintext-only" : "true");
-  element.setAttribute(TEXT_EDIT_ATTRIBUTE, "");
-  element.setAttribute("spellcheck", "false");
-  element.focus({ preventScroll: true });
-  selectWordAt(element, at);
+  // A run: its nodes (and any comment between them) go in a span for the edit.
+  let wrapper: { span: HTMLSpanElement; nodes: ChildNode[] } | null = null;
+  const first = run?.[0];
+  const last = run?.at(-1);
+  if (first && last) {
+    const span = document.createElement("span");
+    const wrapped: ChildNode[] = [];
+    for (let n: ChildNode | null = first; n; n = n.nextSibling) {
+      wrapped.push(n);
+      if (n === last) break;
+    }
+    element.insertBefore(span, first);
+    span.append(...wrapped);
+    wrapper = { span, nodes: wrapped };
+  }
+  const host = wrapper?.span ?? element;
+
+  host.setAttribute("contenteditable", plaintextOnly() ? "plaintext-only" : "true");
+  host.setAttribute(TEXT_EDIT_ATTRIBUTE, "");
+  host.setAttribute("spellcheck", "false");
+  host.focus({ preventScroll: true });
+  selectWordAt(host, at);
 
   let finished = false;
   const finish = (commit: boolean) => {
     if (finished) return;
     finished = true;
-    const text = element.textContent ?? "";
-    element.removeEventListener("keydown", onKeyDown);
-    for (const type of QUIET_EVENTS) element.removeEventListener(type, stop);
-    element.removeEventListener("blur", onBlur);
-    element.removeEventListener("paste", onPaste);
-    element.removeEventListener("drop", onDrop);
-    restoreAttribute(element, "contenteditable", editable);
-    restoreAttribute(element, "spellcheck", spellcheck);
-    element.removeAttribute(TEXT_EDIT_ATTRIBUTE);
-    if (element.ownerDocument.activeElement === element) element.blur();
+    const text = host.textContent ?? "";
+    host.removeEventListener("keydown", onKeyDown);
+    for (const type of QUIET_EVENTS) host.removeEventListener(type, stop);
+    host.removeEventListener("blur", onBlur);
+    host.removeEventListener("paste", onPaste);
+    host.removeEventListener("drop", onDrop);
+    if (host.ownerDocument.activeElement === host) host.blur();
     window.getSelection()?.removeAllRanges();
+    if (wrapper) wrapper.span.replaceWith(...wrapper.nodes);
+    else {
+      restoreAttribute(element, "contenteditable", editable);
+      restoreAttribute(element, "spellcheck", spellcheck);
+      element.removeAttribute(TEXT_EDIT_ATTRIBUTE);
+    }
     // Typing may have split, merged or replaced the text nodes: the page's own go back.
     const current = [...element.childNodes];
     if (current.length !== nodes.length || current.some((n, i) => n !== nodes[i])) element.replaceChildren(...nodes);
@@ -71,9 +105,9 @@ export function editText(
       finish(false);
     }
   };
-  // Focus left the element (the window losing focus, switching apps, doesn't count).
+  // Focus left the text (the window losing focus, switching apps, doesn't count).
   const onBlur = () => {
-    if (element.ownerDocument.activeElement !== element) finish(true);
+    if (host.ownerDocument.activeElement !== host) finish(true);
   };
   const stop = (e: Event) => e.stopPropagation();
   // Plain text only, also where `plaintext-only` isn't supported: no markup pasted or dropped in.
@@ -82,12 +116,12 @@ export function editText(
     insertText(e.clipboardData?.getData("text/plain") ?? "");
   };
   const onDrop = (e: DragEvent) => e.preventDefault();
-  element.addEventListener("keydown", onKeyDown);
-  for (const type of QUIET_EVENTS) element.addEventListener(type, stop);
-  element.addEventListener("blur", onBlur);
-  element.addEventListener("paste", onPaste);
-  element.addEventListener("drop", onDrop);
-  return finish;
+  host.addEventListener("keydown", onKeyDown);
+  for (const type of QUIET_EVENTS) host.addEventListener(type, stop);
+  host.addEventListener("blur", onBlur);
+  host.addEventListener("paste", onPaste);
+  host.addEventListener("drop", onDrop);
+  return { host, finish };
 }
 
 /** What typing sends besides keydown, kept from the page's handlers (they bubble from the element). */
@@ -150,7 +184,7 @@ export function selectWordAt(element: HTMLElement, at: { x: number; y: number } 
   selection.addRange(range);
 }
 
-function caretAt(x: number, y: number): { node: Node; offset: number } | null {
+export function caretAt(x: number, y: number): { node: Node; offset: number } | null {
   const doc = document as Document & {
     caretPositionFromPoint?(x: number, y: number): { offsetNode: Node; offset: number } | null;
     caretRangeFromPoint?(x: number, y: number): Range | null;
