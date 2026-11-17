@@ -2,11 +2,13 @@ import type { ElementState, WidthRange } from "@pilot/protocol";
 import { useCallback, useEffect, useReducer, useRef, useState } from "preact/hooks";
 import { type BoxArea, hidesSelection } from "../dom/boxModel.ts";
 import { type EditableElement, isEditable } from "../dom/target.ts";
+import { TEXT_PROPERTY, isTextOnly, normalizeText } from "../dom/text.ts";
 import { formatPrompt } from "@pilot/protocol";
 import { buildChangeSet, buildRequest, copyText } from "../edits/changeSet.ts";
 import { type EditHistory, historyShortcut } from "../edits/history.ts";
 import { clickWidth } from "../edits/widths.ts";
 import type { PilotDevOptions } from "../mount.tsx";
+import { editText } from "../select/inlineText.ts";
 import { useElementPicker } from "../select/useElementPicker.ts";
 import { useElementRect } from "../select/useElementRect.ts";
 import { BoxAreas } from "./components/BoxAreas/BoxAreas.tsx";
@@ -253,7 +255,35 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [history, host]);
 
-  const hovered = useElementPicker(selecting, host, onPick);
+  // Inline text editing: a double-click on a text-only element (Select tool)
+  // makes its text editable in place (select/inlineText.ts). What's typed is
+  // a text change in the history, one undo step per edit.
+  const [editing, setEditing] = useState<{ element: HTMLElement; finish: (commit: boolean) => void } | null>(null);
+  const editingRef = useRef(editing);
+  editingRef.current = editing;
+  const toolRef = useRef(tool);
+  toolRef.current = tool;
+  const onDoubleClick = useCallback(
+    (element: EditableElement, at: { x: number; y: number }) => {
+      if (toolRef.current !== "select" || !isTextOnly(element)) return;
+      editingRef.current?.finish(true);
+      // The double-click's first click selected it already; `from: "dom"` keeps a new dialog from taking focus.
+      setSelected((prev) => (prev?.element === element ? prev : { element, key: (prev?.key ?? 0) + 1, from: "dom" }));
+      const finish = editText(element, at, (text) => {
+        setEditing((current) => (current?.element === element ? null : current));
+        if (text !== null) commitText(history, element, text);
+      });
+      setEditing({ element, finish });
+    },
+    [history],
+  );
+  // The edit ends (done) when the selection moves to another element or the tool changes.
+  useEffect(() => {
+    if (editing && (selected?.element !== editing.element || tool !== "select")) editing.finish(true);
+  }, [editing, selected?.element, tool]);
+  useEffect(() => () => editingRef.current?.finish(true), []);
+
+  const hovered = useElementPicker(selecting, host, onPick, { editing: editing?.element ?? null, onDoubleClick });
   const hoverRect = useElementRect(hovered !== selected?.element ? hovered : null);
   const selectedRect = useElementRect(selected?.element ?? null);
   const domHoverRect = useElementRect(domHover);
@@ -278,6 +308,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     if (!selected && !selecting) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      if (editingRef.current) return; // cancels the inline text edit (select/inlineText.ts)
       if (selected) {
         if (e.composedPath().includes(host)) return;
         e.preventDefault();
@@ -529,6 +560,21 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
       />
     </>
   );
+}
+
+/**
+ * An inline text edit is done: its text is a change in the history, the
+ * page's own text as its `from`. The page's own text again (whitespace
+ * aside) drops Pilot's; an emptied element is left as it was (removing an
+ * element's text isn't a text change).
+ */
+export function commitText(history: EditHistory, element: HTMLElement, typed: string): void {
+  const page = history.pageText(element);
+  if (!normalizeText(typed)) return;
+  // A space typed at the end of a line comes as a no-break space; the page's own are kept.
+  const text = page.includes("\u00a0") ? typed : typed.replace(/\u00a0/g, " ");
+  const value = normalizeText(text) === normalizeText(page) ? "" : text;
+  history.apply(element, TEXT_PROPERTY, value, undefined, { from: page });
 }
 
 /** A job and where it stands, in words ("Make responsive: Claude Code is working"). */

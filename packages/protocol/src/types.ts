@@ -96,9 +96,23 @@ export type StyleSource =
       media?: string;
     };
 
+/**
+ * The designer rewrote the element's text (double-click, inline): its copy,
+ * not its style. Whitespace runs are one space, trimmed.
+ */
+export interface TextChange {
+  /** The page's own text before the edit. */
+  from: string;
+  /** The text the designer typed. */
+  to: string;
+}
+
 export interface ElementEdit {
   target: ElementTarget;
+  /** CSS changes; empty when only the text changed. */
   changes: StyleChange[];
+  /** A new text for the element, when the designer edited it. */
+  text?: TextChange;
 }
 
 /**

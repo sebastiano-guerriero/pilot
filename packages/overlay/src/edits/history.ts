@@ -1,6 +1,7 @@
 import type { ElementState, ElementTarget, StyleSource, WidthRange } from "@pilot/protocol";
 import { sortStates } from "@pilot/protocol";
 import { type Forced, type Preview, stylesheetPreview } from "../dom/preview.ts";
+import { TEXT_PROPERTY, type TextPreview, domTextPreview } from "../dom/text.ts";
 import { sameStates } from "./states.ts";
 import { type EditableElement, describeElement } from "../dom/target.ts";
 import { inWidths } from "./widths.ts";
@@ -41,6 +42,11 @@ interface Entry {
    * and aren't sent again. None: not sent yet.
    */
   job?: string;
+  /**
+   * A text change (`property` is TEXT_PROPERTY): the page's own text when it
+   * was made, for the change set while the element isn't on the page.
+   */
+  from?: string;
 }
 
 /** A change still in effect, for the change set. */
@@ -56,6 +62,8 @@ export interface RecordedChange {
   states?: ElementState[];
   /** The job it was sent in; none when not sent yet. */
   job?: string;
+  /** A text change: the page's own text when it was made (see Entry). */
+  from?: string;
 }
 
 /** One undo step: a single change, or every change made with the same gesture. */
@@ -101,7 +109,10 @@ export class EditHistory {
   /** An element shown in its states while they're edited (see Forced). Not saved. */
   private forced: Forced | null = null;
 
-  constructor(private readonly preview: Preview = stylesheetPreview) {}
+  constructor(
+    private readonly preview: Preview = stylesheetPreview,
+    private readonly text: TextPreview = domTextPreview,
+  ) {}
 
   /** Call `listener` after every change, undo, redo and restore. Returns the unsubscribe. */
   subscribe(listener: () => void): () => void {
@@ -180,7 +191,7 @@ export class EditHistory {
     property: string,
     value: string,
     gesture?: object,
-    options: { removal?: Removal; widths?: WidthRange; states?: readonly ElementState[] } = {},
+    options: { removal?: Removal; widths?: WidthRange; states?: readonly ElementState[]; from?: string } = {},
   ): void {
     const { removal, widths } = options;
     const states = options.states?.length ? sortStates(options.states) : undefined;
@@ -196,6 +207,7 @@ export class EditHistory {
       const current = this.currentFor(element, property, widths, states);
       if (!removal && !current?.removal && (current?.value ?? "") === value) return;
       const entry: Entry = { element, target: this.targetOf(element), path: location.pathname, property, value, removal, widths, states };
+      if (options.from !== undefined) entry.from = options.from;
       if (step) step.entries.push(entry);
       else this.done.push({ gesture, entries: [entry] });
     }
@@ -213,7 +225,7 @@ export class EditHistory {
     return this.rules()
       .filter((r) => r.value !== "")
       .filter((r) => (filter.unsent ? !r.job : true) && (filter.job === undefined || r.job === filter.job))
-      .map(({ element, target, property, value, removal, widths, states, job }) => ({
+      .map(({ element, target, property, value, removal, widths, states, job, from }) => ({
         element,
         target,
         property,
@@ -222,6 +234,7 @@ export class EditHistory {
         widths,
         states,
         job,
+        ...(from !== undefined && { from }),
       }));
   }
 
@@ -277,7 +290,7 @@ export class EditHistory {
    * what the page gives against what a job asked for (edits/verify.ts).
    */
   probe<T>(changes: RecordedChange[], measure: () => T): T {
-    this.preview.render(changes.map((c) => (c.value === "" ? { ...c, value: "revert-layer" } : c)));
+    this.preview.render(changes.filter((c) => c.property !== TEXT_PROPERTY).map((c) => (c.value === "" ? { ...c, value: "revert-layer" } : c)));
     try {
       return measure();
     } finally {
@@ -387,11 +400,27 @@ export class EditHistory {
 
   private render(): void {
     this.preview.render(this.previewRules(), this.forced);
+    this.text.render(
+      this.rules()
+        .filter((r) => r.property === TEXT_PROPERTY && r.value !== "")
+        .map((r) => ({ element: r.element, text: r.value })),
+    );
     for (const listener of this.listeners) listener();
   }
 
+  /** The stylesheet's rules: the CSS changes (text changes are shown by the text preview). */
   private previewRules() {
-    return this.rules().map((r) => (r.value === "" ? { ...r, value: "revert-layer" } : r));
+    return this.rules()
+      .filter((r) => r.property !== TEXT_PROPERTY)
+      .map((r) => (r.value === "" ? { ...r, value: "revert-layer" } : r));
+  }
+
+  /**
+   * `element`'s own text, as the page has it without Pilot's text change:
+   * what a text change is checked against (edits/verify.ts) and its `from`.
+   */
+  pageText(element: EditableElement): string {
+    return this.text.pageText(element);
   }
 
   /**

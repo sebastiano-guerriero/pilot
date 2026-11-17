@@ -1,5 +1,6 @@
 import type { ChangeResult } from "@pilot/protocol";
 import { PREVIEW_ATTRIBUTE } from "../dom/preview.ts";
+import { TEXT_PROPERTY, normalizeText } from "../dom/text.ts";
 import type { EditHistory, RecordedChange } from "./history.ts";
 import { inWidths } from "./widths.ts";
 
@@ -11,6 +12,9 @@ import { inWidths } from "./widths.ts";
  * only the page's CSS is compared with its computed value with the job's
  * changes previewed (what the designer saw). Both are measured in the same
  * task, so nothing flickers (EditHistory.probe).
+ *
+ * A text change is checked by the element's text: the page's own (Pilot's
+ * text preview left out) against the designer's, whitespace runs as one space.
  *
  * A change for other viewport widths than the window's, for an element
  * state (Pilot can't put the element in a real hover or focus to measure
@@ -27,13 +31,20 @@ export interface JobCheck {
 export function checkJob(history: EditHistory, jobId: string, width = window.innerWidth): JobCheck {
   const changes = history.changes({ job: jobId });
   const checkable = changes.filter((c) => c.element.isConnected && !c.states?.length && inWidths(c.widths ?? null, width));
-  const read = () => checkable.map((c) => computed(c.element, c.property));
-  const actual = history.probe([], read);
-  const expected = history.probe(changes, read);
+  const css = checkable.filter((c) => c.property !== TEXT_PROPERTY);
+  const read = () => css.map((c) => computed(c.element, c.property));
+  const actualCss = history.probe([], read);
+  const expectedCss = history.probe(changes, read);
+  // A text change: the page's own text (Pilot's left out) against the designer's.
+  const actual = checkable.map((c) =>
+    c.property === TEXT_PROPERTY ? normalizeText(history.pageText(c.element)) : actualCss[css.indexOf(c)],
+  );
+  const expected = checkable.map((c) => (c.property === TEXT_PROPERTY ? normalizeText(c.value) : expectedCss[css.indexOf(c)]));
   const check: JobCheck = { results: [], landed: [], differs: [], unchecked: [] };
   for (const c of changes) {
     const i = checkable.indexOf(c);
-    const base = { selector: c.target.selector, property: c.property, expected: c.removal ? "removed" : c.value };
+    const expectedValue = c.removal ? "removed" : c.property === TEXT_PROPERTY ? normalizeText(c.value) : c.value;
+    const base = { selector: c.target.selector, property: c.property, expected: expectedValue };
     if (i < 0) {
       check.unchecked.push(c);
       check.results.push({ ...base, outcome: "unchecked" });

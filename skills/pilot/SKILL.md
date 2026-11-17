@@ -5,7 +5,7 @@ description: Hand the UI to the designer with Pilot, then apply the design edits
 
 # Pilot
 
-Pilot lets the designer edit the running app in the browser. They select elements, change CSS properties with Pilot's editors, and press **Send**. Each Send reaches you as a **job**: plain CSS `property: from → to` on identifiable elements, for you to write into the source in this project's conventions. The designer keeps designing while you work; Pilot previews each job's changes until you report it done, then checks them against the page's real CSS.
+Pilot lets the designer edit the running app in the browser. They select elements, change CSS properties with Pilot's editors, and press **Send**. Each Send reaches you as a **job**: plain CSS `property: from → to` (and new text, when they rewrote one) on identifiable elements, for you to write into the source in this project's conventions. The designer keeps designing while you work; Pilot previews each job's changes until you report it done, then checks them against the page's real CSS.
 
 ## When the user runs /pilot
 
@@ -41,5 +41,6 @@ Rules:
 - If an element comes from a shared component, ask before changing every instance. Otherwise scope the change (a variant, a prop, a class on that use).
 - **Widths:** a change for some viewport widths goes in a media query; use the project's breakpoints when one matches (or is within a few pixels). "Every width" means no media query should override it.
 - **Removed:** the element shouldn't declare the property at all (not `0` or `none`).
+- **Text:** the designer rewrote the element's copy. Change it where it comes from (the markup, a prop, a translation file), for this element only; Pilot checks that the page shows the new text.
 - If you approximated a value to fit a token or scale, say which and by how much in `pilot_done`'s notes (`22px → pt-6, 24px`). Pilot checks the page after each job: a change that doesn't give the designer's value comes back to you once as a follow-up. Fix it, or keep a deliberate choice and say why; after that, Pilot takes what the code gives.
 - Don't run builds or tests for a job unless it's needed: hot reload shows the result, and the designer is waiting to see it.

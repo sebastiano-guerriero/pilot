@@ -1,5 +1,6 @@
 import { useLayoutEffect, useState } from "preact/hooks";
 import { type EditableElement, isEditable } from "../dom/target.ts";
+import { TEXT_EDIT_ATTRIBUTE } from "../dom/text.ts";
 
 /** Pointer events Pilot swallows in select mode so the page doesn't react to picking clicks. */
 const BLOCKED_EVENTS = [
@@ -22,6 +23,14 @@ const CURSOR_STYLE_ID = "pilot-select-cursor";
  *   handlers) and reports the clicked element through `onPick`,
  * - shows a crosshair cursor over the page.
  *
+ * - reports double-clicks through `onDoubleClick` (inline text editing),
+ * - shows a crosshair cursor over the page.
+ *
+ * While an element's text is edited inline (`editing`), the pointer works
+ * as in any text inside it (caret, selecting, the context menu) but still
+ * never reaches the page's handlers, and a click there doesn't follow a
+ * link or submit a form.
+ *
  * Events coming from Pilot's own UI (inside `host`) pass through untouched.
  * Scrolling, keyboard and hover styles keep working normally.
  */
@@ -29,7 +38,9 @@ export function useElementPicker(
   active: boolean,
   host: HTMLElement,
   onPick: (element: EditableElement) => void,
+  options: { editing?: Element | null; onDoubleClick?(element: EditableElement, at: { x: number; y: number }): void } = {},
 ): EditableElement | null {
+  const { editing = null, onDoubleClick } = options;
   const [hovered, setHovered] = useState<EditableElement | null>(null);
 
   // Layout effect: listeners must be in place the moment select mode turns on,
@@ -56,9 +67,15 @@ export function useElementPicker(
     const onBlocked = (e: Event) => {
       const el = fromPage(e);
       if (!el) return;
+      if (editing && e.composedPath().includes(editing)) {
+        e.stopImmediatePropagation();
+        if (e.type === "click" || e.type === "auxclick") e.preventDefault();
+        return;
+      }
       e.preventDefault();
       e.stopImmediatePropagation();
       if (e.type === "click") onPick(el);
+      if (e.type === "dblclick" && e instanceof MouseEvent) onDoubleClick?.(el, { x: e.clientX, y: e.clientY });
     };
 
     window.addEventListener("pointermove", onMove, { capture: true, passive: true });
@@ -73,7 +90,10 @@ export function useElementPicker(
     // pointer on buttons.
     const cursor = document.createElement("style");
     cursor.id = CURSOR_STYLE_ID;
-    cursor.textContent = `html, html *:not(${host.localName}) { cursor: crosshair !important; }`;
+    // The element edited inline shows the text cursor, and no focus ring of
+    // its own: the selection outline marks it.
+    cursor.textContent = `html, html *:not(${host.localName}) { cursor: crosshair !important; }
+[${TEXT_EDIT_ATTRIBUTE}] { cursor: text !important; outline: none !important; }`;
     document.head.append(cursor);
 
     return () => {
@@ -82,7 +102,7 @@ export function useElementPicker(
       for (const type of BLOCKED_EVENTS) window.removeEventListener(type, onBlocked, true);
       cursor.remove();
     };
-  }, [active, host, onPick]);
+  }, [active, host, onPick, editing, onDoubleClick]);
 
   return hovered;
 }
