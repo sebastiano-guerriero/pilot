@@ -371,7 +371,7 @@ To use the Pilot you're working on in another project (an experiment, a real app
 
 The published package is [packages/usepilot](packages/usepilot). Publishing builds it first (`prepack` runs the overlay build and copies `dist/` and the license in):
 
-1. Bump the version in [packages/usepilot/package.json](packages/usepilot/package.json) (0.x for now: `0.1.1` for fixes, `0.2.0` for new features), or run `npm version patch --no-git-tag-version` there.
+1. Bump the version in [packages/usepilot/package.json](packages/usepilot/package.json) (0.x for now: `0.1.1` for fixes, `0.2.0` for new features, and for a new bridge version, which older Pilots can't join), or run `npm version patch --no-git-tag-version` there. Set the same version on the MCP server in [mcp.ts](packages/cli/src/mcp.ts) (`new McpServer({ name: "pilot", version })`).
 2. Publish, from that folder (it asks for your npm security key):
 
    ```bash
