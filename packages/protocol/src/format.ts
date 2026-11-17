@@ -20,6 +20,7 @@ export function formatPrompt(changeSet: ChangeSet): string {
     "- Prefer an existing token or utility when it matches the value (or is within a pixel or two); mention any value you had to approximate.",
     "- Change only the listed elements. If an element is a shared component, ask before changing every instance.",
     "- Widths are viewport widths in CSS px, both ends included. Use this project's breakpoints when one matches (or is within a few pixels), else a custom media query, and say which. \"Every width\" means no media query: the value holds at every viewport width, and no existing media query should override it.",
+    "- A Text change is the element's copy: replace the old text with the new one where it comes from (the markup, a prop, a translation file, a CMS fixture), the rest of the element as it is. If the same text is used elsewhere, change only this element's, unless the designer's note says otherwise.",
     "- A State is the element state the change is for, all of them together (\"hover, active\": hovered and pressed). Use the project's own form: Tailwind's variants (`hover:`, `focus-visible:`, `hover:active:`), `:hover` and the like in CSS. Without a state, the change is for the element as it is (any state).",
     "",
     `Page: ${page.url} (${page.title || "untitled"}) at ${page.viewport.width}x${page.viewport.height}`,
@@ -153,8 +154,10 @@ function targetLines(target: ElementTarget): string[] {
 }
 
 function formatEdit(edit: ElementEdit, n: number): string[] {
-  const { target, changes } = edit;
+  const { target, changes, text } = edit;
   const out = [`## ${n}. \`${target.path}\``, "", ...targetLines(target)];
+  if (text) out.push("", "Text:", "", `- From: ${JSON.stringify(text.from)}`, `- To: ${JSON.stringify(text.to)}`);
+  if (!changes.length) return out;
   // The State column only when a change has one, so most prompts stay as they were.
   const withStates = changes.some((c) => c.states?.length);
   out.push(

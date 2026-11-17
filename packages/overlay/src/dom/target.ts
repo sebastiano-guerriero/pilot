@@ -1,4 +1,5 @@
 import type { ElementTarget } from "@pilot/protocol";
+import { pageTextContent } from "./text.ts";
 
 /** An element Pilot can edit: anything with an inline `style`. */
 export type EditableElement = HTMLElement | SVGElement;
@@ -94,8 +95,9 @@ export function domPath(el: Element): string {
   return segments.slice(-MAX_PATH_SEGMENTS).join(" > ");
 }
 
+/** The element's text as the page has it (Pilot's text changes left out: the agent greps the source for it). */
 function textSnippet(el: Element): string | undefined {
-  const text = el.textContent?.replace(/\s+/g, " ").trim();
+  const text = pageTextContent(el).replace(/\s+/g, " ").trim();
   if (!text) return undefined;
   return text.length > MAX_TEXT ? `${text.slice(0, MAX_TEXT - 1)}…` : text;
 }
