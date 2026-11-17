@@ -228,10 +228,11 @@ export class EditHistory {
   /**
    * Send: the changes in effect that weren't sent yet now belong to job
    * `jobId`. They stay on the page (the agent is applying them) and aren't
-   * sent again; new changes go in the next job. Returns how many it took.
+   * sent again; new changes go in the next job. `only`: just the ones it
+   * picks (the rest stay unsent). Returns how many it took.
    */
-  send(jobId: string): number {
-    const unsent = this.rules().filter((r) => r.value !== "" && !r.job);
+  send(jobId: string, only: (change: RecordedChange) => boolean = () => true): number {
+    const unsent = this.rules().filter((r) => r.value !== "" && !r.job && only(r));
     for (const entry of unsent) entry.job = jobId;
     if (unsent.length) this.render();
     return unsent.length;

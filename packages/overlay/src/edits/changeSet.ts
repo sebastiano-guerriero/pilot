@@ -1,9 +1,9 @@
-import type { AgentRequest, ChangeSet, ElementEdit, StyleChange } from "@pilot/protocol";
+import type { AgentRequest, ChangeSet, CommentMessage, ElementEdit, StyleChange } from "@pilot/protocol";
 import { pageBreakpoints } from "../dom/breakpoints.ts";
 import { declaredValue } from "../dom/declared.ts";
 import { describeElement } from "../dom/target.ts";
 import { sourceOf } from "./clear.ts";
-import type { EditHistory } from "./history.ts";
+import type { EditHistory, RecordedChange } from "./history.ts";
 
 /**
  * The change set for what's in the history now: one edit per element, in the
@@ -17,11 +17,16 @@ import type { EditHistory } from "./history.ts";
  * Elements still on the page are described afresh; one that isn't (another
  * page of the app, or re-rendered) keeps the description taken when it was
  * first changed. `unsent`: only the changes not sent to the agent yet (what
- * Send hands over); Copy prompt takes everything in effect.
+ * Send hands over); Copy prompt takes everything in effect. `only`: just the
+ * changes it picks (Send leaves out the ones that wait for a job).
  */
-export function buildChangeSet(history: EditHistory, options: { unsent?: boolean; id?: string } = {}): ChangeSet {
+export function buildChangeSet(
+  history: EditHistory,
+  options: { unsent?: boolean; id?: string; only?: (change: RecordedChange) => boolean } = {},
+): ChangeSet {
   const edits = new Map<Element, ElementEdit>();
   for (const change of history.changes({ unsent: options.unsent })) {
+    if (options.only && !options.only(change)) continue;
     const { element, property, value, removal, widths, states } = change;
     let edit = edits.get(element);
     if (!edit) {
@@ -50,9 +55,18 @@ export function buildChangeSet(history: EditHistory, options: { unsent?: boolean
 
 /**
  * A task for the agent about one element, as a change set with no edits
- * (see AgentRequest): Make responsive, with the page's breakpoints.
+ * (see AgentRequest), with the page's breakpoints: Make responsive, or a
+ * comment with its `thread` (the designer's latest message last).
  */
-export function buildRequest(element: Element, kind: AgentRequest["kind"], options: { id?: string } = {}): ChangeSet {
+export function buildRequest(
+  element: Element,
+  kind: AgentRequest["kind"],
+  options: { id?: string; thread?: CommentMessage[] } = {},
+): ChangeSet {
+  const target = describeElement(element);
+  const breakpoints = pageBreakpoints();
+  const request: AgentRequest =
+    kind === "comment" ? { kind, target, breakpoints, thread: options.thread ?? [] } : { kind, target, breakpoints };
   return {
     id: options.id ?? `cs_${Date.now().toString(36)}`,
     createdAt: new Date().toISOString(),
@@ -62,7 +76,7 @@ export function buildRequest(element: Element, kind: AgentRequest["kind"], optio
       viewport: { width: window.innerWidth, height: window.innerHeight },
     },
     edits: [],
-    request: { kind, target: describeElement(element), breakpoints: pageBreakpoints() },
+    request,
   };
 }
 

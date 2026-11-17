@@ -29,6 +29,8 @@
 @import "../components/ScrubHandle/ScrubHandle.css" layer(components);
 @import "../components/ScrollThumb/ScrollThumb.css" layer(components);
 @import "../components/Tooltip/Tooltip.css" layer(components);
+@import "../components/CommentWidget/CommentWidget.css" layer(components);
+@import "../components/CommentPins/CommentPins.css" layer(components);
 @import "../components/ViewportWidth/ViewportWidth.css" layer(components);
 
 /* Property editors */

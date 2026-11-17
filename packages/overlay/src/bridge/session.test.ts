@@ -139,6 +139,80 @@ describe("PilotSession", () => {
     expect(el.style.paddingTop).toBe("20px");
   });
 
+  it("a job on an element: jobOn and busy find it until it's finished", async () => {
+    vi.useFakeTimers();
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    expect(s.jobOn(el)).toBeNull();
+    history.apply(el, "padding-top", "20px");
+    const sent = s.send() as { id: string };
+    expect(s.jobOn(el)?.id).toBe(sent.id);
+    expect(s.busy).toEqual([{ element: el, job: expect.objectContaining({ id: sent.id }) }]);
+    // Another kind of job can't go to it meanwhile.
+    expect(s.request(el, "responsive")).toBeNull();
+    sheet.textContent = ".card { padding-top: 20px; }";
+    hub().emit({ type: "job", job: job({ id: sent.id, status: "done", agent }) });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(s.jobOn(el)).toBeNull();
+    expect(s.busy).toEqual([]);
+  });
+
+  it("changes sent for an element a job is on wait, and go as a job of their own once it's finished", async () => {
+    vi.useFakeTimers();
+    const other = document.createElement("p");
+    other.className = "other";
+    document.body.append(other);
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    history.apply(el, "padding-top", "20px");
+    const first = s.send() as { id: string };
+    // The designer goes on: the same element, and another one.
+    history.apply(el, "margin-top", "8px");
+    history.apply(other, "color", "red");
+    const second = s.send() as { id: string };
+    const posted = posts.at(-1)?.body as { id: string; changeSet: { edits: Array<{ changes: Array<{ property: string }> }> } };
+    expect(posted.id).toBe(second.id);
+    expect(posted.changeSet.edits.flatMap((e) => e.changes.map((c) => c.property))).toEqual(["color"]);
+    expect(s.heldCount).toBe(1);
+    expect(s.unsent).toBe(1);
+    // Edits made after Send on a free element aren't swept along when the held ones go.
+    const later = document.createElement("span");
+    later.className = "later";
+    document.body.append(later);
+    history.apply(later, "color", "blue");
+    // The first job finishes: margin-top goes, alone.
+    sheet.textContent = ".card { padding-top: 20px; }";
+    hub().emit({ type: "job", job: job({ id: first.id, status: "done", agent }) });
+    await vi.advanceTimersByTimeAsync(0);
+    const released = posts.at(-1)?.body as { id: string; changeSet: { edits: Array<{ changes: Array<{ property: string }> }> } };
+    expect(released.id).not.toBe(second.id);
+    expect(released.changeSet.edits.flatMap((e) => e.changes.map((c) => c.property))).toEqual(["margin-top"]);
+    expect(s.heldCount).toBe(0);
+    expect(s.unsent).toBe(1); // the later one, for the next Send
+    other.remove();
+    later.remove();
+  });
+
+  it("held changes survive a reload; a cancelled job leaves them for the next Send, with its own", () => {
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    history.apply(el, "padding-top", "20px");
+    const first = s.send() as { id: string };
+    history.apply(el, "margin-top", "8px");
+    expect(s.send()).toBeNull();
+    expect(s.heldCount).toBe(1);
+    s.destroy();
+    const reloaded = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    expect(reloaded.heldCount).toBe(1);
+    const before = posts.length;
+    reloaded.cancel(first.id);
+    // Nothing goes by itself: the job's own changes are unsent again, with the held one.
+    expect(posts.slice(before).filter((p) => p.url === "http://hub/jobs")).toHaveLength(0);
+    expect(reloaded.heldCount).toBe(0);
+    expect(reloaded.unsent).toBe(2);
+  });
+
   it("Make responsive: a job of its own for the element, apart from the changes, with a baseline at the designer's width", async () => {
     vi.useFakeTimers();
     widths.snapshots = 0;
@@ -157,6 +231,106 @@ describe("PilotSession", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(widths.snapshots).toBe(1);
     expect(s.jobs[0]?.baseline).toEqual({ width: 1024, elements: [] });
+  });
+
+  it("Make responsive again on an element whose task isn't finished: nothing new is sent", async () => {
+    vi.useFakeTimers();
+    widths.checks = [{ problems: 0 }];
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    const twin = el.cloneNode() as HTMLElement; // looks the same: its own task
+    document.body.append(twin);
+    const first = s.request(el, "responsive") as { id: string };
+    const jobs = () => posts.filter((p) => p.url === "http://hub/jobs").length;
+    expect(s.openTask(el, "responsive")?.id).toBe(first.id);
+    expect(s.request(el, "responsive")).toBeNull();
+    expect(jobs()).toBe(1);
+    expect(s.request(twin, "responsive")).not.toBeNull();
+    expect(jobs()).toBe(2);
+    // Still open while the agent works and while Pilot checks it…
+    hub().emit({ type: "job", job: job({ id: first.id, status: "working", agent }) });
+    expect(s.openTask(el, "responsive")).not.toBeNull();
+    hub().emit({ type: "job", job: job({ id: first.id, status: "done", agent }) });
+    expect(s.openTask(el, "responsive")).not.toBeNull();
+    // …finished once checked: another pass is fine.
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(s.openTask(el, "responsive")).toBeNull();
+    expect(s.request(el, "responsive")).not.toBeNull();
+    twin.remove();
+  });
+
+  it("after a reload, an open task is found again by its element's selector", () => {
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    s.request(el, "responsive");
+    s.destroy();
+    const reloaded = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    expect(reloaded.openTask(el, "responsive")).not.toBeNull();
+    expect(reloaded.request(el, "responsive")).toBeNull();
+  });
+
+  it("a comment goes to the agent at once, with its thread; the agent's notes come back as its reply", async () => {
+    vi.useFakeTimers();
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    const { thread, job: sent } = s.comment(el, "  Make it the brand green ");
+    expect(sent).not.toBeNull();
+    expect(s.threadFor(el)?.id).toBe(thread.id);
+    const posted = posts.at(-1)?.body as { changeSet: { request: { kind: string; thread: Array<{ text: string }> } } };
+    expect(posted.changeSet.request.kind).toBe("comment");
+    expect(posted.changeSet.request.thread.map((m) => m.text)).toEqual(["Make it the brand green"]);
+    expect(s.threadJob(thread)?.status).toBe("queued");
+    hub().emit({ type: "job", job: job({ id: (sent as { id: string }).id, status: "done", agent, notes: "Done: text-brand." }) });
+    await vi.advanceTimersByTimeAsync(0);
+    const replied = s.threadFor(el);
+    expect(replied?.messages.map((m) => [m.from, m.text])).toEqual([
+      ["designer", "Make it the brand green"],
+      ["agent", "Done: text-brand."],
+    ]);
+    // The reply goes in the next comment's thread.
+    s.comment(el, "A bit lighter");
+    const next = posts.at(-1)?.body as { changeSet: { request: { thread: Array<{ from: string; text: string }> } } };
+    expect(next.changeSet.request.thread.map((m) => m.from)).toEqual(["designer", "agent", "designer"]);
+    // Resolved: the thread goes.
+    s.resolve(thread.id);
+    expect(s.threadFor(el)).toBeNull();
+  });
+
+  it("a comment on an element a job is on waits, and goes with the thread once the job is finished", async () => {
+    vi.useFakeTimers();
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    history.apply(el, "padding-top", "20px");
+    const sent = s.send() as { id: string };
+    const before = posts.length;
+    const first = s.comment(el, "Make the icon match");
+    const second = s.comment(el, "And a bit bolder");
+    expect(first.waiting && second.waiting).toBe(true);
+    expect(first.job).toBeNull();
+    expect(posts.length).toBe(before); // nothing posted yet
+    expect(s.threadFor(el)?.messages.map((m) => m.waiting)).toEqual([true, true]);
+    // The job on the element finishes: both go, as one job with the thread.
+    sheet.textContent = ".card { padding-top: 20px; }";
+    hub().emit({ type: "job", job: job({ id: sent.id, status: "done", agent }) });
+    await vi.advanceTimersByTimeAsync(0);
+    const posted = posts.at(-1)?.body as { id: string; changeSet: { request: { kind: string; thread: Array<{ text: string }> } } };
+    expect(posted.changeSet.request.kind).toBe("comment");
+    expect(posted.changeSet.request.thread.map((m) => m.text)).toEqual(["Make the icon match", "And a bit bolder"]);
+    const messages = s.threadFor(el)?.messages ?? [];
+    expect(messages.every((m) => m.jobId === posted.id && !m.waiting)).toBe(true);
+    expect(s.jobOn(el)?.id).toBe(posted.id);
+  });
+
+  it("with no agent, a comment is kept and its prompt is there to copy; threads survive a reload", () => {
+    const s = session();
+    const { job: sent, changeSet } = s.comment(el, "Swap these two");
+    expect(sent).toBeNull();
+    expect(changeSet.request?.kind).toBe("comment");
+    expect(posts.some((p) => p.url === "http://hub/jobs")).toBe(false);
+    s.destroy();
+    const reloaded = session();
+    expect(reloaded.threadFor(el)?.messages.map((m) => m.text)).toEqual(["Swap these two"]);
   });
 
   it("the agent asks for a width check: the page that has the job answers it", async () => {

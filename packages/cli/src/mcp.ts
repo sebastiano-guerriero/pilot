@@ -36,7 +36,7 @@ export const INSTRUCTIONS = `Pilot lets the designer edit the running app in the
 The loop, when the user runs /pilot or asks to hand the design over:
 1. Call pilot_launch with the URL of the page the designer works on (the app's dev server, e.g. http://localhost:5173). Pilot opens in that page.
 2. Call pilot_wait_for_edits. It returns a job when the designer presses Send, or "no edits yet" after a while: then call it again. (In Claude Code a long wait moves to the background: the job arrives as its result.)
-3. Apply the job's edits to the source, in the project's conventions (see the job's guidelines). Edits are basic: every value is given, so be fast (no screenshots or browser checks: Pilot checks the page). A "make responsive" job is an advanced task: make one element work at every viewport width. Its prompt lists the steps; check the result with pilot_check_widths (numbers for every width, instead of screenshots). In Claude Code, hand advanced tasks to an Opus subagent unless you run on Opus.
+3. Apply the job's edits to the source, in the project's conventions (see the job's guidelines). Edits are basic: every value is given, so be fast (no screenshots or browser checks: Pilot checks the page). A "make responsive" job is an advanced task: make one element work at every viewport width. Its prompt lists the steps; check the result with pilot_check_widths (numbers for every width, instead of screenshots). In Claude Code, hand advanced tasks to an Opus subagent unless you run on Opus. A "comment" job is the designer's own words about one element: do what it asks (simple asks right away, open-ended ones as advanced tasks), and your pilot_done notes are your reply in their thread.
 4. Call pilot_done with the job id and short notes (values you approximated, anything you did differently). Then call pilot_wait_for_edits again.
 
 Keep looping until the user interrupts you. Pilot keeps previewing each job's changes until you call pilot_done, then checks them against the page's real CSS: changes that didn't land come back once as a follow-up job with what the page gives instead.`;
@@ -66,7 +66,7 @@ export function jobPrompt(job: Job): string {
         : formatPrompt(job.changeSet);
   return `${body}
 ---
-Pilot job \`${job.id}\`. When you've applied it, call \`pilot_done\` with \`jobId: "${job.id}"\` and short notes (${job.changeSet.request ? "what changed at which widths, which widths you checked in a browser, anything left for the designer" : "values you approximated, anything you did differently"}). Then call \`pilot_wait_for_edits\` again for the next job.
+Pilot job \`${job.id}\`. When you've applied it, call \`pilot_done\` with \`jobId: "${job.id}"\` and short notes (${notesFor(job)}). Then call \`pilot_wait_for_edits\` again for the next job.
 `;
 }
 
@@ -93,6 +93,18 @@ export function followUp(job: Job): string {
     "Fix them: the usual causes are a rule that overrides yours (more specific, later, or in a media query), an edit in the wrong file or component, or a missed change. If you chose a different value on purpose (a token or the nearest step in the project's scale), keep it and say so in your notes. Pilot takes what the code gives after this.",
   );
   return lines.join("\n");
+}
+
+/** What `pilot_done`'s notes should say, per kind of job. */
+function notesFor(job: Job): string {
+  switch (job.changeSet.request?.kind) {
+    case "comment":
+      return "your reply in the designer's comment thread: what you changed, or your answer, in a sentence or two";
+    case "responsive":
+      return "what changed at which widths, anything left for the designer";
+    default:
+      return "values you approximated, anything you did differently";
+  }
 }
 
 /**

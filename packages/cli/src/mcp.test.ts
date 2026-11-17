@@ -37,4 +37,11 @@ describe("jobPrompt", () => {
     expect(text).toContain("run `pilot_check_widths` to confirm");
     expect(text).toContain("# Pilot: make responsive\n");
   });
+
+  it("a comment's notes are the agent's reply in the thread", () => {
+    const comment = job({
+      changeSet: { ...job().changeSet, request: { kind: "comment", target, thread: [{ from: "designer", text: "Greener", at: "" }], breakpoints: [] } },
+    });
+    expect(jobPrompt(comment)).toContain("your reply in the designer's comment thread");
+  });
 });

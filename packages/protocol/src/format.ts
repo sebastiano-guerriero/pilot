@@ -1,5 +1,5 @@
 import type { WidthCheck } from "./bridge.ts";
-import type { ChangeSet, ElementEdit, ElementState, ElementTarget, ResponsiveRequest, StyleChange, WidthRange } from "./types.ts";
+import type { ChangeSet, CommentRequest, ElementEdit, ElementState, ElementTarget, ResponsiveRequest, StyleChange, WidthRange } from "./types.ts";
 
 /**
  * Turn a change set into instructions a coding agent can follow.
@@ -8,6 +8,7 @@ import type { ChangeSet, ElementEdit, ElementState, ElementTarget, ResponsiveReq
  */
 export function formatPrompt(changeSet: ChangeSet): string {
   if (changeSet.request?.kind === "responsive") return formatResponsive(changeSet, changeSet.request);
+  if (changeSet.request?.kind === "comment") return formatComment(changeSet, changeSet.request);
   const { page, edits, note } = changeSet;
   const lines: string[] = [
     "# Pilot design edits",
@@ -82,6 +83,60 @@ function formatResponsive(changeSet: ChangeSet, request: ResponsiveRequest): str
     "Change only this element and what its layout needs (its container, its children). If it's a shared component, ask before changing every instance.",
   );
   return `${lines.join("\n")}\n`;
+}
+
+/**
+ * A comment: the designer's words about one element, and the thread so far.
+ * Simple, specific asks are done right away; open-ended ones are advanced
+ * tasks (the stronger model). The agent's notes are its reply in the thread.
+ */
+function formatComment(changeSet: ChangeSet, request: CommentRequest): string {
+  const { page } = changeSet;
+  const { target, thread, breakpoints } = request;
+  const latest = thread.at(-1);
+  const earlier = thread.slice(0, -1);
+  const widths = breakpoints.length ? breakpoints.map((b) => `${b}px`).join(", ") : "none found (it may use container queries, or none yet)";
+  const lines = [
+    "# Pilot: comment",
+    "",
+    "A designer left a comment on the element below, in the browser with Pilot. Do what it asks in the source code (or, if it's a question, answer it).",
+    "",
+    `Page: ${page.url} (${page.title || "untitled"}), seen at ${page.viewport.width}x${page.viewport.height}`,
+    `The page's breakpoints (the widths its media queries test): ${widths}`,
+    "",
+    `## \`${target.path}\``,
+    "",
+    ...targetLines(target),
+    "",
+    "## The comment",
+    "",
+    quote(latest?.text ?? ""),
+  ];
+  if (earlier.length) {
+    lines.push("", "## The thread so far (you already did what it asked)", "");
+    for (const m of earlier) lines.push(`- **${m.from === "designer" ? "Designer" : "You"}:** ${m.text.replace(/\s*\n\s*/g, " ")}`);
+  }
+  lines.push(
+    "",
+    "## How to do it",
+    "",
+    "- **A specific, small ask** (a color, a size, a spacing, a text): make it right away, in the project's conventions (its tokens, utilities, components). Speed matters: no screenshots or builds.",
+    "- **An open-ended ask that needs design judgment** (make it calmer, rework this layout): it's an advanced task. If you can hand work to a more capable model and aren't running on one, do: in Claude Code, unless you already run on Opus, give this prompt (with the job id) to a subagent with `model: \"opus\"` (the Agent tool), and report back with its notes.",
+    `- The designer was looking at the page ${page.viewport.width}px wide. If the comment is about how it looks at that width only, scope the change with the project's breakpoints; otherwise it's for every width.`,
+    "- Change only what the comment is about. Never leave inline styles. If the element comes from a shared component, ask before changing every instance.",
+    "- **A question, not a change:** answer it, and change nothing.",
+    "- **Your notes are your reply in the designer's thread:** in a sentence or two, what you changed (or your answer), and anything you need from them.",
+  );
+  return `${lines.join("\n")}\n`;
+}
+
+/** Text as a Markdown quote, line by line. */
+function quote(text: string): string {
+  return text
+    .trim()
+    .split("\n")
+    .map((l) => `> ${l}`)
+    .join("\n");
 }
 
 /** How to find an element: selector, text, source hint. */

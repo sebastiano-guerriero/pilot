@@ -6,8 +6,8 @@ import { Toolbar } from "./Toolbar.tsx";
 
 let container: HTMLElement;
 const props = {
-  selecting: false,
-  onToggleSelect: () => {},
+  tool: null as "select" | "comment" | null,
+  onTool: () => {},
   mode: "send" as "send" | "copy",
   canSend: false,
   onSend: () => true,
@@ -35,6 +35,7 @@ describe("Toolbar", () => {
   it("select, Send, divider, quit; Send is disabled with nothing to send", () => {
     draw();
     expect([...container.querySelectorAll(".toolbar .button, .toolbar .divider")].map((e) => e.className)).toEqual([
+      "button",
       "button",
       "button send",
       "divider",

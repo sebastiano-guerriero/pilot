@@ -117,7 +117,28 @@ export interface ResponsiveRequest {
   breakpoints: number[];
 }
 
-export type AgentRequest = ResponsiveRequest;
+/** One message of a comment thread: the designer's, or the agent's reply (its `pilot_done` notes). */
+export interface CommentMessage {
+  from: "designer" | "agent";
+  text: string;
+  /** ISO timestamp. */
+  at: string;
+}
+
+/**
+ * A comment on one element (the toolbar's Comment tool): free text, sent
+ * right away. The thread's last message is the designer's, what to do now;
+ * the ones before it are the conversation so far.
+ */
+export interface CommentRequest {
+  kind: "comment";
+  target: ElementTarget;
+  thread: CommentMessage[];
+  /** The page's breakpoints, as for ResponsiveRequest: the comment may be about one width. */
+  breakpoints: number[];
+}
+
+export type AgentRequest = ResponsiveRequest | CommentRequest;
 
 export interface ChangeSet {
   id: string;

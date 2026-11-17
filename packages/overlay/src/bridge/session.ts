@@ -1,7 +1,8 @@
-import type { AgentInfo, AgentRequest, ChangeResult, ChangeSet, Job, JobStatus, WidthCheck } from "@pilot/protocol";
+import type { AgentInfo, AgentRequest, ChangeResult, ChangeSet, CommentMessage, ElementTarget, Job, JobStatus, WidthCheck } from "@pilot/protocol";
 import { checkWidths, problemLines, snapshotAt, type StyleSnapshot, widthsToCheck } from "../checks/widths.ts";
+import { describeElement } from "../dom/target.ts";
 import { buildChangeSet, buildRequest } from "../edits/changeSet.ts";
-import type { EditHistory } from "../edits/history.ts";
+import type { EditHistory, RecordedChange } from "../edits/history.ts";
 import { watchJob } from "../edits/verify.ts";
 import { BridgeClient, type BridgeState } from "./client.ts";
 
@@ -43,7 +44,29 @@ export interface JobRecord {
   check?: WidthCheck;
 }
 
+/**
+ * A comment thread on one element (the toolbar's Comment tool): the
+ * designer's messages, each sent to the agent as a job carrying the thread
+ * so far, and the agent's replies (its `pilot_done` notes). It stays (with
+ * its pin) until the designer resolves it.
+ */
+export interface CommentThread {
+  id: string;
+  /** How to find the element again (after a reload, by its selector). */
+  target: ElementTarget;
+  messages: ThreadMessage[];
+}
+
+/**
+ * A message as the thread keeps it: the designer's with the job it went in
+ * (or `waiting`, written while a job was on the element: it goes once that's
+ * finished, see PilotSession.comment), the agent's with the job it answers.
+ */
+export type ThreadMessage = CommentMessage & { jobId?: string; replyTo?: string; waiting?: boolean };
+
 const STORAGE_KEY = "pilot:jobs";
+const THREADS_KEY = "pilot:comments";
+const HELD_KEY = "pilot:held";
 /** How long a job whose changes all landed stays in the list. */
 const APPLIED_LINGER = 8_000;
 /** How long after a task is done Pilot checks it: hot reload's time. */
@@ -63,9 +86,24 @@ export interface SessionOptions {
 
 export class PilotSession {
   jobs: JobRecord[] = [];
+  threads: CommentThread[] = loadThreads();
   readonly bridge: BridgeClient | null;
   private listeners = new Set<() => void>();
   private watching = new Map<string, () => void>();
+  /**
+   * The elements each job of this page load is on: a task's or a comment's
+   * element, the elements an edits job changes (after a reload, found again
+   * by their selectors).
+   */
+  private jobElements = new Map<string, Element[]>();
+  /**
+   * Elements whose changes the designer sent while a job was still on them:
+   * they wait, and go as a job of their own once it's finished (see send).
+   * Saved by selector, like the jobs.
+   */
+  private held = new Set<Element>(loadHeld());
+  /** The element each comment thread is on, the same way. */
+  private threadElements = new Map<string, Element>();
   private timers = new Set<ReturnType<typeof setTimeout>>();
 
   constructor(
@@ -82,7 +120,11 @@ export class PilotSession {
           onCheck: (requestId, jobId) => void this.answerCheck(requestId, jobId),
         })
       : null;
-    this.bridge?.subscribe(() => this.notify());
+    // An agent arrived: changes held for want of one can go.
+    this.bridge?.subscribe(() => {
+      this.release();
+      this.notify();
+    });
     for (const job of [...this.jobs]) {
       // Finished before the reload: nothing left to show.
       if (job.checked || job.status === "cancelled") this.dismiss(job.id);
@@ -120,18 +162,98 @@ export class PilotSession {
     return this.history.changes({ unsent: true }).length;
   }
 
+  /** Unsent changes on elements that wait for a job to finish (sent while it was on them, see send). */
+  get heldCount(): number {
+    return this.history.changes({ unsent: true }).filter((c) => this.held.has(c.element)).length;
+  }
+
   /**
-   * Send: the changes not sent yet become a job for the agent. Null when
-   * there's nothing to send or no agent works on this page. A job the hub
-   * can't take right now (it just went away) is kept, and posted again on
-   * the next connect.
+   * Send: the changes not sent yet become a job for the agent. Changes on
+   * an element a job is still on (see jobOn) wait instead: they go as a job
+   * of their own once it's finished, so two jobs never work on one element
+   * at once (two agents, or the agent's edit and the designer's next one
+   * crossing). Null when nothing went now (nothing to send, all of it
+   * waits, or no agent works on this page). A job the hub can't take right
+   * now (it just went away) is kept, and posted again on the next connect.
    */
   send(): JobRecord | null {
-    if (!this.canSendToAgent || !this.unsent) return null;
+    if (!this.canSendToAgent) return null;
+    const unsent = this.history.changes({ unsent: true });
+    for (const change of unsent) if (this.jobOn(change.element)) this.held.add(change.element);
+    this.saveHeld();
+    return this.sendChanges((change) => !this.held.has(change.element));
+  }
+
+  /** The unsent changes `only` picks, as a job. Null when it picks none. */
+  private sendChanges(only: (change: RecordedChange) => boolean): JobRecord | null {
+    const changes = this.history.changes({ unsent: true }).filter(only);
+    if (!changes.length) return null;
     const id = newJobId();
-    const changeSet = buildChangeSet(this.history, { unsent: true, id });
-    this.history.send(id);
+    const changeSet = buildChangeSet(this.history, { unsent: true, id, only });
+    this.history.send(id, only);
+    this.jobElements.set(id, [...new Set(changes.map((c) => c.element))]);
     return this.post(id, changeSet);
+  }
+
+  /**
+   * What waited for an element that's free now goes (with an agent to take
+   * it): its held changes as a job of their own, its waiting comments as
+   * their thread's next job.
+   */
+  private release(): void {
+    if (!this.canSendToAgent) return;
+    for (const thread of this.threads) {
+      if (!thread.messages.some((m) => m.waiting)) continue;
+      const element = this.threadElement(thread);
+      if (element && !this.jobOn(element)) this.postComment(thread.id, element);
+    }
+    if (!this.held.size) return;
+    const free = [...this.held].filter((element) => !this.jobOn(element));
+    if (!free.length) return;
+    for (const element of free) this.held.delete(element);
+    this.saveHeld();
+    this.sendChanges((change) => free.includes(change.element));
+  }
+
+  /**
+   * A job taken back: what waited for it on its elements doesn't go by
+   * itself (it would take the job's own changes along, unsent again); it's
+   * all for the designer's next Send.
+   */
+  private unhold(job: JobRecord): void {
+    for (const element of this.elementsOf(job)) this.held.delete(element);
+    this.saveHeld();
+  }
+
+  /**
+   * The job that isn't finished yet (waiting, an agent on it, being
+   * checked, or its follow-up) on `element`, if any: a task about it, a
+   * comment on it, or an edits job that changes it. While there's one, the
+   * selection's actions give way to its status, and changes sent for the
+   * element wait for it (see send).
+   */
+  jobOn(element: Element): JobRecord | null {
+    return this.jobs.find((job) => unfinished(job) && this.elementsOf(job).includes(element)) ?? null;
+  }
+
+  /** The elements unfinished jobs are on, each with the job (the earliest, when several are). */
+  get busy(): Array<{ element: Element; job: JobRecord }> {
+    const found = new Map<Element, JobRecord>();
+    for (const job of this.jobs) {
+      if (!unfinished(job)) continue;
+      for (const element of this.elementsOf(job)) if (!found.has(element)) found.set(element, job);
+    }
+    return [...found].map(([element, job]) => ({ element, job }));
+  }
+
+  /** The elements a job is on (see jobElements), on the page. */
+  private elementsOf(job: JobRecord): Element[] {
+    const known = this.jobElements.get(job.id)?.filter((e) => e.isConnected);
+    if (known?.length) return known;
+    const selectors = job.changeSet.request ? [job.changeSet.request.target.selector] : job.changeSet.edits.map((e) => e.target.selector);
+    const found = selectors.map(find).filter((e): e is Element => !!e);
+    if (found.length) this.jobElements.set(job.id, found);
+    return found;
   }
 
   /**
@@ -141,8 +263,9 @@ export class PilotSession {
    * check (no designer values): it's accepted on the agent's word.
    */
   request(element: Element, kind: AgentRequest["kind"]): JobRecord | null {
-    if (!this.canSendToAgent) return null;
+    if (!this.canSendToAgent || this.jobOn(element)) return null;
     const id = newJobId();
+    this.jobElements.set(id, [element]);
     const job = this.post(id, buildRequest(element, kind, { id }));
     // The element at the designer's width as the code has it now (no
     // previews), while the agent starts: to tell what it changed there.
@@ -153,6 +276,122 @@ export class PilotSession {
       });
     }
     return job;
+  }
+
+  // Comments
+
+  /** The thread on `element`, if any (the element itself; after a reload, by its selector). */
+  threadFor(element: Element): CommentThread | null {
+    return this.threads.find((t) => this.threadElement(t) === element) ?? null;
+  }
+
+  /** The element a thread is on, when it's on the page. */
+  threadElement(thread: CommentThread): Element | null {
+    const known = this.threadElements.get(thread.id);
+    if (known?.isConnected) return known;
+    const found = find(thread.target.selector);
+    if (found) this.threadElements.set(thread.id, found);
+    return found;
+  }
+
+  /**
+   * A comment on `element`: added to its thread (a new one for the first),
+   * and sent to the agent at once, as a job carrying the thread so far.
+   * While a job is on the element (see jobOn), it waits instead (`waiting`,
+   * on the message) and goes once that's finished, as edits do (see send):
+   * the agent couldn't read it mid-job anyway, and a second agent can't
+   * take it and edit the same code meanwhile. `job` is null when it waits,
+   * or when no agent works on this page: the comment is kept, and
+   * `changeSet` is its prompt's, to copy.
+   */
+  comment(element: Element, text: string): { thread: CommentThread; job: JobRecord | null; changeSet: ChangeSet; waiting: boolean } {
+    let thread = this.threadFor(element);
+    if (!thread) {
+      thread = { id: `thread_${newJobId().slice(4)}`, target: describeElement(element), messages: [] };
+      this.threads = [...this.threads, thread];
+      this.threadElements.set(thread.id, element);
+    }
+    const message: ThreadMessage = { from: "designer", text: text.trim(), at: new Date().toISOString() };
+    const waiting = this.canSendToAgent && !!this.jobOn(element);
+    if (waiting) message.waiting = true;
+    const messages = [...thread.messages, message];
+    this.patchThread(thread.id, { messages });
+    const { job, changeSet } = waiting ? { job: null, changeSet: this.commentSet(element, messages) } : this.postComment(thread.id, element);
+    return { thread: this.threads.find((t) => t.id === thread.id) as CommentThread, job, changeSet, waiting };
+  }
+
+  /** A comment job's change set: the thread so far, as the agent reads it. */
+  private commentSet(element: Element, messages: ThreadMessage[], id?: string): ChangeSet {
+    return buildRequest(element, "comment", { id, thread: messages.map(({ from, text, at }) => ({ from, text, at })) });
+  }
+
+  /**
+   * The thread's comments not sent yet (the latest, and any that waited)
+   * go to the agent as one job carrying the whole thread. With no agent,
+   * nothing is posted: `changeSet` is the prompt to copy.
+   */
+  private postComment(threadId: string, element: Element): { job: JobRecord | null; changeSet: ChangeSet } {
+    const thread = this.threads.find((t) => t.id === threadId) as CommentThread;
+    const id = newJobId();
+    const changeSet = this.commentSet(element, thread.messages, id);
+    if (!this.canSendToAgent) return { job: null, changeSet };
+    this.jobElements.set(id, [element]);
+    const job = this.post(id, changeSet);
+    const messages = thread.messages.map((m) => (m.from === "designer" && (m.waiting || !m.jobId) ? { ...m, jobId: id, waiting: undefined } : m));
+    this.patchThread(threadId, { messages });
+    return { job, changeSet };
+  }
+
+  /** Where a thread's latest comment stands: its job, while Pilot still lists it. */
+  threadJob(thread: CommentThread): JobRecord | null {
+    const latest = [...thread.messages].reverse().find((m) => m.from === "designer");
+    return (latest?.jobId && this.jobs.find((j) => j.id === latest.jobId)) || null;
+  }
+
+  /** The designer is done with a thread: it goes, with its pin. */
+  resolve(threadId: string): void {
+    this.threads = this.threads.filter((t) => t.id !== threadId);
+    this.threadElements.delete(threadId);
+    this.saveThreads();
+  }
+
+  /** A comment's job is done: the agent's notes are its reply in the thread (once). */
+  private reply(job: JobRecord): void {
+    const thread = this.threads.find((t) => t.messages.some((m) => m.jobId === job.id));
+    if (!thread || thread.messages.some((m) => m.replyTo === job.id)) return;
+    const reply: ThreadMessage = { from: "agent", text: job.notes?.trim() || "Done.", at: new Date().toISOString(), replyTo: job.id };
+    this.patchThread(thread.id, { messages: [...thread.messages, reply] });
+  }
+
+  private patchThread(threadId: string, patch: Partial<CommentThread>): void {
+    this.threads = this.threads.map((t) => (t.id === threadId ? { ...t, ...patch } : t));
+    this.saveThreads();
+  }
+
+  private saveThreads(): void {
+    try {
+      sessionStorage.setItem(THREADS_KEY, JSON.stringify(this.threads));
+    } catch {
+      // Not saved; the threads still work for this page load.
+    }
+    this.notify();
+  }
+
+  /**
+   * The task of `kind` about `element` that isn't finished yet (waiting, an
+   * agent working, being checked, or its follow-up), if any: asking again
+   * then would only make the agent do it twice (and two agents could edit
+   * the same component at once). The element itself, not its selector, so
+   * two cards that look alike each get their own. Once it's finished, a
+   * new one is fine: another pass after the designer changed things.
+   */
+  openTask(element: Element, kind: AgentRequest["kind"]): JobRecord | null {
+    for (const job of this.jobs) {
+      const request = job.changeSet.request;
+      if (request?.kind !== kind || !unfinished(job)) continue;
+      if (this.elementsOf(job).includes(element)) return job;
+    }
+    return null;
   }
 
   private post(id: string, changeSet: ChangeSet): JobRecord {
@@ -168,6 +407,7 @@ export class PilotSession {
     const job = this.jobs.find((j) => j.id === jobId);
     if (!job || job.status === "done" || job.status === "cancelled") return;
     void this.bridge?.cancel(jobId);
+    this.unhold(job);
     this.history.unsend(jobId);
     this.patch(jobId, { status: "cancelled" });
     this.dismiss(jobId);
@@ -180,8 +420,10 @@ export class PilotSession {
     this.watching.get(jobId)?.();
     this.watching.delete(jobId);
     this.history.unsend(jobId);
+    this.jobElements.delete(jobId);
     this.jobs = this.jobs.filter((j) => j.id !== jobId);
     this.save();
+    this.release();
   }
 
   /** A job update from the hub. Jobs of other tabs on the same page are ignored. */
@@ -193,7 +435,10 @@ export class PilotSession {
     if (mine.status === "done" && job.status !== "done" && (job.attempt ?? 1) === (mine.attempt ?? 1)) return;
     const becameDone = job.status === "done" && mine.status !== "done";
     this.patch(job.id, { status: job.status, agent: job.agent, notes: job.notes });
-    if (job.status === "cancelled") this.history.unsend(job.id);
+    if (job.status === "cancelled") {
+      this.unhold(mine);
+      this.history.unsend(job.id);
+    }
     if (becameDone) this.verify(this.jobs.find((j) => j.id === job.id) as JobRecord);
   }
 
@@ -240,6 +485,11 @@ export class PilotSession {
    */
   private verify(job: JobRecord): void {
     if (this.watching.has(job.id)) return;
+    // A comment: nothing to check (free text). Its notes are the agent's reply.
+    if (job.changeSet.request?.kind === "comment") {
+      this.reply(job);
+      return this.accept(job.id);
+    }
     if (job.changeSet.request) return this.verifyTask(job);
     const stop = watchJob(this.history, job.id, (results) => {
       this.watching.delete(job.id);
@@ -277,6 +527,8 @@ export class PilotSession {
   private accept(jobId: string): void {
     this.history.settle(jobId);
     this.patch(jobId, { checked: true });
+    // The element is free: what waited for it goes.
+    this.release();
     const t = setTimeout(() => {
       this.timers.delete(t);
       this.dismiss(jobId);
@@ -301,6 +553,16 @@ export class PilotSession {
     this.save();
   }
 
+  private saveHeld(): void {
+    try {
+      const selectors = [...this.held].map((element) => describeElement(element).selector);
+      if (selectors.length) sessionStorage.setItem(HELD_KEY, JSON.stringify(selectors));
+      else sessionStorage.removeItem(HELD_KEY);
+    } catch {
+      // Not saved: they still wait, for this page load.
+    }
+  }
+
   private save(): void {
     try {
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(this.jobs));
@@ -315,8 +577,41 @@ export class PilotSession {
   }
 }
 
+/** Not finished yet: waiting, an agent on it, being checked, or its follow-up. */
+function unfinished(job: JobRecord): boolean {
+  return job.status !== "cancelled" && !job.checked;
+}
+
+/** The elements held before a reload (see PilotSession.held), found again by selector. */
+function loadHeld(): Element[] {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(HELD_KEY) ?? "[]") as unknown;
+    return Array.isArray(saved) ? saved.flatMap((s) => (typeof s === "string" ? (find(s) ?? []) : [])) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** The element a selector matches, or null (none, or not a valid selector). */
+function find(selector: string): Element | null {
+  try {
+    return document.querySelector(selector);
+  } catch {
+    return null;
+  }
+}
+
 function newJobId(): string {
   return `job_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function loadThreads(): CommentThread[] {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(THREADS_KEY) ?? "[]") as CommentThread[];
+    return Array.isArray(saved) ? saved.filter((t) => t?.id && t.target?.selector && Array.isArray(t.messages)) : [];
+  } catch {
+    return [];
+  }
 }
 
 function load(): JobRecord[] {

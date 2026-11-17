@@ -121,4 +121,23 @@ describe("formatPrompt", () => {
     // No breakpoints in the page's CSS.
     expect(formatPrompt({ ...changeSet, edits: [], request: { kind: "responsive", target, breakpoints: [] } })).toContain("media queries test): none found");
   });
+
+  it("a comment: the designer's words, the thread so far, and what to do with them", () => {
+    const target = changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"];
+    const thread = [
+      { from: "designer" as const, text: "Make it the brand green", at: "" },
+      { from: "agent" as const, text: "Done: text-brand.", at: "" },
+      { from: "designer" as const, text: "A bit lighter\nlike the hover", at: "" },
+    ];
+    const text = formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, thread, breakpoints: [768] } });
+    expect(text).toContain("# Pilot: comment");
+    expect(text).toContain("## The comment\n\n> A bit lighter\n> like the hover");
+    expect(text).toContain("- **Designer:** Make it the brand green");
+    expect(text).toContain("- **You:** Done: text-brand.");
+    expect(text).toContain("seen at 1440x900");
+    expect(text).toContain("Your notes are your reply in the designer's thread");
+    // The first comment has no thread before it.
+    const first = formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, thread: thread.slice(0, 1), breakpoints: [] } });
+    expect(first).not.toContain("The thread so far");
+  });
 });

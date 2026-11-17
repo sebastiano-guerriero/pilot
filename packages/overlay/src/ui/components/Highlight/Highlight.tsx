@@ -4,7 +4,7 @@ import { px } from "../../px.ts";
 interface HighlightProps {
   element: Element;
   rect: DOMRect;
-  variant: "hover" | "selected";
+  variant: "hover" | "selected" | "busy";
   /**
    * Show the name and size label. The hover highlight has one; the selection
    * doesn't (App passes false): its corner is kept for the selection's actions.
@@ -19,7 +19,8 @@ const CORNERS = ["top-left", "top-right", "bottom-left", "bottom-right"] as cons
 
 /**
  * Outline + label drawn over an element; the selected one also gets a round
- * handle on each corner. The label (name and size) sits above the top-left
+ * handle on each corner; `busy` is an element a job is on that isn't
+ * selected (the outline alone; its loader is SelectionActions'). The label (name and size) sits above the top-left
  * corner. Purely visual: never receives events.
  */
 export function Highlight({ element, rect, variant, label = true, nameAttributes }: HighlightProps) {

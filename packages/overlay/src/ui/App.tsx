@@ -13,12 +13,15 @@ import { BoxAreas } from "./components/BoxAreas/BoxAreas.tsx";
 import { GridOverlay } from "./components/GridOverlay/GridOverlay.tsx";
 import { Highlight } from "./components/Highlight/Highlight.tsx";
 import { PropertyDialog, type WidthPick } from "./components/PropertyDialog/PropertyDialog.tsx";
-import type { PilotSession } from "../bridge/session.ts";
-import { JobList } from "./components/JobList/JobList.tsx";
+import type { JobRecord, PilotSession } from "../bridge/session.ts";
+import { JobList, statusText, whatText } from "./components/JobList/JobList.tsx";
 import { DomTree } from "./components/DomTree/DomTree.tsx";
-import { SelectionActions } from "./components/SelectionActions/SelectionActions.tsx";
-import { Toolbar } from "./components/Toolbar/Toolbar.tsx";
+import { type RequestOutcome, SelectionActions } from "./components/SelectionActions/SelectionActions.tsx";
+import { CommentPins, type Pin } from "./components/CommentPins/CommentPins.tsx";
+import { type CommentOutcome, CommentWidget } from "./components/CommentWidget/CommentWidget.tsx";
+import { type Tool, Toolbar } from "./components/Toolbar/Toolbar.tsx";
 import { ViewportWidth } from "./components/ViewportWidth/ViewportWidth.tsx";
+import { loadSpot, saveSpot, type ToolbarSpot } from "./toolbarSpot.ts";
 import { useViewportWidth } from "./useViewportWidth.ts";
 
 interface AppProps {
@@ -48,7 +51,11 @@ interface AppProps {
  * - Cursor off: the page behaves normally again and the selection is cleared.
  */
 export function App({ host, dev, nameAttributes, history, session, onReattach, onQuit }: AppProps) {
-  const [selecting, setSelecting] = useState(!!dev);
+  // The tool that picks elements: Select (the property dialog) or Comment
+  // (the comment widget, and the comment pins); null: the page as it is.
+  const [tool, setTool] = useState<Tool>(dev ? "select" : null);
+  const selecting = tool !== null;
+  const commenting = tool === "comment";
   // `from: "dom"`: picked in the DOM tree, which keeps focus (the dialog doesn't take it).
   const [selected, setSelected] = useState<{ element: EditableElement; key: number; from?: "dom" } | null>(() => {
     if (!dev) return null;
@@ -99,11 +106,32 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!e.altKey || e.metaKey || e.ctrlKey || e.code !== "KeyD") return;
+      // Typing a comment: Alt+D types a character there.
+      if (e.composedPath()[0] instanceof HTMLTextAreaElement) return;
       // Not while typing in the page's own fields (Pilot's are fine: Alt+D types nothing there).
       if (!e.composedPath().includes(host) && isTextField(document.activeElement)) return;
       e.preventDefault();
       e.stopPropagation();
       setDomOpen((open) => !open);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [host]);
+
+  // Option+C and Option+V turn on Comment and Select (or off, when on), as
+  // their toolbar buttons do; the selection stays. Alt with a key, like
+  // Option+P and Alt+D, so plain keys stay the page's. Not while typing
+  // (a comment, or the page's own fields).
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      const next = toolShortcut(e.code);
+      if (!next) return;
+      if (e.composedPath()[0] instanceof HTMLTextAreaElement) return;
+      if (!e.composedPath().includes(host) && isTextField(document.activeElement)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      onToolRef.current(next);
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
@@ -128,12 +156,39 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // With an agent on this page, the button sends the changes not sent yet;
   // without one, it copies the prompt (everything in effect).
   const sendToAgent = !!session?.canSendToAgent;
+  // Send: what went, and what waits for a job still on its element (it goes once that's finished).
+  const sendChanges = (): boolean | string => {
+    if (!session) return false;
+    const job = session.send();
+    const held = session.heldCount > 0;
+    if (job) return held ? "Sent; some wait for the agent" : true;
+    return held ? "Sends when the agent is done" : false;
+  };
+  // The job on the selected element, if one isn't finished: its actions give way to where it stands.
+  const selectedJob = selected && session ? session.jobOn(selected.element) : null;
+  const busyText = selectedJob ? jobText(selectedJob) : undefined;
+  const busy = session?.busy.filter((b) => b.element !== selected?.element) ?? [];
   // Make responsive: a job of its own for the agent working on this page,
   // or, with none, its prompt on the clipboard (the same text either way).
-  const makeResponsive = (element: Element) =>
-    sendToAgent ? !!session?.request(element, "responsive") : copyText(formatPrompt(buildRequest(element, "responsive")));
+  // Asked again while that element's job isn't finished: nothing new is
+  // sent, and the job list opens on it.
+  const makeResponsive = async (element: Element): Promise<RequestOutcome> => {
+    if (!sendToAgent) return (await copyText(formatPrompt(buildRequest(element, "responsive")))) ? "copied" : false;
+    if (session?.openTask(element, "responsive")) {
+      setJobsOpen(true);
+      return "open";
+    }
+    return session?.request(element, "responsive") ? "sent" : false;
+  };
   // Jobs not finished yet: waiting, an agent applying, checking the page.
   const pending = (session?.jobs ?? []).filter((j) => j.status === "queued" || j.status === "working" || (j.status === "done" && !j.checked)).length;
+  // Where the designer dragged the toolbar (null: centered at the bottom),
+  // kept through reloads; the job list goes with it.
+  const [toolbarSpot, setToolbarSpot] = useState<ToolbarSpot | null>(loadSpot);
+  const moveToolbar = (spot: ToolbarSpot) => {
+    setToolbarSpot(spot);
+    saveSpot(spot);
+  };
   // The job list opens from the toolbar's jobs button, and closes when there's nothing left in progress.
   const [jobsOpen, setJobsOpen] = useState(false);
   useEffect(() => {
@@ -147,6 +202,8 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     const onKeyDown = (e: KeyboardEvent) => {
       const action = historyShortcut(e);
       if (!action) return;
+      // Typing a comment: the field's own undo.
+      if (e.composedPath()[0] instanceof HTMLTextAreaElement) return;
       if (!e.composedPath().includes(host) && isTextField(document.activeElement)) return;
       if (action === "undo" ? history.undo() : history.redo()) {
         e.preventDefault();
@@ -189,23 +246,88 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
         dismiss();
       } else {
         e.preventDefault();
-        setSelecting(false);
+        setTool(null);
       }
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [selected, selecting, host]);
 
-  const toggleSelect = () => {
-    if (selecting) setSelected(null);
-    setSelecting(!selecting);
+  // A tool's button: on (switching from the other one keeps the selection:
+  // the same element, edited or commented), or off when it was on.
+  const onTool = (next: Exclude<Tool, null>) => {
+    if (tool === next) {
+      setSelected(null);
+      setTool(null);
+    } else setTool(next);
   };
+  const onToolRef = useRef(onTool);
+  onToolRef.current = onTool;
+
+  // Comments: the selected element's thread, where its latest comment
+  // stands, and sending one (to the agent at once; with none, copied).
+  const thread = selected && session ? session.threadFor(selected.element) : null;
+  const threadJob = thread && session ? session.threadJob(thread) : null;
+  // Comments written while a job was on the element wait for it (see PilotSession.comment).
+  const threadWaits = !!thread?.messages.some((m) => m.waiting);
+  const threadStatus = threadWaits ? "Sends when the agent is done" : threadJob ? threadJobStatus(threadJob) : undefined;
+  const sendComment = async (element: Element, text: string): Promise<CommentOutcome> => {
+    if (!session) return false;
+    const { job, changeSet, waiting } = session.comment(element, text);
+    if (job || waiting) return "sent";
+    return (await copyText(formatPrompt(changeSet))) ? "copied" : false;
+  };
+  const pins: Pin[] =
+    commenting && session
+      ? session.threads.flatMap((t) => {
+          const element = session.threadElement(t);
+          return element ? [{ id: t.id, element, status: session.threadJob(t)?.status, selected: element === selected?.element }] : [];
+        })
+      : [];
 
   const hideSelection = !!inspect?.some(hidesSelection);
 
   return (
     <>
-      {selected && selectedRect && (
+      {/* Elements a job is on (other than the selection, which shows it
+          itself): their outline and their loader, until it's finished. */}
+      {busy.map(({ element, job }) => (
+        <BusyOutline key={job.id + elementKey(element)} element={element} status={jobText(job)} />
+      ))}
+      {/* The Comment tool: pins on the elements with a thread; the selected
+          one gets its thread in the comment widget. */}
+      <CommentPins
+        pins={pins}
+        onOpen={(element) => {
+          if (isEditable(element)) setSelected((prev) => (prev?.element === element ? prev : { element, key: (prev?.key ?? 0) + 1 }));
+        }}
+      />
+      {selected && selectedRect && commenting && (
+        <>
+          <Highlight element={selected.element} rect={selectedRect} variant="selected" label={false} />
+          <CommentWidget
+            key={selected.key}
+            element={selected.element}
+            anchor={selectedRect}
+            thread={thread}
+            status={threadStatus}
+            agentName={threadJob?.agent?.label ?? session?.state.agents[0]?.label}
+            onSend={(text) => sendComment(selected.element, text)}
+            onResolve={thread ? () => session?.resolve(thread.id) : undefined}
+            onClose={dismiss}
+            autoFocus={selected.from !== "dom"}
+          />
+          <SelectionActions
+            rect={selectedRect}
+            domOpen={domOpen}
+            onShowInDom={() => setDomOpen((open) => !open)}
+            responsiveMode={sendToAgent ? "send" : "copy"}
+            onMakeResponsive={() => makeResponsive(selected.element)}
+            busy={busyText}
+          />
+        </>
+      )}
+      {selected && selectedRect && !commenting && (
         <>
           {/* Grid containers also show their grid lines, under the selection
               highlight and the gap stripes; their numbers go on top (below).
@@ -255,6 +377,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
               onShowInDom={() => setDomOpen((open) => !open)}
               responsiveMode={sendToAgent ? "send" : "copy"}
               onMakeResponsive={() => makeResponsive(selected.element)}
+              busy={busyText}
             />
           )}
         </>
@@ -287,20 +410,62 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
           selected ? setWidthPick({ width, shift }) : setWidths((current) => clickWidth(current, width, shift))
         }
       />
-      {session && jobsOpen && session.jobs.length > 0 && <JobList jobs={session.jobs} onCancel={(id) => session.cancel(id)} />}
+      {session && jobsOpen && session.jobs.length > 0 && (
+        <JobList jobs={session.jobs} onCancel={(id) => session.cancel(id)} toolbar={toolbarSpot} />
+      )}
       <Toolbar
-        selecting={selecting}
-        onToggleSelect={toggleSelect}
+        tool={tool}
+        onTool={onTool}
         mode={sendToAgent ? "send" : "copy"}
-        canSend={sendToAgent ? (session?.unsent ?? 0) > 0 : hasChanges}
-        onSend={sendToAgent ? () => !!session?.send() : copyPrompt}
+        canSend={sendToAgent ? (session?.unsent ?? 0) > (session?.heldCount ?? 0) : hasChanges}
+        onSend={sendToAgent ? sendChanges : copyPrompt}
         pending={pending}
         jobsOpen={jobsOpen}
         onToggleJobs={() => setJobsOpen((open) => !open)}
         onQuit={onQuit}
+        spot={toolbarSpot}
+        onMove={moveToolbar}
       />
     </>
   );
+}
+
+/** A job and where it stands, in words ("Make responsive: Claude Code is working"). */
+function jobText(job: JobRecord): string {
+  return `${whatText(job)}: ${statusText(job)}`;
+}
+
+/** Where a thread's latest comment stands, while it's with the agent. */
+function threadJobStatus(job: JobRecord): string | undefined {
+  if (job.status === "queued") return "Waiting for an agent";
+  if (job.status === "working") return `${job.agent?.label ?? "The agent"} is working on it`;
+  return undefined;
+}
+
+/** The tool an Option+key shortcut turns on: C for Comment, V for Select (`code`, as Option changes the character). */
+export function toolShortcut(code: string): Exclude<Tool, null> | null {
+  return code === "KeyC" ? "comment" : code === "KeyV" ? "select" : null;
+}
+
+/** An element a job is on, not selected: its outline, and its loader on the top-right corner (where the job stands in the tooltip). */
+function BusyOutline({ element, status }: { element: Element; status: string }) {
+  const rect = useElementRect(element);
+  if (!rect) return null;
+  return (
+    <>
+      <Highlight element={element} rect={rect} variant="busy" label={false} />
+      <SelectionActions rect={rect} busy={status} />
+    </>
+  );
+}
+
+/** A key per element, for lists of them (the same element keeps its key). */
+const keys = new WeakMap<Element, number>();
+let nextKey = 0;
+function elementKey(element: Element): number {
+  let key = keys.get(element);
+  if (key === undefined) keys.set(element, (key = nextKey++));
+  return key;
 }
 
 function isTextField(el: Element | null): boolean {
