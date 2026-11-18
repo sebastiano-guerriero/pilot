@@ -2,7 +2,7 @@
 /**
  * `pilot` CLI entry. `mcp` runs the MCP server and the bridge; the other
  * commands are placeholders until each piece is built (see the Roadmap in
- * the repo README).
+ * docs/roadmap.md).
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createPilotServer } from "./mcp.ts";

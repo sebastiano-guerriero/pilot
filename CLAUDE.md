@@ -1,14 +1,17 @@
 # Pilot: notes for agents working on this repo
 
-Read [README.md](README.md) first. It holds the product vision, architecture and roadmap.
+Read [docs/README.md](docs/README.md) first: the map of the docs and how to write them. Then read the doc for the area you're changing ([docs/product.md](docs/product.md) for what Pilot is). The root [README.md](README.md) is for people who want to use Pilot: what it is and how to install it. Keep it short, and don't put implementation details there.
 
-## Keep the README current
+## Keep the docs current
 
-The README is the project's living spec. Update it in the same change whenever you:
-- add, remove or rename a package, script or command,
-- complete a roadmap item (tick it) or add new planned work,
-- change a design decision (handoff flow, change-set shape, editor contract),
-- resolve an open question (move the answer into the relevant section).
+The docs in `docs/` are the project's living spec, and the memory between sessions. Update the doc for the area in the same change whenever you:
+- add or change a behavior, or make a design decision (write down why, and alternatives that were rejected),
+- add, remove or rename a package, script or command ([docs/development.md](docs/development.md)),
+- ship a roadmap item (tick it, one line) or add new planned work ([docs/roadmap.md](docs/roadmap.md)),
+- resolve an open question (move the answer into the area's doc),
+- change how Pilot is installed or set up: the root [README.md](README.md) and [packages/usepilot/README.md](packages/usepilot/README.md) (npm's page), both.
+
+Write behavior and reasons, not what the code already holds (sizes, colors, timings, lists kept in one file). Fix what's stale when you see it. `pnpm test` checks the docs' links.
 
 ## Product rules
 
@@ -29,13 +32,13 @@ The README is the project's living spec. Update it in the same change whenever y
 - Element states work the same way: the state pills' `states` go through `history.apply(…, { widths, states })` / `clearProperty(…, widths, states)` from the dialog, and fields read values for exactly those states. Editors don't handle states either.
 - The history belongs to `mountPilot` (one per page load) and survives reloads: it's saved per tab and restored by selector (`src/edits/persist.ts`). Anything new it records must be plain data (JSON-safe) apart from the element, and found again from the change's `target` after a reload.
 - The copy-prompt and MCP paths must produce identical text. Both go through `formatPrompt()`, fed by `buildChangeSet()` (`src/edits/changeSet.ts`).
-- The handoff is jobs (README, "Agent handoff"). The page is the source of truth for its jobs: the hub (`packages/cli`) keeps state in memory only and must accept a job posted again (idempotent by id). Sent changes carry their job id in the history; a job's changes leave the history only through `settle()`, after the page checked them (`edits/verify.ts`): what landed at once, what didn't after its one follow-up (Pilot then accepts the code), and changes it can't check on the agent's word.
+- The handoff is jobs ([docs/handoff.md](docs/handoff.md)). The page is the source of truth for its jobs: the hub (`packages/cli`) keeps state in memory only and must accept a job posted again (idempotent by id). Sent changes carry their job id in the history; a job's changes leave the history only through `settle()`, after the page checked them (`edits/verify.ts`): what landed at once, what didn't after its one follow-up (Pilot then accepts the code), and changes it can't check on the agent's word.
 - The hub takes jobs only from page origins an agent registered, from the `Origin` header; agent routes refuse requests that carry an `Origin`. Keep both checks for every new route.
 
 ## Repo conventions
 
 - pnpm workspace (`packages/*`, `apps/*`), TypeScript strict, ESM, `.ts` extensions in relative imports.
-- Overlay components: one folder per component, `ui/components/<Name>/` with `<Name>.tsx` + `<Name>.css`. The CSS is wrapped in `@scope (.component-root)` and imported in `ui/styles/index.css` into `layer(components)`. Use px rather than rem. See README, "Styling".
+- Overlay components: one folder per component, `ui/components/<Name>/` with `<Name>.tsx` + `<Name>.css`. The CSS is wrapped in `@scope (.component-root)` and imported in `ui/styles/index.css` into `layer(components)`. Use px rather than rem. See [docs/development.md](docs/development.md), "Styling".
 - **Tokens: use only the `--plt-*` tokens that are actually defined in `ui/styles/tokens.css`.** The project owner maintains that file, and its contents change.
   - Read the file before writing CSS. Don't rely on memory, older versions, or other components, which may still reference tokens that were removed.
   - If no token fits, use a raw value (e.g. `8px`). Don't invent a token, and don't add one to `tokens.css` unless asked.
@@ -50,4 +53,4 @@ The README is the project's living spec. Update it in the same change whenever y
 - Tests are `*.test.ts` next to the source and run with Vitest from the root (`pnpm test`).
 - Before finishing a change, run `pnpm typecheck` and `pnpm test`.
 - Use `pnpm dev` (playground at :5180) to try overlay changes in a browser.
-- To try them in another project, unreleased: `pnpm link-experiment <folder>` once, then `pnpm dev:experiments` (overlay source on :5199, CLI rebuilt on change). README, "Trying Pilot in your own projects, unreleased".
+- To try them in another project, unreleased: `pnpm link-experiment <folder>` once, then `pnpm dev:experiments` (overlay source on :5199, CLI rebuilt on change). [docs/development.md](docs/development.md), "Trying Pilot in your own projects, unreleased".

@@ -1,6 +1,6 @@
 # Design tokens in Pilot (planned)
 
-> Status: **not built yet**. This note collects what was decided in discussion, so the work can start from here. When it's built, move the parts that become real into the README (the living spec) and trim this note to what's still open.
+> Status: **not built yet**. This note collects what was decided in discussion, so the work can start from here. When it's built, move the parts that become real into the docs for their area (see [README.md](README.md)) and trim this note to what's still open.
 
 ## Goal
 
