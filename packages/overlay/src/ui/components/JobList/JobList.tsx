@@ -25,9 +25,9 @@ export function listPlacement(toolbar: ToolbarSpot, viewport: { width: number; h
     : { left: px(left), top: px(toolbar.y + TOOLBAR_HEIGHT + GAP), bottom: "auto" };
 }
 
-/** How many property changes a job carries. */
+/** How many changes a job carries: its properties and its texts. */
 function changeCount(job: JobRecord): number {
-  return job.changeSet.edits.reduce((n, e) => n + e.changes.length, 0);
+  return job.changeSet.edits.reduce((n, e) => n + e.changes.length + (e.texts?.length ?? 0), 0);
 }
 
 /** What a job is, in words: its changes, or the task it asks for. */
