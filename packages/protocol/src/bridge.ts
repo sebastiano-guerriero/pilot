@@ -19,7 +19,7 @@ export const BRIDGE_VERSION = 4;
  * should; a project on another version runs its own, instead of the two
  * blocking each other on one port. A project's page and its agent run the
  * same installed Pilot, so they always agree on the port. Pilots before
- * 0.6.1 all used 4747, which no version uses now.
+ * 0.7.0 all used 4747, which no version uses now.
  */
 export const DEFAULT_BRIDGE_PORT = 4747 + BRIDGE_VERSION;
 

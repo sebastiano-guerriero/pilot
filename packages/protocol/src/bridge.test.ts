@@ -19,7 +19,7 @@ describe("origins", () => {
 });
 
 describe("the hub's port", () => {
-  it("is one per bridge version, never the 4747 every Pilot before 0.6.1 used", async () => {
+  it("is one per bridge version, never the 4747 every Pilot before 0.7.0 used", async () => {
     const { BRIDGE_VERSION, DEFAULT_BRIDGE_PORT } = await import("./bridge.ts");
     expect(DEFAULT_BRIDGE_PORT).toBe(4747 + BRIDGE_VERSION);
     expect(DEFAULT_BRIDGE_PORT).not.toBe(4747);
