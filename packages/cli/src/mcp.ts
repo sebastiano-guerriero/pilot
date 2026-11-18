@@ -211,7 +211,7 @@ export function createPilotServer(options: { port?: number; cwd?: string; waitMs
   const cwd = options.cwd ?? process.cwd();
   // Known once the client has connected (see waitMsFor).
   let waitMs = options.waitMs ?? waitMsFor(undefined);
-  const server = new McpServer({ name: "pilot", version: "0.7.0" }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: "pilot", version: "0.7.1" }, { instructions: INSTRUCTIONS });
   const agent: AgentInfo = { id: randomUUID(), label: agentLabel(undefined, cwd) };
   const bridge = new Bridge(agent, port);
   let origin: string | null = null;
