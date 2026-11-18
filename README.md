@@ -28,11 +28,21 @@ Your agent is connected once for this machine, with nothing added to the repo. I
 
 **No agent?** Run `npx usepilot@latest init --agent other` yourself and do the step it prints for loading Pilot. Then press **Option+P** (Alt+P on Windows and Linux) in your app, and **Copy prompt** hands your changes to any chat.
 
+### Updating Pilot
+
+Ask your agent to **update Pilot**, or run this in your project's folder:
+
+```bash
+npx usepilot@latest update
+```
+
+Then restart your app and open a new chat.
+
 ### If something doesn't work
 
 - **The toolbar doesn't appear.** Pilot only loads in development, in the browser. Ask your agent to check where `usepilot/auto` is imported. The shortcut is ignored while you're typing in a text field.
 - **The agent doesn't know Pilot.** Start a new chat: agents load their MCP servers when a chat starts. Some ask once to approve the project's server: say yes. In Cursor, if `pilot` shows switched off in Cursor Settings (MCP section), switch it on: Cursor keeps servers set up in a repo off until you do.
-- **Pilot doesn't open, and another project's chat runs an older Pilot.** Pilots before 0.7.0 all used one port, so two projects on different versions blocked each other. Update Pilot in the older project (paste the install prompt there), or close that chat. From 0.7.0, each version has its own port, and projects on different versions run side by side.
+- **Pilot doesn't open, and another project's chat runs an older Pilot.** Pilots before 0.7.0 all used one port, so two projects on different versions blocked each other. Update Pilot in the older project (`npx usepilot@latest update` there), or close that chat. From 0.7.0, each version has its own port, and projects on different versions run side by side.
 
 ## Using Pilot
 

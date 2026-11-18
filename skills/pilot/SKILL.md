@@ -1,11 +1,15 @@
 ---
 name: pilot
-description: Hand the UI to the designer with Pilot, then apply the design edits they send, job after job. Use when the user runs /pilot, says they want to take control of the design or edit the UI in the browser, or pastes a "Pilot design edits" brief.
+description: Hand the UI to the designer with Pilot, then apply the design edits they send, job after job. Use when the user runs /pilot, says they want to take control of the design or edit the UI in the browser, or pastes a "Pilot design edits" brief, or asks to update Pilot.
 ---
 
 # Pilot
 
 Pilot lets the designer edit the running app in the browser. They select elements, change CSS properties with Pilot's editors, and press **Send**. Each Send reaches you as a **job**: plain CSS `property: from → to` (and new text, when they rewrote one) on identifiable elements, for you to write into the source in this project's conventions. The designer keeps designing while you work; Pilot previews each job's changes until you report it done, then checks them against the page's real CSS.
+
+## When the user asks to update Pilot
+
+Run `npx usepilot@latest update` in the app's folder (the one with `usepilot` in its `package.json`), and tell the user in a few lines what it prints: the new version and the steps left (restart the app's dev server, open a new chat).
 
 ## When the user runs /pilot (or asks to launch Pilot)
 

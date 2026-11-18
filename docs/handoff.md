@@ -22,6 +22,12 @@ The user pastes one prompt into their agent: run `npx usepilot@latest init` and 
 - **Every agent** is told to tell the user to start a new chat (MCP servers load when a chat starts) and ask to launch Pilot, and that a teammate on another agent runs the same prompt in theirs.
 - A monorepo's root gets the list of its apps instead, to run it in the right one.
 
+### Updating
+
+`npx usepilot@latest update`, in the app's folder ([update.ts](../packages/cli/src/update.ts)), or the agent runs it when asked to update Pilot (the skill and the MCP instructions say so). It installs the latest `usepilot` with the project's package manager, rewrites the `pilot` skill wherever `init` put it (the copies installing doesn't touch; a skill that's a link to a Pilot checkout is left as it is), and prints the version change and what's left, for a designer to read as much as for an agent: restart the app's dev server (its bundler keeps the old Pilot until then), open a new chat (an open one keeps the old MCP server), and, when the bridge version changed (read from the old bundle before it's replaced), update the other projects too. The MCP server's command is the same in every version, so its config isn't touched.
+
+- **Why a command of its own:** `init` is setup, safe to run any time, and never changes a version you have (as `shadcn init` and `prisma init` don't); upgrading is a deliberate step, as with `storybook upgrade`, and here it's more than a version bump (the skill, the restarts). `init` on a project with an older Pilot leaves it alone and says that `update` updates it.
+
 A skill can't be the way in: it has to be installed before it could help, and each agent reads skills from its own folder. `usepilot setup` remains for Claude Code alone (the skill for every project on the machine, or `--project`).
 
 ## The loop

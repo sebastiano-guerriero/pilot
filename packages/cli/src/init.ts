@@ -4,6 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { MCP_SERVER, writeSkill } from "./setup.ts";
+import { olderThan, VERSION } from "./version.ts";
 
 /**
  * `usepilot init`: sets Pilot up in a project, for whatever agent runs it.
@@ -169,6 +170,30 @@ const MACHINE: Record<AgentId, MachineSetup> = {
   other: { skills: (home) => join(home, ".agents", "skills") },
 };
 
+/**
+ * Every folder Pilot's skill can be in, where `init` puts it: each agent's
+ * own, once per machine, and each agent's in the repo (`--project`).
+ */
+export function skillFolders(root: string, home: string): string[] {
+  const machine = AGENT_IDS.map((id) => join(MACHINE[id].skills(home), "pilot"));
+  const project = AGENTS.map((a) => join(root, a.skills, "pilot"));
+  return [...new Set([...machine, ...project])];
+}
+
+/** The command that adds `spec` as a dev dependency with `pm`. */
+export function installArgs(pm: "npm" | "pnpm" | "yarn" | "bun", spec = "usepilot"): string[] {
+  return pm === "npm" ? ["install", "-D", spec] : pm === "bun" ? ["add", "-d", spec] : ["add", "-D", spec];
+}
+
+/** The version of `usepilot` installed for the app in `cwd` (its node_modules, or a monorepo's up to `root`), when there's one. */
+export function installedVersion(cwd: string, root: string): string | null {
+  for (let dir = cwd; ; dir = dirname(dir)) {
+    const version = readJson<{ version?: string }>(join(dir, "node_modules", "usepilot", "package.json"))?.version;
+    if (version) return version;
+    if (dir === root || dirname(dir) === dir) return null;
+  }
+}
+
 /** VS Code's user settings folder, per OS. */
 function vscodeUserDir(home: string, platform: NodeJS.Platform): string {
   if (platform === "darwin") return join(home, "Library", "Application Support", "Code", "User");
@@ -220,10 +245,16 @@ ${cwd} is a monorepo's root, not an app. Run \`npx usepilot@latest init\` again 
 
   // 1. The package.
   const pm = packageManager(cwd, root);
-  const installArgs = pm === "npm" ? ["install", "-D", "usepilot"] : pm === "bun" ? ["add", "-d", "usepilot"] : ["add", "-D", "usepilot"];
-  const install = `${pm} ${installArgs.join(" ")}`;
+  const args = installArgs(pm);
+  const install = `${pm} ${args.join(" ")}`;
+  const installed = deps.usepilot ? installedVersion(cwd, root) : null;
+  // Already there: init leaves its version alone (updating is `update`'s job), and says when it's older.
+  if (deps.usepilot && installed && olderThan(installed, VERSION))
+    todo.push(
+      `**Tell the user** Pilot ${installed} is installed here, and ${VERSION} is out: \`npx usepilot@latest update\` updates it (run it now if they ask).`,
+    );
   if (deps.usepilot) done.push("`usepilot` was already a dependency.");
-  else if (options.install !== false && run(pm, installArgs, cwd))
+  else if (options.install !== false && run(pm, args, cwd))
     done.push(`Installed \`usepilot\` as a dev dependency (\`${install}\`).`);
   else todo.push(`Install Pilot as a dev dependency: run \`${install}\` in ${cwd}.`);
 

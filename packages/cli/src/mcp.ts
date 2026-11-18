@@ -7,6 +7,7 @@ import { z } from "zod";
 import { Bridge } from "./agent.ts";
 import { attachmentBlocks } from "./attachments.ts";
 import { whereSection } from "./locate.ts";
+import { VERSION } from "./version.ts";
 
 /**
  * Pilot's MCP server: the tools an agent uses to hand the UI to the designer
@@ -40,6 +41,8 @@ The loop, when the user asks to launch or start Pilot, runs /pilot, or asks to h
 2. Call pilot_wait_for_edits. It returns a job when the designer presses Send, or "no edits yet" after a while: then call it again. (In Claude Code a long wait moves to the background: the job arrives as its result.)
 3. Apply the job's edits to the source: they're design instructions, not code, so write production code the way the project already styles things, whatever it uses (see the job's guidelines). Edits are basic: every value is given, so be fast (no screenshots or browser checks: Pilot checks the page). A "make responsive" job is an advanced task: make one element work at every viewport width. A "break and fix" job is one too: stress-test one element with odd but realistic content, fix what breaks, and put the real content back. Their prompts list the steps; check the result with pilot_check_widths (numbers for every width, instead of screenshots). If you can hand advanced tasks to a more capable model than the one you run on (a subagent, or another model your agent offers), do. A "comment" job is the designer's own words about one element: do what it asks (simple asks right away, open-ended ones as advanced tasks), and your pilot_done notes are your reply in their thread: one short sentence, like a chat message, not a report.
 4. Call pilot_done with the job id and short notes (values you approximated, anything you did differently). When part of a job needs the designer's decision (they changed only some copies of shared code: each element's "Look-alikes" line counts the others; the jobs' guidelines say when, and what each answer means), do the rest, leave that part, and ask with pilot_done's question and choices ("${SHARED_CHOICES.all.label}", "${SHARED_CHOICES.one.label}", "${SHARED_CHOICES.variant.label}", your suggestion first); go on with other jobs, and their answer comes back as that job. Then call pilot_wait_for_edits again. When several jobs were queued, one wait returns them all: do them all, then call pilot_done once per job, each with its own id and notes.
+
+When the user asks to update Pilot: run \`npx usepilot@latest update\` in the app's folder and tell them, in a few lines, what it prints (the new version, and the steps left).
 
 Keep looping until the user interrupts you. Between jobs keep your messages short: a line on what you changed (and anything you approximated) is enough. If the user talks to you meanwhile, help them, then wait again: queued jobs are kept. Pilot keeps previewing each job's changes until you call pilot_done, then checks them against the page's real CSS: changes that didn't land come back once as a follow-up job with what the page gives instead.`;
 
@@ -211,7 +214,7 @@ export function createPilotServer(options: { port?: number; cwd?: string; waitMs
   const cwd = options.cwd ?? process.cwd();
   // Known once the client has connected (see waitMsFor).
   let waitMs = options.waitMs ?? waitMsFor(undefined);
-  const server = new McpServer({ name: "pilot", version: "0.7.1" }, { instructions: INSTRUCTIONS });
+  const server = new McpServer({ name: "pilot", version: VERSION }, { instructions: INSTRUCTIONS });
   const agent: AgentInfo = { id: randomUUID(), label: agentLabel(undefined, cwd) };
   const bridge = new Bridge(agent, port);
   let origin: string | null = null;

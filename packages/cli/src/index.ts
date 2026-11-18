@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 /**
  * `usepilot` CLI entry: `init` sets Pilot up in a project for any agent,
- * `mcp` runs the MCP server and the bridge, `setup` installs /pilot for
+ * `update` brings it up to date, `mcp` runs the MCP server and the bridge, `setup` installs /pilot for
  * Claude Code.
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createPilotServer } from "./mcp.ts";
 import { AGENT_IDS, type AgentId, init } from "./init.ts";
 import { setup } from "./setup.ts";
+import { update } from "./update.ts";
 
 const HELP = `usepilot: take the controls from your coding agent
 
@@ -21,6 +22,9 @@ Usage: npx usepilot <command>
           --project: connect the agent in this repo (files to commit, for a
                      team) instead of once for every project on this machine
           --no-install: print the install command instead of running it
+  update  Update Pilot in this project: the latest usepilot, and the pilot
+          skill wherever init put it. Prints what's left (restart the app,
+          open a new chat). Run it in the app's folder.
   setup   Set up /pilot in Claude Code, for every project on this machine
           (--project: for this repo, to commit, so everyone gets it)
   mcp     Run the MCP server (stdio) agents connect to, and the bridge the
@@ -81,6 +85,14 @@ switch (command) {
       );
     } catch (error) {
       process.stderr.write(`usepilot init: ${(error as Error).message}\n`);
+      process.exitCode = 1;
+    }
+    break;
+  case "update":
+    try {
+      process.stdout.write(await update());
+    } catch (error) {
+      process.stderr.write(`usepilot update: ${(error as Error).message}\n`);
       process.exitCode = 1;
     }
     break;

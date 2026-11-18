@@ -29,7 +29,7 @@ Before finishing a change, run `pnpm typecheck` and `pnpm test`.
 | --- | --- | --- |
 | `@pilot/overlay` | [packages/overlay](../packages/overlay) | The in-page editor: Shadow DOM mount, launch/quit, toolbar, property search, editors, the bridge client. Builds `pilot.js` (API) and `pilot-auto.js` (self-mounting). |
 | `@pilot/protocol` | [packages/protocol](../packages/protocol) | Shared `ChangeSet` types, `formatPrompt()`, `BRIDGE_VERSION`. |
-| `@pilot/cli` | [packages/cli](../packages/cli) | The `usepilot` command: `init` (sets Pilot up in a project for any agent: [init.ts](../packages/cli/src/init.ts)), `mcp` (the MCP server agents start, and the hub the page talks to) and `setup` (the `/pilot` skill and MCP server for Claude Code, for this machine or, with `--project`, for the repo: [setup.ts](../packages/cli/src/setup.ts)). Bundled into one file by tsup, dependencies included. |
+| `@pilot/cli` | [packages/cli](../packages/cli) | The `usepilot` command: `init` (sets Pilot up in a project for any agent: [init.ts](../packages/cli/src/init.ts)), `update` (brings it up to date: [update.ts](../packages/cli/src/update.ts)), `mcp` (the MCP server agents start, and the hub the page talks to) and `setup` (the `/pilot` skill and MCP server for Claude Code, for this machine or, with `--project`, for the repo: [setup.ts](../packages/cli/src/setup.ts)). Bundled into one file by tsup, dependencies included. |
 | `usepilot` | [packages/usepilot](../packages/usepilot) | The one published package: the overlay's build (`dist/`) and the CLI's (`cli/`), copied in by its `build` script (which `prepack` runs), hand-written types (`types/`), and npm's README. Exports `usepilot` (`mountPilot`) and `usepilot/auto` (mounts with defaults). |
 | `playground` | [apps/playground](../apps/playground) | A plain Vite page for developing Pilot. |
 | `/pilot` skill | [skills/pilot](../skills/pilot) | What the agent follows to launch Pilot and apply jobs (`/pilot`; `$pilot` in Codex), in the open SKILL.md format. `init` writes it where each agent reads skills; `setup` for Claude Code alone. Agents without skills get the same loop from the MCP server's instructions. |
@@ -73,7 +73,7 @@ To use the Pilot you're working on in another project without publishing a versi
 
 The published package is [packages/usepilot](../packages/usepilot). Publishing builds it first (`prepack` runs the build and copies `dist/`, `cli/` and the license in).
 
-1. Bump the version in [packages/usepilot/package.json](../packages/usepilot/package.json) (0.x for now: a patch for fixes, a minor for new features and for a new bridge version, which older Pilots can't join), or run `npm version patch --no-git-tag-version` there. Set the same version on the MCP server in [mcp.ts](../packages/cli/src/mcp.ts) (`new McpServer({ name: "pilot", version })`).
+1. Bump the version in [packages/usepilot/package.json](../packages/usepilot/package.json) (0.x for now: a patch for fixes, a minor for new features and for a new bridge version, which older Pilots can't join), or run `npm version patch --no-git-tag-version` there. Set the same version in [version.ts](../packages/cli/src/version.ts) (`VERSION`: the MCP server reports it, `update` and `init` compare with it); `version.test.ts` fails until both match.
 2. Publish, from that folder (it asks for your npm security key):
 
    ```bash
