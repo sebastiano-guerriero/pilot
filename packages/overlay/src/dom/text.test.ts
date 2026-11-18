@@ -5,6 +5,7 @@ import { buildChangeSet } from "../edits/changeSet.ts";
 import { EditHistory } from "../edits/history.ts";
 import { checkJob } from "../edits/verify.ts";
 import { inlinePreview } from "../test/inlinePreview.ts";
+import { whatText } from "../ui/components/JobList/JobList.tsx";
 import { describeElement } from "./target.ts";
 import { TEXT_PROPERTY, holdText, isTextOnly, normalizeText, pageTextContent, textProperty, textRunAt, textRunOf, textRuns } from "./text.ts";
 
@@ -129,6 +130,13 @@ describe("a text change in the history, the change set and the check", () => {
     const prompt = formatPrompt(buildChangeSet(history));
     expect(prompt).toContain('- "Get started" → "Say \\"hi\\""');
     expect(prompt).not.toContain("| Property |"); // no CSS changes, no table
+  });
+
+  it("the job list counts it as a change", () => {
+    history.apply(button, TEXT_PROPERTY, "Start free trial");
+    history.apply(button, "padding-top", "12px");
+    const changeSet = buildChangeSet(history);
+    expect(whatText({ id: "j1", changeSet, status: "queued", createdAt: "" })).toBe("2 changes");
   });
 
   it("an element not on the page keeps the text it had when changed", () => {
