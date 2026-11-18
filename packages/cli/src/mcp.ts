@@ -323,7 +323,7 @@ ${EDIT_GUIDELINES.join("\n")}`,
           .describe("Short notes for the designer: values you approximated (e.g. 22px → pt-6, 24px), anything done differently."),
         question: z
           .object({
-            text: z.string().describe("One short sentence, e.g. \"This title comes from the shared Card: change every card, or only this one?\""),
+            text: z.string().describe("One short sentence, the component's name in **bold** (it's shown as markdown), e.g. \"This title comes from the shared **Card**: change every card, or only this one?\""),
             choices: z
               .array(z.string())
               .max(MAX_CHOICES)
