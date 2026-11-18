@@ -81,7 +81,11 @@ async function agentClient(port: number, waitMs = 2000) {
   });
   const call = async (name: string, args: Record<string, unknown> = {}) => {
     const result = await client.callTool({ name, arguments: args });
-    return (result.content as Array<{ text: string }>)[0]?.text ?? "";
+    // Every text block: a batch of jobs comes as several.
+    return (result.content as Array<{ type: string; text?: string }>)
+      .filter((c) => c.type === "text")
+      .map((c) => c.text)
+      .join("\n");
   };
   return { call, bridge };
 }
@@ -127,6 +131,23 @@ describe("the hub's HTTP server", () => {
 });
 
 describe("the loop, through MCP", () => {
+  it("jobs queued while the agent worked come in one wait, each to report done by its id", async () => {
+    const port = nextPort++;
+    const agent = await agentClient(port);
+    await agent.call("pilot_launch", { url: "localhost:5173" });
+    const app = fakePage(port);
+    await app.ready;
+    await until(() => app.events.some((e) => e.type === "agents" && e.agents.length === 1));
+    // Three Sends while the agent was busy (not waiting).
+    for (const id of ["q1", "q2", "q3"]) await app.post("/jobs", { id, changeSet: changeSet(id) });
+    const prompt = await agent.call("pilot_wait_for_edits");
+    expect(prompt).toContain("# Pilot: 3 jobs");
+    expect(prompt).toContain("call `pilot_done` once per job");
+    for (const id of ["q1", "q2", "q3"]) expect(prompt).toContain(`pilot_done\` with \`jobId: "${id}"\``);
+    expect(prompt).toContain("## Job 3 of 3");
+    for (const id of ["q1", "q2", "q3"]) expect(await agent.call("pilot_done", { jobId: id })).toMatch(/^Done/);
+  });
+
   it("launch → wait → Send → the job → done → the page hears it", async () => {
     const port = nextPort++;
     const agent = await agentClient(port);

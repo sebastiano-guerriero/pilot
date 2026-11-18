@@ -19,7 +19,21 @@ export interface ElementTarget {
   classes: string[];
   /** Trimmed snippet of the element's text, to help the agent grep for it. */
   text?: string;
-  /** Optional framework hints (e.g. React component name / file) when available. */
+  /**
+   * How many elements like it are on the page outside the job: the same
+   * part of each copy of what repeats (every card's title), found by Pilot
+   * from the page's structure. When they come from the same code, the
+   * designer changed only some copies: the agent asks before changing them
+   * all (see AgentQuestion). Absent: none.
+   */
+  lookAlikes?: number;
+  /**
+   * The component the look-alikes are instances of, when Pilot found them by
+   * component (React, Vue: every `<ProductCard>`, whatever its props) rather
+   * than by the page's structure.
+   */
+  lookAlikesOf?: string;
+  /** The component rendering it and its file, from the framework's dev info (React, Vue), when the page has it. */
   source?: {
     component?: string;
     file?: string;
@@ -126,6 +140,8 @@ export interface ElementEdit {
 export interface ResponsiveRequest {
   kind: "responsive";
   target: ElementTarget;
+  /** The other elements selected with `target` (see requestTargets). */
+  others?: ElementTarget[];
   /**
    * The viewport widths the page's media queries test, in CSS px, ascending
    * (Pilot reads them from its stylesheets). Empty when it has none.
@@ -144,6 +160,8 @@ export interface ResponsiveRequest {
 export interface BreakFixRequest {
   kind: "break-and-fix";
   target: ElementTarget;
+  /** The other elements selected with `target` (see requestTargets). */
+  others?: ElementTarget[];
   /** The page's breakpoints, as for ResponsiveRequest. */
   breakpoints: number[];
   /** Files the designer attached when asking, as on a comment. */
@@ -250,12 +268,24 @@ export const ATTACHMENT_ACCEPT = [...new Set(Object.values(ATTACHMENT_TYPES))].j
 export interface CommentRequest {
   kind: "comment";
   target: ElementTarget;
+  /** The other elements selected with `target` (see requestTargets). */
+  others?: ElementTarget[];
   thread: CommentMessage[];
   /** The page's breakpoints, as for ResponsiveRequest: the comment may be about one width. */
   breakpoints: number[];
 }
 
 export type AgentRequest = TaskRequest | CommentRequest;
+
+/**
+ * The elements a request is about: `target`, the first the designer
+ * selected (where the comment's thread is, and the one Pilot's width check
+ * measures), then the others selected with it. A comment or a task on
+ * several elements is one job about all of them ("these cards").
+ */
+export function requestTargets(request: AgentRequest): ElementTarget[] {
+  return [request.target, ...(request.others ?? [])];
+}
 
 export interface ChangeSet {
   id: string;

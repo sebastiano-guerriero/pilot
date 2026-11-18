@@ -5,7 +5,7 @@ import { px } from "../../px.ts";
 interface HighlightProps {
   element: Element;
   rect: DOMRect;
-  variant: "hover" | "selected" | "busy" | "flash";
+  variant: "hover" | "selected" | "dots" | "busy" | "flash";
   /**
    * Show the name and size label. The hover highlight has one; the selection
    * doesn't (App passes false): its corner is kept for the selection's actions.
@@ -37,8 +37,10 @@ const SIZE_GAP = 4;
 const CORNERS = ["top-left", "top-right", "bottom-left", "bottom-right"] as const;
 
 /**
- * Outline + label drawn over an element; the selected one also gets a round
- * handle on each corner; `busy` is an element a job is on that isn't
+ * Outline + label drawn over an element; `selected`, the selection's
+ * outline, and `dots`, its round handle on each corner, a layer of their own
+ * that App draws over every other highlight (a hovered parent's lines
+ * included); `busy` is an element a job is on that isn't
  * selected (the outline alone; its loader is SelectionActions'); `flash`,
  * the toolbar's jobs button landing on a job's element. The label (name and size) sits above the top-left
  * corner. Purely visual: never receives events.
@@ -54,7 +56,8 @@ export function Highlight({
   working = false,
 }: HighlightProps) {
   const size = `${Math.round(rect.width)}×${Math.round(rect.height)}`;
-  const room = labelRoom === undefined ? null : Math.floor(labelRoom);
+  // Not rounded: the actions sit on fractional pixels, and the gap to them is 4px exactly, as between them.
+  const room = labelRoom === undefined ? null : labelRoom;
   const below = room !== null && room < MIN_LABEL;
   // Put the label above the box, or inside it when the element touches the
   // top edge, or below it when the corner icons leave no room.
@@ -97,7 +100,7 @@ export function Highlight({
           </span>
         </span>
       )}
-      {variant === "selected" && CORNERS.map((corner) => <span key={corner} class="handle" data-corner={corner} />)}
+      {variant === "dots" && CORNERS.map((corner) => <span key={corner} class="handle" data-corner={corner} />)}
     </div>
   );
 }

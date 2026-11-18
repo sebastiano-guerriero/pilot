@@ -1,6 +1,7 @@
 import type { CommentAction, ElementState, WidthRange } from "@pilot/protocol";
-import { useCallback, useEffect, useReducer, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import { type BoxArea, hidesSelection } from "../dom/boxModel.ts";
+import { findSimilar } from "../dom/similar.ts";
 import { type EditableElement, isEditable } from "../dom/target.ts";
 import { isTextOnly, normalizeText, textProperty, textRunAt } from "../dom/text.ts";
 import { formatPrompt } from "@pilot/protocol";
@@ -15,7 +16,7 @@ import { BoxAreas } from "./components/BoxAreas/BoxAreas.tsx";
 import { GridOverlay } from "./components/GridOverlay/GridOverlay.tsx";
 import { Highlight } from "./components/Highlight/Highlight.tsx";
 import { PropertyDialog, type WidthPick } from "./components/PropertyDialog/PropertyDialog.tsx";
-import type { CommentThread, JobRecord, PilotSession } from "../bridge/session.ts";
+import { awaitsAnswer, type CommentThread, type JobRecord, needsYou, type PilotSession } from "../bridge/session.ts";
 import { statusText, whatText } from "./components/JobList/JobList.tsx";
 import { DomTree } from "./components/DomTree/DomTree.tsx";
 import { actionsBox, type Busy, SelectionActions } from "./components/SelectionActions/SelectionActions.tsx";
@@ -68,6 +69,36 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     return null;
   });
 
+  // The other selected elements, when several are (Shift+click with Select,
+  // or the DOM tree: Cmd/Ctrl adds one, Shift a range). `selected` stays the
+  // first: the dialog opens beside it and its changes go to all of them.
+  const [others, setOthers] = useState<EditableElement[]>([]);
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  const othersRef = useRef(others);
+  othersRef.current = others;
+  // The element added to the selection last: the panel (dialog or comment box) sits beside it (`placeBy`).
+  const [latest, setLatest] = useState<EditableElement | null>(null);
+  /** Select `element` alone (a plain click, a thread, a row). */
+  const selectOnly = (element: EditableElement, from?: "dom") => {
+    setSelected((prev) => (prev?.element === element ? prev : { element, key: (prev?.key ?? 0) + 1, ...(from ? { from } : {}) }));
+    setOthers([]);
+  };
+  /** Add `element` to the selection, or take it out (the first one too: the next becomes the first). */
+  const toggleSelected = (element: EditableElement, from?: "dom") => {
+    const primary = selectedRef.current?.element;
+    if (!primary) return selectOnly(element, from);
+    if (element === primary) {
+      const [next, ...rest] = othersRef.current;
+      if (!next) return; // The last one stays: Esc clears it.
+      setSelected((prev) => ({ element: next, key: (prev?.key ?? 0) + 1, ...(from ? { from } : {}) }));
+      setOthers(rest);
+      return;
+    }
+    if (!othersRef.current.includes(element)) setLatest(element);
+    setOthers((list) => (list.includes(element) ? list.filter((e) => e !== element) : [...list, element]));
+  };
+
   // The search carries over from one selection to the next: set col-span on
   // one card, click the next, and the same editor is already there. It starts
   // empty again once nothing is selected (Esc, the cursor off, the dialog closed).
@@ -87,9 +118,11 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // dialog, which sets the chip (a `from`/`to` typed in the search decides it).
   const [widthPick, setWidthPick] = useState<WidthPick | undefined>();
 
-  const onPick = useCallback((element: EditableElement) => {
+  const onPick = useCallback((element: EditableElement, how?: { shift: boolean }) => {
     onReattach?.(); // the page may have re-rendered since: changes find their elements again
-    setSelected((prev) => (prev?.element === element ? prev : { element, key: (prev?.key ?? 0) + 1 }));
+    // Shift+click adds to the selection (or takes out), with either tool: a comment can be about several elements.
+    if (how?.shift && toolRef.current) toggleSelected(element);
+    else selectOnly(element);
   }, []);
 
   // The DOM tree: the page's elements as a tree, to select any of them
@@ -97,11 +130,21 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // element; picking one selects it, scrolled into view.
   const [domOpen, setDomOpen] = useState(false);
   const [domHover, setDomHover] = useState<Element | null>(null);
-  const pickFromDom = useCallback((element: Element) => {
+  // In the DOM tree: Cmd/Ctrl+click adds a row's element (or takes it out), Shift+click selects a range of rows.
+  const pickFromDom = useCallback((element: Element, how?: { add?: boolean; range?: readonly Element[] }) => {
     if (!isEditable(element)) return;
     onReattach?.();
     element.scrollIntoView({ block: "nearest", inline: "nearest" });
-    setSelected((prev) => (prev?.element === element ? prev : { element, key: (prev?.key ?? 0) + 1, from: "dom" }));
+    const several = !!toolRef.current;
+    if (several && how?.range?.length) {
+      const range = how.range.filter(isEditable);
+      const current = selectedRef.current?.element;
+      const first = current && range.includes(current) ? current : (range[0] as EditableElement);
+      setSelected((prev) => (prev?.element === first ? prev : { element: first, key: (prev?.key ?? 0) + 1, from: "dom" }));
+      setOthers(range.filter((e) => e !== first));
+      setLatest(element);
+    } else if (several && how?.add) toggleSelected(element, "dom");
+    else selectOnly(element, "dom");
   }, []);
   useEffect(() => {
     if (!domOpen) setDomHover(null);
@@ -174,7 +217,9 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     return held ? "Queued" : false;
   };
   // The job on the selected element, if one isn't finished: its actions give way to where it stands.
-  const selectedJob = selected && session ? session.jobOn(selected.element) : null;
+  // A job waiting for the designer's answer shows no loader: its question, in the thread, says so (see PilotSession.ask).
+  const jobShown = (job: JobRecord | null) => (job && !awaitsAnswer(job) ? job : null);
+  const selectedJob = selected && session ? jobShown(session.jobOn(selected.element)) : null;
   const busyOf = (job: JobRecord): Busy => ({
     text: jobText(job),
     onCancel: session?.canCancel(job) ? () => session.cancel(job.id) : undefined,
@@ -185,10 +230,10 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // comment is with the agent: its loader says so then). Both come with the
   // element's outline.
   const marks = new Map<Element, { job?: JobRecord; thread?: CommentThread }>();
-  for (const { element, job } of session?.busy ?? []) marks.set(element, { job });
+  for (const { element, job } of session?.busy ?? []) if (jobShown(job)) marks.set(element, { job });
   for (const thread of session?.threads ?? []) {
     const job = session?.threadJob(thread);
-    if (job && job.status !== "cancelled" && !job.checked) continue; // with the agent
+    if (job && job.status !== "cancelled" && !job.checked && !needsYou(thread)) continue; // with the agent
     const element = session?.threadElement(thread);
     if (element) marks.set(element, { ...marks.get(element), thread });
   }
@@ -267,7 +312,8 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
       if (!isTextOnly(element) && !run) return;
       editingRef.current?.finish(true);
       // The double-click's first click selected it already; `from: "dom"` keeps a new dialog from taking focus.
-      setSelected((prev) => (prev?.element === element ? prev : { element, key: (prev?.key ?? 0) + 1, from: "dom" }));
+      // Text is edited on one element: the others leave the selection.
+      selectOnly(element, "dom");
       const edit = editText(
         element,
         at,
@@ -300,8 +346,13 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // Esc that drops the selection (the dialog hides) closes the DOM tree too.
   const dismiss = () => {
     setSelected(null);
+    setOthers([]);
     setDomOpen(false);
   };
+  // Elements that left the page leave the selection.
+  useEffect(() => {
+    if (others.some((e) => !e.isConnected)) setOthers((list) => list.filter((e) => e.isConnected));
+  }, [others, selectedRect]);
 
   // Esc, one level at a time:
   // - something selected: clear the selection and close the DOM tree (inside
@@ -340,11 +391,14 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // wrapping around after the last: each one opened, scrolled to (unless
   // it's in view) and flashed, as the jobs button does. Threads whose element isn't on this page are skipped.
   const lastThread = useRef<string | null>(null);
+  // A thread about several elements selects them all again (see CommentThread.others).
   const openThread = (element: Element) => {
     if (!isEditable(element)) return;
     onReattach?.();
     setTool("comment");
-    setSelected((prev) => (prev?.element === element ? prev : { element, key: (prev?.key ?? 0) + 1 }));
+    selectOnly(element);
+    const thread = session?.threadFor(element);
+    if (thread) setOthers(session?.threadOthers(thread).filter(isEditable).filter((e) => e !== element) ?? []);
   };
   const nextThread = () => {
     if (!session) return;
@@ -367,7 +421,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   const threadJob = thread && session ? session.threadJob(thread) : null;
   // Comments written while a job was on the element wait for it (see PilotSession.comment).
   const threadWaits = !!thread?.messages.some((m) => m.waiting);
-  const threadStatus = threadWaits ? "Queued" : threadJob ? threadJobStatus(threadJob) : undefined;
+  const threadStatus = threadWaits ? "Queued" : threadJob && !awaitsAnswer(threadJob) && !(thread && needsYou(thread)) ? threadJobStatus(threadJob) : undefined;
   // Comments go to an agent only: without one on the page, the widget's send is disabled.
   // Attached files go to the hub first (it saves them for the agent); nothing is sent if one fails.
   // An action picked from the `/` menu (Make responsive) goes as that task, the words as its note.
@@ -375,11 +429,30 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     if (!session || !sendToAgent) return false;
     const attachments = files.length ? await session.uploadFiles(files, thumbnail) : [];
     if (!attachments) return false;
-    session.comment(element, text, attachments, action);
+    session.comment(element, text, attachments, action, othersRef.current);
     return "sent";
   };
 
   const hideSelection = !!inspect?.some(hidesSelection);
+  // Beside the latest one added, while it's still selected (taken out: back to the first).
+  const placeBy = latest && others.includes(latest) ? latest : undefined;
+
+  // Select similar: the elements like the selected one (the same part of
+  // each copy of what repeats, dom/similar.ts), added to the selection on
+  // click. Offered while some of them aren't selected; looked for again as
+  // the selection changes.
+  const similarTo = useMemo(() => (selected ? findSimilar(selected.element) : []), [selected?.element]);
+  const unselected = similarTo.filter((e) => !others.includes(e) && e.isConnected);
+  const similar = unselected.length
+    ? {
+        count: unselected.length,
+        // The panel moves beside the last one added, as for a Shift+click.
+        onSelect: () => {
+          setOthers((list) => [...list, ...unselected.filter((e) => !list.includes(e))]);
+          setLatest(unselected.at(-1) ?? null);
+        },
+      }
+    : undefined;
 
   // Where the selection's actions are (see SelectionActions), for the hover
   // label to keep clear of: Show in DOM, its loader, its thread's icon.
@@ -387,7 +460,8 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     selected && selectedRect && (commenting || !hideSelection)
       ? actionsBox(
           selectedRect,
-          1 + Number(!!marks.get(selected.element)?.thread) + Number(!!selectedJob),
+          Number(!!similar) + Number(!others.length) + Number(!!marks.get(selected.element)?.thread) + Number(!!selectedJob),
+          true,
         )
       : null;
   /**
@@ -437,10 +511,25 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
       {selected && selectedRect && commenting && (
         <>
           <Highlight element={selected.element} rect={selectedRect} variant="selected" label={false} working={!!selectedJob} />
+          {others.map((element) => (
+            <SelectedOutline key={elementKey(element)} element={element} working={!!session?.jobOn(element)} />
+          ))}
+          {/* Before the panel (same layer: DOM order decides), so the panel covers them when it's over the element's corner. */}
+          <SelectionActions
+            rect={selectedRect}
+            selected
+            domOpen={domOpen}
+            similar={similar}
+            onShowInDom={others.length ? undefined : () => setDomOpen((open) => !open)}
+            busy={selectedBusy}
+            // The thread is open already: its icon stays, as everywhere.
+            onOpenThread={marks.get(selected.element)?.thread ? () => setTool("comment") : undefined}
+          />
           <CommentWidget
             key={selected.key}
             element={selected.element}
             anchor={selectedRect}
+            placeBy={placeBy}
             thread={thread}
             status={threadStatus}
             agentName={agentName(threadJob?.agent?.label ?? session?.state.agents[0]?.label)}
@@ -459,14 +548,6 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
             }
             onClose={dismiss}
             autoFocus={selected.from !== "dom"}
-          />
-          <SelectionActions
-            rect={selectedRect}
-            domOpen={domOpen}
-            onShowInDom={() => setDomOpen((open) => !open)}
-            busy={selectedBusy}
-            // The thread is open already: its icon stays, as everywhere.
-            onOpenThread={marks.get(selected.element)?.thread ? () => setTool("comment") : undefined}
           />
         </>
       )}
@@ -493,10 +574,31 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
           )}
           {inspect && <BoxAreas element={selected.element} areas={inspect} />}
           {!hideSelection && <GridOverlay element={selected.element} part="numbers" orParent />}
+          {/* The other selected elements: the selection's outline, and dots. */}
+          {others.map((element) => (
+            <SelectedOutline key={elementKey(element)} element={element} working={!!session?.jobOn(element)} />
+          ))}
+          {/* Before the dialog (same layer: DOM order decides), so the dialog
+              covers them when it's over the element's corner. */}
+          {!hideSelection && (
+            <SelectionActions
+              rect={selectedRect}
+              selected
+              domOpen={domOpen}
+              similar={similar}
+              // Several selected: no Show in DOM (it would point at the first one only); the tree marks them all.
+              onShowInDom={others.length ? undefined : () => setDomOpen((open) => !open)}
+              busy={selectedBusy}
+              // A thread waiting for the designer: its icon switches to Comment, which opens it.
+              onOpenThread={marks.get(selected.element)?.thread ? () => setTool("comment") : undefined}
+            />
+          )}
           <PropertyDialog
             key={selected.key}
             element={selected.element}
+            others={others}
             anchor={selectedRect}
+            placeBy={placeBy}
             initialQuery={lastQuery.current}
             onQueryChange={(query) => {
               lastQuery.current = query;
@@ -512,22 +614,10 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
             widthPick={widthPick}
             autoFocus={selected.from !== "dom"}
           />
-          {/* After the dialog (same layer: DOM order decides), so the button's
-              tooltip shows over the dialog when they meet. */}
-          {!hideSelection && (
-            <SelectionActions
-              rect={selectedRect}
-              domOpen={domOpen}
-              onShowInDom={() => setDomOpen((open) => !open)}
-              busy={selectedBusy}
-              // A thread waiting for the designer: its icon switches to Comment, which opens it.
-              onOpenThread={marks.get(selected.element)?.thread ? () => setTool("comment") : undefined}
-            />
-          )}
         </>
       )}
       {/* The hover comes after the selection, so its label is drawn over the
-          selection's outline, dots and grid lines (same layer: DOM order decides).
+          selection's outline and grid lines (same layer: DOM order decides).
           The dialog and the toolbar are on a higher layer either way. */}
       {domHover && domHoverRect && domHover !== selected?.element && (
         <Highlight element={domHover} rect={domHoverRect} variant="hover" nameAttributes={nameAttributes} {...labelPlace(domHover, domHoverRect)} />
@@ -539,9 +629,17 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
           <GridOverlay element={hovered} part="lines" />
         </>
       )}
+      {/* The selection's corner dots, after the hover: on top of a hovered parent's lines. */}
+      {selected && selectedRect && (commenting || !hideSelection) && (
+        <Highlight element={selected.element} rect={selectedRect} variant="dots" label={false} />
+      )}
+      {others.map((element) => (
+        <SelectedDots key={elementKey(element)} element={element} />
+      ))}
       {domOpen && (
         <DomTree
           selected={selected?.element ?? null}
+          also={others}
           onHover={setDomHover}
           onSelect={pickFromDom}
           onClose={() => setDomOpen(false)}
@@ -593,12 +691,12 @@ function jobText(job: JobRecord): string {
   return `${whatText(job)}: ${statusText(job)}`;
 }
 
-/** Where a thread's latest comment stands, while it's with the agent. */
 /** The agent's name from its label ("Claude Code · app" → "Claude Code"). */
 export function agentName(label: string | undefined): string | undefined {
   return label?.split(" · ")[0] || undefined;
 }
 
+/** Where a thread's latest comment stands, while it's with the agent. */
 function threadJobStatus(job: JobRecord): string | undefined {
   if (job.status === "queued") return "Waiting for an agent";
   if (job.status === "working") return `${agentName(job.agent?.label) ?? "The agent"} is working on it`;
@@ -636,6 +734,18 @@ function cornerWidth(count: number): number {
 
 /** How long the jobs button's flash lasts, in ms (Highlight.css, `flash`). */
 const FLASH_MS = 900;
+
+/** Another selected element (several selected): the selection's outline, no label, no actions. */
+function SelectedOutline({ element, working }: { element: Element; working: boolean }) {
+  const rect = useElementRect(element);
+  return rect ? <Highlight element={element} rect={rect} variant="selected" label={false} working={working} /> : null;
+}
+
+/** Another selected element's corner dots (see Highlight's `dots`). */
+function SelectedDots({ element }: { element: Element }) {
+  const rect = useElementRect(element);
+  return rect ? <Highlight element={element} rect={rect} variant="dots" label={false} /> : null;
+}
 
 /** The jobs button's flash on an element (Highlight's `flash` variant). */
 function FlashOutline({ element }: { element: Element }) {

@@ -13,6 +13,11 @@ export default defineConfig({
   plugins: [preact()],
   server: { port: 5199, strictPort: true, cors: true },
   build: {
+    // esbuild, not lightningcss (this Vite's default): lightningcss rounds
+    // big numbers to six digits, so the highlight and UI layers
+    // (2147483646, 2147483647 in tokens.css) both became 2147480000, and
+    // highlights drew over Pilot's own buttons and panels.
+    cssMinify: "esbuild",
     lib: {
       entry: { pilot: "src/index.ts", "pilot-auto": "src/auto.ts" },
       formats: ["es"],

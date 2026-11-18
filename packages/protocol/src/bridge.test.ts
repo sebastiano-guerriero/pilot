@@ -17,3 +17,11 @@ describe("origins", () => {
     expect(originKey("http://127.0.0.1:5180/")).toBe("http://localhost:5180");
   });
 });
+
+describe("the hub's port", () => {
+  it("is one per bridge version, never the 4747 every Pilot before 0.6.1 used", async () => {
+    const { BRIDGE_VERSION, DEFAULT_BRIDGE_PORT } = await import("./bridge.ts");
+    expect(DEFAULT_BRIDGE_PORT).toBe(4747 + BRIDGE_VERSION);
+    expect(DEFAULT_BRIDGE_PORT).not.toBe(4747);
+  });
+});

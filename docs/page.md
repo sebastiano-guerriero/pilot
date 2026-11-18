@@ -28,7 +28,31 @@ With the Select tool on ([select/](../packages/overlay/src/select)):
 
 - **Hovering** outlines the element and labels it with its **name and size** (`article[data-slot=card] 293×110`) above its top-left corner. Next to icons on the element's top-right corner (a job's loader, a comment) or the selection's actions on the same row, the label stops short of them: first without the size, then with the name cut ("…"), and below the element when there's no room at all. On a row with the selection's actions it's lined up with them (`labelRoom`, `labelShift` in [Highlight](../packages/overlay/src/ui/components/Highlight/Highlight.tsx); `labelPlace` in [App.tsx](../packages/overlay/src/ui/App.tsx)).
 - **A click selects.** Pilot catches the click, so the page's own handlers and links don't fire. The selection gets an outline with a handle on each corner, and **no label**: you know what you clicked, and its corner holds the selection's actions. Hovering the selection doesn't add one either.
+- **Shift+click adds** an element to the selection, or takes it out (see *Several elements* below).
 - Select mode stays on, so you can click another element to switch to it. **Esc** clears the selection; with nothing selected, Esc turns the tool off. Clicking the tool again turns it off, clears the selection, and the page behaves normally again.
+
+### Several elements
+
+Selecting several elements edits them together: "these cards", without saying what they have in common ([App.tsx](../packages/overlay/src/ui/App.tsx), `others`).
+
+- **On the page:** Shift+click, with Select or Comment, adds an element, or takes it out. A plain click selects just that one again. **In the DOM tree:** Cmd/Ctrl+click adds or takes out a row; Shift+click selects every selectable row between the last one clicked and this one.
+- **The first one leads:** the selection's actions sit by it (a thread is on it, a task's width check measures it), and the others get the same outline, without handles. Taking out the first one makes the next the first.
+- **The panel follows the latest one added:** the property dialog (or the comment box) picks its spot again beside the element added last, so it's next to what was just clicked (`placeBy`); after Select similar, beside the last of them, in page order. Taking that one out puts it back by the first. Only adding moves it: editing never does.
+- **The dialog edits them all.** Its list holds the properties any of them sets; each change goes to every selected element as **one undo step**, sent in one job. A field whose value differs between them is empty with the placeholder **Mixed**; typing a value sets it on all of them, clearing it clears it on all. A revealing editor with a mixed value (display, position) shows no rows, since they'd differ per element.
+- **Select similar** ([dom/similar.ts](../packages/overlay/src/dom/similar.ts)) finds the elements like the first one **by component first**, where Pilot reads the page's components ([dom/component.ts](../packages/overlay/src/dom/component.ts), *Components* below): the nearest component rendering the element that has other instances on the page is the repeated unit, whatever their props, so `<Button variant="primary">` and `variant="ghost"` are both Buttons, the same code. The same part of each instance is found by the path from its top-level element down to the element, by tag and position (variants may differ in classes). A component with one instance (the page's Hero) passes it on to the component around it. **Else by the page's structure**, for plain HTML: first the **repeated unit**, the nearest of the element and its ancestors with look-alikes, elements with the same tag and classes anywhere on the page (nearly the same with the same children, for a copy the page's script marked `active`), the same `data-slot` for a classless one, or else siblings with the same tag and children (a list's items, a table's rows). A classless element with no children is never a unit: paragraphs side by side are a text, not copies. Then the **same part** of each copy, by walking the path from the unit down to the element (the child with the same tag and classes, at the same position); a copy without it (a card with no badge) is left out.
+- **Comments too:** with several selected, a comment, or a task from the comment box, is about all of them, as one job ([handoff.md](handoff.md), *Comments*).
+- **What needs one element** isn't offered with several: Show in DOM, the hover label and editing text in place.
+
+Why the union and not the shared properties: what one card sets and the others don't is often what the designer wants to line up. Why Mixed rather than the first one's value: showing one value would suggest they all have it, and an unchanged field would look like a choice.
+
+### Components
+
+[dom/component.ts](../packages/overlay/src/dom/component.ts) reads the page's components from what the framework leaves on the DOM in development (Pilot only runs there): which component instance renders an element, every instance of it on the page, and where its code is. Plain HTML, or a framework Pilot doesn't read yet (Svelte, Angular), gives nothing, and Select similar uses the page's structure.
+
+- **React** (16 and later): each DOM node carries its fiber (`__reactFiber$…`). Pilot walks the live tree from its root (the root's `current`, never stale copies); a component is its type, the function or class, so every `<ProductCard>` is an instance whatever its props. The component named for an element is the one whose code wrote it (its owner). Its file comes from `_debugSource` (React 18 and earlier, with the line) or, in React 19, from the stack React records where the element was created: the first frame that's the app's own code (not React, a dependency or a bundle chunk), file only, since that line is the transformed module's. Bundlers that name chunks instead of files (Next.js's Turbopack) give no file.
+- **Vue 3**: each element carries the component that rendered it (`__vueParentComponent`); instances come from walking the app's tree from its root; the file is the component's `__file`.
+- **What it feeds:** Select similar and the look-alike counts (by instance), and each element the agent gets: its component and file (`source`, the prompt's "Component" line) and, for look-alikes found by component, whose instances they are (`lookAlikesOf`), so the agent opens the right file and knows the change touches shared code.
+- **Why from the DOM, not a build plugin:** it works in any project with no setup, which is what Pilot's install promises; a plugin per bundler would give exact lines everywhere but need configuring per project.
 
 ### Element names
 
@@ -45,6 +69,7 @@ Classes are never used: there's no reliable way to tell a meaningful one (`card`
 
 [SelectionActions](../packages/overlay/src/ui/components/SelectionActions/SelectionActions.tsx): small accent buttons above the selection's top-right corner (inside it when the element touches the top of the window). The same with either tool. The corner holds status and navigation only, a few icons at most; tasks for the agent are the comment box's `/` actions ([handoff.md](handoff.md), *Actions*), where a list can grow without crowding the element.
 
+- **Select similar** adds the elements like the selected one to the selection: the same part of each copy of what repeats, so a card's title selects every card's title, not every heading (see *Several elements*). Its tooltip says how many ("Select 2 similar"). Only there while some of them aren't selected yet.
 - **Show in DOM** (`< >`) opens the DOM tree on it.
 - While a job isn't finished on the element, its **loader** takes the corner and says in its tooltip where the job stands; Show in DOM moves to its left. An unresolved comment thread puts its **comment icon** on the corner, at the far right. See *Elements being worked on* and *Comments* in [handoff.md](handoff.md).
 
@@ -84,6 +109,7 @@ Classes are never used: there's no reliable way to tell a meaningful one (`card`
 - Rows are all as wide as the widest one (at least the panel's width), so deep or long ones scroll the list sideways. Selecting a row scrolls its name into view, sideways too.
 - **It follows the selection:** selecting on the page (or Show in DOM) opens it down to the selection (ancestors expanded, its children one level open). Selecting a row in the tree, by click or key, opens nothing: rows open and close only with the chevron or →/←, so moving through the list keeps its shape.
 - **Hovering** a row highlights its element on the page. **Clicking** selects it, scrolled into view, and the property dialog follows without taking focus, so the panel's keys keep working: ↑/↓ select the previous/next row, → opens a row (or goes to its first child), ← closes it (or goes to its parent). →/← never scroll the list sideways, the browser's default for a focused scroller: with nothing to open or close, they do nothing. (Before, a selected row opened itself, so ↓ walked into every row's children.)
+- **Cmd/Ctrl+click** adds a row's element to the selection (or takes it out), **Shift+click** selects the range from the last row clicked; every selected element's row is marked ([Several elements](#several-elements)). Rows have no gap between them, so selected rows next to each other join into one block, square where they meet.
 - The tree updates as the page changes (a MutationObserver on the body).
 
 ## Viewport width and breakpoints

@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AgentInfo, ChangeResult, PageEvent, WidthCheck } from "@pilot/protocol";
-import { BRIDGE_VERSION, originKey } from "@pilot/protocol";
+import { BRIDGE_VERSION, originKey, questionOf } from "@pilot/protocol";
 import { attachmentsDir, extensionOf, MAX_ATTACHMENT_BYTES, saveAttachment, sweepAttachments, withAttachmentPaths } from "./attachments.ts";
 import { Hub, type JobPost } from "./hub.ts";
 
@@ -12,6 +12,7 @@ import { Hub, type JobPost } from "./hub.ts";
  * - POST /jobs                  a job (JobPost)
  * - POST /jobs/:id/cancel       take a job back
  * - POST /jobs/:id/retry        a done job's changes that didn't come out right (or a task's problems): one follow-up
+ * - POST /jobs/:id/answer       the designer's answer to the agent's question about a done job: back to the agent with it
  * - POST /checks/:requestId     the answer to a width check an agent asked for (`check` event)
  * - POST /attachments           a file for a comment: an image, text file or PDF (the raw bytes, its type as Content-Type): saved in
  *                               the OS temp folder (attachments.ts), answers its id. Jobs name files by id only.
@@ -115,13 +116,17 @@ async function handle(hub: Hub, req: IncomingMessage, res: ServerResponse, attac
     if (typeof post?.id !== "string" || !post.changeSet) return json(res, 400, { error: "job needs id and changeSet" });
     return json(res, 202, { job: hub.postJob(origin, withAttachmentPaths(post, attachments)) });
   }
-  const jobRoute = path.match(/^\/jobs\/([^/]+)\/(cancel|retry)$/);
+  const jobRoute = path.match(/^\/jobs\/([^/]+)\/(cancel|retry|answer)$/);
   if (jobRoute) {
     const [, id, action] = jobRoute as unknown as [string, string, string];
+    const answer = (data as { answer?: unknown }).answer;
+    if (action === "answer" && (typeof answer !== "string" || !answer.trim())) return json(res, 400, { error: "answer needed" });
     const job =
       action === "cancel"
         ? hub.cancel(origin, decodeURIComponent(id))
-        : hub.retry(
+        : action === "answer"
+          ? hub.answer(origin, decodeURIComponent(id), (answer as string).trim().slice(0, 2000))
+          : hub.retry(
             origin,
             decodeURIComponent(id),
             ((data as { differences?: ChangeResult[] }).differences ?? []).slice(0, 200),
@@ -159,7 +164,7 @@ function events(hub: Hub, origin: string, req: IncomingMessage, res: ServerRespo
 }
 
 async function handleAgent(hub: Hub, action: string, data: unknown, req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const d = data as { agent: AgentInfo; origin?: string; jobId?: string; notes?: string; timeoutMs?: number };
+  const d = data as { agent: AgentInfo; origin?: string; jobId?: string; notes?: string; question?: unknown; timeoutMs?: number };
   if (!d?.agent?.id) return json(res, 400, { error: "agent needed" });
   switch (action) {
     case "register":
@@ -180,7 +185,7 @@ async function handleAgent(hub: Hub, action: string, data: unknown, req: Incomin
     }
     case "done":
       if (!d.jobId) return json(res, 400, { error: "jobId needed" });
-      return json(res, 200, { job: hub.done(d.agent.id, d.jobId, d.notes) });
+      return json(res, 200, { job: hub.done(d.agent.id, d.jobId, d.notes, questionOf(d.question)) });
     case "check": {
       if (!d.jobId) return json(res, 400, { error: "jobId needed" });
       const check = await hub.check(d.jobId, Math.min(d.timeoutMs ?? CHECK_TIMEOUT, 2 * 60_000));

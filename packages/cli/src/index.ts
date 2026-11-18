@@ -6,16 +6,21 @@
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createPilotServer } from "./mcp.ts";
-import { init } from "./init.ts";
+import { AGENT_IDS, type AgentId, init } from "./init.ts";
 import { setup } from "./setup.ts";
 
 const HELP = `usepilot: take the controls from your coding agent
 
 Usage: npx usepilot <command>
 
-  init    Set Pilot up in this project, for any agent: installs it, registers
-          its MCP server, and prints what's left for the agent (loading it in
-          the app). Ask your agent to run it. --no-install: print the command.
+  init    Set Pilot up in this project for your agent: installs it, connects
+          the agent (its MCP server and the pilot skill, nothing for other
+          agents), and prints what's left for it (loading Pilot in the app).
+          Ask your agent to run it.
+          --agent <claude-code|cursor|codex|vscode|other>: the agent running it
+          --project: connect the agent in this repo (files to commit, for a
+                     team) instead of once for every project on this machine
+          --no-install: print the install command instead of running it
   setup   Set up /pilot in Claude Code, for every project on this machine
           (--project: for this repo, to commit, so everyone gets it)
   mcp     Run the MCP server (stdio) agents connect to, and the bridge the
@@ -38,6 +43,16 @@ async function runMcp(): Promise<void> {
 
 const [command = "help"] = process.argv.slice(2);
 
+/** `--agent <id>` or `--agent=<id>`; an unknown one fails, listing the known ones. */
+function agentArg(): AgentId | undefined {
+  const args = process.argv.slice(3);
+  const i = args.findIndex((a) => a === "--agent" || a.startsWith("--agent="));
+  if (i < 0) return undefined;
+  const value = (args[i]?.includes("=") ? args[i].split("=")[1] : args[i + 1])?.toLowerCase();
+  if (value && (AGENT_IDS as readonly string[]).includes(value)) return value as AgentId;
+  throw new Error(`--agent takes one of: ${AGENT_IDS.join(", ")}.`);
+}
+
 switch (command) {
   case "help":
   case "--help":
@@ -57,7 +72,13 @@ switch (command) {
     break;
   case "init":
     try {
-      process.stdout.write(await init({ install: !process.argv.includes("--no-install") }));
+      process.stdout.write(
+        await init({
+          install: !process.argv.includes("--no-install"),
+          agent: agentArg(),
+          scope: process.argv.includes("--project") ? "project" : "machine",
+        }),
+      );
     } catch (error) {
       process.stderr.write(`usepilot init: ${(error as Error).message}\n`);
       process.exitCode = 1;

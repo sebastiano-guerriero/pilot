@@ -3,7 +3,7 @@ import { joinColor, parseColor, parseOpacity, splitColor } from "../../css/color
 import { Icon } from "../../ui/components/Icon/Icon.tsx";
 import { PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
-import { declaredOf } from "../declared.ts";
+import { declaredOf, isMixed, MIXED } from "../declared.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
 
 /** Whether a color carries its own alpha (8-digit hex, rgba / slash syntax): it then sets the opacity too. */
@@ -70,6 +70,7 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
         <PropertyInputText
           value={color}
           label={label}
+          placeholder={isMixed(props, property) ? MIXED : undefined}
           icon={swatch}
           inputRef={colorRef}
           onCommit={(text) => {

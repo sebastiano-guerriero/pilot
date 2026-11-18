@@ -89,7 +89,7 @@ export class BridgeClient {
     }
   }
 
-  postJob(job: Pick<Job, "id" | "changeSet" | "status" | "agent" | "attempt" | "differences" | "issues">): Promise<boolean> {
+  postJob(job: Pick<Job, "id" | "changeSet" | "status" | "agent" | "attempt" | "differences" | "issues" | "question" | "answer">): Promise<boolean> {
     return this.post("/jobs", job);
   }
 
@@ -109,6 +109,11 @@ export class BridgeClient {
    */
   retry(jobId: string, differences: ChangeResult[], issues?: string[]): Promise<boolean> {
     return this.post(`/jobs/${encodeURIComponent(jobId)}/retry`, { differences, issues });
+  }
+
+  /** The designer's answer to the agent's question about a done job: it goes back to the agent with it. False when the hub refused. */
+  answer(jobId: string, answer: string): Promise<boolean> {
+    return this.post(`/jobs/${encodeURIComponent(jobId)}/answer`, { answer });
   }
 
   private async post(path: string, body: object): Promise<boolean> {

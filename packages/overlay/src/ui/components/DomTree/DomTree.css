@@ -78,6 +78,8 @@
   }
 
   .header {
+    /* Never squeezed by a long list: the list scrolls, the header keeps its 40px. */
+    flex: none;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -119,8 +121,8 @@
 
   /* One column, as wide as the widest row (at least the panel): every row
      spans it, so they all end at the same edge. The list scrolls sideways
-     (trackpad, Shift+wheel) when the widest is wider than the panel. 1px
-     between rows. */
+     (trackpad, Shift+wheel) when the widest is wider than the panel. No
+     gap between rows, so selected rows next to each other join up. */
   .rows {
     flex: 1;
     min-height: 0;
@@ -129,7 +131,6 @@
        panel when they're all narrower. */
     grid-template-columns: auto;
     align-content: start;
-    gap: 1px;
     overflow: auto;
     overscroll-behavior: contain;
     scrollbar-width: none;
@@ -150,8 +151,9 @@
      so nothing fades while the list doesn't scroll. */
   .fade {
     position: absolute;
-    left: 0;
-    right: 0;
+    /* 1px in from each side: the panel's inset ring stays drawn over. */
+    left: 1px;
+    right: 1px;
     pointer-events: none;
   }
 
@@ -188,6 +190,18 @@
   .row[aria-selected="true"] {
     background: var(--plt-color-accent);
     color: var(--plt-color-background);
+  }
+
+  /* Selected rows next to each other (several selected) are one block:
+     square where they meet. */
+  .row[aria-selected="true"] + .row[aria-selected="true"] {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+
+  .row[aria-selected="true"]:has(+ .row[aria-selected="true"]) {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
   }
 
   .row[aria-selected="true"] .identifiers,

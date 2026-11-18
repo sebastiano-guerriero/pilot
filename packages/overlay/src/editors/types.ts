@@ -64,6 +64,13 @@ export interface PropertyEditorProps {
    */
   declared?: Record<string, string>;
   /**
+   * Properties whose value differs across the selected elements (several
+   * selected, see PropertyDialog's `others`): their `declared` value is ""
+   * and their field reads "Mixed". A change sets it on all of them. Read it
+   * with `isMixed()` (editors/declared.ts).
+   */
+  mixed?: ReadonlySet<string>;
+  /**
    * Apply a value: Pilot records it in the undo history (Cmd/Ctrl+Z) and
    * shows it on the page (the preview stylesheet). Editors never write
    * `element.style` themselves. An empty `value` clears it: the element

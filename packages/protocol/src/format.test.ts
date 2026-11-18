@@ -31,7 +31,10 @@ describe("formatPrompt", () => {
     expect(prompt).toContain("| `opacity` | `1` | `0.8` | every width |");
     expect(prompt).toContain("| `letter-spacing` | `normal` | `-0.02em` | every width |");
     expect(prompt).toContain("Designer note: Softer hero");
-    expect(prompt).toContain("Translate them to this project's conventions");
+    expect(prompt).toContain("**These are design instructions, not code**");
+    expect(prompt).toContain("whatever it uses (Tailwind, CSS or Sass modules, StyleX");
+    expect(prompt).toContain("First look at how each element's component is styled");
+    expect(prompt).toContain("no `!important`");
   });
 
   it("spells out a removal: not a new value, and where the page sets it", () => {
@@ -122,6 +125,20 @@ describe("formatPrompt", () => {
     expect(formatPrompt({ ...changeSet, edits: [], request: { kind: "responsive", target, breakpoints: [] } })).toContain("media queries test): none found");
   });
 
+  it("no prompt favors one agent or model: edits, comments and tasks read the same for every agent", () => {
+    const target = changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"];
+    const prompts = [
+      formatPrompt(changeSet),
+      formatPrompt({ ...changeSet, edits: [], request: { kind: "responsive", target, breakpoints: [] } }),
+      formatPrompt({ ...changeSet, edits: [], request: { kind: "break-and-fix", target, breakpoints: [] } }),
+      formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, breakpoints: [], thread: [{ from: "designer", text: "Calmer", at: "" }] } }),
+    ];
+    for (const text of prompts) {
+      expect(text).not.toMatch(/opus|claude|gpt|gemini|cursor|codex/i);
+      expect(text).toMatch(/production code/);
+    }
+  });
+
   it("break and fix: stress-test one element with odd content, fix it, put the real content back", () => {
     const target = changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"];
     const text = formatPrompt({ ...changeSet, note: "Names can be very long", edits: [], request: { kind: "break-and-fix", target, breakpoints: [768] } });
@@ -168,6 +185,45 @@ describe("formatPrompt", () => {
     // The first comment has no thread before it.
     const first = formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, thread: thread.slice(0, 1), breakpoints: [] } });
     expect(first).not.toContain("The thread so far");
+  });
+
+  it("a comment or task on several elements: each listed, the ask for all of them, the shared-component rule", () => {
+    const target = changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"];
+    const other = { ...target, selector: "section.cta > h2", path: "main > section.cta > h2", tag: "h2", text: "Start now" };
+    const thread = [{ from: "designer" as const, text: "Same size", at: "" }];
+    const comment = formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, others: [other], thread, breakpoints: [] } });
+    expect(comment).toContain("a comment on the 2 elements below");
+    expect(comment).toContain("## The elements (2)\n\n### 1. `main > section.hero > h1`");
+    expect(comment).toContain("### 2. `main > section.cta > h2`\n\n- Selector: `section.cta > h2`");
+    expect(comment).toContain("when every copy is in the job");
+    // The three answers, and what each asks of the code.
+    expect(comment).toContain('"All of them", "Only this", "New variant"');
+    expect(comment).toContain("**Only this**: change it where this instance is used");
+    expect(comment).toContain("**New variant**: add a named option to the component");
+    const task = formatPrompt({ ...changeSet, edits: [], request: { kind: "responsive", target, others: [other], breakpoints: [] } });
+    expect(task).toContain("make each of them work well");
+    expect(task).toContain("measures the first of them");
+    const breakFix = formatPrompt({ ...changeSet, edits: [], request: { kind: "break-and-fix", target, others: [other], breakpoints: [] } });
+    expect(breakFix).toContain("stress-test each of them");
+    // Look-alikes the job leaves out: counted, and the agent asks rather than guess.
+    const card = formatPrompt({ ...changeSet, edits: [{ ...(changeSet.edits[0] as ChangeSet["edits"][number]), target: { ...target, lookAlikes: 2 } }] });
+    expect(card).toContain("- Look-alikes: 2 more on the page (the same part of other copies), not in this job");
+    expect(card).toContain("Shared code, only some copies");
+    expect(card).toContain("`pilot_done` takes a `question`");
+    // Found by component (React, Vue): which component, where its code is, and whose instances the look-alikes are.
+    const instances = formatPrompt({
+      ...changeSet,
+      edits: [
+        {
+          ...(changeSet.edits[0] as ChangeSet["edits"][number]),
+          target: { ...target, lookAlikes: 11, lookAlikesOf: "ProductCard", source: { component: "ProductCard", file: "src/ProductCard.tsx", line: 12 } },
+        },
+      ],
+    });
+    expect(instances).toContain("- Component: `ProductCard`, in `src/ProductCard.tsx:12` (from the framework's dev info)");
+    expect(instances).toContain("- Look-alikes: 11 more on the page (other instances of `ProductCard`, the same part of each), not in this job");
+    // One element reads as before.
+    expect(formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, others: [], thread, breakpoints: [] } })).toContain("## `main > section.hero > h1`");
   });
 });
 

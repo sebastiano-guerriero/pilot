@@ -16,13 +16,25 @@ import { ScrollThumb } from "../ScrollThumb/ScrollThumb.tsx";
 import { PropertySearch } from "../PropertySearch/PropertySearch.tsx";
 
 interface PropertyDialogProps {
-  /** The selected element. */
+  /** The selected element (the first one, when several are). */
   element: EditableElement;
+  /**
+   * The other selected elements (Shift+click, or the DOM tree), none for
+   * one: every change goes to all of them, as one undo step, and a field
+   * whose value differs across them reads "Mixed".
+   */
+  others?: readonly EditableElement[];
   /**
    * Its bounding box. The dialog picks its spot next to it when it opens
    * (dialogSpot); later changes of the box don't move it.
    */
   anchor: DOMRect;
+  /**
+   * The element the spot is picked beside, when it isn't `element`: with
+   * several selected, the latest one (App). Picked again when it changes,
+   * so the panel follows the last element added.
+   */
+  placeBy?: Element;
   /** Editors to search. Defaults to the built-in registry (overridable for tests). */
   editors?: PropertyEditor[];
   /**
@@ -94,7 +106,9 @@ const GAP = 8;
  */
 export function PropertyDialog({
   element,
+  others = [],
   anchor,
+  placeBy,
   editors = allEditors,
   initialQuery = "",
   listAll = LIST_ALL_EDITORS,
@@ -244,9 +258,15 @@ export function PropertyDialog({
   // Picked at the first layout (before paint, so the first frame is already in
   // place), with the dialog's real width and the element's box measured right
   // then: after a window resize, the `anchor` prop can still be the old layout's.
+  const beside = placeBy ?? element;
+  const placedBeside = useRef(beside);
   useLayoutEffect(() => {
+    if (placedBeside.current !== beside) {
+      placedBeside.current = beside;
+      if (spot) return setSpot(null);
+    }
     if (spot || !ref.current) return;
-    const box = element.isConnected ? element.getBoundingClientRect() : anchor;
+    const box = beside.isConnected ? beside.getBoundingClientRect() : anchor;
     setSpot(dialogSpot(box, ref.current.offsetWidth, vw, scroll));
   });
   useEffect(() => {
@@ -350,6 +370,7 @@ export function PropertyDialog({
                       <MatchedEditor
                         editor={match}
                         element={element}
+                        others={others}
                         history={history}
                         widths={widths ?? undefined}
                         states={states}
@@ -523,6 +544,7 @@ function Hint({ area }: { area: "search" | "editor" }) {
 function MatchedEditor({
   editor,
   element,
+  others = [],
   history,
   widths,
   states,
@@ -535,6 +557,7 @@ function MatchedEditor({
 }: {
   editor: PropertyEditor;
   element: EditableElement;
+  others?: readonly EditableElement[];
   history: EditHistory;
   widths?: WidthRange;
   states?: ElementState[];
@@ -549,22 +572,35 @@ function MatchedEditor({
   const computed = getComputedStyle(element);
   const properties = propertiesOf(editor);
   const values = Object.fromEntries(properties.map((p) => [p, computed.getPropertyValue(p)]));
+  const all = [element, ...others];
   const declared = fieldValues(element, properties, history, states);
+  // Several selected: a property whose value differs across them is "Mixed" (an empty field).
+  const mixed = new Set<string>();
+  for (const other of others) {
+    const theirs = fieldValues(other, properties, history, states);
+    for (const p of properties) if (theirs[p] !== declared[p]) mixed.add(p);
+  }
+  for (const p of mixed) declared[p] = "";
   const Editor = editor.component;
   return (
     <Editor
       element={element}
       values={values}
       declared={declared}
+      mixed={mixed}
       onChange={(property, value, options) => {
-        // Cleared: the element doesn't set it (a removal, when the page's CSS does).
-        // Recorded for the chip's widths (none: every width) and the state pills (none: as it is).
-        if (value === "") clearProperty(history, element, property, options?.gesture, widths, states);
-        else history.apply(element, property, value, options?.gesture, { widths, states });
+        // Every selected element, with one gesture: one undo step for all of them.
+        const gesture = options?.gesture ?? (others.length ? {} : undefined);
+        for (const el of all) {
+          // Cleared: the element doesn't set it (a removal, when the page's CSS does).
+          // Recorded for the chip's widths (none: every width) and the state pills (none: as it is).
+          if (value === "") clearProperty(history, el, property, gesture, widths, states);
+          else history.apply(el, property, value, gesture, { widths, states });
+        }
         rerender(0);
       }}
       onRevert={(property, gesture) => {
-        history.revert(element, property, gesture);
+        for (const el of all) history.revert(el, property, gesture);
         rerender(0);
       }}
       query={query}

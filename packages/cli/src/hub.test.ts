@@ -32,6 +32,17 @@ describe("Hub", () => {
     expect(p.jobs()).toEqual(["queued", "working"]);
   });
 
+  it("stamps when an agent takes a job and reports it done, to see where its time goes", async () => {
+    let t = 1_000;
+    const hub = new Hub(() => (t += 1_000));
+    hub.register(a, APP);
+    hub.postJob(APP, { id: "j1", changeSet: changeSet("j1") });
+    const { job } = await hub.wait(a, APP, 10);
+    expect(job?.takenAt).toBeDefined();
+    const done = hub.done(a.id, "j1", "ok");
+    expect(Date.parse(done?.doneAt as string)).toBeGreaterThan(Date.parse(job?.takenAt as string));
+  });
+
   it("jobs queue up: an agent that comes back takes the oldest", async () => {
     let t = 0;
     const hub = new Hub(() => ++t);
@@ -97,6 +108,32 @@ describe("Hub", () => {
     // Only once: after the follow-up, Pilot takes what the code gives.
     hub.done("a", "j1");
     expect(hub.retry(APP, "j1", differences)).toBeNull();
+  });
+
+  it("a question: the job is done with it; the designer's answer sends it back once, preferably to the agent that asked", async () => {
+    const hub = new Hub();
+    const p = page(hub);
+    hub.register(a, APP);
+    hub.postJob(APP, { id: "j1", changeSet: changeSet("j1") });
+    await hub.wait(a, APP, 10);
+    // No question, nothing to answer.
+    expect(hub.answer(APP, "j1", "All of them")).toBeNull();
+    const question = { text: "Every card, or only this one?", choices: ["All of them", "Only this one"] };
+    hub.done("a", "j1", "Did the padding", question);
+    const last = p.events.at(-1);
+    expect(last?.type === "job" && [last.job.status, last.job.question]).toEqual(["done", question]);
+    // Another page's origin can't answer it.
+    expect(hub.answer("http://localhost:3000", "j1", "All of them")).toBeNull();
+    const other = hub.wait(b, APP, 50);
+    const same = hub.wait(a, APP, 50);
+    expect(hub.answer(APP, "j1", "All of them")?.status).toBe("working");
+    const { job } = await same;
+    expect([job?.id, job?.answer, job?.question?.text, job?.attempt]).toEqual(["j1", "All of them", question.text, 1]);
+    expect((await other).job).toBeNull();
+    // Once: answered, a new question is dropped, and it can't be answered again.
+    hub.done("a", "j1", "", { text: "And the footer?" });
+    expect(hub.job("j1")?.question?.text).toBe(question.text);
+    expect(hub.answer(APP, "j1", "Yes")).toBeNull();
   });
 
   it("launch reaches the open pages of the agent's origin only", () => {

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { PropertySelect } from "../../ui/components/PropertySelect/PropertySelect.tsx";
-import { declaredOf } from "../declared.ts";
+import { declaredOf, isMixed, MIXED } from "../declared.ts";
 import { rowsOf } from "../listOrder.ts";
 import type { FocusRequest, PropertyEditor, PropertyEditorProps } from "../types.ts";
 
@@ -74,6 +74,7 @@ export function RevealEditor({ config, ...props }: PropertyEditorProps & { confi
         property={config.property}
         options={config.options}
         value={value}
+        mixed={isMixed(props, config.property)}
         focusRequest={requestFor(0)}
         onChange={(next) => onChange(config.property, next)}
         onTab={(direction) => tab(0, direction)}
@@ -94,6 +95,8 @@ interface SelectRowProps {
   property: string;
   options: readonly string[];
   value: string;
+  /** The selected elements differ on it: the select reads "Mixed". */
+  mixed?: boolean;
   focusRequest?: FocusRequest;
   onChange(value: string): void;
   onTab(direction: 1 | -1): void;
@@ -103,7 +106,7 @@ interface SelectRowProps {
  * The select. Picking keeps focus here (Enter picks in the menu), so Tab
  * goes on to the rows that just appeared.
  */
-function SelectRow({ property, options, value, focusRequest, onChange, onTab }: SelectRowProps) {
+function SelectRow({ property, options, value, mixed, focusRequest, onChange, onTab }: SelectRowProps) {
   const ref = useRef<HTMLButtonElement>(null);
   useLayoutEffect(() => {
     if (focusRequest) ref.current?.focus();
@@ -114,6 +117,7 @@ function SelectRow({ property, options, value, focusRequest, onChange, onTab }: 
         value={value}
         options={options}
         label={property}
+        placeholder={mixed ? MIXED : undefined}
         triggerRef={ref}
         onChange={(next) => next !== value && onChange(next)}
         onTab={onTab}

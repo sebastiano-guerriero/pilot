@@ -5,8 +5,16 @@ import { Tooltip } from "../Tooltip/Tooltip.tsx";
 interface SelectionActionsProps {
   /** The element's box (viewport px). */
   rect: DOMRect;
+  /** On the selection, whose line is 2px (1px outside the box, Highlight.css): the actions keep 4px from its outer edge. */
+  selected?: boolean;
   /** The DOM tree is open (the action shows it pressed). */
   domOpen?: boolean;
+  /**
+   * Select similar: `count` elements like this one elsewhere on the page
+   * (dom/similar.ts), selected with it on click. None: nothing similar, or
+   * all of it is selected already.
+   */
+  similar?: { count: number; onSelect(): void };
   /** Show in DOM; none: not offered (a busy element that isn't selected only gets its loader). */
   onShowInDom?(): void;
   /**
@@ -39,23 +47,30 @@ const GAP = 4;
 
 /**
  * Where `count` actions sit for an element's box (viewport px): one 20px
- * square each, 4px apart, right-aligned with it, 4px above its top edge (or
- * inside it, 4px in, when it touches the top of the window). What other
+ * square each, 4px apart, right-aligned with it, 4px above its top edge
+ * (above its 2px line, for the selection: `selected`), or inside it, 4px
+ * in, when it touches the top of the window. What other
  * overlays keep clear of (the hover label).
  */
-export function actionsBox(rect: DOMRect, count: number): { left: number; top: number; right: number; bottom: number; inside: boolean } {
-  const inside = rect.top < SIZE + GAP;
+export function actionsBox(
+  rect: DOMRect,
+  count: number,
+  selected = false,
+): { left: number; top: number; right: number; bottom: number; inside: boolean } {
+  // The selection's line reaches 1px outside its box.
+  const outset = selected ? 1 : 0;
+  const inside = rect.top < SIZE + GAP + outset;
   const width = count * SIZE + Math.max(count - 1, 0) * 4;
   // Not rounded: on the same fractional pixels as the element's outline and label.
   const right = inside ? rect.right - GAP : rect.right;
-  const top = inside ? rect.top + GAP : rect.top - SIZE - GAP;
+  const top = inside ? rect.top + GAP : rect.top - outset - SIZE - GAP;
   return { left: right - width, top, right, bottom: top + SIZE, inside };
 }
 
 /**
  * Status and navigation on an element, above its top-right corner,
- * right-aligned with it, 20px squares 4px apart: on the selection (the same
- * with either tool), Show in DOM (opens the DOM tree on the selected
+ * right-aligned with it, 20px squares 4px apart (4px above its line): on the selection (the same
+ * with either tool), Select similar (when there's something similar), Show in DOM (opens the DOM tree on the selected
  * element). While a job is on the element (`busy`), its loader takes the
  * corner; with an unresolved comment thread, a comment icon takes the
  * corner and opens it. Tasks for the agent (Make responsive) aren't here:
@@ -66,17 +81,32 @@ export function actionsBox(rect: DOMRect, count: number): { left: number; top: n
  */
 export function SelectionActions({
   rect,
+  selected = false,
   domOpen = false,
+  similar,
   onShowInDom,
   busy,
   onOpenThread,
 }: SelectionActionsProps) {
-  const count = Number(!!onShowInDom) + Number(!!onOpenThread) + Number(!!busy);
-  const box = actionsBox(rect, count);
+  const count = Number(!!similar) + Number(!!onShowInDom) + Number(!!onOpenThread) + Number(!!busy);
+  const box = actionsBox(rect, count, selected);
   const side = box.inside ? "bottom" : "top";
   if (!count) return null;
   return (
     <div class="selection-actions" style={{ left: px(box.left), top: px(box.top) }}>
+      {similar && (
+        <Tooltip text={`Select ${similar.count} similar`} side={side}>
+          <button
+            type="button"
+            class="action"
+            aria-label={`Select ${similar.count} similar`}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={similar.onSelect}
+          >
+            <Icon name="similar" />
+          </button>
+        </Tooltip>
+      )}
       {onShowInDom && (
         <Tooltip text="Show in DOM" side={side}>
           <button

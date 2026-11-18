@@ -81,6 +81,7 @@ The published package is [packages/usepilot](../packages/usepilot). Publishing b
    ```
 
 3. Commit the version bump.
+4. **Tag it and publish it on GitHub**, right after npm, without being asked: an annotated tag `vX.Y.Z` on the version-bump commit (`git tag -a vX.Y.Z <commit> -m "usepilot X.Y.Z"`, pushed), then a release from it (`gh release create vX.Y.Z --verify-tag --title vX.Y.Z --notes-file …`). The notes are written for users, not copied from commits: a few bullets on what's new since the last release, in plain language, and an **Update every agent** line when the bridge version changed (older Pilots can't join the hub). Only versions published on npm get one.
 
 npm can take a minute or two to show a new version. Users update with `npm install -D usepilot@latest`. A published version can't be changed or reused: fix forward with a new version. To try the package before publishing, `npm pack` makes the tarball, and a separate app installs it with `npm install -D <path to the .tgz>`.
 
@@ -90,7 +91,7 @@ npm can take a minute or two to show a new version. Users update with `npm insta
 
 ## Styling
 
-Pilot's styles are plain CSS, one file per component, combined at build time into a single `<style>` injected into Pilot's Shadow DOM.
+Pilot's styles are plain CSS, one file per component, combined at build time into a single `<style>` injected into Pilot's Shadow DOM. The build minifies it with esbuild, not lightningcss (Vite's default here): lightningcss rounds big numbers to six digits, which made the highlight and UI layers equal in every release up to 0.6.0, so highlights drew over Pilot's buttons and panels. The playground runs the unminified source, so it never showed; `tokens.test.ts` checks the setting.
 
 ```
 packages/overlay/src/ui/

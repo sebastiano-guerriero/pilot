@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AgentInfo, ChangeResult, ChangeSet, Job, PageEvent, WidthCheck } from "@pilot/protocol";
+import type { AgentInfo, AgentQuestion, ChangeResult, ChangeSet, Job, PageEvent, WidthCheck } from "@pilot/protocol";
 import { originKey } from "@pilot/protocol";
 
 /**
@@ -31,6 +31,9 @@ export interface JobPost {
   attempt?: number;
   differences?: ChangeResult[];
   issues?: string[];
+  /** An answered question (see Hub.answer), posted again. */
+  question?: AgentQuestion;
+  answer?: string;
 }
 
 /** What `wait` returns: the job taken, or none (timed out). */
@@ -129,12 +132,31 @@ export class Hub {
     });
   }
 
-  /** The agent applied a job: done, with its notes. Null for a job the hub doesn't know. */
-  done(agentId: string, jobId: string, notes?: string): Job | null {
+  /**
+   * The agent applied a job: done, with its notes, and its `question` for
+   * the designer if it asked one (the page shows it and holds the job until
+   * the answer, see answer). A job asks once: a question on an answered job
+   * is dropped. Null for a job the hub doesn't know.
+   */
+  done(agentId: string, jobId: string, notes?: string, question?: AgentQuestion): Job | null {
     const job = this.jobs.get(jobId);
     if (!job || job.status === "cancelled") return null;
     const agent = this.agents.get(agentId)?.info ?? job.agent;
-    this.update(job, { status: "done", agent, notes: notes?.trim() || undefined });
+    const asks = question && !job.answer ? { question } : {};
+    this.update(job, { status: "done", agent, notes: notes?.trim() || undefined, doneAt: new Date(this.now()).toISOString(), ...asks });
+    return job;
+  }
+
+  /**
+   * The designer answered a done job's question: the job goes back to the
+   * queue with the answer, preferably to the agent that asked. Null when it
+   * can't (not done, no question, or answered already).
+   */
+  answer(origin: string, jobId: string, answer: string): Job | null {
+    const job = this.jobs.get(jobId);
+    if (!job || job.origin !== originKey(origin) || job.status !== "done" || !job.question || job.answer) return null;
+    this.update(job, { status: "queued", answer, notes: undefined });
+    this.dispatch(job.origin);
     return job;
   }
 
@@ -203,11 +225,13 @@ export class Hub {
       origin: key,
       changeSet: post.changeSet,
       status: stillWorking ? "working" : "queued",
-      // A follow-up keeps its agent as the one to prefer (see dispatch).
-      agent: stillWorking || post.attempt === 2 ? post.agent : undefined,
+      // A follow-up (or an answered question) keeps its agent as the one to prefer (see dispatch).
+      agent: stillWorking || post.attempt === 2 || post.answer ? post.agent : undefined,
       attempt: post.attempt ?? 1,
       differences: post.differences,
       issues: post.issues,
+      question: post.question,
+      answer: post.answer,
       createdAt: at,
       updatedAt: at,
     };
@@ -253,7 +277,7 @@ export class Hub {
   }
 
   private take(job: Job, agent: AgentInfo): Job {
-    this.update(job, { status: "working", agent });
+    this.update(job, { status: "working", agent, takenAt: new Date(this.now()).toISOString() });
     return job;
   }
 

@@ -112,6 +112,40 @@ describe("PropertyDialog", () => {
     expect(history.valueOf(element, "opacity")).toBeNull();
   });
 
+  it("several selected: a change goes to all of them as one undo step, and differing values read Mixed", () => {
+    const history = new EditHistory();
+    const other = document.createElement("div");
+    const third = document.createElement("div");
+    document.body.append(other, third);
+    let seen: { declared?: Record<string, string>; mixed?: ReadonlySet<string> } = {};
+    const probe: PropertyEditor = {
+      id: "opacity",
+      label: "opacity",
+      properties: ["opacity"],
+      component: ({ declared, mixed, onChange }: PropertyEditorProps) => {
+        seen = { declared, mixed };
+        return h("button", { class: "stub", onClick: () => onChange("opacity", "0.5") }, "set");
+      },
+    };
+    history.apply(other, "opacity", "0.2");
+    act(() => {
+      render(h(PropertyDialog, { element, others: [other, third], anchor: element.getBoundingClientRect(), editors: [probe], history }), container);
+    });
+    type("opacity");
+    // The first has none, the second 0.2: Mixed, an empty field.
+    expect(seen.mixed?.has("opacity")).toBe(true);
+    expect(seen.declared?.opacity).toBe("");
+    act(() => (container.querySelector(".stub") as HTMLButtonElement).click());
+    for (const el of [element, other, third]) expect(history.valueOf(el, "opacity")).toBe("0.5");
+    expect(seen.mixed?.has("opacity")).toBe(false);
+    // One undo takes it back on all three.
+    expect(history.undo()).toBe(true);
+    expect(history.valueOf(element, "opacity")).toBeNull();
+    expect(history.valueOf(other, "opacity")).toBe("0.2");
+    other.remove();
+    third.remove();
+  });
+
   it("shows editor changes on the page through Pilot's stylesheet, never the element's style", () => {
     mount();
     type("opacity");

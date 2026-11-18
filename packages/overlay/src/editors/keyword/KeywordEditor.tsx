@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef } from "preact/hooks";
 import { Icon, type IconName } from "../../ui/components/Icon/Icon.tsx";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { PropertySelect } from "../../ui/components/PropertySelect/PropertySelect.tsx";
-import { declaredOf } from "../declared.ts";
+import { declaredOf, isMixed, MIXED } from "../declared.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
 
 interface KeywordOptions {
@@ -39,6 +39,7 @@ export function KeywordEditor({
         value={value}
         options={config.options}
         label={property}
+        placeholder={isMixed(props, property) ? MIXED : undefined}
         triggerRef={ref}
         iconFor={
           icons

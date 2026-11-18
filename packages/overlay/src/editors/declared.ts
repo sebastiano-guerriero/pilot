@@ -8,3 +8,11 @@ import type { PropertyEditorProps } from "./types.ts";
 export function declaredOf(props: Pick<PropertyEditorProps, "element" | "declared">, property: string): string {
   return props.declared?.[property] ?? props.element.style.getPropertyValue(property);
 }
+
+/** The selected elements differ on `property`: its field shows "Mixed" (empty, the placeholder). */
+export function isMixed(props: Pick<PropertyEditorProps, "mixed">, property: string): boolean {
+  return !!props.mixed?.has(property);
+}
+
+/** What an empty field reads when the selected elements differ on its property. */
+export const MIXED = "Mixed";

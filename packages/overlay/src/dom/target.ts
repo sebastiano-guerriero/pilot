@@ -1,4 +1,5 @@
 import type { ElementTarget } from "@pilot/protocol";
+import { componentSource } from "./component.ts";
 import { pageTextContent } from "./text.ts";
 
 /** An element Pilot can edit: anything with an inline `style`. */
@@ -23,6 +24,8 @@ export function describeElement(el: Element): ElementTarget {
   if (el.id) target.id = el.id;
   const text = textSnippet(el);
   if (text) target.text = text;
+  const source = componentSource(el);
+  if (source) target.source = source;
   return target;
 }
 

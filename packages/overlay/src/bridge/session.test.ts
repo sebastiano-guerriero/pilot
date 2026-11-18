@@ -3,7 +3,7 @@ import type { Job, PageEvent } from "@pilot/protocol";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EditHistory } from "../edits/history.ts";
 import { inlinePreview } from "../test/inlinePreview.ts";
-import { PilotSession } from "./session.ts";
+import { PilotSession, timings } from "./session.ts";
 
 // The width checks load the page in frames: the test DOM has no layout, so they're stubbed.
 const widths = vi.hoisted(() => ({
@@ -349,6 +349,82 @@ describe("PilotSession", () => {
     expect(s.jobOn(el)?.id).toBe(posted.id);
   });
 
+  it("a comment on several elements: one job about all of them, the thread on the first, a job on each; a task asked there too", async () => {
+    vi.useFakeTimers();
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    const second = document.createElement("div");
+    second.id = "second";
+    document.body.append(second);
+    const { thread, job: sent } = s.comment(el, "Same height", [], undefined, [second]);
+    const posted = posts.at(-1)?.body as { id: string; changeSet: { request: { kind: string; target: { selector: string }; others?: Array<{ selector: string }> } } };
+    expect(posted.changeSet.request.others?.map((t) => t.selector)).toEqual(["#second"]);
+    expect(s.threadFor(el)?.id).toBe(thread.id);
+    expect(s.threadFor(second)).toBeNull();
+    expect(s.threadOthers(thread)).toEqual([second]);
+    expect(s.jobOn(el)?.id).toBe(sent?.id);
+    expect(s.jobOn(second)?.id).toBe(sent?.id);
+    hub().emit({ type: "job", job: job({ id: posted.id, status: "done", agent, notes: "Both 120px." }) });
+    await vi.advanceTimersByTimeAsync(0);
+    // The next message in the thread is about the same elements; an action goes as a task on all of them.
+    s.comment(el, "", [], "responsive", s.threadOthers(thread));
+    const task = posts.at(-1)?.body as { id: string; changeSet: { request: { kind: string; others?: unknown[] } } };
+    expect(task.changeSet.request.kind).toBe("responsive");
+    expect(task.changeSet.request.others).toHaveLength(1);
+    expect(s.jobOn(second)?.id).toBe(task.id);
+    // While it's on the second element, a comment about both waits.
+    expect(s.comment(el, "Bolder too", [], undefined, [second]).waiting).toBe(true);
+    // Written with only the first selected, the thread is about that one alone from then on.
+    s.resolve(thread.id);
+    const alone = s.comment(second, "Just this one");
+    expect(alone.waiting).toBe(true);
+    expect(alone.thread.others).toBeUndefined();
+    // After a reload, the job is found again on both elements, by their selectors.
+    s.destroy();
+    const reloaded = session();
+    expect(reloaded.jobOn(second)?.id).toBe(task.id);
+    expect(reloaded.jobOn(el)?.id).toBe(task.id);
+    second.remove();
+  });
+
+  it("the agent asks: the question goes in a thread on the job's element, the job waits unchecked, and the answer sends it back", async () => {
+    vi.useFakeTimers();
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    history.apply(el, "padding-top", "20px");
+    const sent = s.send() as { id: string };
+    const question = { text: "Every card, or only this one?", choices: ["All of them", "Only this one"] };
+    hub().emit({ type: "job", job: job({ id: sent.id, status: "done", agent, question }) });
+    await vi.advanceTimersByTimeAsync(2_000);
+    // Not checked: the change is still previewed, and the job still on the element.
+    expect(s.jobs.find((j) => j.id === sent.id)?.checked).toBeFalsy();
+    expect(s.jobOn(el)?.id).toBe(sent.id);
+    const thread = s.threadFor(el) as NonNullable<ReturnType<typeof s.threadFor>>;
+    expect(thread.messages).toMatchObject([{ from: "agent", text: question.text, asks: sent.id, choices: question.choices }]);
+    expect(s.attention.map((t) => t.id)).toEqual([thread.id]);
+    expect(s.openQuestion(thread)?.id).toBe(sent.id);
+    // The designer's next message in the thread is the answer: no new job.
+    const before = posts.filter((p) => p.url === "http://hub/jobs").length;
+    const answered = s.comment(el, "All of them");
+    expect(answered.job?.id).toBe(sent.id);
+    expect(answered.waiting).toBe(false);
+    expect(posts.filter((p) => p.url === "http://hub/jobs").length).toBe(before);
+    expect(posts.at(-1)).toEqual({ url: `http://hub/jobs/${sent.id}/answer`, body: { answer: "All of them" } });
+    expect(s.jobs.find((j) => j.id === sent.id)).toMatchObject({ status: "queued", answer: "All of them" });
+    expect(s.openQuestion(thread)).toBeNull();
+    // Done again: checked as usual, and the notes are the reply in the thread.
+    hub().emit({ type: "job", job: job({ id: sent.id, status: "working", agent, question, answer: "All of them" }) });
+    sheet.textContent = ".card { padding-top: 20px; }";
+    hub().emit({ type: "job", job: job({ id: sent.id, status: "done", agent, question, answer: "All of them", notes: "Card padding is 20px now." }) });
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(s.jobs.find((j) => j.id === sent.id)?.checked).toBe(true);
+    expect(s.threadFor(el)?.messages.map((m) => [m.from, m.text])).toEqual([
+      ["agent", question.text],
+      ["designer", "All of them"],
+      ["agent", "Card padding is 20px now."],
+    ]);
+  });
+
   it("with no agent, a comment is kept and its prompt is there to copy; threads survive a reload", () => {
     const s = session();
     const { job: sent, changeSet } = s.comment(el, "Swap these two");
@@ -482,5 +558,19 @@ describe("PilotSession", () => {
     const s = session();
     hub().emit({ type: "job", job: job({ id: "other-tab", status: "done" }) });
     expect(s.jobs).toEqual([]);
+  });
+});
+
+describe("timings", () => {
+  it("where a job's time went: waiting for an agent, the agent, Pilot's check", () => {
+    expect(
+      timings({
+        createdAt: "2026-11-18T10:00:00.000Z",
+        takenAt: "2026-11-18T10:00:00.400Z",
+        doneAt: "2026-11-18T10:00:12.700Z",
+        checkedAt: "2026-11-18T10:00:13.300Z",
+      }),
+    ).toEqual({ waiting: 0.4, agent: 12.3, check: 0.6, total: 13.3 });
+    expect(timings({ createdAt: "2026-11-18T10:00:00.000Z" })).toEqual({ waiting: null, agent: null, check: null, total: null });
   });
 });

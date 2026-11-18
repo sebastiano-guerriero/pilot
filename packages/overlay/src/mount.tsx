@@ -30,7 +30,7 @@ export interface PilotOptions {
   shortcut?: string | false;
   /**
    * Where Pilot reaches the agents: the bridge's URL (`pilot mcp`, started by
-   * the agent). Default `http://127.0.0.1:4747`. `false` turns it off: no
+   * the agent). Default `http://127.0.0.1:` + the bridge's port for this version (DEFAULT_BRIDGE_PORT). `false` turns it off: no
    * Send, no launch from `/pilot`, Copy prompt only.
    */
   bridge?: string | false;

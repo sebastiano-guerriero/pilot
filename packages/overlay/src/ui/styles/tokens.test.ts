@@ -41,3 +41,15 @@ describe("design tokens", () => {
     expect(undefinedUses, "Undefined tokens. Use one from tokens.css or a raw value").toEqual([]);
   });
 });
+
+describe("the layers survive the build", () => {
+  it("highlights sit below Pilot's UI, and the build's CSS minifier keeps the two numbers apart", () => {
+    const tokens = readFileSync(tokensFile, "utf8");
+    const layer = (name: string) => Number(new RegExp(`--plt-z-${name}:\\s*(\\d+)`).exec(tokens)?.[1]);
+    expect(layer("highlight")).toBeLessThan(layer("ui"));
+    // lightningcss rounds big numbers to six digits (both became 2147480000,
+    // and highlights drew over the buttons); esbuild keeps them exact.
+    const config = readFileSync(join(srcDir, "../vite.config.ts"), "utf8");
+    expect(config).toMatch(/cssMinify:\s*"esbuild"/);
+  });
+});

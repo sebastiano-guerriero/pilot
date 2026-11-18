@@ -7,6 +7,21 @@
     border: 1px solid var(--plt-color-accent);
   }
 
+  /* The selection: 2px in all, the 1px border and a 1px ring outside it
+     (the box doesn't move), so it reads stronger than a hover. A shadow,
+     not an outline: outlines are painted over the element's children, and
+     the corner dots must stay on top of the line. */
+  :scope[data-variant="selected"] {
+    box-shadow: 0 0 0 1px var(--plt-color-accent);
+  }
+
+  /* The selection's corner dots alone, drawn over the other highlights: the
+     same box, its border there but transparent, so the dots sit as on the
+     selection's line. */
+  :scope[data-variant="dots"] {
+    border-color: transparent;
+  }
+
   :scope[data-variant="hover"] {
     background: hsl(from var(--plt-color-accent) h s l / 7%);
   }
@@ -129,36 +144,38 @@
     margin-top: 5px;
   }
 
-  /* Round markers on the selected element's corners, centered on the 1px
-     outline (-0.5px = half the border width). */
+  /* Round markers on the selected element's corners, centered on its 2px
+     line (the border and the ring outside it): -1px from the inner edge. */
   .handle {
     position: absolute;
-    width: 6px;
-    height: 6px;
+    box-sizing: border-box;
+    width: 8px;
+    height: 8px;
+    border: 2px solid var(--plt-color-accent);
     border-radius: 50%;
-    background: var(--plt-color-accent);
+    background: var(--plt-color-contrast-higher);
 
     &[data-corner="top-left"] {
-      top: -0.5px;
-      left: -0.5px;
+      top: -1px;
+      left: -1px;
       translate: -50% -50%;
     }
 
     &[data-corner="top-right"] {
-      top: -0.5px;
-      right: -0.5px;
+      top: -1px;
+      right: -1px;
       translate: 50% -50%;
     }
 
     &[data-corner="bottom-left"] {
-      bottom: -0.5px;
-      left: -0.5px;
+      bottom: -1px;
+      left: -1px;
       translate: -50% 50%;
     }
 
     &[data-corner="bottom-right"] {
-      bottom: -0.5px;
-      right: -0.5px;
+      bottom: -1px;
+      right: -1px;
       translate: 50% 50%;
     }
   }

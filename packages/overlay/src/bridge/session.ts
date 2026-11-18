@@ -1,5 +1,5 @@
-import type { AgentInfo, AgentRequest, ChangeResult, ChangeSet, CommentAction, CommentAttachment, CommentMessage, ElementTarget, Job, JobStatus, WidthCheck } from "@pilot/protocol";
-import { attachmentType } from "@pilot/protocol";
+import type { AgentInfo, AgentQuestion, AgentRequest, ChangeResult, ChangeSet, CommentAction, CommentAttachment, CommentMessage, ElementTarget, Job, JobStatus, WidthCheck } from "@pilot/protocol";
+import { attachmentType, requestTargets } from "@pilot/protocol";
 import { checkWidths, problemLines, snapshotAt, type StyleSnapshot, widthsToCheck } from "../checks/widths.ts";
 import { describeElement } from "../dom/target.ts";
 import { buildChangeSet, buildRequest } from "../edits/changeSet.ts";
@@ -28,6 +28,10 @@ export interface JobRecord {
   changeSet: ChangeSet;
   status: JobStatus;
   agent?: AgentInfo;
+  /** The agent asked the designer something when done (Job.question): asked in a thread, the job held until the answer. */
+  question?: AgentQuestion;
+  /** The designer's answer: the job went back to the agent with it. */
+  answer?: string;
   /** The agent's notes, when done. */
   notes?: string;
   createdAt: string;
@@ -37,6 +41,10 @@ export interface JobRecord {
   differences?: ChangeResult[];
   /** Checked and accepted: what shows is the code. */
   checked?: boolean;
+  /** When an agent took it, reported it done, and Pilot finished checking it (the latest attempt's): see timings. */
+  takenAt?: string;
+  doneAt?: string;
+  checkedAt?: string;
   /** For a task's follow-up: what Pilot's width check found (see Job.issues). */
   issues?: string[];
   /** A task: its element's styles at the designer's width before the job, to tell what the agent changed there. */
@@ -55,6 +63,12 @@ export interface CommentThread {
   id: string;
   /** How to find the element again (after a reload, by its selector). */
   target: ElementTarget;
+  /**
+   * The other elements the thread is about, selected with it when the
+   * designer last wrote in it (see PilotSession.comment). The thread, its
+   * icon and the comment box are on `target`; its jobs are on all of them.
+   */
+  others?: ElementTarget[];
   messages: ThreadMessage[];
 }
 
@@ -67,6 +81,10 @@ export type ThreadMessage = Omit<CommentMessage, "attachments"> & {
   jobId?: string;
   replyTo?: string;
   waiting?: boolean;
+  /** The agent's question about this job (see PilotSession.ask): the designer's next message in the thread is the answer. */
+  asks?: string;
+  /** The question's one-click answers. */
+  choices?: string[];
   attachments?: ThreadAttachment[];
 };
 
@@ -214,7 +232,7 @@ export class PilotSession {
     for (const thread of this.threads) {
       if (!thread.messages.some((m) => m.waiting)) continue;
       const element = this.threadElement(thread);
-      if (element && !this.jobOn(element)) this.postComment(thread.id, element);
+      if (element && !this.anyBusy([element, ...this.threadOthers(thread)])) this.postComment(thread.id, element);
     }
     if (!this.held.size) return;
     const free = [...this.held].filter((element) => !this.jobOn(element));
@@ -269,27 +287,30 @@ export class PilotSession {
   elementsOf(job: JobRecord): Element[] {
     const known = this.jobElements.get(job.id)?.filter((e) => e.isConnected);
     if (known?.length) return known;
-    const selectors = job.changeSet.request ? [job.changeSet.request.target.selector] : job.changeSet.edits.map((e) => e.target.selector);
+    const { request, edits } = job.changeSet;
+    const selectors = (request ? requestTargets(request) : edits.map((e) => e.target)).map((t) => t.selector);
     const found = selectors.map(find).filter((e): e is Element => !!e);
     if (found.length) this.jobElements.set(job.id, found);
     return found;
   }
 
   /**
-   * A task for the agent about one element (Make responsive), as a job of
-   * its own, apart from the changes: nothing of the history goes with it.
+   * A task for the agent about one element (Make responsive), or several
+   * selected together (`others`), as one job of its own, apart from the
+   * changes: nothing of the history goes with it.
    * Null when no agent works on this page. When done there's nothing to
    * check (no designer values): it's accepted on the agent's word.
    */
   request(
     element: Element,
     kind: AgentRequest["kind"],
-    extras: { id?: string; note?: string; attachments?: CommentAttachment[] } = {},
+    extras: { id?: string; note?: string; attachments?: CommentAttachment[]; others?: Element[] } = {},
   ): JobRecord | null {
-    if (!this.canSendToAgent || this.jobOn(element)) return null;
+    const others = extras.others ?? [];
+    if (!this.canSendToAgent || this.anyBusy([element, ...others])) return null;
     const id = extras.id ?? newJobId();
-    this.jobElements.set(id, [element]);
-    const job = this.post(id, buildRequest(element, kind, { id, note: extras.note, attachments: extras.attachments }));
+    this.jobElements.set(id, [element, ...others]);
+    const job = this.post(id, buildRequest(element, kind, { id, note: extras.note, attachments: extras.attachments, others }));
     // The element at the designer's width as the code has it now (no
     // previews), while the agent starts: to tell what it changed there.
     const { page, request } = job.changeSet;
@@ -306,6 +327,16 @@ export class PilotSession {
   /** The thread on `element`, if any (the element itself; after a reload, by its selector). */
   threadFor(element: Element): CommentThread | null {
     return this.threads.find((t) => this.threadElement(t) === element) ?? null;
+  }
+
+  /** Whether a job is on any of `elements` (see jobOn). */
+  private anyBusy(elements: Element[]): boolean {
+    return elements.some((e) => this.jobOn(e));
+  }
+
+  /** The other elements a thread is about (see CommentThread.others), the ones on the page. */
+  threadOthers(thread: CommentThread): Element[] {
+    return (thread.others ?? []).map((t) => find(t.selector)).filter((e): e is Element => !!e);
   }
 
   /** The element a thread is on, when it's on the page. */
@@ -326,32 +357,51 @@ export class PilotSession {
    * take it and edit the same code meanwhile. `job` is null when it waits,
    * or when no agent works on this page: the comment is kept, and
    * `changeSet` is its prompt's, to copy.
+   *
+   * With `others` (several elements selected), the comment is about all of
+   * them: one job, the thread on `element`. The thread keeps what was
+   * selected when the designer last wrote in it, for its next jobs.
    */
   comment(
     element: Element,
     text: string,
     attachments: ThreadAttachment[] = [],
     action?: CommentAction,
+    others: Element[] = [],
   ): { thread: CommentThread; job: JobRecord | null; changeSet: ChangeSet; waiting: boolean } {
     let thread = this.threadFor(element);
+    // The agent asked something here: this message is the answer, and goes with its job.
+    const asked = thread && this.canSendToAgent ? this.openQuestion(thread) : null;
+    if (thread && asked) {
+      const text_ = text.trim();
+      if (!text_) return { thread, job: null, changeSet: asked.changeSet, waiting: false };
+      const message: ThreadMessage = { from: "designer", text: text_, at: new Date().toISOString(), jobId: asked.id };
+      this.patchThread(thread.id, { messages: [...thread.messages, message] });
+      this.answer(asked, text_);
+      const answered = this.jobs.find((j) => j.id === asked.id) as JobRecord;
+      return { thread: this.threads.find((t) => t.id === thread?.id) as CommentThread, job: answered, changeSet: answered.changeSet, waiting: false };
+    }
     if (!thread) {
       thread = { id: `thread_${newJobId().slice(4)}`, target: describeElement(element), messages: [] };
       this.threads = [...this.threads, thread];
       this.threadElements.set(thread.id, element);
     }
+    const otherTargets = others.filter((e) => e !== element).map(describeElement);
+    thread = { ...thread, others: otherTargets.length ? otherTargets : undefined };
+    this.patchThread(thread.id, { others: thread.others });
     const message: ThreadMessage = { from: "designer", text: text.trim(), at: new Date().toISOString() };
     if (attachments.length) message.attachments = attachments;
     if (action) message.action = action;
-    const waiting = this.canSendToAgent && !!this.jobOn(element);
+    const waiting = this.canSendToAgent && this.anyBusy([element, ...others]);
     if (waiting) message.waiting = true;
     const messages = [...thread.messages, message];
     this.patchThread(thread.id, { messages });
-    const { job, changeSet } = waiting ? { job: null, changeSet: this.commentSet(element, messages) } : this.postComment(thread.id, element);
+    const { job, changeSet } = waiting ? { job: null, changeSet: this.commentSet(element, messages, others) } : this.postComment(thread.id, element);
     return { thread: this.threads.find((t) => t.id === thread.id) as CommentThread, job, changeSet, waiting };
   }
 
   /** A comment job's change set: the thread so far, as the agent reads it. */
-  private commentSet(element: Element, messages: ThreadMessage[], id?: string): ChangeSet {
+  private commentSet(element: Element, messages: ThreadMessage[], others: Element[], id?: string): ChangeSet {
     // Attachments go by id (the hub adds where it saved them); their previews stay here.
     const thread = messages.map(({ from, text, at, attachments, action }) => ({
       from,
@@ -360,7 +410,7 @@ export class PilotSession {
       ...(attachments?.length ? { attachments: attachments.map(({ id, name }) => ({ id, name })) } : {}),
       ...(action ? { action } : {}),
     }));
-    return buildRequest(element, "comment", { id, thread });
+    return buildRequest(element, "comment", { id, thread, others });
   }
 
   /**
@@ -390,6 +440,7 @@ export class PilotSession {
    */
   private postComment(threadId: string, element: Element): { job: JobRecord | null; changeSet: ChangeSet } {
     const thread = this.threads.find((t) => t.id === threadId) as CommentThread;
+    const others = this.threadOthers(thread);
     const id = newJobId();
     // An action among what's unsent (`/responsive`): it goes as that task,
     // with the unsent messages' words as its note and their files.
@@ -403,13 +454,13 @@ export class PilotSession {
         .filter(Boolean)
         .join("\n\n");
       const attachments = unsent.flatMap((m) => m.attachments ?? []).map(({ id, name }) => ({ id, name }));
-      job = this.request(element, action, { id, note, attachments });
-      changeSet = job?.changeSet ?? buildRequest(element, action, { id, note, attachments });
+      job = this.request(element, action, { id, note, attachments, others });
+      changeSet = job?.changeSet ?? buildRequest(element, action, { id, note, attachments, others });
       if (!job) return { job: null, changeSet };
     } else {
-      changeSet = this.commentSet(element, thread.messages, id);
+      changeSet = this.commentSet(element, thread.messages, others, id);
       if (!this.canSendToAgent) return { job: null, changeSet };
-      this.jobElements.set(id, [element]);
+      this.jobElements.set(id, [element, ...others]);
       job = this.post(id, changeSet);
     }
     const messages = thread.messages.map((m) => (m.from === "designer" && (m.waiting || !m.jobId) ? { ...m, jobId: id, waiting: undefined } : m));
@@ -516,14 +567,77 @@ export class PilotSession {
     if (!mine || mine.status === "cancelled") return;
     // A stale update (after a takeover, or from before the follow-up).
     if ((job.attempt ?? 1) < (mine.attempt ?? 1)) return;
-    if (mine.status === "done" && job.status !== "done" && (job.attempt ?? 1) === (mine.attempt ?? 1)) return;
+    // (Back from done is the follow-up, a new attempt, or an answer to the agent's question.)
+    if (mine.status === "done" && job.status !== "done" && (job.attempt ?? 1) === (mine.attempt ?? 1) && !(job.answer && !mine.answer)) return;
     const becameDone = job.status === "done" && mine.status !== "done";
-    this.patch(job.id, { status: job.status, agent: job.agent, notes: job.notes });
+    this.patch(job.id, {
+      status: job.status,
+      agent: job.agent,
+      notes: job.notes,
+      takenAt: job.takenAt,
+      doneAt: job.doneAt,
+      question: job.question ?? mine.question,
+      answer: job.answer ?? mine.answer,
+    });
     if (job.status === "cancelled") {
       this.unhold(mine);
       this.history.unsend(job.id);
     }
-    if (becameDone) this.verify(this.jobs.find((j) => j.id === job.id) as JobRecord);
+    if (!becameDone) return;
+    const done = this.jobs.find((j) => j.id === job.id) as JobRecord;
+    if (awaitsAnswer(done)) this.ask(done);
+    else this.verify(done);
+  }
+
+  /**
+   * The agent asked the designer something (pilot_done's question, mostly
+   * "all of them, or only this one?"): Pilot asks it in a comment thread,
+   * the job's own (a comment's), else the thread on its first element, else
+   * a new one there, about all of its elements. The job isn't checked
+   * meanwhile, and stays on its elements; the designer's next message in
+   * the thread is the answer (see comment), and the job goes back to the
+   * agent with it.
+   */
+  private ask(job: JobRecord): void {
+    const question = job.question;
+    if (!question) return;
+    const [first] = this.elementsOf(job);
+    let thread = this.threads.find((t) => t.messages.some((m) => m.jobId === job.id || m.asks === job.id)) ?? (first ? this.threadFor(first) : null);
+    if (thread?.messages.some((m) => m.asks === job.id)) return;
+    if (!thread) {
+      const { request, edits } = job.changeSet;
+      const [target, ...others] = request ? requestTargets(request) : edits.map((e) => e.target);
+      if (!target) return;
+      thread = { id: `thread_${newJobId().slice(4)}`, target, ...(others.length ? { others } : {}), messages: [] };
+      this.threads = [...this.threads, thread];
+      if (first) this.threadElements.set(thread.id, first);
+    }
+    const message: ThreadMessage = {
+      from: "agent",
+      text: question.text,
+      at: new Date().toISOString(),
+      asks: job.id,
+      ...(question.choices?.length ? { choices: question.choices } : {}),
+    };
+    this.patchThread(thread.id, { messages: [...thread.messages, message] });
+  }
+
+  /** The job whose question is waiting for the designer's answer in `thread`, if any. */
+  openQuestion(thread: CommentThread): JobRecord | null {
+    const asked = [...thread.messages].reverse().find((m) => m.asks);
+    const job = asked && this.jobs.find((j) => j.id === asked.asks);
+    return job && awaitsAnswer(job) ? job : null;
+  }
+
+  /** The designer answered a job's question: back to the agent with it (posted again when the hub doesn't have it, a new hub). */
+  private answer(job: JobRecord, answer: string): void {
+    this.patch(job.id, { status: "queued", answer, notes: undefined });
+    void this.bridge?.answer(job.id, answer).then((ok) => {
+      if (!ok) {
+        const { changeSet, agent, attempt, question } = job;
+        void this.bridge?.postJob({ id: job.id, changeSet, status: "queued", agent, attempt, question, answer });
+      }
+    });
   }
 
   /** A task's width check, now (`pilot_check_widths`, and after done). */
@@ -556,6 +670,8 @@ export class PilotSession {
           attempt: job.attempt,
           differences: job.differences,
           issues: job.issues,
+          question: job.question,
+          answer: job.answer,
         });
       }
     }
@@ -575,6 +691,8 @@ export class PilotSession {
       return this.accept(job.id);
     }
     if (job.changeSet.request) return this.verifyTask(job);
+    // An edits job the designer answered a question about: the agent's notes are its reply in that thread.
+    if (job.answer) this.reply(job);
     const stop = watchJob(this.history, job.id, (results) => {
       this.watching.delete(job.id);
       const differences = results.filter((r) => r.outcome === "differs");
@@ -612,7 +730,9 @@ export class PilotSession {
   /** Checked and accepted: it settles, and leaves the list after a moment. */
   private accept(jobId: string): void {
     this.history.settle(jobId);
-    this.patch(jobId, { checked: true });
+    this.patch(jobId, { checked: true, checkedAt: new Date().toISOString() });
+    const done = this.jobs.find((j) => j.id === jobId);
+    if (done) logTimings(done);
     // The element is free: what waited for it goes.
     this.release();
     const t = setTimeout(() => {
@@ -668,6 +788,11 @@ export function needsYou(thread: CommentThread): boolean {
   return thread.messages.at(-1)?.from === "agent";
 }
 
+/** Done, with a question for the designer not answered yet (see PilotSession.ask). */
+export function awaitsAnswer(job: Pick<JobRecord, "status" | "question" | "answer" | "checked">): boolean {
+  return job.status === "done" && !!job.question && !job.answer && !job.checked;
+}
+
 /** Not finished yet: waiting, an agent on it, being checked, or its follow-up. */
 function unfinished(job: JobRecord): boolean {
   return job.status !== "cancelled" && !job.checked;
@@ -713,4 +838,39 @@ function load(): JobRecord[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * Where a job's time went, in seconds: waiting for an agent (sent → taken),
+ * the agent's work (taken → done), and Pilot's check (done → checked). Null
+ * for a step that hasn't happened (yet). For a job with a follow-up, the
+ * last attempt's steps, and the total from the first send.
+ */
+export function timings(job: Pick<JobRecord, "createdAt" | "takenAt" | "doneAt" | "checkedAt">): {
+  waiting: number | null;
+  agent: number | null;
+  check: number | null;
+  total: number | null;
+} {
+  const at = (iso?: string) => (iso ? Date.parse(iso) : Number.NaN);
+  const span = (from?: string, to?: string) => {
+    const s = (at(to) - at(from)) / 1000;
+    return Number.isFinite(s) && s >= 0 ? Math.round(s * 10) / 10 : null;
+  };
+  return {
+    waiting: span(job.createdAt, job.takenAt),
+    agent: span(job.takenAt, job.doneAt),
+    check: span(job.doneAt, job.checkedAt),
+    total: span(job.createdAt, job.checkedAt),
+  };
+}
+
+/** A finished job's timings, in the browser console: where the time went, to make jobs faster. */
+function logTimings(job: JobRecord): void {
+  const t = timings(job);
+  if (t.total === null) return;
+  const part = (label: string, s: number | null) => (s === null ? [] : [`${label} ${s}s`]);
+  const parts = [...part("waiting for an agent", t.waiting), ...part("agent", t.agent), ...part("Pilot's check", t.check)];
+  const attempt = (job.attempt ?? 1) > 1 ? " (with a follow-up)" : "";
+  console.info(`[Pilot] Job done in ${t.total}s${attempt}: ${parts.join(", ")}.`);
 }

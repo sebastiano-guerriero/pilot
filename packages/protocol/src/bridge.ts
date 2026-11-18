@@ -1,7 +1,7 @@
 /**
  * The bridge: how the page (Pilot's overlay) and coding agents meet.
  *
- * One hub per machine listens on 127.0.0.1 (DEFAULT_BRIDGE_PORT). It lives
+ * One hub per machine and bridge version listens on 127.0.0.1 (DEFAULT_BRIDGE_PORT). It lives
  * in the first `pilot mcp` process an agent starts; later ones talk to it over
  * HTTP and take over if it goes away. The page sends jobs and listens to
  * Server-Sent Events; agents take jobs (`pilot_wait_for_edits`) and report
@@ -10,10 +10,18 @@
  */
 import type { ChangeSet } from "./types.ts";
 
-export const DEFAULT_BRIDGE_PORT = 4747;
+/** Bumped when the hub's HTTP API changes incompatibly. 2: width checks (`/agents/check`, `/checks/:id`). 3: comment images (`/attachments`). 4: the agent's questions (`question` on `/agents/done`, `/jobs/:id/answer`). */
+export const BRIDGE_VERSION = 4;
 
-/** Bumped when the hub's HTTP API changes incompatibly. 2: width checks (`/agents/check`, `/checks/:id`). 3: comment images (`/attachments`). */
-export const BRIDGE_VERSION = 3;
+/**
+ * The hub's port: one per bridge version (4747 + the version, so 4750 for
+ * version 3). Projects on the same Pilot version share one hub, as they
+ * should; a project on another version runs its own, instead of the two
+ * blocking each other on one port. A project's page and its agent run the
+ * same installed Pilot, so they always agree on the port. Pilots before
+ * 0.6.1 all used 4747, which no version uses now.
+ */
+export const DEFAULT_BRIDGE_PORT = 4747 + BRIDGE_VERSION;
 
 /**
  * - queued: sent by the designer, waiting for an agent;
@@ -55,6 +63,46 @@ export interface Job {
   /** ISO timestamps. */
   createdAt: string;
   updatedAt: string;
+  /** When an agent took it, and when it reported it done (the latest attempt's): to see where a job's time goes. */
+  takenAt?: string;
+  doneAt?: string;
+  /**
+   * The agent asked the designer something instead of guessing (pilot_done's
+   * `question`): the job is done but waits for the answer, which Pilot asks
+   * in a comment thread on the job's first element. Pilot doesn't check it
+   * meanwhile: what the agent left for the answer isn't in the code yet.
+   */
+  question?: AgentQuestion;
+  /** The designer's answer to `question`: the job went back to the agent with it (once). */
+  answer?: string;
+}
+
+/**
+ * A question from the agent to the designer, about a job (see Job.question).
+ * Non-blocking: the agent goes on with its next jobs; the answer comes back
+ * as this job again. Mostly "all of them, or only this one?", when the
+ * designer changed only some copies of shared code (ElementTarget.lookAlikes).
+ */
+export interface AgentQuestion {
+  /** One short sentence. */
+  text: string;
+  /** One-click answers (at most MAX_CHOICES, a few words each); the designer can also write one. */
+  choices?: string[];
+}
+
+/** One-click answers to a question, at most. */
+export const MAX_CHOICES = 4;
+
+/** An agent's question (see AgentQuestion), its text and choices trimmed and capped; undefined when it isn't one. */
+export function questionOf(value: unknown): AgentQuestion | undefined {
+  const q = value as { text?: unknown; choices?: unknown } | undefined;
+  if (typeof q?.text !== "string" || !q.text.trim()) return undefined;
+  const choices = (Array.isArray(q.choices) ? q.choices : [])
+    .filter((c): c is string => typeof c === "string")
+    .map((c) => c.trim().slice(0, 60))
+    .filter(Boolean)
+    .slice(0, MAX_CHOICES);
+  return { text: q.text.trim().slice(0, 500), ...(choices.length ? { choices } : {}) };
 }
 
 /**

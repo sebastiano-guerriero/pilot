@@ -10,6 +10,8 @@ interface PropertySelectProps {
   options: readonly string[];
   /** Accessible name, e.g. "display". */
   label: string;
+  /** What the trigger says with no value: "Select" by default ("Mixed" when the selected elements differ). */
+  placeholder?: string;
   /** The trigger button, so the editor can focus it (e.g. from the search). */
   triggerRef?: RefObject<HTMLButtonElement | null>;
   /** The designer picked a value, or "" to remove it (Backspace/Delete on the trigger). */
@@ -68,6 +70,7 @@ export function PropertySelect({
   onTab,
   clearable = true,
   iconFor,
+  placeholder = "Select",
 }: PropertySelectProps) {
   // "" is the "Select" option: no value.
   const list = [...(clearable ? [""] : []), ...(value && !options.includes(value) ? [value] : []), ...options];
@@ -200,7 +203,7 @@ export function PropertySelect({
         onBlur={close}
       >
         {iconFor && <span class="option-icon">{iconFor(value)}</span>}
-        {value ? <span class="value">{value}</span> : <span class="value placeholder">Select</span>}
+        {value ? <span class="value">{value}</span> : <span class="value placeholder">{placeholder}</span>}
         <Icon name="chevron-down" class="chevron" />
       </button>
       {open && (

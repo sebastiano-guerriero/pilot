@@ -3,7 +3,7 @@ import { parseValue } from "../../css/values.ts";
 import { PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { PropertySelect } from "../../ui/components/PropertySelect/PropertySelect.tsx";
-import { declaredOf } from "../declared.ts";
+import { declaredOf, isMixed, MIXED } from "../declared.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
 
 /** A property picked from a few values, or typed (aspect-ratio, flex-grow). */
@@ -80,6 +80,7 @@ export function PresetEditor({ config, ...props }: PropertyEditorProps & { confi
         value={option}
         options={[...config.presets, CUSTOM]}
         label={property}
+        placeholder={isMixed(props, property) ? MIXED : undefined}
         triggerRef={selectRef}
         onChange={(next) => {
           if (next === CUSTOM) {
@@ -96,7 +97,7 @@ export function PresetEditor({ config, ...props }: PropertyEditorProps & { confi
       {custom && (
         <PropertyInputText
           value={presetOption(config, value) === CUSTOM ? value : ""}
-          placeholder={config.placeholder}
+          placeholder={isMixed(props, property) ? MIXED : config.placeholder}
           label={config.customLabel}
           inputRef={fieldRef}
           onCommit={(text) => {

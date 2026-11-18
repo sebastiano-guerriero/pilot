@@ -4,7 +4,7 @@ import type { BoxArea } from "../../dom/boxModel.ts";
 import { Icon, type IconName } from "../../ui/components/Icon/Icon.tsx";
 import { type InputDraft, PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
-import { declaredOf } from "../declared.ts";
+import { declaredOf, isMixed, MIXED } from "../declared.ts";
 import { useScrub } from "../length/useScrub.ts";
 import { normalizeQuery } from "../query.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
@@ -103,6 +103,7 @@ export function SplitEditor({
   element,
   values,
   declared,
+  mixed: differing,
   onChange,
   onRevert,
   query = "",
@@ -120,7 +121,9 @@ export function SplitEditor({
     string,
     string
   >;
-  const same = parts.every((p) => value[p.key] === value[first.key]);
+  // Mixed: the parts differ here, or (several elements selected) a part differs across them.
+  const partMixed = (part: SplitPart) => isMixed({ mixed: differing }, part.property);
+  const same = parts.every((p) => value[p.key] === value[first.key]) && !parts.some(partMixed);
   const mixed = !same;
 
   // The search picks the view as it's typed (`px` → each part); otherwise
@@ -261,7 +264,7 @@ export function SplitEditor({
           <span class="field" {...fieldEvents("all")}>
             <PropertyInputText
               value={same && value[first.key] ? displayValue(value[first.key] as string, first.property) : ""}
-              placeholder={mixed ? "Mixed" : undefined}
+              placeholder={mixed ? MIXED : undefined}
               label={title}
               inputRef={refs.current.all}
               onCommit={commitAll}
@@ -285,6 +288,7 @@ export function SplitEditor({
                 <PropertyInputText
                   value={value[part.key] ? displayValue(value[part.key] as string, part.property) : ""}
                   label={part.label}
+                  placeholder={partMixed(part) ? MIXED : undefined}
                   inputRef={refs.current[part.key]}
                   onCommit={(text) => commitPart(part.key, text)}
                   onStep={(delta, text) => {

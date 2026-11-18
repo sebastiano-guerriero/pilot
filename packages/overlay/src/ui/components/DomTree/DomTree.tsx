@@ -7,10 +7,17 @@ import { ScrollThumb } from "../ScrollThumb/ScrollThumb.tsx";
 interface DomTreeProps {
   /** The selected element: its row is marked, and the tree opens down to it. */
   selected: Element | null;
+  /** The other selected elements, when several are: their rows are marked too. */
+  also?: readonly Element[];
   /** A row is hovered (null: none): its element is highlighted on the page. */
   onHover(element: Element | null): void;
-  /** A row was picked (clicked, or reached with the arrow keys): select its element. */
-  onSelect(element: Element): void;
+  /**
+   * A row was picked (clicked, or reached with the arrow keys): select its
+   * element. Cmd/Ctrl+click: `add` it to the selection (or take it out);
+   * Shift+click: the `range` of rows from the last picked one to it, as the
+   * selection, the last picked first.
+   */
+  onSelect(element: Element, how?: { add?: boolean; range?: readonly Element[] }): void;
   onClose(): void;
 }
 
@@ -72,7 +79,7 @@ const keyOf = (el: Element, pseudo = "") => {
  *   things), not selectable: changes are for elements.
  * The tree updates as the page changes (a MutationObserver on the body).
  */
-export function DomTree({ selected, onHover, onSelect, onClose }: DomTreeProps) {
+export function DomTree({ selected, also = [], onHover, onSelect, onClose }: DomTreeProps) {
   const root = document.body;
   // Open down to the selection from the first render, so the panel opens
   // centered on its real height (and the effect below keeps it following).
@@ -211,6 +218,19 @@ export function DomTree({ selected, onHover, onSelect, onClose }: DomTreeProps) 
   const selectRow = (row: DomRow | undefined) => {
     if (row && isSelectableRow(row)) pick(row.element);
   };
+  /** The selectable rows' elements from the last picked row (or the selected one) to row `index`, that one first. */
+  const rangeTo = (index: number): Element[] => {
+    const anchor = picked.current ?? selected;
+    const from = rows.findIndex((r) => !r.pseudo && r.element === anchor);
+    const start = from < 0 ? index : from;
+    const step = index >= start ? 1 : -1;
+    const range: Element[] = [];
+    for (let i = start; i !== index + step; i += step) {
+      const row = rows[i];
+      if (row && isSelectableRow(row) && !range.includes(row.element)) range.push(row.element);
+    }
+    return range;
+  };
 
   const onKeyDown = (e: KeyboardEvent) => {
     const current = rows[selectedIndex];
@@ -295,12 +315,19 @@ export function DomTree({ selected, onHover, onSelect, onClose }: DomTreeProps) 
               role="treeitem"
               aria-level={row.depth + 1}
               aria-expanded={row.expandable ? row.expanded : undefined}
-              aria-selected={index === selectedIndex}
+              aria-selected={index === selectedIndex || (!row.pseudo && also.includes(row.element))}
               data-index={index}
               data-pseudo={row.pseudo ? "" : undefined}
               style={{ paddingLeft: px(8 + row.depth * 12) }}
               onPointerEnter={() => onHover(row.element)}
-              onClick={() => selectRow(row)}
+              onClick={(e) => {
+                if (!isSelectableRow(row)) return;
+                if (e.metaKey || e.ctrlKey) {
+                  picked.current = row.element;
+                  onSelect(row.element, { add: true });
+                } else if (e.shiftKey) onSelect(row.element, { range: rangeTo(index) });
+                else selectRow(row);
+              }}
             >
               <span
                 class="toggle"

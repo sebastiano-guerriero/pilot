@@ -1,6 +1,7 @@
-import type { AgentRequest, ChangeSet, CommentAttachment, CommentMessage, ElementEdit, StyleChange } from "@pilot/protocol";
+import type { AgentRequest, ChangeSet, CommentAttachment, CommentMessage, ElementEdit, ElementTarget, StyleChange } from "@pilot/protocol";
 import { pageBreakpoints } from "../dom/breakpoints.ts";
 import { declaredValue } from "../dom/declared.ts";
+import { similarOf } from "../dom/similar.ts";
 import { describeElement } from "../dom/target.ts";
 import { normalizeText, textRunOf } from "../dom/text.ts";
 import { sourceOf } from "./clear.ts";
@@ -49,6 +50,7 @@ export function buildChangeSet(
     if (states?.length) styleChange.states = states;
     edit.changes.push(styleChange);
   }
+  withLookAlikes(edits);
   return {
     id: options.id ?? `cs_${Date.now().toString(36)}`,
     createdAt: new Date().toISOString(),
@@ -69,14 +71,20 @@ export function buildChangeSet(
 export function buildRequest(
   element: Element,
   kind: AgentRequest["kind"],
-  options: { id?: string; thread?: CommentMessage[]; note?: string; attachments?: CommentAttachment[] } = {},
+  options: { id?: string; thread?: CommentMessage[]; note?: string; attachments?: CommentAttachment[]; others?: Element[] } = {},
 ): ChangeSet {
-  const target = describeElement(element);
+  // Several selected together: one request about all of them, `element` first.
+  const selected = [element, ...(options.others ?? []).filter((e) => e !== element)];
+  const [target, ...others] = selected.map((e) => ({ ...describeElement(e), ...lookAlikes(e, selected) })) as [
+    ElementTarget,
+    ...ElementTarget[],
+  ];
+  const several = others.length ? { others } : {};
   const breakpoints = pageBreakpoints();
   const request: AgentRequest =
     kind === "comment"
-      ? { kind, target, breakpoints, thread: options.thread ?? [] }
-      : { kind, target, breakpoints, ...(options.attachments?.length ? { attachments: options.attachments } : {}) };
+      ? { kind, target, ...several, breakpoints, thread: options.thread ?? [] }
+      : { kind, target, ...several, breakpoints, ...(options.attachments?.length ? { attachments: options.attachments } : {}) };
   return {
     id: options.id ?? `cs_${Date.now().toString(36)}`,
     createdAt: new Date().toISOString(),
@@ -89,6 +97,23 @@ export function buildRequest(
     request,
     ...(options.note?.trim() ? { note: options.note.trim() } : {}),
   };
+}
+
+/**
+ * How many elements like each one (dom/similar.ts) the job leaves out: the
+ * agent asks before changing shared code the designer changed in only some
+ * copies (ElementTarget.lookAlikes).
+ */
+function withLookAlikes(edits: Map<Element, ElementEdit>): void {
+  const elements = [...edits.keys()];
+  for (const [element, edit] of edits) if (element.isConnected) Object.assign(edit.target, lookAlikes(element, elements));
+}
+
+function lookAlikes(element: Element, inJob: readonly Element[]): { lookAlikes?: number; lookAlikesOf?: string } {
+  if (!(element instanceof HTMLElement || element instanceof SVGElement)) return {};
+  const similar = similarOf(element);
+  const n = similar.elements.filter((e) => !inJob.includes(e)).length;
+  return n ? { lookAlikes: n, ...(similar.component ? { lookAlikesOf: similar.component } : {}) } : {};
 }
 
 /**

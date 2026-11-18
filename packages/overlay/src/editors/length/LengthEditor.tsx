@@ -4,7 +4,7 @@ import { displayValue, parseValue, stepValue } from "../../css/values.ts";
 import type { BoxArea } from "../../dom/boxModel.ts";
 import { type InputDraft, PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
-import { declaredOf } from "../declared.ts";
+import { declaredOf, isMixed, MIXED } from "../declared.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
 import { useScrub } from "./useScrub.ts";
 
@@ -46,6 +46,7 @@ export function LengthEditor({
   element,
   values,
   declared,
+  mixed,
   onChange,
   onRevert,
   focusRequest,
@@ -104,6 +105,7 @@ export function LengthEditor({
       <PropertyInputText
         value={shown}
         label={name}
+        placeholder={isMixed({ mixed }, property) ? MIXED : undefined}
         inputRef={inputRef}
         onCommit={(text) => {
           // Cleared: remove the value (back to the page's CSS, or the default).

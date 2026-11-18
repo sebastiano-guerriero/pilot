@@ -16,6 +16,12 @@ interface CommentWidgetProps {
   element: Element;
   /** The element's box (viewport px), to open beside it. */
   anchor: DOMRect;
+  /**
+   * The element the spot is picked beside, when it isn't `element`: with
+   * several selected, the latest one (App). Picked again when it changes,
+   * so the panel follows the last element added.
+   */
+  placeBy?: Element;
   /** The element's thread, once it has one. */
   thread: CommentThread | null;
   /**
@@ -79,6 +85,7 @@ const FIELD_MAX = 120;
 export function CommentWidget({
   element,
   anchor,
+  placeBy,
   thread,
   status,
   agentName,
@@ -152,9 +159,15 @@ export function CommentWidget({
   const vh = window.innerHeight;
   const scroll = { x: window.scrollX, y: window.scrollY };
   const [spot, setSpot] = useState<{ left: number; top: number } | null>(null);
+  const beside = placeBy ?? element;
+  const placedBeside = useRef(beside);
   useLayoutEffect(() => {
+    if (placedBeside.current !== beside) {
+      placedBeside.current = beside;
+      if (spot) return setSpot(null);
+    }
     if (spot || !ref.current) return;
-    const box = element.isConnected ? element.getBoundingClientRect() : anchor;
+    const box = beside.isConnected ? beside.getBoundingClientRect() : anchor;
     setSpot(dialogSpot(box, ref.current.offsetWidth, vw, scroll));
   });
   useEffect(() => {
@@ -284,6 +297,14 @@ export function CommentWidget({
     setAttachments([]);
   };
 
+  // A one-click answer to the agent's question: sent as the designer's message (the draft stays).
+  const answer = async (choice: string) => {
+    if (!agentOn || sending) return;
+    setSending(true);
+    await onSend(choice, []);
+    setSending(false);
+  };
+
   const onKeyDown = (e: KeyboardEvent) => {
     if (menuOpen && e.target === fieldRef.current) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -369,7 +390,7 @@ export function CommentWidget({
         // window), with fades at its edges and Pilot's scroll thumb.
         <div class="messages-frame">
           <div class="messages" ref={listRef} onScroll={measure}>
-            {thread?.messages.map((m) =>
+            {thread?.messages.map((m, i) =>
               m.from === "designer" ? (
                 <div key={m.at + m.from} class="message">
                   {m.action && <span class="action-chip">{actionName(m.action)}</span>}
@@ -391,6 +412,23 @@ export function CommentWidget({
               ) : (
                 <div key={m.at + m.from} class="message" data-from="agent" aria-label={`${agentName ?? "Agent"}: ${m.text}`}>
                   {renderMarkdown(m.text)}
+                  {/* The agent's question, not answered yet: its one-click answers (or write one), the agent's suggestion first. */}
+                  {m.choices?.length && i === count - 1 ? (
+                    <div class="choices" role="group" aria-label="Answers">
+                      {m.choices.map((choice) => (
+                        <button
+                          key={choice}
+                          type="button"
+                          class="choice"
+                          disabled={!agentOn || sending}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => void answer(choice)}
+                        >
+                          {choice}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               ),
             )}

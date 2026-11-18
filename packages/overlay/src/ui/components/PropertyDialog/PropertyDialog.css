@@ -92,8 +92,9 @@
      when it doesn't scroll. Above the rows, below a menu (z-index 1). */
   .fade {
     position: absolute;
-    left: 0;
-    right: 0;
+    /* 1px in from each side: the panel's inset ring stays drawn over. */
+    left: 1px;
+    right: 1px;
     height: 12px;
     pointer-events: none;
   }

@@ -37,7 +37,8 @@ const CURSOR_STYLE_ID = "pilot-select-cursor";
 export function useElementPicker(
   active: boolean,
   host: HTMLElement,
-  onPick: (element: EditableElement) => void,
+  /** A click picked `element`; `shift`: held, to add it to the selection (or take it out). */
+  onPick: (element: EditableElement, how: { shift: boolean }) => void,
   options: { editing?: Element | null; onDoubleClick?(element: EditableElement, at: { x: number; y: number }): void } = {},
 ): EditableElement | null {
   const { editing = null, onDoubleClick } = options;
@@ -74,7 +75,7 @@ export function useElementPicker(
       }
       e.preventDefault();
       e.stopImmediatePropagation();
-      if (e.type === "click") onPick(el);
+      if (e.type === "click") onPick(el, { shift: e instanceof MouseEvent && e.shiftKey });
       if (e.type === "dblclick" && e instanceof MouseEvent) onDoubleClick?.(el, { x: e.clientX, y: e.clientY });
     };
 
