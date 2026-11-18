@@ -8,8 +8,11 @@ interface TooltipProps {
   text: string;
   /** Above the trigger (default), or below it when there's no room above. */
   side?: "top" | "bottom";
-  /** Centered on the trigger (default), or its right edge on the trigger's, for a trigger at a panel's right edge. */
-  align?: "center" | "end";
+  /**
+   * Centered on the trigger (default), or its left edge on the trigger's
+   * (`start`) or its right edge (`end`), for a trigger at a panel's edge.
+   */
+  align?: "center" | "start" | "end";
   /** Space between the trigger and the tooltip, in px (default 4): more when the trigger sits inside a bar, so the tooltip clears the bar. */
   gap?: number;
   /** Show it now, whatever the pointer does (a moment of feedback: "Sent"). */
@@ -110,7 +113,7 @@ export function Tooltip({ text, side = "top", align = "center", gap, forceOpen =
       <span
         class="tooltip"
         data-side={side}
-        data-align={align === "end" ? "end" : undefined}
+        data-align={align === "center" ? undefined : align}
         data-open={open || forceOpen || undefined}
         data-instant={instant || undefined}
         style={gap === undefined ? undefined : side === "top" ? { marginBottom: px(gap) } : { marginTop: px(gap) }}

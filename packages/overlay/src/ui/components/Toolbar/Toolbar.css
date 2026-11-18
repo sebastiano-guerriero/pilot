@@ -1,7 +1,7 @@
 @scope (.toolbar) {
   :scope {
     background: var(--plt-color-background);
-    box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.1), var(--plt-shadow-lg);
+    box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.15), var(--plt-shadow-lg);
     position: fixed;
     z-index: var(--plt-z-ui);
     bottom: 24px;

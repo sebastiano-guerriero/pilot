@@ -10,10 +10,30 @@
     flex-direction: column;
     border-radius: 12px;
     background: var(--plt-color-background);
-    box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.1), var(--plt-shadow-lg);
+    box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.15), var(--plt-shadow-lg);
     overflow: hidden;
     font-size: 12px;
     line-height: 16px;
+  }
+
+  /* Files dragged over it: the box takes them anywhere (dropped, they
+     attach as if picked). A layer over all of it, the background at 70%
+     blurring what's under it, says so: the paperclip-plus icon and the
+     words, 8px apart, centered. It lets the drag events through to the box. */
+  .drop-overlay {
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: hsl(from var(--plt-color-background) h s l / 0.7);
+    backdrop-filter: blur(8px);
+    color: var(--plt-color-contrast-high);
+    text-align: center;
+    pointer-events: none;
   }
 
   /* The drag strip, as on the property dialog. */

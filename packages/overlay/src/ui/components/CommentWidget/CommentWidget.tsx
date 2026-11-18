@@ -97,6 +97,35 @@ export function CommentWidget({
     if (taken.length) setAttachments((all) => [...all, ...taken.map(toAttachment)]);
     fieldRef.current?.focus();
   };
+  // Files dropped anywhere on the widget attach as if picked. `over` counts
+  // the drag's enters and leaves, as it crosses the widget's children.
+  const over = useRef(0);
+  const [dropping, setDropping] = useState(false);
+  const carriesFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes("Files");
+  const onDragEnter = (e: DragEvent) => {
+    if (!carriesFiles(e)) return;
+    e.preventDefault();
+    over.current += 1;
+    setDropping(true);
+  };
+  const onDragOver = (e: DragEvent) => {
+    if (!carriesFiles(e)) return;
+    // Taken here, so the browser doesn't open the file in the tab instead.
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+  };
+  const onDragLeave = (e: DragEvent) => {
+    if (!carriesFiles(e)) return;
+    over.current = Math.max(0, over.current - 1);
+    if (over.current === 0) setDropping(false);
+  };
+  const onDrop = (e: DragEvent) => {
+    if (!carriesFiles(e)) return;
+    e.preventDefault();
+    over.current = 0;
+    setDropping(false);
+    attach(e.dataTransfer?.files ?? null);
+  };
   const detach = (attachment: Attachment) => {
     if (attachment.url) URL.revokeObjectURL(attachment.url);
     setAttachments((all) => all.filter((a) => a !== attachment));
@@ -263,8 +292,19 @@ export function CommentWidget({
       role="dialog"
       aria-label="Comment"
       data-dragging={dragging || undefined}
+      data-dropping={dropping || undefined}
       onKeyDown={onKeyDown}
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
     >
+      {dropping && (
+        <div class="drop-overlay" aria-hidden="true">
+          <Icon name="attach-add" />
+          <span>Drop to attach</span>
+        </div>
+      )}
       <div
         class="drag-handle"
         aria-hidden="true"
@@ -339,9 +379,11 @@ export function CommentWidget({
           onInput={(e) => setText((e.currentTarget as HTMLTextAreaElement).value)}
         />
         <div class="buttons">
-          <button type="button" class="attach" aria-label="Attach files" onClick={() => fileRef.current?.click()}>
-            <Icon name="attach" />
-          </button>
+          <Tooltip text="Attach files" align="start">
+            <button type="button" class="attach" aria-label="Attach files" onClick={() => fileRef.current?.click()}>
+              <Icon name="attach" />
+            </button>
+          </Tooltip>
           <input
             ref={fileRef}
             type="file"

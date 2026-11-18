@@ -1,5 +1,5 @@
 /* A tooltip over its trigger (Tooltip.tsx): 22px tall, 6px padding, 11px
-   text, 5px radius, in the background color, with a 1px white ring at 10%
+   text, 5px radius, in the background color, with a 1px white ring at 15%
    and the large shadow. 4px from the trigger, centered on it. */
 @scope (.tooltip-anchor) {
   :scope {
@@ -21,8 +21,8 @@
     color: var(--plt-color-contrast-high);
     font-size: 11px;
     white-space: nowrap;
-    /* The property dialog's 1px white ring at 10%, over the large shadow. */
-    box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.1), var(--plt-shadow-lg);
+    /* The property dialog's 1px white ring at 15%, over the large shadow. */
+    box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.15), var(--plt-shadow-lg);
     pointer-events: none;
     /* Closed: faded out and a touch smaller, scaled from the side that
        faces the trigger. Closing is quick (0.1s, easing in), after 40ms:
@@ -55,6 +55,17 @@
 
     &[data-align="end"][data-side="bottom"] {
       transform-origin: 100% 0;
+    }
+
+    /* Left edge on the trigger's (a trigger at a panel's left edge). */
+    &[data-align="start"] {
+      left: 0;
+      translate: none;
+      transform-origin: 0 100%;
+    }
+
+    &[data-align="start"][data-side="bottom"] {
+      transform-origin: 0 0;
     }
   }
 
