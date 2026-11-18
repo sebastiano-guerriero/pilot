@@ -3,7 +3,7 @@
  * they match). The MCP server reports it, and `update` and `init` compare
  * a project's installed Pilot with it.
  */
-export const VERSION = "0.7.1";
+export const VERSION = "0.7.2";
 
 /** Whether version `a` is older than `b` (x.y.z, prerelease tags ignored). */
 export function olderThan(a: string, b: string): boolean {
