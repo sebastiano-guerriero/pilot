@@ -1,5 +1,5 @@
 /* The Comment tool's panel. Placed inline by CommentWidget.tsx, like the
-   property dialog. Placeholder look, pending the design. */
+   property dialog. Text is 12px on 16px lines. */
 @scope (.comment-widget) {
   :scope {
     position: fixed;
@@ -12,6 +12,8 @@
     background: var(--plt-color-background);
     box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.1), var(--plt-shadow-lg);
     overflow: hidden;
+    font-size: 12px;
+    line-height: 16px;
   }
 
   /* The drag strip, as on the property dialog. */
@@ -49,61 +51,335 @@
     color: var(--plt-color-contrast-high);
   }
 
-  /* The thread: the designer's messages, the agent's replies. */
-  .messages {
+  /* The thread: the designer's comments as plain text, the agent's replies
+     in accent bubbles on the right. The first line sits like the field's
+     (centered in the top 40px). */
+  /* Holds the scrolling thread, the line under it, and the fades. The
+     thread is at most 400px tall, and less when the window is short (the
+     widget never is taller than the window, 8px from each edge): the field
+     and the footer stay. */
+  .messages-frame {
+    position: relative;
     min-height: 0;
-    overflow-y: auto;
+    max-height: 400px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 16px 16px 12px;
     border-bottom: 1px solid var(--plt-color-border);
   }
 
-  .message {
+  .messages {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* No native scrollbar: ScrollThumb draws one over the edge, as in the
+       property dialog. */
+    scrollbar-width: none;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px 16px;
   }
 
-  .author {
-    color: var(--plt-color-contrast-low);
+  .messages::-webkit-scrollbar {
+    display: none;
   }
 
-  .message[data-from="agent"] .author {
-    color: var(--plt-color-accent);
+  /* Messages fade out as they scroll under the edges, as in the property
+     dialog: the widget's background, going transparent toward the thread.
+     At the top, 8px of solid background first (under the drag strip's grip),
+     then the 12px gradient. Each shows only while there's more that way. */
+  .fade {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 12px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease-out;
   }
 
-  .text {
+  .fade[data-on] {
+    opacity: 1;
+  }
+
+  .fade[data-edge="top"] {
+    top: 0;
+    height: 20px;
+    background: linear-gradient(to bottom, var(--plt-color-background) 8px, transparent);
+  }
+
+  .fade[data-edge="bottom"] {
+    bottom: 0;
+    background: linear-gradient(to top, var(--plt-color-background), transparent);
+  }
+
+  .message {
     margin: 0;
+    max-width: 100%;
     color: var(--plt-color-contrast-high);
-    line-height: 16px;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
 
-  /* Where the latest comment stands. */
-  .status {
-    padding: 8px 16px;
-    border-bottom: 1px solid var(--plt-color-border);
-    color: var(--plt-color-contrast-low);
+  /* The designer's message: the images sent with it (as their previews
+     in the field were), then the words. */
+  .message:not([data-from]) {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    & p {
+      margin: 0;
+    }
   }
 
+  .sent-images {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .message[data-from="agent"] {
+    align-self: flex-end;
+    max-width: 90%;
+    padding: 8px;
+    border-radius: 6px 6px 2px 6px;
+    background: hsl(from var(--plt-color-accent) h s l / 0.15);
+    box-shadow: inset 0 0 0 1px hsl(from var(--plt-color-accent) h s l / 0.05);
+  }
+
+  /* The agent's reply, as markdown (markdown.tsx): blocks 6px apart, lists
+     indented, code in Geist Mono on contrast-high at 10%, bold in the brightest color. */
+  .message[data-from="agent"]:not([data-pending]) {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    white-space: normal;
+
+    & p,
+    & ul,
+    & ol,
+    & pre {
+      margin: 0;
+    }
+
+    & ul,
+    & ol {
+      padding-left: 16px;
+    }
+
+    & li + li {
+      margin-top: 2px;
+    }
+
+    & strong {
+      font-weight: 600;
+      color: var(--plt-color-contrast-higher);
+    }
+
+    & code {
+      padding: 0 3px;
+      border-radius: 3px;
+      background: hsl(from var(--plt-color-contrast-high) h s l / 0.1);
+      font-family: var(--plt-font-mono);
+      font-size: 11px;
+    }
+
+    & pre {
+      max-width: 100%;
+      overflow-x: auto;
+      padding: 6px 8px;
+      border-radius: 4px;
+      background: hsl(from var(--plt-color-contrast-high) h s l / 0.1);
+      white-space: pre;
+
+      & code {
+        padding: 0;
+        background: none;
+      }
+    }
+  }
+
+  /* Where the latest comment stands, as the reply to come, while the agent
+     hasn't answered: a brighter band sweeps along its text (the text clips
+     a moving gradient). The gradient is 3 times the text's width, its band
+     in the middle 20%, so the band starts fully left of the text and ends
+     fully right of it: the loop restarts with no band in view, no jump.
+     Still, at full color, with reduced motion. */
+  .message[data-pending] {
+    background-image:
+      linear-gradient(
+        90deg,
+        hsl(from var(--plt-color-contrast-high) h s l / 0.4) 0%,
+        hsl(from var(--plt-color-contrast-high) h s l / 0.4) 40%,
+        var(--plt-color-contrast-high) 50%,
+        hsl(from var(--plt-color-contrast-high) h s l / 0.4) 60%,
+        hsl(from var(--plt-color-contrast-high) h s l / 0.4) 100%
+      ),
+      /* An empty last layer: the bubble's color (background-color) is clipped
+         like the last layer, so this keeps it on the whole bubble. */
+      linear-gradient(transparent, transparent);
+    background-size:
+      300% 100%,
+      100% 100%;
+    background-clip: text, padding-box;
+    -webkit-background-clip: text, padding-box;
+    color: transparent;
+    animation: shimmer 1.5s linear infinite;
+  }
+
+  @keyframes shimmer {
+    from {
+      background-position:
+        100% 0,
+        0 0;
+    }
+    to {
+      background-position:
+        0% 0,
+        0 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fade {
+      transition: none;
+    }
+
+    .message[data-pending] {
+      background-image: none;
+      background-clip: padding-box;
+      -webkit-background-clip: padding-box;
+      color: var(--plt-color-contrast-high);
+      animation: none;
+    }
+  }
+
+  /* The field (40px tall on one line, like the property search), growing
+     with its text; the buttons under it, 40px from the top. */
   .composer {
     display: flex;
-    align-items: flex-end;
-    gap: 8px;
-    padding: 12px 8px 8px 16px;
+    flex-direction: column;
+    padding: 0 16px 12px;
+  }
+
+  /* Attached files, above the field (images as themselves, others as a
+     tile): 42px previews with a 6px radius, five to a row (spread across
+     the field's 248px), 16px from the top; the field follows as usual. The
+     tile is background-light with an inset white ring at 10%; over an
+     image, a 1px white ring at 20% is drawn above it (::after), as the
+     box's own ring is under the image. */
+  .attachments {
+    margin: 0;
+    padding: 16px 0 0;
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(5, 42px);
+    justify-content: space-between;
+    row-gap: 10px;
+  }
+
+  .attachment {
+    position: relative;
+    width: 42px;
+    height: 42px;
+    border-radius: 6px;
+    background: var(--plt-color-background-light);
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.2),
+      0 1px 3px rgba(0, 0, 0, 0.2),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+
+    & img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+      object-fit: cover;
+    }
+
+    /* Over an image, the ring is drawn again above it, at 20%. */
+    &:has(img)::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+      pointer-events: none;
+    }
+  }
+
+  /* A file that isn't an image: its extension, centered on the tile, 8px
+     semibold, spaced out. Letter spacing also follows the last letter: the
+     same space on the left keeps the word optically centered. */
+  .file-type {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    padding-left: 0.1em;
+    color: var(--plt-color-contrast-high);
+    font-size: 8px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    line-height: 1;
+    text-align: center;
+  }
+
+  /* Remove: a 16px round button on the preview's top-right corner (4px
+     past it), shown while the preview is hovered or the button focused. */
+  .detach {
+    all: unset;
+    position: absolute;
+    z-index: 1;
+    top: -4px;
+    right: -4px;
+    display: grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.2),
+      0 5px 2px rgba(0, 0, 0, 0.01),
+      0 3px 2px rgba(0, 0, 0, 0.05),
+      0 1px 1px rgba(0, 0, 0, 0.09),
+      0 0 1px rgba(0, 0, 0, 0.1);
+    color: var(--plt-color-contrast-higher);
+    cursor: pointer;
+    opacity: 0;
+
+    & .icon {
+      width: 6px;
+      height: 6px;
+    }
+
+    &:focus-visible {
+      opacity: 1;
+      outline: 2px solid var(--plt-color-accent);
+      outline-offset: 1px;
+    }
+  }
+
+  .attachment:hover .detach {
+    opacity: 1;
   }
 
   .field {
     all: unset;
-    flex: 1;
-    min-height: 16px;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 40px;
     max-height: 120px;
-    padding-block: 8px;
+    padding-block: 12px;
     color: var(--plt-color-contrast-high);
-    line-height: 16px;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     overflow-y: auto;
@@ -114,24 +390,51 @@
     }
   }
 
+  .buttons {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .attach,
   .send {
     all: unset;
-    flex: none;
     display: grid;
     place-items: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 50em;
-    color: var(--plt-color-accent);
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: hsl(from var(--plt-color-contrast-high) h s l / 0.2);
     cursor: pointer;
-
-    &:disabled {
-      opacity: 0.3;
-      cursor: default;
-    }
 
     &:focus-visible {
       outline: 2px solid var(--plt-color-accent);
+      outline-offset: 2px;
+    }
+  }
+
+  /* Hovered: 5% more of its ground, at once (no transition). */
+  .attach {
+    color: var(--plt-color-contrast-high);
+
+    &:hover {
+      background: hsl(from var(--plt-color-contrast-high) h s l / 0.25);
+    }
+  }
+
+  .send {
+    color: var(--plt-color-background);
+
+    &:not(:disabled) {
+      background: var(--plt-color-accent);
+    }
+
+    /* Hovered while it can send: the accent at 90%, at once (no transition). */
+    &:not(:disabled):hover {
+      background: hsl(from var(--plt-color-accent) h s l / 0.9);
+    }
+
+    &:disabled {
+      cursor: default;
     }
   }
 
@@ -140,22 +443,32 @@
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    padding: 8px 16px;
-    border-top: 1px dotted var(--plt-color-border);
+    height: 40px;
+    padding-inline: 16px;
+    border-top: 1px solid var(--plt-color-border);
     color: var(--plt-color-contrast-low);
   }
 
+  /* A taller target than its text (8px above and below), without moving
+     the layout: the negative margins take the padding back. */
   .resolve {
     all: unset;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding-block: 8px;
+    margin-block: -8px;
     color: var(--plt-color-contrast-high);
     cursor: pointer;
 
     &:hover {
-      color: var(--plt-color-accent);
+      opacity: 0.9;
     }
 
     &:focus-visible {
       outline: 2px solid var(--plt-color-accent);
+      outline-offset: 2px;
+      border-radius: 2px;
     }
   }
 }

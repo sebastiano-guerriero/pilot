@@ -74,8 +74,8 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [ ] Preferences panel: change or remove Pilot's shortcuts
 - [ ] Send in the property dialog for the element's changes
 - [ ] A comment carries the element's unsent changes as an attachment (applied and checked with it)
-- [x] Attachments, step 1: the attach button picks images, previewed above the field, each removable
-- [ ] Attachments, next: send the images with the comment (to the agent through the hub)
+- [x] Comment attachments (images, text files, PDFs): picked, previewed, sent with the comment or alone, saved by the hub in the OS temp folder, shown to the agent with the job
+- [ ] Design the file tile for attachments that aren't images (placeholder now)
 - [ ] Element markers for unsent changes
 - [ ] Comments, phase 2: the agent asks the designer a question in the thread and waits for the answer (an MCP tool)
 - [ ] Source hints (`target.source`: file and line, from the framework in development), so agents open the right file without searching

@@ -1,5 +1,6 @@
 import type { WidthCheck } from "./bridge.ts";
-import type { ChangeSet, CommentRequest, ElementEdit, ElementState, ElementTarget, ResponsiveRequest, StyleChange, WidthRange } from "./types.ts";
+import { attachmentKind } from "./types.ts";
+import type { ChangeSet, CommentMessage, CommentRequest, ElementEdit, ElementState, ElementTarget, ResponsiveRequest, StyleChange, WidthRange } from "./types.ts";
 
 /**
  * Turn a change set into instructions a coding agent can follow.
@@ -111,11 +112,14 @@ function formatComment(changeSet: ChangeSet, request: CommentRequest): string {
     "",
     "## The comment",
     "",
-    quote(latest?.text ?? ""),
+    ...commentLines(latest),
   ];
   if (earlier.length) {
     lines.push("", "## The thread so far (you already did what it asked)", "");
-    for (const m of earlier) lines.push(`- **${m.from === "designer" ? "Designer" : "You"}:** ${m.text.replace(/\s*\n\s*/g, " ")}`);
+    for (const m of earlier) {
+      const files = m.attachments?.length ? ` (${countFiles(m.attachments.length)})` : "";
+      lines.push(`- **${m.from === "designer" ? "Designer" : "You"}:**${files} ${m.text.replace(/\s*\n\s*/g, " ")}`.trimEnd());
+    }
   }
   lines.push(
     "",
@@ -126,9 +130,41 @@ function formatComment(changeSet: ChangeSet, request: CommentRequest): string {
     `- The designer was looking at the page ${page.viewport.width}px wide. If the comment is about how it looks at that width only, scope the change with the project's breakpoints; otherwise it's for every width.`,
     "- Change only what the comment is about. Never leave inline styles. If the element comes from a shared component, ask before changing every instance.",
     "- **A question, not a change:** answer it, and change nothing.",
-    "- **Your notes are your reply in the designer's thread:** in a sentence or two, what you changed (or your answer), and anything you need from them.",
+    "- **Your notes are your reply in the designer's thread, a small chat box for quick design back-and-forth:** keep it to one short sentence, like a chat message (about 120 characters at most): what you changed, or your answer, or the one thing you need from them. No lists, headings or code blocks; inline `code` for a value or a file name at most. Not a report: the designer sees the result on the page.",
   );
   return `${lines.join("\n")}\n`;
+}
+
+/**
+ * The latest comment: its words, quoted, and its attachments, saved in the
+ * OS temp folder. Images and text files come with the job (Pilot shows them
+ * to the agent); PDFs are read from their path. With no words, the
+ * attachments are the comment.
+ */
+function commentLines(message: CommentMessage | undefined): string[] {
+  const text = message?.text.trim() ?? "";
+  const files = message?.attachments ?? [];
+  const out = text ? [quote(text)] : [];
+  if (!files.length) return out.length ? out : ["> (empty)"];
+  const one = files.length === 1;
+  if (out.length) out.push("");
+  out.push(
+    text
+      ? `The designer attached ${countFiles(files.length)} to it:`
+      : `The comment is ${countFiles(files.length)}, with no words. ${one ? "It" : "They"} may hold the instructions: a screenshot, a sketch, notes, a spec. If it's unclear what to do, ask in your reply instead of guessing.`,
+    "",
+    ...files.map((file) => {
+      const kind = attachmentKind(file.id);
+      const how = kind === "pdf" ? "a PDF: open it at this path" : kind === "image" ? "an image, shown with this job" : "a text file, its contents shown with this job";
+      return `- ${file.name ? `${file.name} ` : ""}(${how}): \`${file.path ?? file.id}\``;
+    }),
+  );
+  return out;
+}
+
+/** "a file", "3 files". */
+function countFiles(n: number): string {
+  return n === 1 ? "a file" : `${n} files`;
 }
 
 /** Text as a Markdown quote, line by line. */

@@ -73,6 +73,22 @@ export class BridgeClient {
   }
 
   /** Posts a job. False when the hub isn't reachable or refused it (no agent on this page). */
+  /**
+   * Uploads a file for a comment (an image, text file or PDF, as `type`);
+   * its id (the hub keeps the file in the OS temp folder), or null when the
+   * hub refused it or isn't there.
+   */
+  async upload(file: Blob, type: string): Promise<string | null> {
+    try {
+      const res = await fetch(`${this.url}/attachments`, { method: "POST", headers: { "content-type": type }, body: file });
+      if (!res.ok) return null;
+      const { id } = (await res.json()) as { id?: unknown };
+      return typeof id === "string" ? id : null;
+    } catch {
+      return null;
+    }
+  }
+
   postJob(job: Pick<Job, "id" | "changeSet" | "status" | "agent" | "attempt" | "differences" | "issues">): Promise<boolean> {
     return this.post("/jobs", job);
   }

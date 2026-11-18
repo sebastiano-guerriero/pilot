@@ -12,8 +12,8 @@ import type { ChangeSet } from "./types.ts";
 
 export const DEFAULT_BRIDGE_PORT = 4747;
 
-/** Bumped when the hub's HTTP API changes incompatibly. 2: width checks (`/agents/check`, `/checks/:id`). */
-export const BRIDGE_VERSION = 2;
+/** Bumped when the hub's HTTP API changes incompatibly. 2: width checks (`/agents/check`, `/checks/:id`). 3: comment images (`/attachments`). */
+export const BRIDGE_VERSION = 3;
 
 /**
  * - queued: sent by the designer, waiting for an agent;

@@ -5,6 +5,7 @@ import type { AgentInfo, Job } from "@pilot/protocol";
 import { DEFAULT_BRIDGE_PORT, formatPrompt, formatWidthCheck, originOf } from "@pilot/protocol";
 import { z } from "zod";
 import { Bridge } from "./agent.ts";
+import { attachmentBlocks } from "./attachments.ts";
 
 /**
  * Pilot's MCP server: the tools an agent uses to hand the UI to the designer
@@ -36,7 +37,7 @@ export const INSTRUCTIONS = `Pilot lets the designer edit the running app in the
 The loop, when the user runs /pilot or asks to hand the design over:
 1. Call pilot_launch with the URL of the page the designer works on (the app's dev server, e.g. http://localhost:5173). Pilot opens in that page.
 2. Call pilot_wait_for_edits. It returns a job when the designer presses Send, or "no edits yet" after a while: then call it again. (In Claude Code a long wait moves to the background: the job arrives as its result.)
-3. Apply the job's edits to the source, in the project's conventions (see the job's guidelines). Edits are basic: every value is given, so be fast (no screenshots or browser checks: Pilot checks the page). A "make responsive" job is an advanced task: make one element work at every viewport width. Its prompt lists the steps; check the result with pilot_check_widths (numbers for every width, instead of screenshots). In Claude Code, hand advanced tasks to an Opus subagent unless you run on Opus. A "comment" job is the designer's own words about one element: do what it asks (simple asks right away, open-ended ones as advanced tasks), and your pilot_done notes are your reply in their thread.
+3. Apply the job's edits to the source, in the project's conventions (see the job's guidelines). Edits are basic: every value is given, so be fast (no screenshots or browser checks: Pilot checks the page). A "make responsive" job is an advanced task: make one element work at every viewport width. Its prompt lists the steps; check the result with pilot_check_widths (numbers for every width, instead of screenshots). In Claude Code, hand advanced tasks to an Opus subagent unless you run on Opus. A "comment" job is the designer's own words about one element: do what it asks (simple asks right away, open-ended ones as advanced tasks), and your pilot_done notes are your reply in their thread: one short sentence, like a chat message, not a report.
 4. Call pilot_done with the job id and short notes (values you approximated, anything you did differently). Then call pilot_wait_for_edits again.
 
 Keep looping until the user interrupts you. Pilot keeps previewing each job's changes until you call pilot_done, then checks them against the page's real CSS: changes that didn't land come back once as a follow-up job with what the page gives instead.`;
@@ -99,7 +100,7 @@ export function followUp(job: Job): string {
 function notesFor(job: Job): string {
   switch (job.changeSet.request?.kind) {
     case "comment":
-      return "your reply in the designer's comment thread: what you changed, or your answer, in a sentence or two";
+      return "your reply in the designer's comment thread, a small chat box: one short sentence, about 120 characters at most, with what you changed or your answer; no lists or code blocks";
     case "responsive":
       return "what changed at which widths, anything left for the designer";
     default:
@@ -203,7 +204,8 @@ export function createPilotServer(options: { port?: number; cwd?: string; waitMs
       try {
         const { job } = await bridge.wait(origin, waitMs, extra.signal);
         if (!job) return text("No edits yet. Call pilot_wait_for_edits again to keep waiting (the designer can keep editing meanwhile).");
-        return text(jobPrompt(job));
+        // A comment's images and text files come with it, so the agent sees them without opening files.
+        return { content: [{ type: "text" as const, text: jobPrompt(job) }, ...(await attachmentBlocks(job))], isError: false };
       } catch (error) {
         return text(`Pilot's bridge failed while waiting: ${(error as Error).message}. Call pilot_wait_for_edits again.`, true);
       } finally {

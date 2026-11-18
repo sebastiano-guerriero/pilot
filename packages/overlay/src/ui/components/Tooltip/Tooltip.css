@@ -44,6 +44,18 @@
       margin-top: 4px;
       transform-origin: 50% 0;
     }
+
+    /* Right edge on the trigger's (a trigger at a panel's right edge). */
+    &[data-align="end"] {
+      left: auto;
+      right: 0;
+      translate: none;
+      transform-origin: 100% 100%;
+    }
+
+    &[data-align="end"][data-side="bottom"] {
+      transform-origin: 100% 0;
+    }
   }
 
   /* Open: Tooltip.tsx decides when (the pause on hover, shared by all

@@ -1,11 +1,15 @@
+import { ATTACHMENT_ACCEPT, attachmentKind, attachmentType } from "@pilot/protocol";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { CommentThread } from "../../../bridge/session.ts";
 import { px } from "../../px.ts";
 import { Icon } from "../Icon/Icon.tsx";
 import { dialogPosition, dialogSpot, raisedSpot } from "../PropertyDialog/PropertyDialog.tsx";
+import { ScrollThumb } from "../ScrollThumb/ScrollThumb.tsx";
+import { Tooltip } from "../Tooltip/Tooltip.tsx";
+import { renderMarkdown } from "./markdown.tsx";
 
-/** How sending went: to the agent, its prompt copied (no agent on the page), or not at all. */
-export type CommentOutcome = "sent" | "copied" | false;
+/** How sending went: to the agent, or not at all. */
+export type CommentOutcome = "sent" | false;
 
 interface CommentWidgetProps {
   element: Element;
@@ -13,16 +17,44 @@ interface CommentWidgetProps {
   anchor: DOMRect;
   /** The element's thread, once it has one. */
   thread: CommentThread | null;
-  /** Where its latest comment stands, in words ("Waiting for an agent"), if it isn't done. */
+  /**
+   * Where its latest comment stands, in words ("Waiting for an agent"), while
+   * it isn't done: shown as the agent's reply to come, with a shimmer.
+   */
   status?: string;
+  /** An agent is on the page: without one, the send button is disabled (comments go to an agent only). */
+  agentOn?: boolean;
   /** Who replies ("Claude Code · app"), for the agent's messages. */
   agentName?: string;
-  onSend(text: string): Promise<CommentOutcome> | CommentOutcome;
-  /** The designer is done with the thread: it goes, with its pin. */
-  onResolve?(): void;
+  /** Sends the comment: its words (maybe none) and the images attached (maybe none, but not both). */
+  onSend(text: string, images: File[]): Promise<CommentOutcome> | CommentOutcome;
+  /** The designer is done with the thread: it goes. `from` is Mark as solved's box (for its confetti). */
+  onResolve?(from?: DOMRect): void;
   onClose(): void;
   /** Take focus when it opens (not when the selection came from the DOM tree, which keeps it). */
   autoFocus?: boolean;
+}
+
+/** Resolve's shortcut, as the keyboard names it. */
+const RESOLVE_KEYS = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "⌥ + Enter" : "Alt + Enter";
+
+/** A file attached to the comment being written: an image (with its preview's object URL), a text file or a PDF. */
+interface Attachment {
+  id: number;
+  file: File;
+  url?: string;
+}
+
+let nextAttachment = 0;
+const toAttachment = (file: File): Attachment => ({
+  id: ++nextAttachment,
+  file,
+  url: attachmentKind(file.name) === "image" ? URL.createObjectURL(file) : undefined,
+});
+
+/** A file's tile when it isn't an image: its extension ("PDF", "MD"). Placeholder look, pending the design. */
+function FileTile({ name }: { name: string }) {
+  return <span class="file-type">{(name.split(".").pop() ?? "").slice(0, 4).toUpperCase()}</span>;
 }
 
 /** The longest the field grows to before it scrolls, in px. */
@@ -34,9 +66,10 @@ const FIELD_MAX = 120;
  * page, never jumps while you type, draggable by its top strip): the
  * element's thread (the designer's comments, the agent's replies), where
  * the latest stands, and a field to write the next one.
- * - Enter sends (at once, to the agent working on the page; with none, its
- *   prompt is copied), Shift+Enter starts a new line, Esc closes.
- * - Resolve ends the thread. Placeholder look, pending the design.
+ * - Enter sends, at once, to the agent working on the page (with none,
+ *   it can't), Shift+Enter starts a new line, Esc closes.
+ * - Option+Enter (Alt+Enter) resolves the thread, like Mark as solved:
+ *   Option, like Pilot's other shortcuts.
  */
 export function CommentWidget({
   element,
@@ -48,12 +81,31 @@ export function CommentWidget({
   onResolve,
   onClose,
   autoFocus = true,
+  agentOn = true,
 }: CommentWidgetProps) {
   const ref = useRef<HTMLDivElement>(null);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const resolveRef = useRef<HTMLButtonElement>(null);
+  const resolve = () => onResolve?.(resolveRef.current?.getBoundingClientRect());
   const [text, setText] = useState("");
-  const [copied, setCopied] = useState(false);
+  // Files attached to the comment being written (images, text files, PDFs), previewed above the field.
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const attach = (files: FileList | null) => {
+    const taken = [...(files ?? [])].filter((f) => attachmentType(f.name, f.type));
+    if (taken.length) setAttachments((all) => [...all, ...taken.map(toAttachment)]);
+    fieldRef.current?.focus();
+  };
+  const detach = (attachment: Attachment) => {
+    if (attachment.url) URL.revokeObjectURL(attachment.url);
+    setAttachments((all) => all.filter((a) => a !== attachment));
+    fieldRef.current?.focus();
+  };
+  // The previews' object URLs go with the widget.
+  const shown = useRef(attachments);
+  shown.current = attachments;
+  useEffect(() => () => shown.current.forEach((a) => a.url && URL.revokeObjectURL(a.url)), []);
 
   // Placement: as the property dialog's (see dialogSpot / dialogPosition).
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -83,19 +135,35 @@ export function CommentWidget({
     if (raised !== spot) setSpot(raised);
   }, [size.height]);
 
-  const drag = useRef<{ x: number; y: number; from: { left: number; top: number } } | null>(null);
+  const drag = useRef<{
+    x: number;
+    y: number;
+    from: { left: number; top: number };
+  } | null>(null);
   const [dragging, setDragging] = useState(false);
   const onDragStart = (e: PointerEvent) => {
     if (e.button !== 0) return;
     e.preventDefault();
-    drag.current = { x: e.clientX, y: e.clientY, from: { left: left + scroll.x, top: top + scroll.y } };
+    drag.current = {
+      x: e.clientX,
+      y: e.clientY,
+      from: { left: left + scroll.x, top: top + scroll.y },
+    };
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
     setDragging(true);
   };
   const onDragMove = (e: PointerEvent) => {
     const d = drag.current;
     if (!d) return;
-    const shown = dialogPosition({ left: d.from.left + e.clientX - d.x, top: d.from.top + e.clientY - d.y }, size, { width: vw, height: vh }, scroll);
+    const shown = dialogPosition(
+      {
+        left: d.from.left + e.clientX - d.x,
+        top: d.from.top + e.clientY - d.y,
+      },
+      size,
+      { width: vw, height: vh },
+      scroll,
+    );
     setSpot({ left: shown.left + scroll.x, top: shown.top + scroll.y });
   };
   const onDragEnd = () => {
@@ -106,17 +174,35 @@ export function CommentWidget({
   useEffect(() => {
     if (autoFocus) fieldRef.current?.focus();
   }, []);
-  // The latest message in view.
+  // The latest message in view: the thread opens scrolled to the bottom, and
+  // stays there while its content settles (fonts loading, a reply arriving)
+  // unless the designer scrolled up. The fades show only where there's more.
   const count = thread?.messages.length ?? 0;
+  const stick = useRef(true);
+  const [more, setMore] = useState({ above: false, below: false });
+  const measure = () => {
+    const list = listRef.current;
+    if (!list) return;
+    const below = list.scrollHeight - list.scrollTop - list.clientHeight > 1;
+    stick.current = !below;
+    const above = list.scrollTop > 0;
+    setMore((m) => (m.above === above && m.below === below ? m : { above, below }));
+  };
   useLayoutEffect(() => {
-    if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
-  }, [count]);
-  // "Prompt copied" for a moment.
-  useEffect(() => {
-    if (!copied) return;
-    const t = setTimeout(() => setCopied(false), 2500);
-    return () => clearTimeout(t);
-  }, [copied]);
+    const list = listRef.current;
+    if (!list) return;
+    stick.current = true;
+    const pin = () => {
+      if (stick.current) list.scrollTop = list.scrollHeight;
+      measure();
+    };
+    pin();
+    if (typeof ResizeObserver === "undefined") return;
+    const resize = new ResizeObserver(pin);
+    resize.observe(list);
+    for (const child of list.children) resize.observe(child);
+    return () => resize.disconnect();
+  }, [count, status]);
 
   // The field grows with its text, up to FIELD_MAX.
   const fit = () => {
@@ -127,13 +213,21 @@ export function CommentWidget({
   };
   useLayoutEffect(fit, [text]);
 
+  // Words, images, or both; the images upload first, so sending can take a moment.
+  const [sending, setSending] = useState(false);
+  const canSend = agentOn && !sending && (!!text.trim() || attachments.length > 0);
   const send = async () => {
-    const value = text.trim();
-    if (!value) return;
-    const outcome = await onSend(value);
+    if (!canSend) return;
+    setSending(true);
+    const outcome = await onSend(
+      text.trim(),
+      attachments.map((a) => a.file),
+    );
+    setSending(false);
     if (outcome === false) return;
     setText("");
-    if (outcome === "copied") setCopied(true);
+    for (const a of attachments) if (a.url) URL.revokeObjectURL(a.url);
+    setAttachments([]);
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -141,13 +235,25 @@ export function CommentWidget({
       e.preventDefault();
       e.stopPropagation();
       onClose();
-    } else if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    } else if (e.key === "Enter" && !e.isComposing && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
       e.preventDefault();
-      void send();
+      // Option+Enter resolves, like Mark as solved; Enter sends.
+      if (e.altKey) resolve();
+      else void send();
     }
   };
 
-  const note = copied ? "Prompt copied: paste it in your agent's chat." : status;
+  const sendButton = (
+    <button
+      type="button"
+      class="send"
+      aria-label={agentOn ? "Send comment" : "Send comment: no agent connected"}
+      disabled={!canSend}
+      onClick={() => void send()}
+    >
+      <Icon name="arrow-up" />
+    </button>
+  );
 
   return (
     <div
@@ -169,40 +275,101 @@ export function CommentWidget({
       >
         <Icon name="grip" />
       </div>
-      {count > 0 && (
-        <div class="messages" ref={listRef}>
-          {thread?.messages.map((m) => (
-            <div key={m.at + m.from} class="message" data-from={m.from}>
-              <span class="author">{m.from === "designer" ? "You" : (agentName ?? "Agent")}</span>
-              <p class="text">{m.text}</p>
-            </div>
-          ))}
-        </div>
-      )}
-      {note && (
-        <div class="status" role="status">
-          {note}
+      {(count > 0 || status) && (
+        // The thread scrolls inside its frame (up to 400px, less in a short
+        // window), with fades at its edges and Pilot's scroll thumb.
+        <div class="messages-frame">
+          <div class="messages" ref={listRef} onScroll={measure}>
+            {thread?.messages.map((m) =>
+              m.from === "designer" ? (
+                <div key={m.at + m.from} class="message">
+                  {m.attachments?.length ? (
+                    <ul class="sent-images" aria-label="Attachments">
+                      {m.attachments.map((file) => (
+                        <li key={file.id} class="attachment" title={file.name}>
+                          {file.thumb ? (
+                            <img src={file.thumb} alt={file.name ?? "Image"} draggable={false} />
+                          ) : (
+                            <FileTile name={file.name ?? file.id} />
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {m.text && <p>{m.text}</p>}
+                </div>
+              ) : (
+                <div key={m.at + m.from} class="message" data-from="agent" aria-label={`${agentName ?? "Agent"}: ${m.text}`}>
+                  {renderMarkdown(m.text)}
+                </div>
+              ),
+            )}
+            {/* Where the latest comment stands, as the reply to come, until the agent's real reply replaces it. */}
+            {status && (
+              <p class="message" data-from="agent" data-pending role="status">
+                {status}…
+              </p>
+            )}
+          </div>
+          <div class="fade" data-edge="top" data-on={more.above || undefined} aria-hidden="true" />
+          <div class="fade" data-edge="bottom" data-on={more.below || undefined} aria-hidden="true" />
+          <ScrollThumb target={listRef} />
         </div>
       )}
       <div class="composer">
+        {attachments.length > 0 && (
+          <ul class="attachments" aria-label="Attachments">
+            {attachments.map((a) => (
+              <li key={a.id} class="attachment" title={a.file.name}>
+                {a.url ? <img src={a.url} alt={a.file.name} draggable={false} /> : <FileTile name={a.file.name} />}
+                <button type="button" class="detach" aria-label={`Remove ${a.file.name}`} onClick={() => detach(a)}>
+                  <Icon name="close" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         <textarea
           ref={fieldRef}
           class="field"
           rows={1}
           value={text}
-          placeholder={count ? "Reply…" : "Comment for the agent…"}
+          placeholder={count ? "Reply…" : "Ask the agent"}
           aria-label="Comment"
           onInput={(e) => setText((e.currentTarget as HTMLTextAreaElement).value)}
         />
-        <button type="button" class="send" aria-label="Send comment" disabled={!text.trim()} onClick={() => void send()}>
-          <Icon name="send" />
-        </button>
+        <div class="buttons">
+          <button type="button" class="attach" aria-label="Attach files" onClick={() => fileRef.current?.click()}>
+            <Icon name="attach" />
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept={ATTACHMENT_ACCEPT}
+            multiple
+            hidden
+            onChange={(e) => {
+              const input = e.currentTarget as HTMLInputElement;
+              attach(input.files);
+              // So picking the same file again still counts as a change.
+              input.value = "";
+            }}
+          />
+          {agentOn ? (
+            sendButton
+          ) : (
+            <Tooltip text="No agent connected" align="end">
+              {sendButton}
+            </Tooltip>
+          )}
+        </div>
       </div>
       {thread && onResolve && (
         <div class="footer">
-          <span class="hint">Shift+Enter for a new line</span>
-          <button type="button" class="resolve" onClick={onResolve}>
-            Resolve
+          <span class="hint">{RESOLVE_KEYS} to resolve</span>
+          <button ref={resolveRef} type="button" class="resolve" onClick={resolve}>
+            <Icon name="solved" />
+            Mark as solved
           </button>
         </div>
       )}

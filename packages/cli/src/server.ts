@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AgentInfo, ChangeResult, PageEvent, WidthCheck } from "@pilot/protocol";
 import { BRIDGE_VERSION, originKey } from "@pilot/protocol";
+import { attachmentsDir, extensionOf, MAX_ATTACHMENT_BYTES, saveAttachment, sweepAttachments, withAttachmentPaths } from "./attachments.ts";
 import { Hub, type JobPost } from "./hub.ts";
 
 /**
@@ -12,6 +13,8 @@ import { Hub, type JobPost } from "./hub.ts";
  * - POST /jobs/:id/cancel       take a job back
  * - POST /jobs/:id/retry        a done job's changes that didn't come out right (or a task's problems): one follow-up
  * - POST /checks/:requestId     the answer to a width check an agent asked for (`check` event)
+ * - POST /attachments           a file for a comment: an image, text file or PDF (the raw bytes, its type as Content-Type): saved in
+ *                               the OS temp folder (attachments.ts), answers its id. Jobs name files by id only.
  * The page's origin comes from the `Origin` header the browser always sends,
  * never from the request. Jobs are only taken from an origin an agent works
  * on (it ran /pilot for it), so another website can't hand prompts to the
@@ -32,9 +35,11 @@ export interface HubServer {
 }
 
 /** Starts the hub on `port`; rejects with EADDRINUSE when another process has it. */
-export function startHub(port: number, hub = new Hub()): Promise<HubServer> {
+export function startHub(port: number, hub = new Hub(), options: { attachments?: string } = {}): Promise<HubServer> {
+  const attachments = options.attachments ?? attachmentsDir();
+  void sweepAttachments(attachments);
   const server = createServer((req, res) => {
-    handle(hub, req, res).catch((error) => {
+    handle(hub, req, res, attachments).catch((error) => {
       if (!res.headersSent) json(res, 500, { error: String(error) });
     });
   });
@@ -65,7 +70,7 @@ export function startHub(port: number, hub = new Hub()): Promise<HubServer> {
 /** Agents in the hub's own process: never swept (see Hub.sweep). */
 export const localAgents = new Set<string>();
 
-async function handle(hub: Hub, req: IncomingMessage, res: ServerResponse): Promise<void> {
+async function handle(hub: Hub, req: IncomingMessage, res: ServerResponse, attachments: string): Promise<void> {
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
   const origin = req.headers.origin;
   const path = url.pathname;
@@ -95,11 +100,20 @@ async function handle(hub: Hub, req: IncomingMessage, res: ServerResponse): Prom
   if (req.method !== "POST") return json(res, 405, { error: "POST only" });
   if (!hub.hasAgents(origin)) return json(res, 403, { error: "no agent works on this page: run /pilot in your agent" });
 
+  if (path === "/attachments") {
+    const type = req.headers["content-type"] ?? "";
+    if (!extensionOf(type)) return json(res, 415, { error: "images (png, jpeg, gif, webp), text files (txt, md, csv, json) and PDFs only" });
+    const bytes = await rawBody(req, MAX_ATTACHMENT_BYTES);
+    if (!bytes) return json(res, 413, { error: `files up to ${MAX_ATTACHMENT_BYTES / 1_000_000} MB` });
+    const id = await saveAttachment(bytes, type, attachments);
+    return id ? json(res, 201, { id }) : json(res, 400, { error: "not a file of that type" });
+  }
+
   const data = (await body(req)) as Record<string, unknown>;
   if (path === "/jobs") {
     const post = data as unknown as JobPost;
     if (typeof post?.id !== "string" || !post.changeSet) return json(res, 400, { error: "job needs id and changeSet" });
-    return json(res, 202, { job: hub.postJob(origin, post) });
+    return json(res, 202, { job: hub.postJob(origin, withAttachmentPaths(post, attachments)) });
   }
   const jobRoute = path.match(/^\/jobs\/([^/]+)\/(cancel|retry)$/);
   if (jobRoute) {
@@ -192,6 +206,30 @@ function stringsOf(value: unknown): string[] | undefined {
 function json(res: ServerResponse, status: number, data: unknown): void {
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(data));
+}
+
+/** A request's raw bytes, or null past `max` (the rest isn't read). */
+function rawBody(req: IncomingMessage, max: number): Promise<Buffer | null> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let over = false;
+    req.on("data", (chunk: Buffer) => {
+      if (over) return;
+      size += chunk.length;
+      if (size > max) {
+        over = true;
+        resolve(null);
+        req.resume();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => {
+      if (!over) resolve(Buffer.concat(chunks));
+    });
+    req.on("error", reject);
+  });
 }
 
 function body(req: IncomingMessage): Promise<unknown> {

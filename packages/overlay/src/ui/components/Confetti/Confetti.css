@@ -1,0 +1,46 @@
+/* A confetti burst (Confetti.tsx): placed at the button's left edge, halfway
+   down; each piece starts somewhere along the button and is animated from
+   there. Strips 3×7px, squares 5px, dots 4px; mostly the accent, some light. */
+@scope (.confetti) {
+  :scope {
+    position: fixed;
+    z-index: var(--plt-z-ui);
+    width: 0;
+    height: 0;
+    pointer-events: none;
+  }
+
+  .piece {
+    position: absolute;
+    top: 0;
+    translate: -50% -50%;
+    background: var(--plt-color-accent);
+    will-change: transform, opacity;
+  }
+
+  .piece[data-shape="strip"] {
+    width: 3px;
+    height: 7px;
+    border-radius: 1px;
+  }
+
+  .piece[data-shape="square"] {
+    width: 5px;
+    height: 5px;
+    border-radius: 1px;
+  }
+
+  .piece[data-shape="dot"] {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+  }
+
+  .piece[data-color="high"] {
+    background: var(--plt-color-contrast-high);
+  }
+
+  .piece[data-color="higher"] {
+    background: var(--plt-color-contrast-higher);
+  }
+}

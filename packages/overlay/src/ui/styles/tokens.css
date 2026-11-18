@@ -15,12 +15,15 @@
   --plt-color-background-light: #303030;
   --plt-color-contrast-low: #737373;
   --plt-color-contrast-high: #E5E5E5;
+  --plt-color-contrast-higher: #fff;
   --plt-color-border: hsl(from var(--plt-color-contrast-high) h s l / 0.125);
   --plt-color-accent: #1CF69E;
 
   /* Typography */
   /* Main font: Geist, bundled and registered by ui/fonts.ts. */
   --plt-font-main: "PLT Geist", ui-sans-serif, system-ui, sans-serif;
+  /* Monospace font: Geist Mono, bundled and registered by ui/fonts.ts. */
+  --plt-font-mono: "PLT Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   /* OpenType features for the main font. normal = Geist's defaults. */
   --plt-font-features: normal;
 

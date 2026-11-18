@@ -20,6 +20,8 @@ import { statusText, whatText } from "./components/JobList/JobList.tsx";
 import { DomTree } from "./components/DomTree/DomTree.tsx";
 import { actionsBox, type Busy, type RequestOutcome, SelectionActions } from "./components/SelectionActions/SelectionActions.tsx";
 import { type CommentOutcome, CommentWidget } from "./components/CommentWidget/CommentWidget.tsx";
+import { Confetti } from "./components/Confetti/Confetti.tsx";
+import { thumbnail } from "../dom/thumbnail.ts";
 import { type Tool, Toolbar } from "./components/Toolbar/Toolbar.tsx";
 import { ViewportWidth } from "./components/ViewportWidth/ViewportWidth.tsx";
 import { loadSpot, saveSpot, type ToolbarSpot } from "./toolbarSpot.ts";
@@ -152,6 +154,9 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   const copyPrompt = () => copyText(formatPrompt(buildChangeSet(history)));
   // The session's jobs and agents: re-render as they change.
   const [, setSessionTick] = useState(0);
+  // Confetti bursts in flight (Mark as solved), each gone once it's over.
+  const [bursts, setBursts] = useState<{ key: number; from: DOMRect }[]>([]);
+  const burstKey = useRef(0);
   useEffect(() => session?.subscribe(() => setSessionTick((n) => n + 1)), [session]);
   useEffect(() => history.subscribe(() => setSessionTick((n) => n + 1)), [history]);
   // With an agent on this page, the button sends the changes not sent yet;
@@ -165,8 +170,8 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     if (!session) return false;
     const job = session.send();
     const held = session.heldCount > 0;
-    if (job) return held ? "Sent; some wait for the agent" : true;
-    return held ? "Sends when the agent is done" : false;
+    if (job) return held ? "Sent; some queued" : true;
+    return held ? "Queued" : false;
   };
   // The job on the selected element, if one isn't finished: its actions give way to where it stands.
   const selectedJob = selected && session ? session.jobOn(selected.element) : null;
@@ -371,12 +376,15 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   const threadJob = thread && session ? session.threadJob(thread) : null;
   // Comments written while a job was on the element wait for it (see PilotSession.comment).
   const threadWaits = !!thread?.messages.some((m) => m.waiting);
-  const threadStatus = threadWaits ? "Sends when the agent is done" : threadJob ? threadJobStatus(threadJob) : undefined;
-  const sendComment = async (element: Element, text: string): Promise<CommentOutcome> => {
-    if (!session) return false;
-    const { job, changeSet, waiting } = session.comment(element, text);
-    if (job || waiting) return "sent";
-    return (await copyText(formatPrompt(changeSet))) ? "copied" : false;
+  const threadStatus = threadWaits ? "Queued" : threadJob ? threadJobStatus(threadJob) : undefined;
+  // Comments go to an agent only: without one on the page, the widget's send is disabled.
+  // Attached files go to the hub first (it saves them for the agent); nothing is sent if one fails.
+  const sendComment = async (element: Element, text: string, files: File[]): Promise<CommentOutcome> => {
+    if (!session || !sendToAgent) return false;
+    const attachments = files.length ? await session.uploadFiles(files, thumbnail) : [];
+    if (!attachments) return false;
+    session.comment(element, text, attachments);
+    return "sent";
   };
 
   const hideSelection = !!inspect?.some(hidesSelection);
@@ -428,27 +436,33 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
           />
         ),
       )}
+      {bursts.map((burst) => (
+        <Confetti key={burst.key} from={burst.from} onDone={() => setBursts((all) => all.filter((b) => b !== burst))} />
+      ))}
       {/* The jobs button's flash on the next job's elements. */}
       {flash?.elements.map((element) => (
         <FlashOutline key={`${flash.key}-${elementKey(element)}`} element={element} />
       ))}
       {selected && selectedRect && commenting && (
         <>
-          <Highlight element={selected.element} rect={selectedRect} variant="selected" label={false} />
+          <Highlight element={selected.element} rect={selectedRect} variant="selected" label={false} working={!!selectedJob} />
           <CommentWidget
             key={selected.key}
             element={selected.element}
             anchor={selectedRect}
             thread={thread}
             status={threadStatus}
-            agentName={threadJob?.agent?.label ?? session?.state.agents[0]?.label}
-            onSend={(text) => sendComment(selected.element, text)}
+            agentName={agentName(threadJob?.agent?.label ?? session?.state.agents[0]?.label)}
+            agentOn={sendToAgent}
+            onSend={(text, files) => sendComment(selected.element, text, files)}
             // Resolved: the thread goes, and the widget closes (the next one is the Comment button's click away).
             onResolve={
               thread
-                ? () => {
+                ? (from) => {
                     session?.resolve(thread.id);
                     dismiss();
+                    // A little celebration, from Mark as solved (the widget is gone, so App draws it).
+                    if (from) setBursts((all) => [...all, { key: ++burstKey.current, from }]);
                   }
                 : undefined
             }
@@ -485,6 +499,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
               // No name and size on the selection: you know what you clicked,
               // and its corner is kept for the selection's actions.
               label={false}
+              working={!!selectedJob}
             />
           )}
           {inspect && <BoxAreas element={selected.element} areas={inspect} />}
@@ -592,9 +607,14 @@ function jobText(job: JobRecord): string {
 }
 
 /** Where a thread's latest comment stands, while it's with the agent. */
+/** The agent's name from its label ("Claude Code · app" → "Claude Code"). */
+export function agentName(label: string | undefined): string | undefined {
+  return label?.split(" · ")[0] || undefined;
+}
+
 function threadJobStatus(job: JobRecord): string | undefined {
   if (job.status === "queued") return "Waiting for an agent";
-  if (job.status === "working") return `${job.agent?.label ?? "The agent"} is working on it`;
+  if (job.status === "working") return `${agentName(job.agent?.label) ?? "The agent"} is working on it`;
   return undefined;
 }
 
@@ -613,7 +633,7 @@ function CornerMarks({ element, busy, onOpenThread }: { element: Element; busy?:
   if (!rect) return null;
   return (
     <>
-      <Highlight element={element} rect={rect} variant="busy" label={false} />
+      <Highlight element={element} rect={rect} variant="busy" label={false} working={!!busy} />
       <SelectionActions rect={rect} busy={busy} onOpenThread={onOpenThread} />
     </>
   );

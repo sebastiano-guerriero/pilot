@@ -36,7 +36,7 @@ interface ToolbarProps {
   sendCount?: number;
   /**
    * Send or copy; resolves to whether it worked, or to what the tooltip
-   * says instead of "Sent" ("Sends when the agent is done").
+   * says instead of "Sent" ("Queued").
    */
   onSend(): Promise<boolean | string> | boolean | string | void;
   /** Jobs not finished yet (waiting, an agent applying, checking): the jobs button shows while there are any. */

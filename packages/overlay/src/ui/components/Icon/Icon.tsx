@@ -235,6 +235,33 @@ const ICONS = {
       />
     ),
   },
+  // The comment box (Nucleo UI, outline, 12px): attach (paperclip), send (arrow-up).
+  attach: {
+    size: 12,
+    body: (
+      <path
+        d="m4.75,3.75v3.75c0,.69.56,1.25,1.25,1.25h0c.69,0,1.25-.56,1.25-1.25V3.25c0-1.381-1.119-2.5-2.5-2.5h0c-1.381,0-2.5,1.119-2.5,2.5v4.25c0,2.071,1.679,3.75,3.75,3.75h0c2.071,0,3.75-1.679,3.75-3.75v-3.75"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    ),
+  },
+  "arrow-up": {
+    size: 12,
+    body: (
+      <g stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 11V1.25" />
+        <path d="M9.25 4.25L6 1L2.75 4.25" />
+      </g>
+    ),
+  },
+  // Mark as solved, in the comment box: a check (8px).
+  solved: {
+    size: 8,
+    body: <path d="M1 4.8203L2.59198 7L7 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />,
+  },
   // The dialog's drag strip: three dots in a row (10×2).
   grip: {
     size: [10, 2],

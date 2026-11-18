@@ -8,6 +8,8 @@ interface TooltipProps {
   text: string;
   /** Above the trigger (default), or below it when there's no room above. */
   side?: "top" | "bottom";
+  /** Centered on the trigger (default), or its right edge on the trigger's, for a trigger at a panel's right edge. */
+  align?: "center" | "end";
   /** Space between the trigger and the tooltip, in px (default 4): more when the trigger sits inside a bar, so the tooltip clears the bar. */
   gap?: number;
   /** Show it now, whatever the pointer does (a moment of feedback: "Sent"). */
@@ -33,7 +35,7 @@ function focusVisible(el: Element): boolean {
  * (delay.ts). Keyboard focus opens it at once. Use it instead of `title` in
  * Pilot's own UI.
  */
-export function Tooltip({ text, side = "top", gap, forceOpen = false, children }: TooltipProps) {
+export function Tooltip({ text, side = "top", align = "center", gap, forceOpen = false, children }: TooltipProps) {
   const [open, setOpen] = useState(false);
   // No transition (Tooltip.css) while moving between triggers: opened
   // straight after another one closed, or left for one that opened so.
@@ -108,6 +110,7 @@ export function Tooltip({ text, side = "top", gap, forceOpen = false, children }
       <span
         class="tooltip"
         data-side={side}
+        data-align={align === "end" ? "end" : undefined}
         data-open={open || forceOpen || undefined}
         data-instant={instant || undefined}
         style={gap === undefined ? undefined : side === "top" ? { marginBottom: px(gap) } : { marginTop: px(gap) }}

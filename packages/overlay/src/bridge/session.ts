@@ -1,4 +1,5 @@
-import type { AgentInfo, AgentRequest, ChangeResult, ChangeSet, CommentMessage, ElementTarget, Job, JobStatus, WidthCheck } from "@pilot/protocol";
+import type { AgentInfo, AgentRequest, ChangeResult, ChangeSet, CommentAttachment, CommentMessage, ElementTarget, Job, JobStatus, WidthCheck } from "@pilot/protocol";
+import { attachmentType } from "@pilot/protocol";
 import { checkWidths, problemLines, snapshotAt, type StyleSnapshot, widthsToCheck } from "../checks/widths.ts";
 import { describeElement } from "../dom/target.ts";
 import { buildChangeSet, buildRequest } from "../edits/changeSet.ts";
@@ -62,7 +63,15 @@ export interface CommentThread {
  * (or `waiting`, written while a job was on the element: it goes once that's
  * finished, see PilotSession.comment), the agent's with the job it answers.
  */
-export type ThreadMessage = CommentMessage & { jobId?: string; replyTo?: string; waiting?: boolean };
+export type ThreadMessage = Omit<CommentMessage, "attachments"> & {
+  jobId?: string;
+  replyTo?: string;
+  waiting?: boolean;
+  attachments?: ThreadAttachment[];
+};
+
+/** A file on a designer's message: the hub's id for it, and for an image a small preview (a data URL) for the thread. */
+export type ThreadAttachment = CommentAttachment & { thumb?: string };
 
 const STORAGE_KEY = "pilot:jobs";
 const THREADS_KEY = "pilot:comments";
@@ -314,7 +323,11 @@ export class PilotSession {
    * or when no agent works on this page: the comment is kept, and
    * `changeSet` is its prompt's, to copy.
    */
-  comment(element: Element, text: string): { thread: CommentThread; job: JobRecord | null; changeSet: ChangeSet; waiting: boolean } {
+  comment(
+    element: Element,
+    text: string,
+    attachments: ThreadAttachment[] = [],
+  ): { thread: CommentThread; job: JobRecord | null; changeSet: ChangeSet; waiting: boolean } {
     let thread = this.threadFor(element);
     if (!thread) {
       thread = { id: `thread_${newJobId().slice(4)}`, target: describeElement(element), messages: [] };
@@ -322,6 +335,7 @@ export class PilotSession {
       this.threadElements.set(thread.id, element);
     }
     const message: ThreadMessage = { from: "designer", text: text.trim(), at: new Date().toISOString() };
+    if (attachments.length) message.attachments = attachments;
     const waiting = this.canSendToAgent && !!this.jobOn(element);
     if (waiting) message.waiting = true;
     const messages = [...thread.messages, message];
@@ -332,7 +346,31 @@ export class PilotSession {
 
   /** A comment job's change set: the thread so far, as the agent reads it. */
   private commentSet(element: Element, messages: ThreadMessage[], id?: string): ChangeSet {
-    return buildRequest(element, "comment", { id, thread: messages.map(({ from, text, at }) => ({ from, text, at })) });
+    // Attachments go by id (the hub adds where it saved them); their previews stay here.
+    const thread = messages.map(({ from, text, at, attachments }) =>
+      attachments?.length ? { from, text, at, attachments: attachments.map(({ id, name }) => ({ id, name })) } : { from, text, at },
+    );
+    return buildRequest(element, "comment", { id, thread });
+  }
+
+  /**
+   * Uploads a comment's files (images, text files, PDFs) to the hub, which
+   * saves them in the OS temp folder for the agent; each with its id, and
+   * an image with a small preview for the thread. Null when any fails, or
+   * isn't a type Pilot takes (nothing is sent then).
+   */
+  async uploadFiles(files: File[], preview: (file: File) => Promise<string | undefined>): Promise<ThreadAttachment[] | null> {
+    if (!this.bridge) return null;
+    const bridge = this.bridge;
+    const uploaded = await Promise.all(
+      files.map(async (file) => {
+        const type = attachmentType(file.name, file.type);
+        if (!type) return null;
+        const [id, thumb] = await Promise.all([bridge.upload(file, type), type.startsWith("image/") ? preview(file) : undefined]);
+        return id ? { id, name: file.name, thumb } : null;
+      }),
+    );
+    return uploaded.every((f) => f) ? (uploaded as ThreadAttachment[]) : null;
   }
 
   /**

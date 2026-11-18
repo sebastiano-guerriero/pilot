@@ -11,6 +11,34 @@
     background: hsl(from var(--plt-color-accent) h s l / 7%);
   }
 
+  /* A job is on the element (its loader on the corner): the box's fill, the
+     accent at 10%, breathes in and out over 2.4s. A layer of its own whose
+     opacity is all that changes, so the browser animates it on the
+     compositor, without repainting the page. With reduced motion, a still
+     fill at half that. */
+  :scope[data-working]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: hsl(from var(--plt-color-accent) h s l / 10%);
+    opacity: 0;
+    will-change: opacity;
+    animation: breathe 2.4s ease-in-out infinite;
+  }
+
+  @keyframes breathe {
+    50% {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :scope[data-working]::before {
+      opacity: 0.5;
+      animation: none;
+    }
+  }
+
   /* The jobs button landed on this job's element: it blinks twice, then
      fades (0.9s, FLASH_MS in App.tsx). Shown still for that long with
      reduced motion. Placeholder look, pending the design. */

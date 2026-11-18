@@ -23,6 +23,8 @@ interface HighlightProps {
   labelRoom?: number;
   /** Px to move the label down (or up), to line it up with what shares its row (the selection's actions). */
   labelShift?: number;
+  /** A job is on the element (its loader shows): the box's fill breathes, slowly (Highlight.css). */
+  working?: boolean;
 }
 
 /** The narrowest the label gets beside corner icons before it goes below the element, in px. */
@@ -41,7 +43,16 @@ const CORNERS = ["top-left", "top-right", "bottom-left", "bottom-right"] as cons
  * the toolbar's jobs button landing on a job's element. The label (name and size) sits above the top-left
  * corner. Purely visual: never receives events.
  */
-export function Highlight({ element, rect, variant, label = true, nameAttributes, labelRoom, labelShift = 0 }: HighlightProps) {
+export function Highlight({
+  element,
+  rect,
+  variant,
+  label = true,
+  nameAttributes,
+  labelRoom,
+  labelShift = 0,
+  working = false,
+}: HighlightProps) {
   const size = `${Math.round(rect.width)}×${Math.round(rect.height)}`;
   const room = labelRoom === undefined ? null : Math.floor(labelRoom);
   const below = room !== null && room < MIN_LABEL;
@@ -63,6 +74,7 @@ export function Highlight({ element, rect, variant, label = true, nameAttributes
     <div
       class="highlight"
       data-variant={variant}
+      data-working={working || undefined}
       style={{ left: px(rect.left), top: px(rect.top), width: px(rect.width), height: px(rect.height) }}
       aria-hidden="true"
     >
@@ -85,8 +97,7 @@ export function Highlight({ element, rect, variant, label = true, nameAttributes
           </span>
         </span>
       )}
-      {variant === "selected" &&
-        CORNERS.map((corner) => <span key={corner} class="handle" data-corner={corner} />)}
+      {variant === "selected" && CORNERS.map((corner) => <span key={corner} class="handle" data-corner={corner} />)}
     </div>
   );
 }
