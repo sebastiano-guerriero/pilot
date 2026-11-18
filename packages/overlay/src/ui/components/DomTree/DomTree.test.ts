@@ -66,18 +66,50 @@ describe("DomTree", () => {
     expect(selected).toBe(page.querySelector("h1"));
   });
 
-  it("↓/↑ select the next/previous row; ← goes to the parent; → opens a row", () => {
+  it("↓/↑ select the next/previous row without opening it; → opens it, ← closes it", () => {
     selected = page.querySelector("h1");
     mount();
     key("ArrowDown");
     expect(selected).toBe(page.querySelector(".actions"));
+    expect(rows()).toEqual(["1:main", "2:section#hero", "3:h1", "3:div*", "2:footer#foot"]);
+    key("ArrowDown");
+    expect(selected).toBe(page.querySelector("#foot"));
+    key("ArrowUp");
     key("ArrowRight");
+    expect(rows()).toEqual(["1:main", "2:section#hero", "3:h1", "3:div*", "4:a", "4:a", "2:footer#foot"]);
     key("ArrowRight");
     expect(selected).toBe(page.querySelector(".actions a"));
     key("ArrowLeft");
     expect(selected).toBe(page.querySelector(".actions"));
+    key("ArrowLeft");
+    expect(rows()).toEqual(["1:main", "2:section#hero", "3:h1", "3:div*", "2:footer#foot"]);
     key("ArrowUp");
     expect(selected).toBe(page.querySelector("h1"));
+  });
+
+  it("clicking a row doesn't open it; selecting on the page opens the tree down to it", () => {
+    selected = page.querySelector("#hero");
+    mount();
+    const div = [...container.querySelectorAll(".row")].find((r) => r.querySelector(".tag")?.textContent === "div") as HTMLElement;
+    act(() => div.click());
+    expect(rows()).toEqual(["1:main", "2:section#hero", "3:h1", "3:div*", "2:footer#foot"]);
+    selected = page.querySelector("#hero");
+    mount();
+    selected = page.querySelector(".actions");
+    mount();
+    expect(rows()).toEqual(["1:main", "2:section#hero", "3:h1", "3:div*", "4:a", "4:a", "2:footer#foot"]);
+  });
+
+  it("→ and ← never scroll the list sideways", () => {
+    selected = page.querySelector("h1");
+    mount();
+    for (const k of ["ArrowRight", "ArrowLeft"]) {
+      const e = new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true });
+      act(() => {
+        tree().dispatchEvent(e);
+      });
+      expect(e.defaultPrevented).toBe(true);
+    }
   });
 
   it("Esc closes it", () => {

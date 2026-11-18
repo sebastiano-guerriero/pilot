@@ -64,9 +64,10 @@ const keyOf = (el: Element, pseudo = "") => {
  * - Opens down to the selection (its ancestors expanded, its children one
  *   level open), and follows it: selecting on the page moves the tree too.
  * - Hovering a row highlights its element on the page; clicking it selects it.
- * - Keys, with focus in the panel: ↑/↓ select the previous/next row, → opens
- *   a row (or goes to its first child), ← closes it (or goes to its parent),
- *   Esc closes the panel. Focus stays in the panel while moving.
+ * - Keys, with focus in the panel: ↑/↓ select the previous/next row (without
+ *   opening it), → opens a row (or goes to its first child), ← closes it (or
+ *   goes to its parent), Esc closes the panel. Focus stays in the panel while
+ *   moving. Only selecting elsewhere opens the tree down to the selection.
  * - ::before / ::after show as rows of their own (what may be covering
  *   things), not selectable: changes are for elements.
  * The tree updates as the page changes (a MutationObserver on the body).
@@ -153,9 +154,14 @@ export function DomTree({ selected, onHover, onSelect, onClose }: DomTreeProps) 
     setDragging(null);
   };
 
-  // Open down to the selection, and one level into it.
+  // Open down to the selection, and one level into it, when it was selected
+  // elsewhere (on the page, Show in DOM). A row picked here is already in
+  // view and stays as it was: only → and the chevron open rows.
+  const picked = useRef<Element | null>(null);
   useLayoutEffect(() => {
-    if (!selected) return;
+    const fromHere = selected === picked.current;
+    picked.current = null;
+    if (!selected || fromHere) return;
     setExpanded((prev) => {
       const next = new Set(prev);
       for (const el of ancestorsWithin(selected, root)) next.add(el);
@@ -198,8 +204,12 @@ export function DomTree({ selected, onHover, onSelect, onClose }: DomTreeProps) 
       return next;
     });
 
+  const pick = (element: Element) => {
+    picked.current = element;
+    onSelect(element);
+  };
   const selectRow = (row: DomRow | undefined) => {
-    if (row && isSelectableRow(row)) onSelect(row.element);
+    if (row && isSelectableRow(row)) pick(row.element);
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -217,14 +227,16 @@ export function DomTree({ selected, onHover, onSelect, onClose }: DomTreeProps) 
       case "ArrowUp":
         selectRow(step(selectedIndex < 0 ? rows.length : selectedIndex, -1));
         break;
+      // → and ← never scroll the list sideways (the default for a focused
+      // scroller): with nothing to open or close, they do nothing.
       case "ArrowRight":
-        if (!current?.expandable) return;
+        if (!current?.expandable) break;
         if (!current.expanded) toggle(current.element, true);
         else selectRow(step(selectedIndex, 1));
         break;
       case "ArrowLeft":
         if (current?.expanded) toggle(current.element, false);
-        else if (current?.element.parentElement && current.element.parentElement !== root) onSelect(current.element.parentElement);
+        else if (current?.element.parentElement && current.element.parentElement !== root) pick(current.element.parentElement);
         break;
       case "Escape":
         onClose();
