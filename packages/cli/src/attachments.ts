@@ -93,10 +93,9 @@ export async function saveAttachment(bytes: Buffer, type: string, dir = attachme
  */
 export function withAttachmentPaths<T extends { changeSet: Job["changeSet"] }>(job: T, dir = attachmentsDir()): T {
   const request = job.changeSet.request;
-  if (request?.kind !== "comment") return job;
-  const thread = request.thread.map((message) => {
-    if (!message.attachments) return message;
-    const attachments: CommentAttachment[] = message.attachments
+  const kept = (files: CommentAttachment[] | undefined): CommentAttachment[] | undefined => {
+    if (!Array.isArray(files)) return undefined;
+    const valid = files
       .filter((file) => typeof file?.id === "string" && ATTACHMENT_ID.test(file.id) && existsSync(join(dir, file.id)))
       .slice(0, 20)
       .map((file) => ({
@@ -104,8 +103,13 @@ export function withAttachmentPaths<T extends { changeSet: Job["changeSet"] }>(j
         name: typeof file.name === "string" ? file.name.slice(0, 200) : undefined,
         path: join(dir, file.id),
       }));
-    return { ...message, attachments: attachments.length ? attachments : undefined };
-  });
+    return valid.length ? valid : undefined;
+  };
+  // A task asked from the comment box (Make responsive, Break and fix) carries its own.
+  if (request && request.kind !== "comment")
+    return { ...job, changeSet: { ...job.changeSet, request: { ...request, attachments: kept(request.attachments) } } };
+  if (request?.kind !== "comment") return job;
+  const thread = request.thread.map((message) => (message.attachments ? { ...message, attachments: kept(message.attachments) } : message));
   return { ...job, changeSet: { ...job.changeSet, request: { ...request, thread } } };
 }
 
@@ -121,9 +125,12 @@ export type AttachmentBlock = { type: "image"; data: string; mimeType: string } 
  */
 export async function attachmentBlocks(job: Job): Promise<AttachmentBlock[]> {
   const request = job.changeSet.request;
-  if (request?.kind !== "comment") return [];
-  const lastReply = request.thread.map((m) => m.from).lastIndexOf("agent");
-  const files = request.thread.slice(lastReply + 1).flatMap((m) => m.attachments ?? []);
+  let files: CommentAttachment[];
+  if (request && request.kind !== "comment") files = request.attachments ?? [];
+  else if (request?.kind === "comment") {
+    const lastReply = request.thread.map((m) => m.from).lastIndexOf("agent");
+    files = request.thread.slice(lastReply + 1).flatMap((m) => m.attachments ?? []);
+  } else return [];
   const blocks: AttachmentBlock[] = [];
   for (const file of files) {
     const path = file.path;

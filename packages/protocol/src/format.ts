@@ -1,6 +1,6 @@
 import type { WidthCheck } from "./bridge.ts";
 import { attachmentKind } from "./types.ts";
-import type { ChangeSet, CommentMessage, CommentRequest, ElementEdit, ElementState, ElementTarget, ResponsiveRequest, StyleChange, WidthRange } from "./types.ts";
+import type { BreakFixRequest, ChangeSet, CommentAction, CommentAttachment, CommentMessage, CommentRequest, ElementEdit, ElementState, ElementTarget, ResponsiveRequest, StyleChange, WidthRange } from "./types.ts";
 
 /**
  * Turn a change set into instructions a coding agent can follow.
@@ -9,6 +9,7 @@ import type { ChangeSet, CommentMessage, CommentRequest, ElementEdit, ElementSta
  */
 export function formatPrompt(changeSet: ChangeSet): string {
   if (changeSet.request?.kind === "responsive") return formatResponsive(changeSet, changeSet.request);
+  if (changeSet.request?.kind === "break-and-fix") return formatBreakFix(changeSet, changeSet.request);
   if (changeSet.request?.kind === "comment") return formatComment(changeSet, changeSet.request);
   const { page, edits, note } = changeSet;
   const lines: string[] = [
@@ -47,6 +48,60 @@ export function formatPrompt(changeSet: ChangeSet): string {
 const ADVANCED_TASK =
   "**An advanced task: it needs judgment more than speed.** If you can hand work to a more capable model and aren't running on one, do: in Claude Code, unless you already run on Opus, give this whole prompt (with the job id) to a subagent with `model: \"opus\"` (the Agent tool), have it make the changes and run the width check, and report back; then call `pilot_done` with its notes.";
 
+/** How an earlier action reads in a comment's thread. */
+const ACTION_ASKED: Record<CommentAction, string> = {
+  responsive: "asked you to make it responsive",
+  "break-and-fix": "asked you to break and fix it",
+};
+
+/**
+ * Break and fix: the designer asks the agent to stress-test one element with
+ * odd but realistic content, fix what breaks without changing its usual
+ * look, and put the real content back. Pilot's width check measures it, on
+ * the agent's temporary content while it works, on the usual content after.
+ */
+function formatBreakFix(changeSet: ChangeSet, request: BreakFixRequest): string {
+  const { page, note } = changeSet;
+  const { target, breakpoints } = request;
+  const widths = breakpoints.length ? breakpoints.map((b) => `${b}px`).join(", ") : "none found (it may use container queries, or none yet)";
+  const lines = [
+    "# Pilot: break and fix",
+    "",
+    "A designer selected the element below in the browser with Pilot and asked you to stress-test it: make sure it holds up with real-world content, not only the placeholder values it was built with, and fix what breaks. Content should never break the layout.",
+    "",
+    `Page: ${page.url} (${page.title || "untitled"}), seen at ${page.viewport.width}x${page.viewport.height}`,
+    `The page's breakpoints (the widths its media queries test): ${widths}`,
+    "",
+    ADVANCED_TASK,
+  ];
+  if (note?.trim()) lines.push("", `Designer note: ${note.trim()}`);
+  if (request.attachments?.length) lines.push("", ...attachmentLines(request.attachments, `The designer attached ${countFiles(request.attachments.length)}:`));
+  lines.push(
+    "",
+    `## \`${target.path}\``,
+    "",
+    ...targetLines(target),
+    "",
+    "## How to do it",
+    "",
+    "1. **Find the element's component and where its content comes from**: props, data, a CMS or an API, translations. List what can vary: each text, how many repeated items there are, optional parts (an image, a subtitle, a badge), numbers, names, URLs.",
+    "2. **Think of the odd but realistic content each can get**: text far longer than the placeholder (a 120-character title, a long person or product name) and much shorter or empty; long words with no spaces (URLs, emails, IDs, compound words); optional parts missing (no image, no subtitle, an empty list) and many repeated items instead of a few; big numbers and prices; the longer strings of other languages; images (and background images) in odd shapes, very wide, very tall, tiny or low-resolution, and images that fail to load.",
+    "3. **Break it on purpose, temporarily**: put that content in the page (the props, the fixture or data it renders, or the markup), let hot reload show it, and run `pilot_check_widths` with this job's id. It measures the element at every width in the designer's page and reports, as numbers, content sticking out of the viewport, spilling out of its parent, clipped, or overlapping. Read the code too, for what the check can't see: items that shrink when they shouldn't (an icon or avatar squeezed by flex), buttons that stretch, rows that misalign, text wrapping under an icon, images stretched or squashed (a distorted image keeps its box, so the check doesn't report it).",
+    "4. **Fix what breaks, without changing how it looks with its usual content**, the way this project does it (its utilities, its components):",
+    "   - **Long text:** truncate it with an ellipsis (`truncate`, `text-overflow: ellipsis`) where one line matters, or clamp it to a few lines (`line-clamp-*`) where it can wrap; when the full text is lost, show it on hover (`title`, or the project's tooltip).",
+    "   - **Flex and grid:** `min-width: 0` (`min-w-0`) on items holding text so they can shrink; `flex-shrink: 0` (`shrink-0`) on icons, avatars and buttons that mustn't; `minmax(0, 1fr)` columns; wrapping rows (`flex-wrap`) instead of overflowing ones.",
+    "   - **Long words:** `overflow-wrap: anywhere` (`break-words`) where text must wrap.",
+    "   - **Images:** `object-fit: cover` for photos that should fill their frame, `contain` where cropping would lose something (logos, product shots); for background images, `background-size: cover` (or `contain`) with a sensible `background-position`. A fixed `aspect-ratio` (or size) on the frame, so the layout doesn't jump while an image loads or when its shape is odd, and a fallback when it fails or is missing (a plain background, initials, an icon), never a broken-image box.",
+    "   - **Missing parts:** no gap or empty box left behind; a simple empty state only where one is clearly needed.",
+    "   In the check, an ellipsis on your deliberately long text is the fix working, not a problem.",
+    "5. **Put the real content back.** Remove every temporary value you added: nothing of the test may stay in the code. Then run `pilot_check_widths` again: with its usual content, the element must look as it did at the designer's width (the check reports any change there).",
+    "6. **Report** in your notes, in a line or two, what broke and how you fixed it, and anything for the designer to decide (a content limit to agree on, an empty state to design). When you report it done, Pilot runs the width check once more, with the usual content: problems come back to you once, as a follow-up.",
+    "",
+    "Change only this element and what it needs (its children, its container). If it's a shared component, fix it there, so every instance gets sturdier, as long as its usual look doesn't change; ask before anything that would. Never leave inline styles.",
+  );
+  return `${lines.join("\n")}\n`;
+}
+
 /**
  * Make responsive: the designer asks the agent to make one element work at
  * every viewport width. No values: the agent decides the changes, the way
@@ -67,6 +122,7 @@ function formatResponsive(changeSet: ChangeSet, request: ResponsiveRequest): str
     ADVANCED_TASK,
   ];
   if (note?.trim()) lines.push("", `Designer note: ${note.trim()}`);
+  if (request.attachments?.length) lines.push("", ...attachmentLines(request.attachments, `The designer attached ${countFiles(request.attachments.length)}:`));
   lines.push(
     "",
     `## \`${target.path}\``,
@@ -118,7 +174,8 @@ function formatComment(changeSet: ChangeSet, request: CommentRequest): string {
     lines.push("", "## The thread so far (you already did what it asked)", "");
     for (const m of earlier) {
       const files = m.attachments?.length ? ` (${countFiles(m.attachments.length)})` : "";
-      lines.push(`- **${m.from === "designer" ? "Designer" : "You"}:**${files} ${m.text.replace(/\s*\n\s*/g, " ")}`.trimEnd());
+      const action = m.action ? ` (${ACTION_ASKED[m.action]})` : "";
+      lines.push(`- **${m.from === "designer" ? "Designer" : "You"}:**${action}${files} ${m.text.replace(/\s*\n\s*/g, " ")}`.trimEnd());
     }
   }
   lines.push(
@@ -153,13 +210,19 @@ function commentLines(message: CommentMessage | undefined): string[] {
       ? `The designer attached ${countFiles(files.length)} to it:`
       : `The comment is ${countFiles(files.length)}, with no words. ${one ? "It" : "They"} may hold the instructions: a screenshot, a sketch, notes, a spec. If it's unclear what to do, ask in your reply instead of guessing.`,
     "",
-    ...files.map((file) => {
-      const kind = attachmentKind(file.id);
-      const how = kind === "pdf" ? "a PDF: open it at this path" : kind === "image" ? "an image, shown with this job" : "a text file, its contents shown with this job";
-      return `- ${file.name ? `${file.name} ` : ""}(${how}): \`${file.path ?? file.id}\``;
-    }),
+    ...attachmentLines(files),
   );
   return out;
+}
+
+/** Attached files, one per line with how the agent gets each; after `intro` when given. */
+function attachmentLines(files: CommentAttachment[], intro?: string): string[] {
+  const lines = files.map((file) => {
+    const kind = attachmentKind(file.id);
+    const how = kind === "pdf" ? "a PDF: open it at this path" : kind === "image" ? "an image, shown with this job" : "a text file, its contents shown with this job";
+    return `- ${file.name ? `${file.name} ` : ""}(${how}): \`${file.path ?? file.id}\``;
+  });
+  return intro ? [intro, "", ...lines] : lines;
 }
 
 /** "a file", "3 files". */

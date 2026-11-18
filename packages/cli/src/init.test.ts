@@ -48,12 +48,12 @@ describe("usepilot init", () => {
     });
     expect((await json(".cursor/mcp.json")).mcpServers.pilot).toEqual({ command: "npx", args: ["-y", "usepilot", "mcp"] });
     expect((await json(".vscode/mcp.json")).servers.pilot).toEqual({ type: "stdio", command: "npx", args: ["-y", "usepilot", "mcp"] });
-    expect(existsSync(join(dir, ".claude/skills/pilot/SKILL.md"))).toBe(true);
+    for (const folder of [".agents", ".claude", ".github"]) expect(existsSync(join(dir, folder, "skills/pilot/SKILL.md"))).toBe(true);
 
     expect(out).toContain("It's a Vite app: in its entry, `src/main.tsx`");
     expect(out).toContain('if (import.meta.env.DEV) import("usepilot/auto");');
     expect(out).toContain("codex mcp add pilot -- npx -y usepilot mcp");
-    expect(out).toContain("ask to launch Pilot");
+    expect(out).toContain("ask to launch Pilot, or run `/pilot` (`$pilot` in Codex)");
   });
 
   it("run again, it changes nothing, and an app that loads Pilot already gets no loading step", async () => {

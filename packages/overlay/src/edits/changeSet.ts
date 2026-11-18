@@ -1,4 +1,4 @@
-import type { AgentRequest, ChangeSet, CommentMessage, ElementEdit, StyleChange } from "@pilot/protocol";
+import type { AgentRequest, ChangeSet, CommentAttachment, CommentMessage, ElementEdit, StyleChange } from "@pilot/protocol";
 import { pageBreakpoints } from "../dom/breakpoints.ts";
 import { declaredValue } from "../dom/declared.ts";
 import { describeElement } from "../dom/target.ts";
@@ -69,12 +69,14 @@ export function buildChangeSet(
 export function buildRequest(
   element: Element,
   kind: AgentRequest["kind"],
-  options: { id?: string; thread?: CommentMessage[] } = {},
+  options: { id?: string; thread?: CommentMessage[]; note?: string; attachments?: CommentAttachment[] } = {},
 ): ChangeSet {
   const target = describeElement(element);
   const breakpoints = pageBreakpoints();
   const request: AgentRequest =
-    kind === "comment" ? { kind, target, breakpoints, thread: options.thread ?? [] } : { kind, target, breakpoints };
+    kind === "comment"
+      ? { kind, target, breakpoints, thread: options.thread ?? [] }
+      : { kind, target, breakpoints, ...(options.attachments?.length ? { attachments: options.attachments } : {}) };
   return {
     id: options.id ?? `cs_${Date.now().toString(36)}`,
     createdAt: new Date().toISOString(),
@@ -85,6 +87,7 @@ export function buildRequest(
     },
     edits: [],
     request,
+    ...(options.note?.trim() ? { note: options.note.trim() } : {}),
   };
 }
 

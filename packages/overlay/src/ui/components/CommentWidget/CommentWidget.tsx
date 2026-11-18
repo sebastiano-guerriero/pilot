@@ -1,4 +1,4 @@
-import { ATTACHMENT_ACCEPT, attachmentKind, attachmentType } from "@pilot/protocol";
+import { ATTACHMENT_ACCEPT, attachmentKind, attachmentType, type CommentAction } from "@pilot/protocol";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { CommentThread } from "../../../bridge/session.ts";
 import { px } from "../../px.ts";
@@ -6,6 +6,7 @@ import { Icon } from "../Icon/Icon.tsx";
 import { dialogPosition, dialogSpot, raisedSpot } from "../PropertyDialog/PropertyDialog.tsx";
 import { ScrollThumb } from "../ScrollThumb/ScrollThumb.tsx";
 import { Tooltip } from "../Tooltip/Tooltip.tsx";
+import { actionName, isActionQuery, matchActions } from "./actions.ts";
 import { renderMarkdown } from "./markdown.tsx";
 
 /** How sending went: to the agent, or not at all. */
@@ -26,8 +27,12 @@ interface CommentWidgetProps {
   agentOn?: boolean;
   /** Who replies ("Claude Code · app"), for the agent's messages. */
   agentName?: string;
-  /** Sends the comment: its words (maybe none) and the images attached (maybe none, but not both). */
-  onSend(text: string, images: File[]): Promise<CommentOutcome> | CommentOutcome;
+  /**
+   * Sends the comment: its words, the files attached, and the action picked
+   * from the `/` menu (Make responsive); any of them may be missing, but
+   * not all.
+   */
+  onSend(text: string, files: File[], action?: CommentAction): Promise<CommentOutcome> | CommentOutcome;
   /** The designer is done with the thread: it goes. `from` is Mark as solved's box (for its confetti). */
   onResolve?(from?: DOMRect): void;
   onClose(): void;
@@ -242,24 +247,68 @@ export function CommentWidget({
   };
   useLayoutEffect(fit, [text]);
 
-  // Words, images, or both; the images upload first, so sending can take a moment.
+  // The `/` menu: `/` at the start of the message lists the actions (see
+  // actions.ts), filtered by what follows. ↑/↓ move, Enter or Tab picks
+  // (the action becomes a chip, and what's typed next goes with it), Esc
+  // closes it by clearing the `/…` text. Backspace at the start of the
+  // field removes the chip.
+  const [action, setAction] = useState<CommentAction | null>(null);
+  const menuOpen = !action && isActionQuery(text);
+  const options = menuOpen ? matchActions(text) : [];
+  const [active, setActive] = useState(0);
+  useEffect(() => setActive(0), [text]);
+  const pick = (index: number) => {
+    const chosen = options[index];
+    if (!chosen) return;
+    setAction(chosen.id);
+    setText("");
+    fieldRef.current?.focus();
+  };
+
+  // Words, files, an action, or any of them together; files upload first, so sending can take a moment.
   const [sending, setSending] = useState(false);
-  const canSend = agentOn && !sending && (!!text.trim() || attachments.length > 0);
+  const canSend = agentOn && !sending && !menuOpen && (!!text.trim() || attachments.length > 0 || !!action);
   const send = async () => {
     if (!canSend) return;
     setSending(true);
     const outcome = await onSend(
       text.trim(),
       attachments.map((a) => a.file),
+      action ?? undefined,
     );
     setSending(false);
     if (outcome === false) return;
     setText("");
+    setAction(null);
     for (const a of attachments) if (a.url) URL.revokeObjectURL(a.url);
     setAttachments([]);
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
+    if (menuOpen && e.target === fieldRef.current) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        if (options.length) setActive((i) => (i + (e.key === "ArrowDown" ? 1 : -1) + options.length) % options.length);
+        return;
+      }
+      if ((e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) && !e.isComposing) {
+        e.preventDefault();
+        pick(active);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation(); // only the menu closes, not the box
+        setText("");
+        return;
+      }
+    }
+    const field = fieldRef.current;
+    if (e.key === "Backspace" && action && e.target === field && field?.selectionStart === 0 && field.selectionEnd === 0) {
+      e.preventDefault();
+      setAction(null);
+      return;
+    }
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopPropagation();
@@ -323,6 +372,7 @@ export function CommentWidget({
             {thread?.messages.map((m) =>
               m.from === "designer" ? (
                 <div key={m.at + m.from} class="message">
+                  {m.action && <span class="action-chip">{actionName(m.action)}</span>}
                   {m.attachments?.length ? (
                     <ul class="sent-images" aria-label="Attachments">
                       {m.attachments.map((file) => (
@@ -357,6 +407,24 @@ export function CommentWidget({
         </div>
       )}
       <div class="composer">
+        {action && (
+          <div class="action-chip-row">
+            <span class="action-chip">
+              {actionName(action)}
+              <button
+                type="button"
+                class="action-remove"
+                aria-label={`Remove ${actionName(action)}`}
+                onClick={() => {
+                  setAction(null);
+                  fieldRef.current?.focus();
+                }}
+              >
+                <Icon name="close-small" />
+              </button>
+            </span>
+          </div>
+        )}
         {attachments.length > 0 && (
           <ul class="attachments" aria-label="Attachments">
             {attachments.map((a) => (
@@ -374,10 +442,37 @@ export function CommentWidget({
           class="field"
           rows={1}
           value={text}
-          placeholder={count ? "Reply…" : "Ask the agent"}
+          placeholder={action ? "Add details (optional)" : count ? "Reply, or / for actions" : "Ask the agent, or / for actions"}
           aria-label="Comment"
           onInput={(e) => setText((e.currentTarget as HTMLTextAreaElement).value)}
+          aria-controls={menuOpen ? "pilot-actions" : undefined}
+          aria-activedescendant={menuOpen && options[active] ? `pilot-action-${options[active].id}` : undefined}
         />
+        {menuOpen && (
+          <div class="actions-menu" id="pilot-actions" role="listbox" aria-label="Actions">
+            {options.length ? (
+              options.map((a, i) => (
+                <div
+                  key={a.id}
+                  id={`pilot-action-${a.id}`}
+                  class="action-option"
+                  role="option"
+                  aria-selected={i === active}
+                  data-active={i === active || undefined}
+                  onPointerEnter={() => setActive(i)}
+                  // Keep focus in the field.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => pick(i)}
+                >
+                  <span class="action-name">{a.name}</span>
+                  <span class="action-description">{a.description}</span>
+                </div>
+              ))
+            ) : (
+              <div class="action-none">No action matches</div>
+            )}
+          </div>
+        )}
         <div class="buttons">
           <Tooltip text="Attach files" align="start">
             <button type="button" class="attach" aria-label="Attach files" onClick={() => fileRef.current?.click()}>

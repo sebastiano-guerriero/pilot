@@ -1,10 +1,10 @@
-import type { ElementState, WidthRange } from "@pilot/protocol";
+import type { CommentAction, ElementState, WidthRange } from "@pilot/protocol";
 import { useCallback, useEffect, useReducer, useRef, useState } from "preact/hooks";
 import { type BoxArea, hidesSelection } from "../dom/boxModel.ts";
 import { type EditableElement, isEditable } from "../dom/target.ts";
 import { isTextOnly, normalizeText, textProperty, textRunAt } from "../dom/text.ts";
 import { formatPrompt } from "@pilot/protocol";
-import { buildChangeSet, buildRequest, copyText } from "../edits/changeSet.ts";
+import { buildChangeSet, copyText } from "../edits/changeSet.ts";
 import { type EditHistory, historyShortcut } from "../edits/history.ts";
 import { clickWidth } from "../edits/widths.ts";
 import type { PilotDevOptions } from "../mount.tsx";
@@ -18,7 +18,7 @@ import { PropertyDialog, type WidthPick } from "./components/PropertyDialog/Prop
 import type { CommentThread, JobRecord, PilotSession } from "../bridge/session.ts";
 import { statusText, whatText } from "./components/JobList/JobList.tsx";
 import { DomTree } from "./components/DomTree/DomTree.tsx";
-import { actionsBox, type Busy, type RequestOutcome, SelectionActions } from "./components/SelectionActions/SelectionActions.tsx";
+import { actionsBox, type Busy, SelectionActions } from "./components/SelectionActions/SelectionActions.tsx";
 import { type CommentOutcome, CommentWidget } from "./components/CommentWidget/CommentWidget.tsx";
 import { Confetti } from "./components/Confetti/Confetti.tsx";
 import { thumbnail } from "../dom/thumbnail.ts";
@@ -197,15 +197,6 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     const mark = marks.get(element);
     return Number(!!mark?.job) + Number(!!mark?.thread);
   };
-  // Make responsive: a job of its own for the agent working on this page,
-  // or, with none, its prompt on the clipboard (the same text either way).
-  // Asked again while that element's job isn't finished: nothing new is
-  // sent (the loader shows instead of the button by then anyway).
-  const makeResponsive = async (element: Element): Promise<RequestOutcome> => {
-    if (!sendToAgent) return (await copyText(formatPrompt(buildRequest(element, "responsive")))) ? "copied" : false;
-    if (session?.openTask(element, "responsive")) return "open";
-    return session?.request(element, "responsive") ? "sent" : false;
-  };
   // Jobs not finished yet: waiting, an agent applying, checking the page.
   const pending = (session?.jobs ?? []).filter((j) => j.status === "queued" || j.status === "working" || (j.status === "done" && !j.checked)).length;
   // Where the designer dragged the toolbar (null: centered at the bottom), kept through reloads.
@@ -379,24 +370,24 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   const threadStatus = threadWaits ? "Queued" : threadJob ? threadJobStatus(threadJob) : undefined;
   // Comments go to an agent only: without one on the page, the widget's send is disabled.
   // Attached files go to the hub first (it saves them for the agent); nothing is sent if one fails.
-  const sendComment = async (element: Element, text: string, files: File[]): Promise<CommentOutcome> => {
+  // An action picked from the `/` menu (Make responsive) goes as that task, the words as its note.
+  const sendComment = async (element: Element, text: string, files: File[], action?: CommentAction): Promise<CommentOutcome> => {
     if (!session || !sendToAgent) return false;
     const attachments = files.length ? await session.uploadFiles(files, thumbnail) : [];
     if (!attachments) return false;
-    session.comment(element, text, attachments);
+    session.comment(element, text, attachments, action);
     return "sent";
   };
 
   const hideSelection = !!inspect?.some(hidesSelection);
 
   // Where the selection's actions are (see SelectionActions), for the hover
-  // label to keep clear of: Make responsive (unless a job is on it), Show in
-  // DOM, its loader, its thread's icon.
+  // label to keep clear of: Show in DOM, its loader, its thread's icon.
   const selectionActions =
     selected && selectedRect && (commenting || !hideSelection)
       ? actionsBox(
           selectedRect,
-          Number(!selectedJob) + 1 + Number(!!marks.get(selected.element)?.thread) + Number(!!selectedJob),
+          1 + Number(!!marks.get(selected.element)?.thread) + Number(!!selectedJob),
         )
       : null;
   /**
@@ -454,7 +445,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
             status={threadStatus}
             agentName={agentName(threadJob?.agent?.label ?? session?.state.agents[0]?.label)}
             agentOn={sendToAgent}
-            onSend={(text, files) => sendComment(selected.element, text, files)}
+            onSend={(text, files, action) => sendComment(selected.element, text, files, action)}
             // Resolved: the thread goes, and the widget closes (the next one is the Comment button's click away).
             onResolve={
               thread
@@ -473,8 +464,6 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
             rect={selectedRect}
             domOpen={domOpen}
             onShowInDom={() => setDomOpen((open) => !open)}
-            responsiveMode={sendToAgent ? "send" : "copy"}
-            onMakeResponsive={() => makeResponsive(selected.element)}
             busy={selectedBusy}
             // The thread is open already: its icon stays, as everywhere.
             onOpenThread={marks.get(selected.element)?.thread ? () => setTool("comment") : undefined}
@@ -530,8 +519,6 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
               rect={selectedRect}
               domOpen={domOpen}
               onShowInDom={() => setDomOpen((open) => !open)}
-              responsiveMode={sendToAgent ? "send" : "copy"}
-              onMakeResponsive={() => makeResponsive(selected.element)}
               busy={selectedBusy}
               // A thread waiting for the designer: its icon switches to Comment, which opens it.
               onOpenThread={marks.get(selected.element)?.thread ? () => setTool("comment") : undefined}
@@ -615,6 +602,9 @@ export function agentName(label: string | undefined): string | undefined {
 function threadJobStatus(job: JobRecord): string | undefined {
   if (job.status === "queued") return "Waiting for an agent";
   if (job.status === "working") return `${agentName(job.agent?.label) ?? "The agent"} is working on it`;
+  // A task (Make responsive, Break and fix) is done, and Pilot checks it before taking it.
+  const kind = job.changeSet.request?.kind;
+  if (job.status === "done" && !job.checked && kind && kind !== "comment") return "Checking every width";
   return undefined;
 }
 

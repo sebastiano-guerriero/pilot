@@ -122,6 +122,35 @@ describe("formatPrompt", () => {
     expect(formatPrompt({ ...changeSet, edits: [], request: { kind: "responsive", target, breakpoints: [] } })).toContain("media queries test): none found");
   });
 
+  it("break and fix: stress-test one element with odd content, fix it, put the real content back", () => {
+    const target = changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"];
+    const text = formatPrompt({ ...changeSet, note: "Names can be very long", edits: [], request: { kind: "break-and-fix", target, breakpoints: [768] } });
+    expect(text).toContain("# Pilot: break and fix");
+    expect(text).toContain("Designer note: Names can be very long");
+    expect(text).toContain("**Break it on purpose, temporarily**");
+    expect(text).toContain("`pilot_check_widths`");
+    expect(text).toContain("**Put the real content back.**");
+    // Images: tried in odd shapes and failing, fixed with object-fit / background-size and a fallback.
+    expect(text).toContain("images (and background images) in odd shapes");
+    expect(text).toContain("`object-fit: cover`");
+    expect(text).toContain("`background-size: cover`");
+    expect(text).toContain("a fallback when it fails or is missing");
+    expect(text).toContain("An advanced task");
+  });
+
+  it("make responsive from the comment box: the designer's words as the note, and the files attached", () => {
+    const target = changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"];
+    const text = formatPrompt({
+      ...changeSet,
+      note: "Two columns on tablet",
+      edits: [],
+      request: { kind: "responsive", target, breakpoints: [768], attachments: [{ id: `${"a".repeat(64)}.png`, name: "sketch.png", path: "/tmp/pilot-attachments/x.png" }] },
+    });
+    expect(text).toContain("Designer note: Two columns on tablet");
+    expect(text).toContain("The designer attached a file:");
+    expect(text).toContain("- sketch.png (an image, shown with this job): `/tmp/pilot-attachments/x.png`");
+  });
+
   it("a comment: the designer's words, the thread so far, and what to do with them", () => {
     const target = changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"];
     const thread = [

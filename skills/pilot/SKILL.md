@@ -7,7 +7,7 @@ description: Hand the UI to the designer with Pilot, then apply the design edits
 
 Pilot lets the designer edit the running app in the browser. They select elements, change CSS properties with Pilot's editors, and press **Send**. Each Send reaches you as a **job**: plain CSS `property: from → to` (and new text, when they rewrote one) on identifiable elements, for you to write into the source in this project's conventions. The designer keeps designing while you work; Pilot previews each job's changes until you report it done, then checks them against the page's real CSS.
 
-## When the user runs /pilot
+## When the user runs /pilot (or asks to launch Pilot)
 
 1. **Find the page.** Work out the URL of the app's dev server: the dev script and its config (`vite.config.*` → `server.port`, Next.js → 3000, a `--port` flag…), or a server already running in a terminal. If the dev server isn't running, start it in the background. If you can't tell the URL, ask.
 2. **Launch:** call `pilot_launch` with that URL. Pilot opens in the page (if the page isn't open yet, tell the designer to open it).
@@ -23,7 +23,7 @@ Jobs come in three kinds:
 
 - **Edits** (basic): the designer set every value; you only translate them. **Speed is what matters**: go straight to the code, apply, call `pilot_done`. No screenshots, browser checks, builds or tests: Pilot checks the page itself and sends back what didn't land.
 - **Comments**: the designer's own words about one element ("make it the brand green", "can this be calmer?"), with the thread so far. Do what the latest one asks: a specific, small ask right away (like an edit), an open-ended one as an advanced task (below). A question gets an answer and no change. Your `pilot_done` notes are your reply in their thread, a small chat box for quick design back-and-forth: one short sentence, like a chat message (about 120 characters), with no lists or code blocks. Not a report: they see the result on the page.
-- **Tasks** (advanced), like **Make responsive**: the designer selected an element and asked for an outcome (work at every viewport width). They need judgment more than speed. The prompt has the steps. Check the result with `pilot_check_widths` (numbers for every width, no screenshots needed). In Claude Code, unless you already run on Opus, hand the task to a subagent with `model: "opus"`, then call `pilot_done` with its notes. Pilot checks the widths again when you're done; problems come back once as a follow-up.
+- **Tasks** (advanced), like **Make responsive** and **Break and fix**: the designer selected an element and asked for an outcome (work at every viewport width; hold up with odd but realistic content, like very long text, with the real content put back after testing). They need judgment more than speed. The prompt has the steps. Check the result with `pilot_check_widths` (numbers for every width, no screenshots needed). In Claude Code, unless you already run on Opus, hand the task to a subagent with `model: "opus"`, then call `pilot_done` with its notes. Pilot checks the widths again when you're done; problems come back once as a follow-up.
 
 ### Edits
 

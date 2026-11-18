@@ -37,7 +37,7 @@ export const INSTRUCTIONS = `Pilot lets the designer edit the running app in the
 The loop, when the user asks to launch or start Pilot, runs /pilot, or asks to hand the design over:
 1. Find the page: the URL of the app's dev server, from the dev script and its config (vite.config → server.port, Next.js → 3000, a --port flag…) or a server already running. If it isn't running, start it in the background; if you can't tell the URL, ask. Call pilot_launch with that URL: Pilot opens in that page (if the page isn't open, tell the user to open it), then tell the user in one line that Pilot is ready: select an element, edit, press Send.
 2. Call pilot_wait_for_edits. It returns a job when the designer presses Send, or "no edits yet" after a while: then call it again. (In Claude Code a long wait moves to the background: the job arrives as its result.)
-3. Apply the job's edits to the source, in the project's conventions (see the job's guidelines). Edits are basic: every value is given, so be fast (no screenshots or browser checks: Pilot checks the page). A "make responsive" job is an advanced task: make one element work at every viewport width. Its prompt lists the steps; check the result with pilot_check_widths (numbers for every width, instead of screenshots). In Claude Code, hand advanced tasks to an Opus subagent unless you run on Opus. A "comment" job is the designer's own words about one element: do what it asks (simple asks right away, open-ended ones as advanced tasks), and your pilot_done notes are your reply in their thread: one short sentence, like a chat message, not a report.
+3. Apply the job's edits to the source, in the project's conventions (see the job's guidelines). Edits are basic: every value is given, so be fast (no screenshots or browser checks: Pilot checks the page). A "make responsive" job is an advanced task: make one element work at every viewport width. A "break and fix" job is one too: stress-test one element with odd but realistic content, fix what breaks, and put the real content back. Their prompts list the steps; check the result with pilot_check_widths (numbers for every width, instead of screenshots). In Claude Code, hand advanced tasks to an Opus subagent unless you run on Opus. A "comment" job is the designer's own words about one element: do what it asks (simple asks right away, open-ended ones as advanced tasks), and your pilot_done notes are your reply in their thread: one short sentence, like a chat message, not a report.
 4. Call pilot_done with the job id and short notes (values you approximated, anything you did differently). Then call pilot_wait_for_edits again.
 
 Keep looping until the user interrupts you. Pilot keeps previewing each job's changes until you call pilot_done, then checks them against the page's real CSS: changes that didn't land come back once as a follow-up job with what the page gives instead.`;
@@ -103,21 +103,28 @@ function notesFor(job: Job): string {
       return "your reply in the designer's comment thread, a small chat box: one short sentence, about 120 characters at most, with what you changed or your answer; no lists or code blocks";
     case "responsive":
       return "what changed at which widths, anything left for the designer";
+    case "break-and-fix":
+      return "what broke and how you fixed it, anything for the designer to decide";
     default:
       return "values you approximated, anything you did differently";
   }
 }
 
 /**
- * A task's follow-up (Make responsive): the problems Pilot's width check
- * found once the agent was done, then the task again for reference.
+ * A task's follow-up (Make responsive, Break and fix): the problems Pilot's
+ * width check found once the agent was done, then the task again for
+ * reference.
  */
 export function taskFollowUp(job: Job): string {
-  const target = job.changeSet.request?.target;
+  const request = job.changeSet.request;
+  const target = `\`${request?.target.path ?? "the element"}\``;
+  const breakFix = request?.kind === "break-and-fix";
   const lines = [
-    "# Pilot: make responsive, follow-up",
+    breakFix ? "# Pilot: break and fix, follow-up" : "# Pilot: make responsive, follow-up",
     "",
-    `You made \`${target?.path ?? "the element"}\` responsive, but Pilot's width check (the page measured at each width) still finds these problems:`,
+    breakFix
+      ? `You stress-tested ${target} and reported it done, but Pilot's width check (the page with its usual content, measured at each width) finds these problems. If one comes from test content still in the code, remove it:`
+      : `You made ${target} responsive, but Pilot's width check (the page measured at each width) still finds these problems:`,
     "",
     ...(job.issues ?? []).map((i) => `- ${i}`),
     "",
@@ -244,9 +251,9 @@ export function createPilotServer(options: { port?: number; cwd?: string; waitMs
     {
       title: "Check an element at every width",
       description:
-        "For a Make responsive job: Pilot loads the page in hidden frames at a phone width, each breakpoint and just below it, a wide desktop and the designer's width, and measures the job's element in each. Returns each width's size and layout, and problems (sticking out of the viewport, spilling out of its parent, clipped content, overlaps), plus what changed at the designer's width. Use it instead of screenshots; fix the problems and run it again until it finds none.",
+        "For a Make responsive or Break and fix job: Pilot loads the page in hidden frames at a phone width, each breakpoint and just below it, a wide desktop and the designer's width, and measures the job's element in each. Returns each width's size and layout, and problems (sticking out of the viewport, spilling out of its parent, clipped content, overlaps), plus what changed at the designer's width. Use it instead of screenshots; fix the problems and run it again until it finds none.",
       inputSchema: {
-        jobId: z.string().describe("The Make responsive job's id, from pilot_wait_for_edits."),
+        jobId: z.string().describe("The Make responsive or Break and fix job's id, from pilot_wait_for_edits."),
       },
     },
     async ({ jobId }) => {
@@ -254,7 +261,7 @@ export function createPilotServer(options: { port?: number; cwd?: string; waitMs
         const check = await bridge.check(jobId);
         if (!check) {
           return text(
-            `Pilot couldn't check job ${jobId}: no page answered. The page with Pilot must be open (the designer's tab), and the job must be a Make responsive one. If you can, check the widths in a browser instead.`,
+            `Pilot couldn't check job ${jobId}: no page answered. The page with Pilot must be open (the designer's tab), and the job must be a Make responsive or Break and fix one. If you can, check the widths in a browser instead.`,
             true,
           );
         }

@@ -301,6 +301,29 @@ describe("PilotSession", () => {
     expect(s.threadFor(el)).toBeNull();
   });
 
+  it("an action from the comment box (/responsive) goes as that task, with the words and files, and the agent's notes come back in the thread", async () => {
+    vi.useFakeTimers();
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    const { thread, job: sent } = s.comment(el, " Two columns on tablet ", [{ id: `${"a".repeat(64)}.png`, name: "sketch.png", thumb: "data:," }], "responsive");
+    expect(sent).not.toBeNull();
+    const posted = posts.at(-1)?.body as { id: string; changeSet: { note?: string; request: { kind: string; attachments?: unknown[] } } };
+    expect(posted.changeSet.request.kind).toBe("responsive");
+    expect(posted.changeSet.note).toBe("Two columns on tablet");
+    // By id only: the preview stays on the page.
+    expect(posted.changeSet.request.attachments).toEqual([{ id: `${"a".repeat(64)}.png`, name: "sketch.png" }]);
+    expect(s.threadFor(el)?.messages[0]).toMatchObject({ from: "designer", action: "responsive", jobId: posted.id });
+    expect(s.jobOn(el)?.id).toBe(posted.id);
+    // Done: the notes are the reply, while Pilot checks the widths.
+    hub().emit({ type: "job", job: job({ id: posted.id, status: "done", agent, notes: "Stacks below 768px." }) });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(s.threadFor(el)?.messages.map((m) => [m.from, m.text])).toEqual([
+      ["designer", "Two columns on tablet"],
+      ["agent", "Stacks below 768px."],
+    ]);
+    expect(s.attention.map((t) => t.id)).toEqual([thread.id]);
+  });
+
   it("a comment on an element a job is on waits, and goes with the thread once the job is finished", async () => {
     vi.useFakeTimers();
     const s = session();

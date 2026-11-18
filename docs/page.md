@@ -43,11 +43,10 @@ Classes are never used: there's no reliable way to tell a meaningful one (`card`
 
 ### Selection actions
 
-[SelectionActions](../packages/overlay/src/ui/components/SelectionActions/SelectionActions.tsx): small accent buttons above the selection's top-right corner (inside it when the element touches the top of the window). The same with either tool.
+[SelectionActions](../packages/overlay/src/ui/components/SelectionActions/SelectionActions.tsx): small accent buttons above the selection's top-right corner (inside it when the element touches the top of the window). The same with either tool. The corner holds status and navigation only, a few icons at most; tasks for the agent are the comment box's `/` actions ([handoff.md](handoff.md), *Actions*), where a list can grow without crowding the element.
 
-- **Make responsive** sends the agent a task about this element ([handoff.md](handoff.md)).
 - **Show in DOM** (`< >`) opens the DOM tree on it.
-- While a job isn't finished on the element, its **loader** takes the corner and says in its tooltip where the job stands; Show in DOM moves to its left, and Make responsive isn't offered. An unresolved comment thread puts its **comment icon** on the corner, at the far right. See *Elements being worked on* and *Comments* in [handoff.md](handoff.md).
+- While a job isn't finished on the element, its **loader** takes the corner and says in its tooltip where the job stands; Show in DOM moves to its left. An unresolved comment thread puts its **comment icon** on the corner, at the far right. See *Elements being worked on* and *Comments* in [handoff.md](handoff.md).
 
 ### Grid lines
 

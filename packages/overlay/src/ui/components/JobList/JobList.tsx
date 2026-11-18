@@ -33,6 +33,7 @@ function changeCount(job: JobRecord): number {
 /** What a job is, in words: its changes, or the task it asks for. */
 export function whatText(job: JobRecord): string {
   if (job.changeSet.request?.kind === "responsive") return "Make responsive";
+  if (job.changeSet.request?.kind === "break-and-fix") return "Break and fix";
   if (job.changeSet.request?.kind === "comment") return "Comment";
   const n = changeCount(job);
   return `${n} ${n === 1 ? "change" : "changes"}`;

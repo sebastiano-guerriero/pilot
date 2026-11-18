@@ -131,7 +131,37 @@ export interface ResponsiveRequest {
    * (Pilot reads them from its stylesheets). Empty when it has none.
    */
   breakpoints: number[];
+  /** Files the designer attached when asking (from the comment box's `/` actions), as on a comment. */
+  attachments?: CommentAttachment[];
 }
+
+/**
+ * Break and fix: the agent stress-tests one element with odd but realistic
+ * content (very long text, long words, missing or many items), fixes what
+ * breaks without changing its usual look, and puts the real content back.
+ * The same shape as Make responsive, and the same width check after.
+ */
+export interface BreakFixRequest {
+  kind: "break-and-fix";
+  target: ElementTarget;
+  /** The page's breakpoints, as for ResponsiveRequest. */
+  breakpoints: number[];
+  /** Files the designer attached when asking, as on a comment. */
+  attachments?: CommentAttachment[];
+}
+
+/** A task about one element (not edits, not a comment): Pilot checks it at every width when it's done. */
+export type TaskRequest = ResponsiveRequest | BreakFixRequest;
+
+/** The task kinds, for code that treats them alike. */
+export const TASK_KINDS: readonly TaskRequest["kind"][] = ["responsive", "break-and-fix"];
+
+/**
+ * An action asked from the comment box (`/responsive`, `/break`): a task
+ * about the element, sent as its own job, shown in the thread as the
+ * designer's message. The words typed with it go as the task's note.
+ */
+export type CommentAction = TaskRequest["kind"];
 
 /** One message of a comment thread: the designer's, or the agent's reply (its `pilot_done` notes). */
 export interface CommentMessage {
@@ -142,6 +172,8 @@ export interface CommentMessage {
   at: string;
   /** Files the designer attached (screenshots, sketches, notes, a spec): they may hold the instructions. */
   attachments?: CommentAttachment[];
+  /** The designer's message asked for an action (Make responsive), sent as a task: see CommentAction. */
+  action?: CommentAction;
 }
 
 /**
@@ -223,7 +255,7 @@ export interface CommentRequest {
   breakpoints: number[];
 }
 
-export type AgentRequest = ResponsiveRequest | CommentRequest;
+export type AgentRequest = TaskRequest | CommentRequest;
 
 export interface ChangeSet {
   id: string;

@@ -11,8 +11,9 @@ import { MCP_SERVER, writeSkill } from "./setup.ts";
  * prints the rest for the agent:
  * - installs `usepilot` as a dev dependency, with the project's package manager;
  * - registers Pilot's MCP server in the project for the agents that read a
- *   project file (Claude Code, Cursor, VS Code), and adds the /pilot skill
- *   for Claude Code (other agents launch Pilot when asked, from the MCP
+ *   project file (Claude Code, Cursor, VS Code), and adds the `pilot` skill
+ *   where each agent reads skills (`/pilot`; `$pilot` in Codex; agents
+ *   without skills launch Pilot when asked, from the MCP
  *   server's own instructions);
  * - detects the framework and prints where and how to load Pilot in the
  *   app, in development only: the agent writes it, in the project's way.
@@ -42,6 +43,14 @@ const CLIENTS = [
 ] as const;
 
 const COMMAND = `${MCP_SERVER.command} ${MCP_SERVER.args.join(" ")}`;
+
+/**
+ * Where agents read a project's skills (the open SKILL.md format): the
+ * shared `.agents/skills` (Codex and Cursor; VS Code's Codex sessions),
+ * Claude Code's own, and GitHub Copilot's in VS Code. Cursor also reads
+ * `.claude/skills`; the copies are the same skill.
+ */
+const SKILL_FOLDERS = [join(".agents", "skills"), join(".claude", "skills"), join(".github", "skills")];
 
 export async function init(options: InitOptions = {}): Promise<string> {
   const cwd = options.cwd ?? process.cwd();
@@ -81,7 +90,7 @@ ${cwd} is a monorepo's root, not an app. Run \`npx usepilot@latest init\` again 
     done.push(`Installed \`usepilot\` as a dev dependency (\`${install}\`).`);
   else todo.push(`Install Pilot as a dev dependency: run \`${install}\` in ${cwd}.`);
 
-  // 2. The MCP server, for the agents that read a project file; the skill for Claude Code.
+  // 2. The MCP server, for the agents that read a project file; the skill, where each agent reads skills.
   const registered: string[] = [];
   for (const client of CLIENTS) {
     const file = join(root, client.file);
@@ -93,8 +102,8 @@ ${cwd} is a monorepo's root, not an app. Run \`npx usepilot@latest init\` again 
     else registered.push(`${client.name} (\`${relative(root, file)}\`)`);
   }
   if (registered.length) done.push(`Registered Pilot's MCP server for ${list(registered)}.`);
-  const skill = await writeSkill(join(root, ".claude", "skills", "pilot"));
-  done.push(`Added the \`/pilot\` command for Claude Code (\`${relative(root, skill)}\`).`);
+  for (const folder of SKILL_FOLDERS) await writeSkill(join(root, folder, "pilot"));
+  done.push(`Added the \`pilot\` skill (\`/pilot\`; \`$pilot\` in Codex) where agents read skills: ${list(SKILL_FOLDERS.map((f) => `\`${f}/pilot/\``))}.`);
 
   // 3. Loading Pilot in the app: written by the agent.
   if (framework.loads) done.push(`The app already loads Pilot (\`${relative(cwd, framework.loads)}\`).`);
@@ -102,9 +111,10 @@ ${cwd} is a monorepo's root, not an app. Run \`npx usepilot@latest init\` again 
 
   todo.push(
     `**If you aren't Claude Code, Cursor or VS Code**, register Pilot's MCP server with yourself too, named \`pilot\`, running \`${COMMAND}\`. Codex: \`codex mcp add pilot -- ${COMMAND}\`. Others: their MCP settings.`,
-    `**Tell the user**, in a few lines: Pilot is set up. To start, open a new chat (agents load MCP servers when a chat starts; some ask once to approve the project's server), then ask to launch Pilot (in Claude Code: \`/pilot\`). The new files (${list(
-      [...CLIENTS.map((c) => `\`${c.file}\``), "`.claude/skills/pilot/`"],
-    )}) can be committed, so everyone on the project gets it. Without an agent, Option+P (Alt+P) in the app opens Pilot, and Copy prompt hands the changes over.`,
+    `**Tell the user**, in a few lines: Pilot is set up. To start, open a new chat (agents load MCP servers when a chat starts; some ask once to approve the project's server), then ask to launch Pilot, or run \`/pilot\` (\`$pilot\` in Codex). The new files (${list([
+      ...CLIENTS.map((c) => `\`${c.file}\``),
+      ...SKILL_FOLDERS.map((f) => `\`${f}/pilot/\``),
+    ])}) can be committed, so everyone on the project gets it. Without an agent, Option+P (Alt+P) in the app opens Pilot, and Copy prompt hands the changes over.`,
   );
 
   return `# Pilot: set up

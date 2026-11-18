@@ -62,7 +62,11 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [x] `pilot_launch`, `pilot_wait_for_edits`, `pilot_done` and the `/pilot` skill
 - [x] Send as jobs: queued while the agent works, routed by page origin
 - [x] The check after done: what landed settles, what didn't goes back once, then Pilot accepts the code
-- [x] Make responsive: a task job with its own prompt, or copied
+- [x] Make responsive: a task job with its own prompt
+- [x] Actions in the comment box's `/` menu (Make responsive first), off the selection's corner; the reply comes back in the thread
+- [x] Break and fix: the agent stress-tests an element with odd content and fixes what breaks
+- [ ] Break and fix checked by Pilot itself: the width check with long text put in its copy of the page, ellipses counted as fixes
+- [ ] More `/` actions, and the menu's design (placeholder look now)
 - [x] Pilot's width check (`pilot_check_widths`): a copy of the page in one hidden frame, the designer's width compared before and after, one follow-up after done
 - [x] Basic and advanced jobs: edits go fast, advanced tasks to an Opus subagent in Claude Code
 - [x] Comments, phase 1: the Comment tool and widget, a thread per element, the agent's notes as replies, unresolved threads marked on their elements
@@ -82,7 +86,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [ ] A history of the session's jobs (what changed, how it landed, files touched, a summary to copy), in place of the job list
 - [ ] Design the Send states and the job status (placeholder look now)
 - [ ] The bridge watches token files that only live in code (Tailwind v3 config, `tokens.json`, Style Dictionary) ([design-tokens.md](design-tokens.md))
-- [ ] Cursor: a `/pilot` command file next to the MCP server (the server works there already)
+- [x] `/pilot` in any agent with skills: `init` writes the skill for Codex and Cursor (`.agents/skills`), Claude Code and Copilot
 
 ## Distribution
 
