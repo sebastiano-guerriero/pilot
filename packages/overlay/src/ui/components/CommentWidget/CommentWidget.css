@@ -29,7 +29,10 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
+    /* Rounded like the box, with its 1px ring drawn again on top: the layer covers the box's own. */
+    border-radius: inherit;
     background: hsl(from var(--plt-color-background) h s l / 0.7);
+    box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.15);
     backdrop-filter: blur(8px);
     color: var(--plt-color-contrast-high);
     text-align: center;

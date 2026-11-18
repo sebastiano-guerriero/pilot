@@ -35,6 +35,12 @@ const SIZE_GAP = 4;
 
 /** Corner markers drawn on the selected element. */
 const CORNERS = ["top-left", "top-right", "bottom-left", "bottom-right"] as const;
+/**
+ * Under this width or height, in px, the selection has no corner dots: the
+ * dot's own size, where two of them touch (smaller, they'd overlap into a
+ * blob you can't tell apart), and the 2px line alone says what's selected.
+ */
+export const MIN_DOTS_SIZE = 8;
 
 /**
  * Outline + label drawn over an element; `selected`, the selection's
@@ -100,7 +106,7 @@ export function Highlight({
           </span>
         </span>
       )}
-      {variant === "dots" && CORNERS.map((corner) => <span key={corner} class="handle" data-corner={corner} />)}
+      {variant === "dots" && rect.width >= MIN_DOTS_SIZE && rect.height >= MIN_DOTS_SIZE && CORNERS.map((corner) => <span key={corner} class="handle" data-corner={corner} />)}
     </div>
   );
 }

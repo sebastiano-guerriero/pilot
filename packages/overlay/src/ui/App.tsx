@@ -1,6 +1,7 @@
 import type { CommentAction, ElementState, WidthRange } from "@pilot/protocol";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import { type BoxArea, hidesSelection } from "../dom/boxModel.ts";
+import { revealInWindow } from "../dom/reveal.ts";
 import { findSimilar } from "../dom/similar.ts";
 import { type EditableElement, isEditable } from "../dom/target.ts";
 import { isTextOnly, normalizeText, textProperty, textRunAt } from "../dom/text.ts";
@@ -134,7 +135,8 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   const pickFromDom = useCallback((element: Element, how?: { add?: boolean; range?: readonly Element[] }) => {
     if (!isEditable(element)) return;
     onReattach?.();
-    element.scrollIntoView({ block: "nearest", inline: "nearest" });
+    // The window only, never the page's own containers: they'd move its elements (dom/reveal.ts).
+    void revealInWindow(element);
     const several = !!toolRef.current;
     if (several && how?.range?.length) {
       const range = how.range.filter(isEditable);
@@ -268,7 +270,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   };
   /** Scroll to `elements` (the first one), then flash them all. */
   const goTo = (elements: Element[]) => {
-    void scrollTo(elements[0] as Element).then(() => {
+    void revealInWindow(elements[0] as Element, "center", true).then(() => {
       clearTimeout(flashTimer.current);
       setFlash((prev) => ({ elements, key: (prev?.key ?? 0) + 1 }));
       flashTimer.current = setTimeout(() => setFlash(null), FLASH_MS);
@@ -751,28 +753,6 @@ function SelectedDots({ element }: { element: Element }) {
 function FlashOutline({ element }: { element: Element }) {
   const rect = useElementRect(element);
   return rect ? <Highlight element={element} rect={rect} variant="flash" label={false} /> : null;
-}
-
-/**
- * Scrolls `element` to the middle of the window (smoothly, unless the
- * designer asked for reduced motion), unless all of it is in view already.
- * Resolves once the scroll is over (`scrollend`, or 700ms at most).
- */
-function scrollTo(element: Element): Promise<void> {
-  const rect = element.getBoundingClientRect();
-  if (rect.top >= 0 && rect.bottom <= window.innerHeight && rect.left >= 0 && rect.right <= window.innerWidth) return Promise.resolve();
-  const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  element.scrollIntoView({ block: "center", inline: "nearest", behavior: reduced ? "auto" : "smooth" });
-  if (reduced) return Promise.resolve();
-  return new Promise((resolve) => {
-    const done = () => {
-      clearTimeout(timer);
-      window.removeEventListener("scrollend", done, true);
-      resolve();
-    };
-    const timer = setTimeout(done, 700);
-    window.addEventListener("scrollend", done, true);
-  });
 }
 
 /** A key per element, for lists of them (the same element keeps its key). */

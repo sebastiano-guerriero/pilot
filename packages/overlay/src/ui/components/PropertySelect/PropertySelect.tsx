@@ -2,6 +2,7 @@ import type { ComponentChildren, RefObject } from "preact";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { px } from "../../px.ts";
 import { Icon } from "../Icon/Icon.tsx";
+import { scrollWithin } from "../../../dom/reveal.ts";
 
 interface PropertySelectProps {
   /** The value set on the element (e.g. "grid"), or "" when none is: the trigger then says "Select", dimmed. */
@@ -113,7 +114,7 @@ export function PropertySelect({
     );
     const minWidth = t.width + labelShift + 2 * MENU_PADDING;
     m.style.minWidth = px(minWidth); // measure at the size it'll have
-    current?.scrollIntoView?.({ block: "nearest" }); // a long list scrolls to it first
+    scrollWithin(m, current); // a long list scrolls to it first (the list only: dom/reveal.ts)
     setPosition({
       minWidth,
       ...menuPosition({
@@ -128,7 +129,7 @@ export function PropertySelect({
 
   // Keep the highlighted option in view when the list scrolls.
   useEffect(() => {
-    if (open) menu.current?.querySelector(`[data-index="${active}"]`)?.scrollIntoView?.({ block: "nearest" });
+    if (open) scrollWithin(menu.current, menu.current?.querySelector(`[data-index="${active}"]`));
   }, [open, active]);
 
   // The page moved under the menu: close it rather than leave it floating.

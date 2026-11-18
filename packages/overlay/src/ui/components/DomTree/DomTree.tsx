@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
 import { type DomRow, ancestorsWithin, isSelectableRow, domRows } from "../../../dom/domTree.ts";
+import { scrollWithin } from "../../../dom/reveal.ts";
 import { px } from "../../px.ts";
 import { Icon } from "../Icon/Icon.tsx";
 import { ScrollThumb } from "../ScrollThumb/ScrollThumb.tsx";
@@ -195,12 +196,11 @@ export function DomTree({ selected, also = [], onHover, onSelect, onClose }: Dom
   const selectedIndex = rows.findIndex((r) => !r.pseudo && r.element === selected);
 
   // Keep the selected row in view, sideways too: its name, not the whole
-  // row (rows are as wide as the longest, see the CSS).
+  // row (rows are as wide as the longest, see the CSS). The list scrolls
+  // itself, nothing else: scrollIntoView would scroll the page behind it too.
   useLayoutEffect(() => {
-    if (selectedIndex < 0) return;
-    listRef.current
-      ?.querySelector(`[data-index="${selectedIndex}"] .tag`)
-      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const list = listRef.current;
+    scrollWithin(list, selectedIndex < 0 ? null : list?.querySelector(`[data-index="${selectedIndex}"] .tag`), "both");
   }, [selectedIndex, selected]);
 
   const toggle = (element: Element, open: boolean) =>

@@ -23,6 +23,18 @@ afterEach(() => {
 });
 
 describe("Highlight", () => {
+  it("the selection's corner dots, only when the box is big enough to tell them apart", () => {
+    const dots = (width: number, height: number) => {
+      act(() => render(h(Highlight, { element: el, rect: new DOMRect(10, 100, width, height), variant: "dots", label: false }), container));
+      return container.querySelectorAll(".handle").length;
+    };
+    expect(dots(120, 30)).toBe(4);
+    expect(dots(18, 18)).toBe(4);
+    expect(dots(8, 8)).toBe(4); // side by side, touching
+    expect(dots(120, 6)).toBe(0);
+    expect(dots(7, 80)).toBe(0);
+  });
+
   it("the label shows the name and size, above the box", () => {
     draw(120);
     expect(label().textContent).toBe("code120×30");
