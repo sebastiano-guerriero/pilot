@@ -88,7 +88,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 
 - [x] The name: `usepilot` on npm (package and organization), `usepilot.design` for the site
 - [x] `usepilot` published, installable in Vite and Next.js apps, with the CLI (`mcp`, `setup`)
-- [ ] `npx usepilot init`: detect the framework's entry, add the dev import, register the MCP server and skill, in one command
+- [x] `npx usepilot init`: one prompt for any agent; installs, registers the MCP server for Claude Code, Cursor and VS Code (Codex by `codex mcp add`), adds the skill, and tells the agent where to load Pilot
 
 ## Open questions
 

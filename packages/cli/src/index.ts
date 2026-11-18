@@ -1,17 +1,21 @@
 #!/usr/bin/env node
 /**
- * `pilot` CLI entry. `mcp` runs the MCP server and the bridge; the other
- * commands are placeholders until each piece is built (see the Roadmap in
- * docs/roadmap.md).
+ * `usepilot` CLI entry: `init` sets Pilot up in a project for any agent,
+ * `mcp` runs the MCP server and the bridge, `setup` installs /pilot for
+ * Claude Code.
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createPilotServer } from "./mcp.ts";
+import { init } from "./init.ts";
 import { setup } from "./setup.ts";
 
 const HELP = `usepilot: take the controls from your coding agent
 
 Usage: npx usepilot <command>
 
+  init    Set Pilot up in this project, for any agent: installs it, registers
+          its MCP server, and prints what's left for the agent (loading it in
+          the app). Ask your agent to run it. --no-install: print the command.
   setup   Set up /pilot in Claude Code, for every project on this machine
           (--project: for this repo, to commit, so everyone gets it)
   mcp     Run the MCP server (stdio) agents connect to, and the bridge the
@@ -52,8 +56,12 @@ switch (command) {
     }
     break;
   case "init":
-    process.stderr.write(`pilot ${command}: not implemented yet.\n`);
-    process.exitCode = 1;
+    try {
+      process.stdout.write(await init({ install: !process.argv.includes("--no-install") }));
+    } catch (error) {
+      process.stderr.write(`usepilot init: ${(error as Error).message}\n`);
+      process.exitCode = 1;
+    }
     break;
   default:
     process.stderr.write(`Unknown command: ${command}\n\n${HELP}`);

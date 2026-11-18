@@ -29,10 +29,10 @@ Before finishing a change, run `pnpm typecheck` and `pnpm test`.
 | --- | --- | --- |
 | `@pilot/overlay` | [packages/overlay](../packages/overlay) | The in-page editor: Shadow DOM mount, launch/quit, toolbar, property search, editors, the bridge client. Builds `pilot.js` (API) and `pilot-auto.js` (self-mounting). |
 | `@pilot/protocol` | [packages/protocol](../packages/protocol) | Shared `ChangeSet` types, `formatPrompt()`, `BRIDGE_VERSION`. |
-| `@pilot/cli` | [packages/cli](../packages/cli) | The `usepilot` command: `mcp` (the MCP server agents start, and the hub the page talks to) and `setup` (the `/pilot` skill and MCP server, for this machine or, with `--project`, for the repo: [setup.ts](../packages/cli/src/setup.ts)). Bundled into one file by tsup, dependencies included. |
+| `@pilot/cli` | [packages/cli](../packages/cli) | The `usepilot` command: `init` (sets Pilot up in a project for any agent: [init.ts](../packages/cli/src/init.ts)), `mcp` (the MCP server agents start, and the hub the page talks to) and `setup` (the `/pilot` skill and MCP server for Claude Code, for this machine or, with `--project`, for the repo: [setup.ts](../packages/cli/src/setup.ts)). Bundled into one file by tsup, dependencies included. |
 | `usepilot` | [packages/usepilot](../packages/usepilot) | The one published package: the overlay's build (`dist/`) and the CLI's (`cli/`), copied in by its `build` script (which `prepack` runs), hand-written types (`types/`), and npm's README. Exports `usepilot` (`mountPilot`) and `usepilot/auto` (mounts with defaults). |
 | `playground` | [apps/playground](../apps/playground) | A plain Vite page for developing Pilot. |
-| `/pilot` skill | [skills/pilot](../skills/pilot) | What the agent follows to launch Pilot and apply jobs. `setup` installs it. |
+| `/pilot` skill | [skills/pilot](../skills/pilot) | What Claude Code follows to launch Pilot and apply jobs (`/pilot`). `init` and `setup` install it; other agents get the same loop from the MCP server's instructions. |
 
 The workspace packages (`@pilot/overlay`, `@pilot/protocol`, `@pilot/cli`) are internal and never published under those names: `usepilot` bundles them.
 

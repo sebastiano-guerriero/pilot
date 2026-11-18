@@ -13,11 +13,22 @@ page (your app in dev, the overlay)          one hub per machine, 127.0.0.1:4747
                                                               if chat A closes)
 ```
 
+## Installing
+
+The user pastes one prompt into their agent: run `npx usepilot@latest init` and follow what it prints ([init.ts](../packages/cli/src/init.ts)). Nothing in the install depends on the agent or the framework being one we named, and the user never edits code by hand:
+
+- **The command does what must be exact:** it installs `usepilot` as a dev dependency with the project's package manager (from the lockfile, up to the repository's root), registers the MCP server in the files the agents read from a project (Claude Code, Cursor, VS Code), merged into what's there, and adds the `/pilot` skill for Claude Code. Those go at the repository's root, where agents open; the package goes in the app's folder. Run again, it changes nothing.
+- **The agent does what needs judgment:** the command detects the framework (Vite, Next.js App and Pages Router, Nuxt, SvelteKit, Astro, React Router, webpack) and prints the snippet that loads Pilot in development only, and where; the agent writes it the project's way. An app that loads Pilot already gets no such step.
+- **Any other agent** is told to register the server with itself (Codex: `codex mcp add`), and every agent to tell the user to start a new chat (MCP servers load when a chat starts) and ask to launch Pilot.
+- A monorepo's root gets the list of its apps instead, to run it in the right one.
+
+A skill can't be the way in: it only exists in Claude Code, and must be installed before it could help. `usepilot setup` remains for Claude Code alone (the skill for every project on the machine, or `--project`).
+
 ## The loop
 
-In any agent chat, `/pilot`:
+When the user asks to launch Pilot (`/pilot` in Claude Code):
 
-1. The skill ([skills/pilot/SKILL.md](../skills/pilot/SKILL.md)) has the agent find the dev server's URL and call `pilot_launch({ url })`. The hub registers the chat for that page's origin and tells the open page to launch Pilot.
+1. The agent finds the dev server's URL and calls `pilot_launch({ url })`: the skill ([skills/pilot/SKILL.md](../skills/pilot/SKILL.md)) says how in Claude Code, and the MCP server's instructions (`INSTRUCTIONS` in [mcp.ts](../packages/cli/src/mcp.ts)) in any agent. The hub registers the chat for that page's origin and tells the open page to launch Pilot.
 2. The agent calls `pilot_wait_for_edits`. It returns a job when the designer sends one, or "no edits yet" after a while (the agent calls it again). In Claude Code the call waits long, and Claude Code moves it to the background after a couple of minutes: the chat stays usable and the job arrives as the task's result. Other clients wait under MCP's default 60-second request timeout (`waitMsFor()` in [mcp.ts](../packages/cli/src/mcp.ts); `PILOT_WAIT_MS` overrides it). Progress notifications keep the call under Claude Code's idle limit.
 3. The job is the prompt's text plus its id and "call `pilot_done`". The agent applies it, calls `pilot_done({ jobId, notes })`, and waits again.
 4. Pilot checks the job on the page. If some changes didn't land, the same job comes back **once** as a follow-up (`followUp()` in [mcp.ts](../packages/cli/src/mcp.ts)): each change with its element, the designer's value and what the page gives, the usual causes, and "if you chose a different value on purpose, keep it and say so in your notes". After that, Pilot accepts what the code gives.

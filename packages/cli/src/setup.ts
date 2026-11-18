@@ -70,7 +70,7 @@ Then, in a Claude Code chat in this folder: /pilot
 `;
 }
 
-async function writeSkill(dir: string): Promise<string> {
+export async function writeSkill(dir: string): Promise<string> {
   // A link (to a Pilot checkout, while developing it): replaced by a folder
   // of its own, so the published skill isn't written into the checkout.
   if (await isLink(dir)) await unlink(dir);

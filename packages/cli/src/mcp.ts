@@ -34,8 +34,8 @@ const PROGRESS_MS = 20_000;
 
 export const INSTRUCTIONS = `Pilot lets the designer edit the running app in the browser and send the edits back to you as jobs.
 
-The loop, when the user runs /pilot or asks to hand the design over:
-1. Call pilot_launch with the URL of the page the designer works on (the app's dev server, e.g. http://localhost:5173). Pilot opens in that page.
+The loop, when the user asks to launch or start Pilot, runs /pilot, or asks to hand the design over:
+1. Find the page: the URL of the app's dev server, from the dev script and its config (vite.config → server.port, Next.js → 3000, a --port flag…) or a server already running. If it isn't running, start it in the background; if you can't tell the URL, ask. Call pilot_launch with that URL: Pilot opens in that page (if the page isn't open, tell the user to open it), then tell the user in one line that Pilot is ready: select an element, edit, press Send.
 2. Call pilot_wait_for_edits. It returns a job when the designer presses Send, or "no edits yet" after a while: then call it again. (In Claude Code a long wait moves to the background: the job arrives as its result.)
 3. Apply the job's edits to the source, in the project's conventions (see the job's guidelines). Edits are basic: every value is given, so be fast (no screenshots or browser checks: Pilot checks the page). A "make responsive" job is an advanced task: make one element work at every viewport width. Its prompt lists the steps; check the result with pilot_check_widths (numbers for every width, instead of screenshots). In Claude Code, hand advanced tasks to an Opus subagent unless you run on Opus. A "comment" job is the designer's own words about one element: do what it asks (simple asks right away, open-ended ones as advanced tasks), and your pilot_done notes are your reply in their thread: one short sentence, like a chat message, not a report.
 4. Call pilot_done with the job id and short notes (values you approximated, anything you did differently). Then call pilot_wait_for_edits again.
@@ -154,7 +154,7 @@ export function createPilotServer(options: { port?: number; cwd?: string; waitMs
     {
       title: "Launch Pilot",
       description:
-        "Opens Pilot in the page the designer works on, and routes that page's edits to you. Call it first when the user runs /pilot. Then call pilot_wait_for_edits.",
+        "Opens Pilot in the page the designer works on, and routes that page's edits to you. Call it first when the user asks to launch or start Pilot (or runs /pilot). Then call pilot_wait_for_edits.",
       inputSchema: {
         url: z
           .string()
