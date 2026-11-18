@@ -72,8 +72,8 @@
   }
 
   /* The thread: the designer's comments as plain text, the agent's replies
-     in accent bubbles on the right, at the base 11px (the field stays at
-     12px), 16px apart, 20px of room above the first. */
+     in accent bubbles on the right, at the base 11px (the reply field too;
+     the first comment's field is 12px), 16px apart, 20px of room above the first. */
   /* Holds the scrolling thread, the line under it, and the fades. The
      thread is at most 400px tall, and less when the window is short (the
      widget never is taller than the window, 8px from each edge): the field
@@ -534,6 +534,11 @@
     &::placeholder {
       color: var(--plt-color-contrast-low);
     }
+  }
+
+  /* A reply, in a thread: the base 11px, like the thread. The first comment stays at 12px. */
+  .field[data-reply] {
+    font-size: var(--plt-text-base);
   }
 
   .buttons {

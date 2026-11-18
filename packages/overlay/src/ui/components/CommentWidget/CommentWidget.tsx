@@ -478,6 +478,7 @@ export function CommentWidget({
         <textarea
           ref={fieldRef}
           class="field"
+          data-reply={count > 0 || undefined}
           rows={1}
           value={text}
           placeholder={action ? "Add details (optional)" : count ? "Reply, or / for actions" : "Ask the agent, or / for actions"}
