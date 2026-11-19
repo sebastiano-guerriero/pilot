@@ -71,7 +71,7 @@ Changes record the state pills' `states` the same way, through `history.apply(�
 
 ## Text changes
 
-[dom/text.ts](../packages/overlay/src/dom/text.ts). Text edited inline ([page.md](page.md)) is the one non-CSS change.
+[dom/text.ts](../packages/overlay/src/dom/text.ts). Text edited inline ([page.md](page.md)) is one of the two non-CSS changes; the other is the DOM's own (below).
 
 - What's edited is a **text run**: the text between an element's child elements, its text nodes in a row (a comment between them, like React's `<!-- -->`, doesn't break it). A text-only element has one run, its whole text.
 - Each run is recorded in the history like a CSS change, under a reserved property (`textProperty(run)`: `text` for run 0, `text:1`, `text:2`…), with no widths or states: undo, reloads, Send, jobs and the check after done work the same, each run on its own.
@@ -80,6 +80,19 @@ Changes record the state pills' `states` the same way, through `history.apply(�
 - That's what the check compares: a text change landed when the page's own text in that run is the designer's (whitespace aside).
 - Descriptions (`describeElement()`'s snippet, an ancestor's too) use the page's own text, so the agent greps for what's in the source.
 - **Known limits:** a run is found by its place among the element's runs, so a re-render that adds or removes child elements before it can shift it. A server-rendered page hydrating after Pilot restores a text change may log a hydration mismatch; the framework re-renders and the observer takes the new nodes in.
+
+## DOM changes
+
+[dom/structure.ts](../packages/overlay/src/dom/structure.ts), the actions in [edits/structure.ts](../packages/overlay/src/edits/structure.ts). The DOM tree's row menu ([page.md](page.md), *The DOM tree*) deletes elements and adds them: Duplicate, Add child, Add sibling.
+
+- **Recorded like CSS changes**, under reserved properties (`DOM_REMOVE`, `DOM_INSERT` in [protocol/src/types.ts](../packages/protocol/src/types.ts)): `dom:remove` on a deleted element; `dom:insert:<id>` on the element a new one goes after or inside, with what it adds as the value (the new element's markup, where it goes, how many of the page's own elements its parent had). Each action is one undo step, for every element it acts on; undo, reloads, Send, jobs and the check work as for any change.
+- **The page's own nodes are never removed or moved.** A framework (React, Vue…) keeps hold of the nodes it rendered, and the next re-render would fail on one that isn't where it left it. So a deleted element is only hidden, by the preview stylesheet (`display: none`, after every other rule of Pilot's), and a new element is **one of Pilot's own nodes** (`data-pilot-new`), put next to the page's: right after its element, after the ones added there before, or as its last child. A re-render that takes one out (its parent replaced) gets it put back, by a MutationObserver.
+- **Duplicate** copies the element as the page shows it, children and Pilot's text changes included, without Pilot's marks, ids (two elements with one id would break the page's selectors) or the children deleted in it. Pilot's CSS changes to it and its children are copied onto the copy in the same undo step, so it looks the same; from then on they're apart, as copies in a design tool are. **Add child** and **Add sibling** add an empty `div` (picking its tag is next, with double-click editing).
+- **Deleting a new element takes it back** (its insert dropped, one undo step): it was never in the code, so there's nothing to tell the agent.
+- **Selectors leave Pilot's nodes out.** A copy shifts the page's own elements (the third item is no longer the third child), so the history's selectors are taken, and looked up after a reload, with Pilot's nodes out of the page for that moment (`withoutInserted()`); the text an element is described by leaves them out too. An element inside a new one is found from it: `[data-pilot-new="…"] > h2:nth-child(1)`. After a reload, the history makes the new elements again from their markup before it finds anything (`EditHistory.load()`).
+- **The change set:** a deleted element's edit is `removed` (its other changes, and everything inside it, are left out); elements added after or inside an element are its `inserts`, named `new-1`, `new-2`… in the order added (`kind`: a copy or a new element, its tag); the edits of a new element, or of what's inside it, say which (`newElement`), and give no selector, which would be Pilot's own. The prompt says *Deleted*, and *Added*: where and what, and the edit guidelines say how: markup removed or added where the code writes it (or an item in the data a list renders), never CSS that hides it.
+- **The check** ([edits/verify.ts](../packages/overlay/src/edits/verify.ts)): a deletion landed once the page no longer has the element. A new element landed once its parent has more of the page's own elements than it had when the element was added: one more per new element in the job, one fewer per deleted element that's gone, a count, not a match, since the agent writes its own markup. Changes on a new element (or inside it) follow its insert: Pilot's node goes when it lands, and they go with it. What didn't land goes back in the follow-up, in words ("deleted by the designer, but it's still on the page").
+- **Known limits:** an element's later changes, made after its insert was sent, stay on Pilot's node, which goes when the insert lands, so they go with it. Comments and tasks on a new element point at something the code doesn't have yet. Pilot's nodes are static copies: no event handlers, no component state. A server-rendered page hydrating after Pilot restores them may log a hydration mismatch, as for text changes.
 
 ## The change set
 

@@ -15,6 +15,7 @@
 @import "../components/Toolbar/Toolbar.css" layer(components);
 @import "../components/JobList/JobList.css" layer(components);
 @import "../components/DomTree/DomTree.css" layer(components);
+@import "../components/ContextMenu/ContextMenu.css" layer(components);
 @import "../components/SelectionActions/SelectionActions.css" layer(components);
 @import "../components/PropertyDialog/PropertyDialog.css" layer(components);
 @import "../components/PropertySearch/PropertySearch.css" layer(components);

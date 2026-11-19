@@ -10,6 +10,7 @@ import type {
   ElementEdit,
   ElementState,
   ElementTarget,
+  Insertion,
   AgentRequest,
   ResponsiveRequest,
   StyleChange,
@@ -118,6 +119,7 @@ export const EDIT_GUIDELINES: string[] = [
   "- No screenshots, builds or tests for these edits: hot reload shows them, and Pilot checks the page itself.",
   '- Widths are viewport widths in CSS px, both ends included. Use this project\'s breakpoints when one matches (or is within a few pixels), else a custom media query, and say which. "Every width" means no media query: the value holds at every viewport width, and no existing media query should override it.',
   "- A Text change is the element's copy (all of its text, or the part between its child elements): replace the old text with the new one where it comes from (the markup, a prop, a translation file, a CMS fixture), the rest of the element as it is. If the same text is used elsewhere, change only this element's, unless the designer's note says otherwise.",
+  "- A Deleted element goes from the code, where the code writes it (its markup, or its item in the data a list is rendered from), not hidden with CSS. An Added element is new markup in the same place, written the way the code around it is: a copy is the same markup again (another item in the data, for a list rendered from data), a new element is an empty one of the tag given, to style with the changes listed for it. The changes listed for a new element (`new-1`) are for it once it's added.",
   "- A State is the element state the change is for, all of them together (\"hover, active\": hovered and pressed). Use the project's own form: Tailwind's variants (`hover:`, `focus-visible:`, `hover:active:`), `:hover` and the like in CSS. Without a state, the change is for the element as it is (any state).",
 ];
 
@@ -376,8 +378,17 @@ function targetLines(target: ElementTarget): string[] {
 }
 
 function formatEdit(edit: ElementEdit, n: number): string[] {
-  const { target, changes, texts } = edit;
-  const out = [`## ${n}. \`${target.path}\``, "", ...targetLines(target)];
+  const { target, changes, texts, removed, inserts, newElement } = edit;
+  const out = newElement
+    ? [
+        `## ${n}. \`${target.path}\` (in new element \`${newElement}\`)`,
+        "",
+        `- Not in the code yet: new element \`${newElement}\` is added in this job (or was in an earlier one); this is it or one of its children.`,
+        ...(target.text ? [`- Text: "${target.text}"`] : []),
+      ]
+    : [`## ${n}. \`${target.path}\``, "", ...targetLines(target)];
+  if (removed) out.push("", "**Deleted**: remove this element from the code.");
+  if (inserts?.length) out.push("", "Added:", "", ...inserts.map(insertLine));
   if (texts?.length) out.push("", "Text (from → to):", "", ...texts.map((t) => `- ${JSON.stringify(t.from)} → ${JSON.stringify(t.to)}`));
   if (!changes.length) return out;
   // The State column only when a change has one, so most prompts stay as they were.
@@ -396,6 +407,13 @@ function formatEdit(edit: ElementEdit, n: number): string[] {
   const notes = changes.flatMap((c) => [c.removed && removalNote(c), mediaNote(c)].filter((n): n is string => !!n));
   if (notes.length) out.push("", ...notes.map((n) => `- ${n}`));
   return out;
+}
+
+/** An element added next to or inside the edit's element, in words. */
+function insertLine(insert: Insertion): string {
+  const where = insert.place === "after" ? "Right after this element" : "Inside this element, as its last child";
+  const what = insert.kind === "copy" ? "a copy of this element as the page shows it (its children too)" : `a new empty \`${insert.tag}\``;
+  return `- ${where}: ${what}, new element \`${insert.id}\``;
 }
 
 /** The states in words, as the prompt and Pilot's pills write them: `hover, active`; "—" for none. */

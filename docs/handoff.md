@@ -60,6 +60,7 @@ The toolbar's **Send** turns the changes not sent yet into a job (`PilotSession`
 [edits/verify.ts](../packages/overlay/src/edits/verify.ts). For each change, the element's computed value with only the page's CSS against its computed value with the job's changes previewed (`EditHistory.probe()`, both in one task, so nothing flickers). So `1.5rem` or `pt-5` from the agent matches the designer's `20px`.
 
 - It checks again on every stylesheet change in the head (hot reload; Pilot's own preview sheet is ignored, `isPageMutation()`) and every half second, for up to 15 seconds. What landed is settled at once.
+- **Changes to the DOM** (deleted and added elements) are checked by what's on the page, not by a value: see *DOM changes* in [edits.md](edits.md).
 - **Can't be checked, settled on the agent's word:** changes for widths other than the window's, changes for states, and elements not on this page.
 - What still doesn't match after 15 seconds goes back as the follow-up, and stays previewed meanwhile (the job reads as the agent applying). After the follow-up, the job's previews go, whatever they show, so the page never stays in a state the designer has to sort out. To get an exact value the agent didn't keep, edit it again and Send: a new job.
 - A finished job leaves the list shortly after (and on the next load).

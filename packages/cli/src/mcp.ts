@@ -4,7 +4,7 @@ import { basename, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AgentInfo, Job } from "@pilot/protocol";
-import { DEFAULT_BRIDGE_PORT, EDIT_GUIDELINES, formatPrompt, formatWidthCheck, MAX_CHOICES, originOf, questionOf, SHARED_CHOICES, sharedChoiceMeaning } from "@pilot/protocol";
+import { DEFAULT_BRIDGE_PORT, DOM_INSERT, DOM_REMOVE, EDIT_GUIDELINES, formatPrompt, formatWidthCheck, MAX_CHOICES, originOf, questionOf, SHARED_CHOICES, sharedChoiceMeaning } from "@pilot/protocol";
 import { z } from "zod";
 import { Bridge } from "./agent.ts";
 import { attachmentBlocks } from "./attachments.ts";
@@ -132,7 +132,9 @@ export function followUp(job: Job): string {
     const edit = job.changeSet.edits.find((e) => e.target.selector === d.selector);
     const where = edit ? `\`${edit.target.path}\` (selector \`${d.selector}\`${edit.target.text ? `, text "${edit.target.text}"` : ""})` : `\`${d.selector}\``;
     // A change to the DOM itself: in words, there's no value to compare.
-    lines.push(`- ${where}: \`${d.property}\` should be \`${d.expected}\`, the page gives \`${d.actual ?? "?"}\`.`);
+    if (d.property === DOM_REMOVE) lines.push(`- ${where}: deleted by the designer, but it's still on the page.`);
+    else if (d.property.startsWith(DOM_INSERT)) lines.push(`- ${where}: ${d.expected} was added by the designer, but it's not on the page.`);
+    else lines.push(`- ${where}: \`${d.property}\` should be \`${d.expected}\`, the page gives \`${d.actual ?? "?"}\`.`);
   }
   lines.push(
     "",

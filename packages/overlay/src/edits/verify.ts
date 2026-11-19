@@ -1,5 +1,7 @@
 import type { ChangeResult } from "@pilot/protocol";
+import { DOM_REMOVE } from "@pilot/protocol";
 import { PREVIEW_ATTRIBUTE } from "../dom/preview.ts";
+import { insertIdOf, newIdOf, newRootOf, pageChildCount, parseSpec } from "../dom/structure.ts";
 import { normalizeText, textRunOf } from "../dom/text.ts";
 import type { EditHistory, RecordedChange } from "./history.ts";
 import { inWidths } from "./widths.ts";
@@ -20,6 +22,13 @@ import { inWidths } from "./widths.ts";
  * state (Pilot can't put the element in a real hover or focus to measure
  * it), or on an element that isn't on this page, can't be checked now:
  * `unchecked`.
+ *
+ * Changes to the DOM (dom/structure.ts) are checked by what's on the page:
+ * a deleted element landed once the page no longer has it; a new element
+ * once its parent has more of the page's own elements than it had when the
+ * element was added (one more per new element in the job, one fewer per
+ * deleted element that's gone). Changes on a new element, or inside it,
+ * follow its insert: they go when it lands, since Pilot's node goes then.
  */
 export interface JobCheck {
   results: ChangeResult[];
@@ -30,7 +39,10 @@ export interface JobCheck {
 
 export function checkJob(history: EditHistory, jobId: string, width = window.innerWidth): JobCheck {
   const changes = history.changes({ job: jobId });
-  const checkable = changes.filter((c) => c.element.isConnected && !c.states?.length && inWidths(c.widths ?? null, width));
+  const dom = domOutcomes(changes);
+  const checkable = changes.filter(
+    (c) => !dom.has(c) && c.element.isConnected && !c.states?.length && inWidths(c.widths ?? null, width),
+  );
   const isText = (c: RecordedChange) => textRunOf(c.property) !== null;
   const css = checkable.filter((c) => !isText(c));
   const read = () => css.map((c) => computed(c.element, c.property));
@@ -43,6 +55,14 @@ export function checkJob(history: EditHistory, jobId: string, width = window.inn
   const expected = checkable.map((c) => (isText(c) ? normalizeText(c.value) : expectedCss[css.indexOf(c)]));
   const check: JobCheck = { results: [], landed: [], differs: [], unchecked: [] };
   for (const c of changes) {
+    const outcome = dom.get(c);
+    if (outcome) {
+      // A change on a new element follows its insert, and isn't reported on its own.
+      const list = outcome.follows ? outcome.follows : outcome.result.outcome;
+      check[list === "landed" ? "landed" : list === "differs" ? "differs" : "unchecked"].push(c);
+      check.results.push(outcome.follows ? { selector: c.target.selector, property: c.property, expected: c.value, outcome: "unchecked" } : outcome.result);
+      continue;
+    }
     const i = checkable.indexOf(c);
     const expectedValue = c.removal ? "removed" : isText(c) ? normalizeText(c.value) : c.value;
     const base = { selector: c.target.selector, property: c.property, expected: expectedValue };
@@ -58,6 +78,51 @@ export function checkJob(history: EditHistory, jobId: string, width = window.inn
     }
   }
   return check;
+}
+
+type DomOutcome = { result: ChangeResult; follows?: undefined } | { follows: ChangeResult["outcome"]; result?: undefined };
+
+/** The outcome of each DOM change in the job, and of each change on a new element (which follows its insert). */
+function domOutcomes(changes: RecordedChange[]): Map<RecordedChange, DomOutcome> {
+  const out = new Map<RecordedChange, DomOutcome>();
+  const here = (c: RecordedChange) => c.path === location.pathname;
+  const removals = changes.filter((c) => c.property === DOM_REMOVE && !newRootOf(c.element));
+  const gone = removals.filter((c) => here(c) && !c.element.isConnected).length;
+  const inserts = changes.filter((c) => insertIdOf(c.property) && !newRootOf(c.element));
+  const parentOf = (c: RecordedChange) => (parseSpec(c.value)?.place === "inside" ? c.element : c.element.parentElement);
+  const base = (c: RecordedChange) => ({ selector: c.target.selector, property: c.property });
+  for (const c of removals) {
+    const result: ChangeResult = !here(c)
+      ? { ...base(c), expected: "removed", outcome: "unchecked" }
+      : c.element.isConnected
+        ? { ...base(c), expected: "removed", outcome: "differs", actual: "still on the page" }
+        : { ...base(c), expected: "removed", outcome: "landed" };
+    out.set(c, { result });
+  }
+  for (const c of inserts) {
+    const spec = parseSpec(c.value);
+    const expected = spec?.place === "inside" ? "a new last child" : "a new element after it";
+    const parent = parentOf(c);
+    if (!spec || !here(c) || !c.element.isConnected || !parent) {
+      out.set(c, { result: { ...base(c), expected, outcome: "unchecked" } });
+      continue;
+    }
+    const added = inserts.filter((i) => parentOf(i) === parent).length;
+    const landed = pageChildCount(parent) >= spec.count + added - gone;
+    out.set(c, { result: landed ? { ...base(c), expected, outcome: "landed" } : { ...base(c), expected, outcome: "differs", actual: "not on the page" } });
+  }
+  // Changes on new elements (and inside them, inserts of new elements in them too): their insert's outcome.
+  const insertOf = new Map(inserts.map((c) => [insertIdOf(c.property), c]));
+  for (const c of changes) {
+    const root = newRootOf(c.element);
+    if (!root) continue;
+    // The outermost new element it's in: what's in the code once that one lands.
+    let outer = root;
+    for (let up = outer.parentElement && newRootOf(outer.parentElement); up; up = up.parentElement && newRootOf(up.parentElement)) outer = up;
+    const insert = insertOf.get(newIdOf(outer));
+    out.set(c, { follows: insert ? (out.get(insert)?.result?.outcome ?? "unchecked") : "unchecked" });
+  }
+  return out;
 }
 
 function computed(element: Element, property: string): string {
