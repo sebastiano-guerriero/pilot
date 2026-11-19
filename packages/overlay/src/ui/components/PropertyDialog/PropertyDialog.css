@@ -3,6 +3,12 @@
    `to (.editor)`: the matched property editor renders inside `.editor` and owns
    its styles; these rules stop at that boundary. */
 @scope (.property-dialog) to (.editor) {
+  /* Out of sight while the redlines show (Alt held): still there, its focus kept. */
+  :scope[data-veiled] {
+    opacity: 0;
+    pointer-events: none;
+  }
+
   :scope {
     position: fixed;
     z-index: var(--plt-z-ui);

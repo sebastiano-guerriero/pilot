@@ -1,6 +1,7 @@
 import type { CommentAction, ElementState, WidthRange } from "@pilot/protocol";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import { type BoxArea, hidesSelection } from "../dom/boxModel.ts";
+import { measuredBoxes } from "../dom/measure.ts";
 import { revealInWindow } from "../dom/reveal.ts";
 import { findSimilar } from "../dom/similar.ts";
 import { type EditableElement, isEditable } from "../dom/target.ts";
@@ -12,7 +13,9 @@ import { clickWidth } from "../edits/widths.ts";
 import type { PilotDevOptions } from "../mount.tsx";
 import { caretAt, editText } from "../select/inlineText.ts";
 import { useElementPicker } from "../select/useElementPicker.ts";
+import { useAltHeld } from "../select/useAltHeld.ts";
 import { useElementRect } from "../select/useElementRect.ts";
+import { Measurements } from "./components/Measurements/Measurements.tsx";
 import { BoxAreas } from "./components/BoxAreas/BoxAreas.tsx";
 import { GridOverlay } from "./components/GridOverlay/GridOverlay.tsx";
 import { Highlight } from "./components/Highlight/Highlight.tsx";
@@ -362,6 +365,13 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   const hovered = useElementPicker(selecting, host, onPick, { editing: editing?.host ?? null, onDoubleClick });
   const hoverRect = useElementRect(hovered !== selected?.element ? hovered : null);
   const selectedRect = useElementRect(selected?.element ?? null);
+  // Alt held with an element selected (a tool on): Figma's redlines, the distances from the selection to the
+  // element under the pointer, or to its parent when that's the selection itself (or nothing). The green
+  // selection (outline, dots, actions, grid lines) and the hover highlight give way to them meanwhile.
+  const alt = useAltHeld();
+  const measuring = alt && !!selected && !!tool;
+  const measureTo = !measuring ? null : hovered && hovered !== selected?.element ? hovered : (selected?.element.parentElement ?? null);
+  const measureRect = useElementRect(measureTo);
   const domHoverRect = useElementRect(domHover);
 
   // The selected element disappeared (re-render, HMR): drop the selection.
@@ -459,7 +469,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     return "sent";
   };
 
-  const hideSelection = !!inspect?.some(hidesSelection);
+  const hideSelection = !!inspect?.some(hidesSelection) || measuring;
   // Beside the latest one added, while it's still selected (taken out: back to the first).
   const placeBy = latest && others.includes(latest) ? latest : undefined;
 
@@ -536,26 +546,30 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
       ))}
       {selected && selectedRect && commenting && (
         <>
-          <Highlight element={selected.element} rect={selectedRect} variant="selected" label={false} working={!!selectedJob && !isStuck(selectedJob)} />
-          {others.map((element) => (
-            <SelectedOutline key={elementKey(element)} element={element} working={workingOn(element)} />
-          ))}
+          {!measuring && (
+            <Highlight element={selected.element} rect={selectedRect} variant="selected" label={false} working={!!selectedJob && !isStuck(selectedJob)} />
+          )}
+          {!measuring &&
+            others.map((element) => <SelectedOutline key={elementKey(element)} element={element} working={workingOn(element)} />)}
           {/* Before the panel (same layer: DOM order decides), so the panel covers them when it's over the element's corner. */}
-          <SelectionActions
-            rect={selectedRect}
-            selected
-            domOpen={domOpen}
-            similar={similar}
-            onShowInDom={others.length ? undefined : () => setDomOpen((open) => !open)}
-            busy={selectedBusy}
-            // The thread is open already: its icon stays, as everywhere.
-            onOpenThread={marks.get(selected.element)?.thread ? () => setTool("comment") : undefined}
-          />
+          {!measuring && (
+            <SelectionActions
+              rect={selectedRect}
+              selected
+              domOpen={domOpen}
+              similar={similar}
+              onShowInDom={others.length ? undefined : () => setDomOpen((open) => !open)}
+              busy={selectedBusy}
+              // The thread is open already: its icon stays, as everywhere.
+              onOpenThread={marks.get(selected.element)?.thread ? () => setTool("comment") : undefined}
+            />
+          )}
           <CommentWidget
             key={selected.key}
             element={selected.element}
             anchor={selectedRect}
             placeBy={placeBy}
+            veiled={measuring}
             thread={thread}
             status={threadStatus}
             error={threadJob && isStuck(threadJob) ? stuckAlert : undefined}
@@ -602,9 +616,8 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
           {inspect && <BoxAreas element={selected.element} areas={inspect} />}
           {!hideSelection && <GridOverlay element={selected.element} part="numbers" orParent />}
           {/* The other selected elements: the selection's outline, and dots. */}
-          {others.map((element) => (
-            <SelectedOutline key={elementKey(element)} element={element} working={workingOn(element)} />
-          ))}
+          {!measuring &&
+            others.map((element) => <SelectedOutline key={elementKey(element)} element={element} working={workingOn(element)} />)}
           {/* Before the dialog (same layer: DOM order decides), so the dialog
               covers them when it's over the element's corner. */}
           {!hideSelection && (
@@ -626,6 +639,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
             others={others}
             anchor={selectedRect}
             placeBy={placeBy}
+            veiled={measuring}
             initialQuery={lastQuery.current}
             onQueryChange={(query) => {
               lastQuery.current = query;
@@ -646,10 +660,14 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
       {/* The hover comes after the selection, so its label is drawn over the
           selection's outline and grid lines (same layer: DOM order decides).
           The dialog and the toolbar are on a higher layer either way. */}
-      {domHover && domHoverRect && domHover !== selected?.element && (
+      {/* The redlines (Alt held), in place of the green selection and the hover. */}
+      {measuring && selected && selectedRect && measureTo && measureRect && (
+        <Measurements {...measuredBoxes(selected.element, selectedRect, measureTo, measureRect)} />
+      )}
+      {!measuring && domHover && domHoverRect && domHover !== selected?.element && (
         <Highlight element={domHover} rect={domHoverRect} variant="hover" nameAttributes={nameAttributes} {...labelPlace(domHover, domHoverRect)} />
       )}
-      {hovered && hoverRect && !domHover && (
+      {!measuring && hovered && hoverRect && !domHover && (
         <>
           <Highlight element={hovered} rect={hoverRect} variant="hover" nameAttributes={nameAttributes} {...labelPlace(hovered, hoverRect)} />
           {/* A hovered grid shows its lines; numbers come with the selection. */}
@@ -660,9 +678,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
       {selected && selectedRect && (commenting || !hideSelection) && (
         <Highlight element={selected.element} rect={selectedRect} variant="dots" label={false} />
       )}
-      {others.map((element) => (
-        <SelectedDots key={elementKey(element)} element={element} />
-      ))}
+      {!measuring && others.map((element) => <SelectedDots key={elementKey(element)} element={element} />)}
       {domOpen && (
         <DomTree
           selected={selected?.element ?? null}
@@ -670,6 +686,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
           onHover={setDomHover}
           onSelect={pickFromDom}
           onClose={() => setDomOpen(false)}
+          veiled={measuring}
         />
       )}
       <ViewportWidth

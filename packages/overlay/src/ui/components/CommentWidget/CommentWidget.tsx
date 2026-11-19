@@ -29,6 +29,11 @@ interface CommentWidgetProps {
    * so the panel follows the last element added.
    */
   placeBy?: Element;
+  /**
+   * Out of sight for a moment (the redlines, Alt held: App), still there:
+   * its search, its fields and its focus stay as they are.
+   */
+  veiled?: boolean;
   /** The element's thread, once it has one. */
   thread: CommentThread | null;
   /**
@@ -98,6 +103,7 @@ export function CommentWidget({
   element,
   anchor,
   placeBy,
+  veiled = false,
   thread,
   status,
   error,
@@ -381,6 +387,7 @@ export function CommentWidget({
       role="dialog"
       aria-label="Comment"
       data-dragging={dragging || undefined}
+      data-veiled={veiled || undefined}
       data-dropping={dropping || undefined}
       onKeyDown={onKeyDown}
       onDragEnter={onDragEnter}

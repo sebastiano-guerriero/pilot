@@ -19,6 +19,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 ## Editing
 
 - [x] Element selection: hover highlight and label, click to select (page clicks blocked), Esc to clear
+- [x] Distances (Alt held, as in Figma): red lines and values from the selection to the hovered element, or to its parent
 - [x] Hover label: name (id, naming data attributes, form field name, tag; never classes or text) and size; none on the selection
 - [x] Component names in the label (React, Vue), before the id: a component's top-level element by its name
 - [x] Several elements: Shift+click on the page, Cmd/Ctrl+click and Shift+click ranges in the DOM tree; the dialog edits them all (one undo step, one job), Mixed for differing values

@@ -1,6 +1,12 @@
 /* The Comment tool's panel. Placed inline by CommentWidget.tsx, like the
    property dialog. Text is 12px on 16px lines. */
 @scope (.comment-widget) {
+  /* Out of sight while the redlines show (Alt held): still there, its focus kept. */
+  :scope[data-veiled] {
+    opacity: 0;
+    pointer-events: none;
+  }
+
   :scope {
     position: fixed;
     z-index: var(--plt-z-ui);

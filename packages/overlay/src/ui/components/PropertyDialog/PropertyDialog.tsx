@@ -35,6 +35,11 @@ interface PropertyDialogProps {
    * so the panel follows the last element added.
    */
   placeBy?: Element;
+  /**
+   * Out of sight for a moment (the redlines, Alt held: App), still there:
+   * its search, its fields and its focus stay as they are.
+   */
+  veiled?: boolean;
   /** Editors to search. Defaults to the built-in registry (overridable for tests). */
   editors?: PropertyEditor[];
   /**
@@ -109,6 +114,7 @@ export function PropertyDialog({
   others = [],
   anchor,
   placeBy,
+  veiled = false,
   editors = allEditors,
   initialQuery = "",
   listAll = LIST_ALL_EDITORS,
@@ -319,6 +325,7 @@ export function PropertyDialog({
       role="dialog"
       aria-label="Edit properties"
       data-dragging={dragging || undefined}
+      data-veiled={veiled || undefined}
       onKeyDown={onKeyDown}
       onFocusIn={onFocusIn}
     >

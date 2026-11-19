@@ -31,6 +31,14 @@ With the Select tool on ([select/](../packages/overlay/src/select)):
 - **Shift+click adds** an element to the selection, or takes it out (see *Several elements* below).
 - Select mode stays on, so you can click another element to switch to it. **Esc** clears the selection; with nothing selected, Esc turns the tool off. Clicking the tool again turns it off, clears the selection, and the page behaves normally again.
 
+### Measuring distances (Alt)
+
+As in Figma with Option: with an element selected and a tool on, holding **Alt** shows the distances from the selection to the element under the pointer, or to its parent when the pointer is on the selection itself (or on nothing). Red, so they read apart from the selection's green: both boxes outlined, a line for each distance with its value in a pill, dashed guides where a line ends off the other box ([Measurements](../packages/overlay/src/ui/components/Measurements/Measurements.tsx), geometry in [dom/measure.ts](../packages/overlay/src/dom/measure.ts)). Meanwhile the green selection (outline, dots, corner actions, grid lines), the hover highlight and the panels (the property dialog or the comment box, and the DOM tree: faded out but still there, with their search, scroll and focus) are hidden; releasing Alt brings them back. A container is measured inside its border, so a card's 20px padding reads 20 (not 21 with a 1px border). Alt with another key (Alt+P, Alt+D) isn't measuring.
+
+- **Beside** on an axis: one line across the gap, at the middle of where the boxes overlap on the other axis; with no overlap there, from the selection's middle, with a guide to the other box's edge.
+- **Overlapping** on an axis (one inside the other included): a line between each pair of matching edges that differ (left to left, right to right), at the middle of the inner box.
+- Values in CSS px, to a tenth.
+
 ### Several elements
 
 Selecting several elements edits them together: "these cards", without saying what they have in common ([App.tsx](../packages/overlay/src/ui/App.tsx), `others`).

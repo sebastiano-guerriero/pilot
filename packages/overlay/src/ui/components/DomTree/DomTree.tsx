@@ -20,6 +20,11 @@ interface DomTreeProps {
    */
   onSelect(element: Element, how?: { add?: boolean; range?: readonly Element[] }): void;
   onClose(): void;
+  /**
+   * Out of sight for a moment (the redlines, Alt held: App), still there:
+   * its rows, scroll and focus stay as they are.
+   */
+  veiled?: boolean;
 }
 
 /** The panel's width and its distance from the window's edges, in px (DomTree.css). */
@@ -80,7 +85,7 @@ const keyOf = (el: Element, pseudo = "") => {
  *   things), not selectable: changes are for elements.
  * The tree updates as the page changes (a MutationObserver on the body).
  */
-export function DomTree({ selected, also = [], onHover, onSelect, onClose }: DomTreeProps) {
+export function DomTree({ selected, also = [], onHover, onSelect, onClose, veiled = false }: DomTreeProps) {
   const root = document.body;
   // Open down to the selection from the first render, so the panel opens
   // centered on its real height (and the effect below keeps it following).
@@ -279,6 +284,7 @@ export function DomTree({ selected, also = [], onHover, onSelect, onClose }: Dom
       aria-label="DOM tree"
       style={{ left: px(position.left), top: px(position.top), maxHeight: px(limit) }}
       data-dragging={dragging || undefined}
+      data-veiled={veiled || undefined}
     >
       {/* The drag strip: 12px along the top edge, over the header (it adds
           no height), with the grip as the visual clue. */}

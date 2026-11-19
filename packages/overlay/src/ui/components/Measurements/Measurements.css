@@ -1,0 +1,59 @@
+/* Figma's redlines (Measurements.tsx): positions are set inline. Lines and
+   outlines 1px in the red, values in red pills with white text, guides
+   dashed. Above the page, under Pilot's panels. */
+@scope (.measurements) {
+  :scope {
+    position: fixed;
+    inset: 0;
+    z-index: var(--plt-z-highlight);
+    pointer-events: none;
+  }
+
+  .box {
+    position: fixed;
+    box-sizing: border-box;
+    border: 1px solid var(--plt-color-red);
+  }
+
+  .line,
+  .guide {
+    position: fixed;
+  }
+
+  .line[data-axis="x"] {
+    height: 0;
+    border-top: 1px solid var(--plt-color-red);
+  }
+
+  .line[data-axis="y"] {
+    width: 0;
+    border-left: 1px solid var(--plt-color-red);
+  }
+
+  .guide[data-axis="x"] {
+    height: 0;
+    border-top: 1px dashed var(--plt-color-red);
+  }
+
+  .guide[data-axis="y"] {
+    width: 0;
+    border-left: 1px dashed var(--plt-color-red);
+  }
+
+  /* The value, centered on its line. */
+  .value {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    translate: -50% -50%;
+    height: 16px;
+    padding-inline: 4px;
+    border-radius: 4px;
+    background: var(--plt-color-red);
+    color: var(--plt-color-contrast-higher);
+    font-size: var(--plt-text-base);
+    line-height: 16px;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+}

@@ -3,6 +3,12 @@
    spot and max-height are set inline (DomTree.tsx). Placeholder look,
    pending the design. */
 @scope (.dom-tree) {
+  /* Out of sight while the redlines show (Alt held): still there, its focus kept. */
+  :scope[data-veiled] {
+    opacity: 0;
+    pointer-events: none;
+  }
+
   :scope {
     position: fixed;
     z-index: var(--plt-z-ui);

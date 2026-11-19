@@ -21,6 +21,7 @@
 @import "../components/Highlight/Highlight.css" layer(components);
 @import "../components/BoxAreas/BoxAreas.css" layer(components);
 @import "../components/GridOverlay/GridOverlay.css" layer(components);
+@import "../components/Measurements/Measurements.css" layer(components);
 @import "../components/PropertyLabel/PropertyLabel.css" layer(components);
 @import "../components/PropertyInputText/PropertyInputText.css" layer(components);
 @import "../components/PropertyRow/PropertyRow.css" layer(components);
