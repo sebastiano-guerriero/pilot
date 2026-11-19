@@ -69,7 +69,11 @@ describe("searchEditors", () => {
       "text-overflow": ["text-overflow", "text-ellipsis", "truncate"],
       "text-wrap": ["text-wrap", "text-balance", "text-pretty", "text-nowrap"],
       "text-indent": ["text-indent", "indent"],
+      "vertical-align": ["vertical-align", "vertical", "align-middle", "align-text-top", "align-super"],
+      "text-transform": ["text-transform", "uppercase", "lowercase", "capitalize", "normal-case"],
       "white-space": ["white-space", "whitespace"],
+      "list-style-type": ["list-style-type", "list-disc", "list-decimal", "list-none"],
+      "list-style-position": ["list-style-position", "list-position", "list-inside", "list-outside"],
       "mix-blend-mode": ["mix-blend-mode", "mix-blend"],
       "background-blend-mode": ["background-blend-mode", "bg-blend", "bg-blend-mode"],
       cursor: ["cursor"],
@@ -190,7 +194,6 @@ describe("abbreviationPenalty", () => {
       ["font-family", "font-family"],
       ["font-sans", "font-family"],
       ["font-size", "font-size"],
-      ["text", "font-size"],
       ["italic", "font-style"],
       ["font-bold", "font-weight"],
       ["weight", "font-weight"],
@@ -202,10 +205,24 @@ describe("abbreviationPenalty", () => {
       ["text-left", "text-align"],
       ["text-justify", "text-align"],
       ["text-end", "text-align"],
-      ["text", "font-size"],
+      ["text-lg", "font-size"],
+      ["text-2xl", "font-size"],
     ] as const) {
       expect(await ids(q), q).toEqual([id]);
     }
+    // text is the text-* properties (Tailwind's text-lg still finds font-size).
+    expect(await ids("text")).toEqual([
+      "text-align",
+      "text-indent",
+      "text-wrap",
+      "text-overflow",
+      "text-decoration-line",
+      "text-decoration-color",
+      "text-decoration-style",
+      "text-decoration-thickness",
+      "text-underline-offset",
+      "text-transform",
+    ]);
     // size still finds the size editor (width and height), not font-size.
     expect(await ids("size")).toEqual(["size"]);
   });

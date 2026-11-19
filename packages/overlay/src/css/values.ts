@@ -84,6 +84,7 @@ export function parseValue(property: string, text: string): string | null {
   if (!t) return null;
   const info = cssProperty(property);
   if (info.kind === "font-family") return supported(property, parseFontFamily(text, t));
+  if (info.kind === "marker") return supported(property, parseMarker(text, t));
   t = unwrapCalc(t) ?? t; // typed calc(): we add it back where needed
 
   const isKeyword = info.keywords.includes(t) || (GLOBAL_KEYWORDS as readonly string[]).includes(t);
@@ -115,6 +116,17 @@ function parseFontFamily(text: string, lower: string): string | null {
   if (FUNCTION.test(lower)) return typed;
   const names = splitTopLevel(typed).map((n) => n.trim());
   return names.every((n) => n) ? names.join(", ") : null;
+}
+
+/**
+ * A list marker: a keyword or counter style's name (lowercase), a quoted
+ * string as typed, or any other text quoted (`—` → `"—"`), case kept.
+ */
+function parseMarker(text: string, lower: string): string | null {
+  const typed = text.trim();
+  if (/^-?[a-z][a-z0-9-]*$/.test(lower) || FUNCTION.test(lower)) return lower;
+  if (/^(["']).*\1$/.test(typed)) return typed;
+  return JSON.stringify(typed);
 }
 
 /** Split on commas that aren't inside quotes or parentheses. */
@@ -179,6 +191,8 @@ function parseOther(kind: NonLengthKind, negative: boolean, t: string): string |
       const parts = t.split(",").map((p) => p.trim());
       return parts.every((p) => /^-?[a-z][a-z0-9-]*$/.test(p)) ? parts.join(", ") : null;
     }
+    case "marker":
+      return null; // parsed before (parseMarker)
     case "position": {
       // Up to four parts: side keywords, lengths (a bare number is px) and
       // percentages, by spaces or Tailwind's `_`.
@@ -211,6 +225,7 @@ type NonLengthKind =
   | "ratio"
   | "percent"
   | "idents"
+  | "marker"
   | "position";
 
 const POSITION_KEYWORDS = ["top", "right", "bottom", "left", "center"];
@@ -328,6 +343,7 @@ function stepOther(
     }
     case "ratio":
     case "idents":
+    case "marker":
     case "position":
       return null;
     case "percent": {

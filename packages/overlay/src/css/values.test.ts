@@ -22,6 +22,21 @@ describe("parseValue", () => {
     expect(stepValue("object-position", "top", 1, undefined)).toBeNull();
   });
 
+  it("marker (list-style-type): a style's name, or any text, quoted with its case", () => {
+    expect(parseValue("list-style-type", "Lower-Greek")).toBe("lower-greek");
+    expect(parseValue("list-style-type", "—")).toBe('"—"');
+    expect(parseValue("list-style-type", '"→ "')).toBe('"→ "');
+    expect(parseValue("list-style-type", "Step")).toBe("step");
+    expect(parseValue("list-style-type", "A.")).toBe('"A."');
+    expect(stepValue("list-style-type", "disc", 1, undefined)).toBeNull();
+  });
+
+  it("vertical-align: its keywords, or a length (negatives too) or percentage", () => {
+    expect(parseValue("vertical-align", "middle")).toBe("middle");
+    expect(parseValue("vertical-align", "-2")).toBe("-2px");
+    expect(parseValue("vertical-align", "10%")).toBe("10%");
+  });
+
   it("takes a bare number as px", () => {
     expect(parseValue("width", " 120 ")).toBe("120px");
     expect(parseValue("width", "0")).toBe("0px");

@@ -84,11 +84,22 @@ export const LIST_ORDER: ReadonlyArray<{ group: string; entries: readonly ListEn
       "line-height",
       "letter-spacing",
       "text-align",
+      // the text's decoration (underline…)
+      "text-decoration-line",
+      "text-decoration-color",
+      "text-decoration-style",
+      "text-decoration-thickness",
+      "text-underline-offset",
+      "text-transform",
       "text-indent",
+      "vertical-align",
       "text-wrap",
       "white-space",
       "text-overflow",
       "line-clamp",
+      // a list's markers
+      "list-style-type",
+      "list-style-position",
     ],
   },
   {

@@ -64,7 +64,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [x] Grid and flex rows: grid-columns, grid-rows, gap, justify-content, justify-items, align-items, align-content, flex-direction, flex-wrap
 - [x] Position: position (with inset), inset, z-index, isolation
 - [x] Appearance: background color, border radius, opacity, mix-blend-mode, background-blend-mode
-- [x] Typography: color, font-family, font-size, font-style, font-weight, font-variant-numeric, line-height, letter-spacing, text-align, text-indent, text-wrap, white-space, text-overflow, line-clamp
+- [x] Typography: color, font-family, font-size, font-style, font-weight, font-variant-numeric, line-height, letter-spacing, text-align, text-decoration-line, text-decoration-color, text-decoration-style, text-decoration-thickness, text-underline-offset, text-transform, text-indent, vertical-align, text-wrap, white-space, text-overflow, line-clamp, list-style-type, list-style-position
 - [x] Interactivity: cursor, pointer-events, user-select, appearance, will-change
 - [x] SVG: fill, stroke, stroke-width
 - [x] Visibility: visibility

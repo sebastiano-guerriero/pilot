@@ -11,6 +11,14 @@ import {
   willChangeEditor,
 } from "./interactivity/InteractivityEditors.tsx";
 import { lineClampEditor } from "./line-clamp/LineClampEditor.tsx";
+import {
+  textDecorationColorEditor,
+  textDecorationLineEditor,
+  textDecorationStyleEditor,
+  textDecorationThicknessEditor,
+  textUnderlineOffsetEditor,
+} from "./text-decoration/TextDecorationEditors.tsx";
+import { listStylePositionEditor, listStyleTypeEditor } from "./list-style/ListStyleEditors.tsx";
 import { overscrollEditor } from "./overscroll/OverscrollEditor.tsx";
 import { fillEditor, strokeEditor, strokeWidthEditor } from "./svg/SvgEditors.tsx";
 import { aspectRatioEditor } from "./aspect-ratio/AspectRatioEditor.tsx";
@@ -54,7 +62,9 @@ import {
   textAlignEditor,
   textIndentEditor,
   textOverflowEditor,
+  textTransformEditor,
   textWrapEditor,
+  verticalAlignEditor,
   whiteSpaceEditor,
 } from "./typography/TypographyEditors.tsx";
 import { visibilityEditor } from "./visibility/VisibilityEditor.tsx";
@@ -132,6 +142,15 @@ export const editors: PropertyEditor[] = [
   whiteSpaceEditor,
   textOverflowEditor,
   lineClampEditor,
+  textDecorationLineEditor,
+  textDecorationColorEditor,
+  textDecorationStyleEditor,
+  textDecorationThicknessEditor,
+  textUnderlineOffsetEditor,
+  textTransformEditor,
+  verticalAlignEditor,
+  listStyleTypeEditor,
+  listStylePositionEditor,
   cursorEditor,
   pointerEventsEditor,
   userSelectEditor,

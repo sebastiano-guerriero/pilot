@@ -73,6 +73,9 @@ export interface CssPropertyInfo {
    *   Steps by whole numbers.
    * - "idents": names, comma-separated (will-change: `opacity, transform`),
    *   lowercase, joined with ", ", checked by the browser. Not stepped.
+   * - "marker": a list marker (list-style-type): a counter style's name
+   *   (`lower-greek`), or any text as the marker (`—`, `"→ "`), quoted as
+   *   typed, case kept. Not stepped.
    * - "position": where a box sits inside another (object-position): up to
    *   four parts, each a side keyword (`top`, `left`, `center`…), a length
    *   (a bare number is px) or a percentage, separated by spaces, or by `_`
@@ -89,6 +92,7 @@ export interface CssPropertyInfo {
     | "ratio"
     | "percent"
     | "idents"
+    | "marker"
     | "position";
 }
 
@@ -171,6 +175,22 @@ export const OBJECT_POSITION_VALUES = [
 /** isolation's options, in menu order. */
 export const ISOLATION_VALUES = ["auto", "isolate"] as const;
 
+/** list-style-type's presets, in menu order (none last; custom takes any other style or text). */
+export const LIST_STYLE_TYPE_VALUES = [
+  "disc",
+  "circle",
+  "square",
+  "decimal",
+  "lower-alpha",
+  "upper-alpha",
+  "lower-roman",
+  "upper-roman",
+  "none",
+] as const;
+
+/** list-style-position's options, in menu order. */
+export const LIST_STYLE_POSITION_VALUES = ["outside", "inside"] as const;
+
 /** float's options, in menu order. */
 export const FLOAT_VALUES = ["left", "right", "inline-start", "inline-end", "none"] as const;
 
@@ -195,6 +215,18 @@ export const FONT_VARIANT_NUMERIC_VALUES = [
 
 /** text-overflow's options, in menu order. */
 export const TEXT_OVERFLOW_VALUES = ["clip", "ellipsis"] as const;
+
+/** text-decoration-line's options, in menu order (none last). A combination set another way is still shown. */
+export const TEXT_DECORATION_LINE_VALUES = ["underline", "overline", "line-through", "none"] as const;
+
+/** vertical-align's presets, in menu order (Tailwind's; custom takes a length or percentage). */
+export const VERTICAL_ALIGN_VALUES = ["baseline", "top", "middle", "bottom", "text-top", "text-bottom", "sub", "super"] as const;
+
+/** text-transform's options, in menu order (none last). */
+export const TEXT_TRANSFORM_VALUES = ["uppercase", "lowercase", "capitalize", "none"] as const;
+
+/** text-decoration-style's options, in menu order. */
+export const TEXT_DECORATION_STYLE_VALUES = ["solid", "double", "dotted", "dashed", "wavy"] as const;
 
 /** text-wrap's options, in menu order. */
 export const TEXT_WRAP_VALUES = ["wrap", "nowrap", "balance", "pretty"] as const;
@@ -340,6 +372,8 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   color: { initial: "canvastext", keywords: ["currentcolor", "transparent"], negative: false },
   "background-color": { initial: "transparent", keywords: ["currentcolor", "transparent"], negative: false },
   float: { initial: "none", keywords: [...FLOAT_VALUES], negative: false },
+  "list-style-type": { initial: "disc", keywords: [...LIST_STYLE_TYPE_VALUES], negative: false, kind: "marker" },
+  "list-style-position": { initial: "outside", keywords: [...LIST_STYLE_POSITION_VALUES], negative: false },
   "box-sizing": { initial: "content-box", keywords: [...BOX_SIZING_VALUES], negative: false },
   "overscroll-behavior": { initial: "auto", keywords: [...OVERSCROLL_VALUES], negative: false },
   "font-variant-numeric": { initial: "normal", keywords: [...FONT_VARIANT_NUMERIC_VALUES], negative: false },
@@ -348,6 +382,14 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   "-webkit-line-clamp": { initial: "none", keywords: ["none"], negative: false, kind: "integer" },
   "-webkit-box-orient": { initial: "horizontal", keywords: ["horizontal", "vertical"], negative: false },
   "text-overflow": { initial: "clip", keywords: [...TEXT_OVERFLOW_VALUES], negative: false },
+  "text-decoration-line": { initial: "none", keywords: [...TEXT_DECORATION_LINE_VALUES], negative: false },
+  // Edited by the color editor, not as a length.
+  "text-decoration-color": { initial: "currentcolor", keywords: ["currentcolor", "transparent"], negative: false },
+  "text-decoration-style": { initial: "solid", keywords: [...TEXT_DECORATION_STYLE_VALUES], negative: false },
+  "text-decoration-thickness": { initial: "auto", keywords: ["auto", "from-font"], negative: false },
+  "vertical-align": { initial: "baseline", keywords: [...VERTICAL_ALIGN_VALUES], negative: true },
+  "text-transform": { initial: "none", keywords: [...TEXT_TRANSFORM_VALUES], negative: false },
+  "text-underline-offset": { initial: "auto", keywords: ["auto"], negative: true },
   "text-wrap": { initial: "wrap", keywords: [...TEXT_WRAP_VALUES], negative: false },
   "text-indent": { initial: "0", keywords: [], negative: true },
   "white-space": { initial: "normal", keywords: [...WHITE_SPACE_VALUES], negative: false },

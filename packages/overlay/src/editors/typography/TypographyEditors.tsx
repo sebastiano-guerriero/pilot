@@ -4,7 +4,9 @@ import {
   FONT_WEIGHTS,
   TEXT_ALIGN_VALUES,
   TEXT_OVERFLOW_VALUES,
+  TEXT_TRANSFORM_VALUES,
   TEXT_WRAP_VALUES,
+  VERTICAL_ALIGN_VALUES,
   WHITE_SPACE_VALUES,
 } from "../../css/properties.ts";
 import { keywordEditor } from "../keyword/KeywordEditor.tsx";
@@ -29,8 +31,23 @@ export const fontFamilyEditor = lengthEditor({
 export const fontSizeEditor = lengthEditor({
   property: "font-size",
   label: "Font size",
-  // Tailwind's text-* sizes (text-sm, text-lg…).
-  aliases: ["text"],
+  // Tailwind's text-* sizes. Not `text` alone: that would hide every text-*
+  // property behind font-size (an exact alias beats a prefix).
+  aliases: [
+    "text-xs",
+    "text-sm",
+    "text-base",
+    "text-lg",
+    "text-xl",
+    "text-2xl",
+    "text-3xl",
+    "text-4xl",
+    "text-5xl",
+    "text-6xl",
+    "text-7xl",
+    "text-8xl",
+    "text-9xl",
+  ],
   scrub: true,
 });
 
@@ -177,4 +194,48 @@ export const textOverflowEditor = keywordEditor({
   options: TEXT_OVERFLOW_VALUES,
   // Tailwind's text-ellipsis / text-clip, and truncate.
   aliases: ["text-ellipsis", "text-clip", "truncate"],
+});
+
+/**
+ * text-transform, as a select with an icon per value: the text's case shown
+ * in capitals, lower case, or each word capitalized, whatever the text is
+ * written in. Tailwind's four only.
+ */
+export const textTransformEditor = keywordEditor({
+  property: "text-transform",
+  label: "Text transform",
+  options: TEXT_TRANSFORM_VALUES,
+  icons: {
+    "": "layout-empty",
+    uppercase: "text-transform-uppercase",
+    lowercase: "text-transform-lowercase",
+    capitalize: "text-transform-capitalize",
+    none: "text-transform-none",
+  },
+  // Tailwind's uppercase, lowercase, capitalize, normal-case.
+  aliases: ["uppercase", "lowercase", "capitalize", "normal-case"],
+});
+
+/**
+ * vertical-align: where an inline or table-cell element sits on its line
+ * (baseline, middle…). Tailwind's eight as presets, and custom for a length
+ * or percentage (`-2px`, `10%`, raising or lowering it from the baseline).
+ */
+export const verticalAlignEditor = presetEditor({
+  property: "vertical-align",
+  label: "Vertical align",
+  presets: VERTICAL_ALIGN_VALUES,
+  placeholder: "-2px",
+  customLabel: "custom vertical-align",
+  // Tailwind's align-* utilities.
+  aliases: [
+    "align-baseline",
+    "align-top",
+    "align-middle",
+    "align-bottom",
+    "align-text-top",
+    "align-text-bottom",
+    "align-sub",
+    "align-super",
+  ],
 });

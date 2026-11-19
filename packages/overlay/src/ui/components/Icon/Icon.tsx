@@ -190,6 +190,19 @@ const align = (y: number, tallY: number, h = 2, tallH = 4) =>
  */
 const objectAt = (x: 2 | 5 | 8, y: 2 | 5 | 8) => layout([{ x, y }]);
 
+/** text-transform's "Ag" (capitalize, and none in contrast-low): an A, then a g. */
+const capitalizeAg = (stroke: string) => ({
+  size: 12,
+  body: (
+    <g stroke={stroke} stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6.04541 8.16667L3.66541 2.5H3.54675L1.16675 8.16667" />
+      <path d="M1.72681 6.83337H5.48547" />
+      <path d="M8.96674 4.5H9.1034C9.87476 4.5 10.5001 5.12531 10.5001 5.89667V6.43667C10.5001 7.20802 9.87476 7.83333 9.1034 7.83333H8.96674C8.19538 7.83333 7.57007 7.20802 7.57007 6.43667V5.89667C7.57007 5.12531 8.19538 4.5 8.96674 4.5Z" />
+      <path d="M10.4999 4.5V8.702C10.4999 9.51133 9.84394 10.1667 9.03527 10.1667C8.54994 10.1667 8.11994 9.93067 7.85327 9.56733" />
+    </g>
+  ),
+});
+
 /**
  * Pilot's icons. Single-color ones are drawn in `currentColor`, so they take
  * the color of the text around them; multi-color ones (the layout icons)
@@ -577,6 +590,30 @@ const ICONS = {
   },
   "flex-wrap": layout([item3(1, 2.5), item3(5, 2.5), item3(1, 6.5)]),
   "flex-wrap-reverse": layout([item3(1, 6.5), item3(5, 6.5), item3(1, 2.5)]),
+  // text-transform: the designed icons. none is capitalize's "Ag" in contrast-low.
+  "text-transform-uppercase": {
+    size: 12,
+    body: (
+      <g stroke="var(--plt-color-accent)" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5.54541 8.83329L3.16541 3.16663H3.04675L0.666748 8.83329" />
+        <path d="M1.22681 7.5H4.98547" />
+        <path d="M11.0199 4.03196C10.8006 3.74329 10.2406 3.16663 9.26992 3.16663C7.84592 3.16663 6.83325 4.18129 6.83325 6.03596C6.83325 7.66529 7.82792 8.83329 9.12592 8.83329C9.87592 8.83329 11.3033 8.71796 11.3033 6.19463H9.19792" />
+      </g>
+    ),
+  },
+  "text-transform-lowercase": {
+    size: 12,
+    body: (
+      <g stroke="var(--plt-color-accent)" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2.15601 4.82271C2.48001 4.47404 2.94134 4.33337 3.41001 4.33337C4.19601 4.33337 4.83267 4.97071 4.83267 5.75604V8.16671" />
+        <path d="M4.83333 6.33331C4.83333 7.34531 4.012 8.16664 3 8.16664H2.8924C2.39953 8.16664 2 7.76711 2 7.27424C2 6.84518 2.30533 6.47684 2.72693 6.39731L4.24513 6.13071C4.60413 6.06298 4.8384 5.72064 4.77927 5.36658" />
+        <path d="M8.29999 4.5H8.43665C9.20801 4.5 9.83332 5.12531 9.83332 5.89667V6.43667C9.83332 7.20802 9.20801 7.83333 8.43665 7.83333H8.29999C7.52863 7.83333 6.90332 7.20802 6.90332 6.43667V5.89667C6.90332 5.12531 7.52863 4.5 8.29999 4.5Z" />
+        <path d="M9.83343 4.5V8.702C9.83343 9.51133 9.17743 10.1667 8.36877 10.1667C7.88343 10.1667 7.45343 9.93067 7.18677 9.56733" />
+      </g>
+    ),
+  },
+  "text-transform-capitalize": capitalizeAg("var(--plt-color-accent)"),
+  "text-transform-none": capitalizeAg("var(--plt-color-contrast-low)"),
   // object-fit: the designed icons (fill stretches the picture, none shows it at its own size, cropped).
   "object-fit-cover": {
     size: 12,

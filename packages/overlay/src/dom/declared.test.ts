@@ -7,6 +7,7 @@ import {
   isFromReset,
   matchedRules as matchedRulesFor,
   pickSide,
+  resolve,
   sourcesOf,
   specificity,
   splitTopLevel,
@@ -222,5 +223,41 @@ describe("declaredValue (with real stylesheets)", () => {
   it("selectors that don't parse don't break the rest", () => {
     sheet(".card { width: 7px; } .card:-unknown-thing { width: 8px; }");
     expect(declaredValue(element, "width")?.value).toBe("7px");
+  });
+});
+
+describe("a shorthand's implicit reset", () => {
+  /** A rule's style as Chrome reads `text`: the longhands a shorthand leaves out are `initial`. */
+  const rule = (cssText: string, values: Record<string, string>, order = 0) => ({
+    style: {
+      cssText,
+      getPropertyValue: (p: string) => values[p] ?? "",
+      getPropertyPriority: () => "",
+    } as unknown as CSSStyleDeclaration,
+    selector: ".a",
+    specificity: [0, 1, 0] as [number, number, number],
+    layer: [Infinity],
+    order,
+  });
+
+  it("isn't declared: text-decoration: none sets the line, not the color", () => {
+    const shorthand = rule("text-decoration: none;", {
+      "text-decoration-line": "none",
+      "text-decoration-color": "initial",
+      "text-decoration-style": "initial",
+    });
+    expect(resolve("text-decoration-line", undefined, [shorthand])?.value).toBe("none");
+    expect(resolve("text-decoration-color", undefined, [shorthand])).toBeNull();
+  });
+
+  it("still wins the cascade: a less specific rule's color doesn't show through", () => {
+    const own = rule("text-decoration-color: red;", { "text-decoration-color": "red" }, 0);
+    const later = rule("text-decoration: none;", { "text-decoration-line": "none", "text-decoration-color": "initial" }, 1);
+    expect(resolve("text-decoration-color", undefined, [own, later])).toBeNull();
+  });
+
+  it("initial written by the page is declared", () => {
+    const written = rule("text-decoration-color: initial;", { "text-decoration-color": "initial" });
+    expect(resolve("text-decoration-color", undefined, [written])?.value).toBe("initial");
   });
 });
