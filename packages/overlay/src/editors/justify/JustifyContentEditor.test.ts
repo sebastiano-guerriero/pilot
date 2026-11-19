@@ -83,7 +83,9 @@ describe("justify-content", () => {
   });
 
   it("Tailwind's justify-* utilities find it", () => {
-    for (const q of ["justify", "justify-content", "justify-between", "justify-center", "justify-evenly"]) {
+    // justify alone is every justify- property, justify-content first.
+    expect(matchEditors("justify")[0]?.id).toBe("justify-content");
+    for (const q of ["justify-content", "justify-between", "justify-center", "justify-evenly"]) {
       expect(matchEditors(q).map((e) => e.id)).toEqual(["justify-content"]);
     }
   });

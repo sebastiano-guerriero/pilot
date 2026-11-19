@@ -29,3 +29,28 @@ export const colEndEditor = lengthEditor({
   label: "Column end",
   aliases: ["col-end"],
 });
+
+/**
+ * The same for the rows: row-span (the `grid-row` shorthand), row-start and
+ * row-end, Tailwind's names.
+ */
+export const rowSpanEditor = lengthEditor({
+  property: "grid-row",
+  name: "row-span",
+  label: "Row span",
+  aliases: ["row-span", "row-span-full"],
+});
+
+export const rowStartEditor = lengthEditor({
+  property: "grid-row-start",
+  name: "row-start",
+  label: "Row start",
+  aliases: ["row-start"],
+});
+
+export const rowEndEditor = lengthEditor({
+  property: "grid-row-end",
+  name: "row-end",
+  label: "Row end",
+  aliases: ["row-end"],
+});

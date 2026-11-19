@@ -22,10 +22,11 @@ export const LIST_ORDER: ReadonlyArray<{ group: string; entries: readonly ListEn
       {
         id: "display",
         rows: {
-          grid: ["grid-columns", "gap", "justify-content", "align-items"],
-          flex: ["flex-direction", "flex-wrap", "gap", "justify-content", "align-items"],
+          grid: ["grid-columns", "grid-rows", "gap", "justify-content", "justify-items", "align-items", "align-content"],
+          flex: ["flex-direction", "flex-wrap", "gap", "justify-content", "align-items", "align-content"],
         },
       },
+      "float",
       "width",
       "min-width",
       "max-width",
@@ -39,6 +40,9 @@ export const LIST_ORDER: ReadonlyArray<{ group: string; entries: readonly ListEn
       "overflow",
       "overscroll-behavior",
       "order",
+      // where an item sits in its own area, over its parent's alignment
+      "align-self",
+      "justify-self",
       // a flex item's share of the space
       "flex-grow",
       "flex-shrink",
@@ -47,7 +51,12 @@ export const LIST_ORDER: ReadonlyArray<{ group: string; entries: readonly ListEn
       "grid-column",
       "grid-column-start",
       "grid-column-end",
+      // and on its rows
+      "grid-row",
+      "grid-row-start",
+      "grid-row-end",
       "object-fit",
+      "object-position",
     ],
   },
   {

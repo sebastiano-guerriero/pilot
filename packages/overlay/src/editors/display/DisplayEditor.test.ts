@@ -6,6 +6,7 @@ import { EditHistory } from "../../edits/history.ts";
 import { matchEditors } from "../registry.ts";
 import type { FocusRequest } from "../types.ts";
 import { gridColumnsEditor } from "../grid-columns/GridColumnsEditor.tsx";
+import { gridRowsEditor } from "../grid-rows/GridRowsEditor.tsx";
 import { displayEditor, displayOptions } from "./DisplayEditor.tsx";
 import { inlinePreview } from "../../test/inlinePreview.ts";
 
@@ -110,28 +111,32 @@ describe("display select", () => {
 });
 
 describe("grid rows", () => {
-  it("are editors of their own: grid-columns, gap, justify-content, align-items, flex-direction, flex-wrap", () => {
+  it("are editors of their own: the grid and flex rows, and the alignments", () => {
     expect(displayEditor.embeds?.map((e) => e.id)).toEqual([
       "grid-columns",
+      "grid-rows",
       "flex-direction",
       "flex-wrap",
       "gap",
       "justify-content",
+      "justify-items",
       "align-items",
+      "align-content",
     ]);
     expect(gridColumnsEditor.properties).toEqual(["grid-template-columns"]);
+    expect(gridRowsEditor.properties).toEqual(["grid-template-rows"]);
   });
 
   it("grid shows the grid rows, flex the flex rows, anything else none", () => {
     mount();
     pick("grid");
-    expect(labels()).toEqual(["display", "grid-columns", "gap", "justify-content", "align-items"]);
+    expect(labels()).toEqual(["display", "grid-columns", "grid-rows", "gap", "justify-content", "justify-items", "align-items", "align-content"]);
     pick("inline-grid");
-    expect(labels()).toEqual(["display", "grid-columns", "gap", "justify-content", "align-items"]);
+    expect(labels()).toEqual(["display", "grid-columns", "grid-rows", "gap", "justify-content", "justify-items", "align-items", "align-content"]);
     pick("flex");
-    expect(labels()).toEqual(["display", "flex-direction", "flex-wrap", "gap", "justify-content", "align-items"]);
+    expect(labels()).toEqual(["display", "flex-direction", "flex-wrap", "gap", "justify-content", "align-items", "align-content"]);
     pick("inline-flex");
-    expect(labels()).toEqual(["display", "flex-direction", "flex-wrap", "gap", "justify-content", "align-items"]);
+    expect(labels()).toEqual(["display", "flex-direction", "flex-wrap", "gap", "justify-content", "align-items", "align-content"]);
     pick("block");
     expect(labels()).toEqual(["display"]);
   });
@@ -220,7 +225,7 @@ describe("grid rows", () => {
 });
 
 describe("keyboard", () => {
-  it("Tab goes display → columns select → count → gap → justify → align, then out of the editor", () => {
+  it("Tab goes display → columns → rows → gap → the four alignments, then out of the editor", () => {
     element.style.display = "grid";
     element.style.gridTemplateColumns = "repeat(3, minmax(0, 1fr))";
     mount({ query: "grid" });
@@ -230,18 +235,34 @@ describe("keyboard", () => {
     key(select("grid-columns"), "Tab");
     expect(focused()).toBe("column count");
     key(field("column count") as HTMLInputElement, "Tab");
+    expect(focused()).toBe("grid-rows");
+    key(select("grid-rows"), "Tab");
+    expect(focused()).toBe("row count");
+    key(field("row count") as HTMLInputElement, "Tab");
     expect(focused()).toBe("gap");
     key(field("gap") as HTMLInputElement, "Tab");
     expect(focused()).toBe("justify-content");
     key(select("justify-content"), "Tab");
+    expect(focused()).toBe("justify-items");
+    key(select("justify-items"), "Tab");
     expect(focused()).toBe("align-items");
     key(select("align-items"), "Tab");
+    expect(focused()).toBe("align-content");
+    key(select("align-content"), "Tab");
     expect(tabbedOut).toEqual([1]);
+    key(select("align-content"), "Tab", { shiftKey: true });
+    expect(focused()).toBe("align-items");
     key(select("align-items"), "Tab", { shiftKey: true });
+    expect(focused()).toBe("justify-items");
+    key(select("justify-items"), "Tab", { shiftKey: true });
     expect(focused()).toBe("justify-content");
     key(select("justify-content"), "Tab", { shiftKey: true });
     expect(focused()).toBe("gap");
     key(field("gap") as HTMLInputElement, "Tab", { shiftKey: true });
+    expect(focused()).toBe("row count");
+    key(field("row count") as HTMLInputElement, "Tab", { shiftKey: true });
+    expect(focused()).toBe("grid-rows");
+    key(select("grid-rows"), "Tab", { shiftKey: true });
     expect(focused()).toBe("column count");
     key(field("column count") as HTMLInputElement, "Tab", { shiftKey: true });
     expect(focused()).toBe("grid-columns");
@@ -249,13 +270,16 @@ describe("keyboard", () => {
     expect(focused()).toBe("display");
   });
 
-  it("without a columns field (subgrid), Tab goes from the grid-columns select to gap", () => {
+  it("without a field (subgrid), Tab goes from the select to the next row", () => {
     element.style.display = "grid";
     element.style.gridTemplateColumns = "subgrid";
+    element.style.gridTemplateRows = "subgrid";
     mount({ query: "grid" });
     key(select(), "Tab");
     expect(focused()).toBe("grid-columns");
     key(select("grid-columns"), "Tab");
+    expect(focused()).toBe("grid-rows");
+    key(select("grid-rows"), "Tab");
     expect(focused()).toBe("gap");
   });
 
@@ -270,7 +294,7 @@ describe("keyboard", () => {
     mount({ query: "grid" });
     expect(focused()).toBe("display");
     mount({ query: "", edge: "last" });
-    expect(focused()).toBe("align-items");
+    expect(focused()).toBe("align-content");
   });
 });
 
@@ -292,7 +316,8 @@ describe("search", () => {
   it("the embedded grid rows don't make display match: their own editors do", () => {
     expect(matchEditors("justify-content").map((e) => e.id)).toEqual(["justify-content"]);
     expect(matchEditors("align-items").map((e) => e.id)).toEqual(["align-items"]);
-    expect(matchEditors("align").map((e) => e.id)).toEqual(["align-items"]);
+    // align is each align- property: the container's first, then the item's.
+    expect(matchEditors("align").map((e) => e.id)).toEqual(["align-items", "align-content", "align-self"]);
   });
 });
 

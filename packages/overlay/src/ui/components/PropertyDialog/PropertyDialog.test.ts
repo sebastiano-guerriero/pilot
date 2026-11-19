@@ -728,7 +728,7 @@ describe("placement", () => {
     });
     const ids = editorIds();
     expect(ids[0]).toBe("display");
-    expect(ids.slice(0, 7)).toEqual(["display", "width", "min-width", "max-width", "height", "min-height", "max-height"]);
+    expect(ids.slice(0, 8)).toEqual(["display", "float", "width", "min-width", "max-width", "height", "min-height", "max-height"]);
     expect(ids).toContain("padding");
     expect(ids).toContain("aspect-ratio");
     expect(ids).not.toContain("gap"); // shown by display, as its row

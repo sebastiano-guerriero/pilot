@@ -51,6 +51,7 @@ describe("searchEditors", () => {
       "object-fit": ["object-fit", "object", "object-cover", "object-scale-down"],
       isolation: ["isolation", "isolate", "isolation-auto"],
       overflow: ["overflow", "overflow-hidden", "overflow-auto"],
+      "object-position": ["object-position", "object-top-left", "object-center", "object-bottom"],
     };
     for (const [id, queries] of Object.entries(cases)) {
       for (const q of queries) expect(searchEditors(q, editors)[0]?.id, q).toBe(id);
@@ -61,6 +62,7 @@ describe("searchEditors", () => {
     const { editors } = await import("./registry.ts");
     const cases: Record<string, string[]> = {
       "box-sizing": ["box-sizing", "box-border", "box-content"],
+      float: ["float", "float-left", "float-start", "float-none"],
       "overscroll-behavior": ["overscroll", "overscroll-behavior", "overscroll-contain"],
       "font-variant-numeric": ["font-numeric", "font-variant-numeric", "tabular-nums", "slashed-zero"],
       "line-clamp": ["line-clamp", "-webkit-line-clamp"],
@@ -168,7 +170,7 @@ describe("abbreviationPenalty", () => {
     expect(matchEditors("span").map((e) => e.id)).toEqual(["grid-column"]);
     expect(matchEditors("ite").map((e) => e.id)).toEqual(["align-items"]);
     expect(matchEditors("items").map((e) => e.id)).toEqual(["align-items"]);
-    expect(matchEditors("justify").map((e) => e.id)).toEqual(["justify-content"]);
+    expect(matchEditors("justify").map((e) => e.id)).toEqual(["justify-content", "justify-items", "justify-self"]);
   });
 
   it("flex-direction and flex-wrap: their names and Tailwind's; flex stays display", async () => {
@@ -182,7 +184,8 @@ describe("abbreviationPenalty", () => {
   it("typography: by name and Tailwind's font-*, text, italic, leading, tracking", async () => {
     const { editors } = await import("./registry.ts");
     const ids = async (q: string) => matchEditors(q, editors).map((e) => e.id);
-    expect(await ids("font")).toEqual(["font-family", "font-size", "font-style", "font-weight"]);
+    // All five: prefix ties aren't capped.
+    expect(await ids("font")).toEqual(["font-family", "font-size", "font-style", "font-weight", "font-variant-numeric"]);
     for (const [q, id] of [
       ["font-family", "font-family"],
       ["font-sans", "font-family"],

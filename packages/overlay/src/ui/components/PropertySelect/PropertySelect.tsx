@@ -31,6 +31,11 @@ interface PropertySelectProps {
    * (nothing set). Values without one keep an empty slot, so labels line up.
    */
   iconFor?(value: string): ComponentChildren;
+  /**
+   * A word after a value, dimmed, on the trigger and in the menu: what a
+   * number means (font-weight's 700 → bold). None for values without one.
+   */
+  hintFor?(value: string): string | undefined;
 }
 
 /** The menu's padding: its options line up with the trigger once it's moved left by this. */
@@ -71,6 +76,7 @@ export function PropertySelect({
   onTab,
   clearable = true,
   iconFor,
+  hintFor,
   placeholder = "Select",
 }: PropertySelectProps) {
   // "" is the "Select" option: no value.
@@ -204,7 +210,14 @@ export function PropertySelect({
         onBlur={close}
       >
         {iconFor && <span class="option-icon">{iconFor(value)}</span>}
-        {value ? <span class="value">{value}</span> : <span class="value placeholder">{placeholder}</span>}
+        {value ? (
+          <span class="value">
+            {value}
+            {hintFor?.(value) && <span class="hint">{hintFor(value)}</span>}
+          </span>
+        ) : (
+          <span class="value placeholder">{placeholder}</span>
+        )}
         <Icon name="chevron-down" class="chevron" />
       </button>
       {open && (
@@ -237,7 +250,10 @@ export function PropertySelect({
               <span class="check">{option === value && <Icon name="check" />}</span>
               <span class="content">
                 {iconFor && <span class="option-icon">{iconFor(option)}</span>}
-                <span class={option ? "label" : "label placeholder"}>{option || "Select"}</span>
+                <span class={option ? "label" : "label placeholder"}>
+                  {option || "Select"}
+                  {option && hintFor?.(option) && <span class="hint">{hintFor(option)}</span>}
+                </span>
               </span>
             </div>
           ))}

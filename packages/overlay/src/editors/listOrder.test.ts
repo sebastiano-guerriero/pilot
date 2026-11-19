@@ -16,8 +16,8 @@ describe("LIST_ORDER", () => {
   });
 
   it("display's rows: grid and flex, each in its own order, inline- variants alike", () => {
-    expect(rowsOf("display", "grid")).toEqual(["grid-columns", "gap", "justify-content", "align-items"]);
-    expect(rowsOf("display", "inline-flex")).toEqual(["flex-direction", "flex-wrap", "gap", "justify-content", "align-items"]);
+    expect(rowsOf("display", "grid")).toEqual(["grid-columns", "grid-rows", "gap", "justify-content", "justify-items", "align-items", "align-content"]);
+    expect(rowsOf("display", "inline-flex")).toEqual(["flex-direction", "flex-wrap", "gap", "justify-content", "align-items", "align-content"]);
     expect(rowsOf("display", "block")).toEqual([]);
     // Every row named there is one display can show.
     for (const value of ["grid", "flex"]) {

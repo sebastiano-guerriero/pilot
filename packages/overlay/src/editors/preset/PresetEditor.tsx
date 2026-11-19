@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { parseValue } from "../../css/values.ts";
+import { Icon, type IconName } from "../../ui/components/Icon/Icon.tsx";
 import { PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { PropertySelect } from "../../ui/components/PropertySelect/PropertySelect.tsx";
@@ -20,6 +21,13 @@ export interface PresetConfig {
   customLabel: string;
   /** Tailwind's class names for the presets. */
   aliases?: string[];
+  /**
+   * The select's icon variant: an icon per preset, for `custom`, and for ""
+   * (nothing set), as in keywordEditor.
+   */
+  icons?: Record<string, IconName>;
+  /** A word after each preset, dimmed (font-weight's 700 → bold). */
+  hints?: Record<string, string>;
 }
 
 export const CUSTOM = "custom";
@@ -82,6 +90,15 @@ export function PresetEditor({ config, ...props }: PropertyEditorProps & { confi
         label={property}
         placeholder={isMixed(props, property) ? MIXED : undefined}
         triggerRef={selectRef}
+        iconFor={
+          config.icons
+            ? (v) => {
+                const name = config.icons?.[v];
+                return name ? <Icon name={name} /> : null;
+              }
+            : undefined
+        }
+        hintFor={config.hints ? (v) => config.hints?.[v] : undefined}
         onChange={(next) => {
           if (next === CUSTOM) {
             setPickedCustom(true);

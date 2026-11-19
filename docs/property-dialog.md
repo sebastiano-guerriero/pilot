@@ -43,17 +43,18 @@ Only three things: the editor's **label**, the **CSS property names** it writes 
 1. an exact **alias**;
 2. an exact label or property name;
 3. a prefix (`pad`);
-4. a later word starting with the query (`spa` → the "span" in col-span, `ite` → align-items, `cols` → `grid-cols`): a word being typed counts;
-5. a substring;
-6. an **abbreviation**, only when nothing better matches: the query's letters in order in a property name, starting at a word start (`wdt` → width, `mxw` → max-width, `pdg` → the padding rows). Requiring a word start keeps it sensible (`dt` won't match width through its middle letters). Starting at a later word (the "width" in `min-width`) counts as one more skipped letter, so `wdt` prefers width itself. Among several, the fewest skipped letters win, then the shortest name.
+4. a Tailwind class whose first word starts with the query (`items` → `items-center`, align-items; `self` → align-self): it beats a name that only has the word later (justify-items). The first word only, so `cols` isn't `col-start`;
+5. a later word starting with the query (`spa` → the "span" in col-span, `ite` → align-items, `cols` → `grid-cols`): a word being typed counts;
+6. a substring;
+7. an **abbreviation**, only when nothing better matches: the query's letters in order in a property name, starting at a word start (`wdt` → width, `mxw` → max-width, `pdg` → the padding rows). Requiring a word start keeps it sensible (`dt` won't match width through its middle letters). Starting at a later word (the "width" in `min-width`) counts as one more skipped letter, so `wdt` prefers width itself. Among several, the fewest skipped letters win, then the shortest name.
 
 Hyphens and spaces are ignored on both sides: `minw`, `min w`, `min-w` and `minwidth` are the same query, and `paddingtop` finds padding-top. Swapped letters (`widht`) aren't handled yet.
 
 The dialog shows:
 
-- **every editor tied for the best match**, if that match is a prefix or better (`w` → width, min-width and max-width; `min` → min-width and min-height), or an abbreviation skipping as many letters (`pdg` → the four padding rows). A substring-only best match shows just the top editor, so a single letter doesn't flood the dialog. Tied editors keep the registry's order;
+- **every editor tied for the best match**, if that match is a Tailwind class's first word or better (`w` → width, min-width and max-width; `min` → min-width and min-height; `font` → all five font editors; `content` → display's `contents` and align-content), or an abbreviation skipping as many letters (`pdg` → the four padding rows). A substring-only best match shows just the top editor, so a single letter doesn't flood the dialog. Tied editors keep the registry's order;
 - **plus the family** of each editor shown. Editors can declare a `family`: min-width and max-width belong to `width`. A query that lands on the family's main editor brings the whole family, main one first (`w`, `width` → width, min-width, max-width). A query that lands on a member shows only that member (`min-w`, `max-width`);
-- at most 4 editors.
+- no limit for those prefix-or-better ties: they're the family the designer is typing, and cutting one hid it (`font` lost font-variant-numeric). An abbreviation shows at most 4 editors.
 
 Padding shows how far this goes without extra logic: its four sides each carry the Tailwind aliases that include them, so `p` shows all four, `px` right and left, `pt` one. Equal matches show together.
 

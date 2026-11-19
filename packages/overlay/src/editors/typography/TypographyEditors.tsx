@@ -52,6 +52,18 @@ export const fontWeightEditor = presetEditor({
   label: "Font weight",
   presets: FONT_WEIGHTS,
   customLabel: "custom font-weight",
+  // Each weight's name, as Tailwind's classes call it.
+  hints: {
+    "100": "thin",
+    "200": "extralight",
+    "300": "light",
+    "400": "normal",
+    "500": "medium",
+    "600": "semibold",
+    "700": "bold",
+    "800": "extrabold",
+    "900": "black",
+  },
   // Tailwind's font-thin … font-black.
   aliases: [
     "font-thin",

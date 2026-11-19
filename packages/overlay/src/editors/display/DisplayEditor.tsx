@@ -1,26 +1,32 @@
 import { DISPLAY_VALUES } from "../../css/properties.ts";
+import { alignContentEditor } from "../align/AlignContentEditor.tsx";
 import { alignItemsEditor } from "../align/AlignItemsEditor.tsx";
 import { flexDirectionEditor, flexWrapEditor } from "../flex/FlexEditors.tsx";
 import { gapEditor } from "../gap/GapEditor.tsx";
 import { gridColumnsEditor } from "../grid-columns/GridColumnsEditor.tsx";
+import { gridRowsEditor } from "../grid-rows/GridRowsEditor.tsx";
 import { justifyContentEditor } from "../justify/JustifyContentEditor.tsx";
+import { justifyItemsEditor } from "../justify/JustifyItemsEditor.tsx";
 import { revealEditor, revealedRows } from "../reveal/RevealEditor.tsx";
 import type { PropertyEditor } from "../types.ts";
 
 /**
  * The editors display can show as rows below the select. Which ones, and in
  * what order, for each display value is set in LIST_ORDER
- * (editors/listOrder.ts: grid → grid-columns, gap…; flex → flex-direction,
+ * (editors/listOrder.ts: grid → grid-columns, grid-rows, gap…; flex → flex-direction,
  * flex-wrap, gap…). Each row is an editor of its own: searching for it (`gap`,
  * `cols`, `flex-col`, `items`…) shows just that editor, without display.
  */
 const ROW_EDITORS: PropertyEditor[] = [
   gridColumnsEditor,
+  gridRowsEditor,
   flexDirectionEditor,
   flexWrapEditor,
   gapEditor,
   justifyContentEditor,
+  justifyItemsEditor,
   alignItemsEditor,
+  alignContentEditor,
 ];
 
 /**
