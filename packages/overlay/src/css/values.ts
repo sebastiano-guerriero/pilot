@@ -84,6 +84,7 @@ export function parseValue(property: string, text: string): string | null {
   if (!t) return null;
   const info = cssProperty(property);
   if (info.kind === "font-family") return supported(property, parseFontFamily(text, t));
+  if (info.kind === "marker") return supported(property, parseMarker(text, t));
   t = unwrapCalc(t) ?? t; // typed calc(): we add it back where needed
 
   const isKeyword = info.keywords.includes(t) || (GLOBAL_KEYWORDS as readonly string[]).includes(t);
@@ -123,6 +124,17 @@ function parseFontFamily(text: string, lower: string): string | null {
   if (FUNCTION.test(lower)) return typed;
   const names = splitTopLevel(typed).map((n) => n.trim());
   return names.every((n) => n) ? names.join(", ") : null;
+}
+
+/**
+ * A list marker: a keyword or counter style's name (lowercase), a quoted
+ * string as typed, or any other text quoted (`—` → `"—"`), case kept.
+ */
+function parseMarker(text: string, lower: string): string | null {
+  const typed = text.trim();
+  if (/^-?[a-z][a-z0-9-]*$/.test(lower) || FUNCTION.test(lower)) return lower;
+  if (/^(["']).*\1$/.test(typed)) return typed;
+  return JSON.stringify(typed);
 }
 
 /** Split on commas that aren't inside quotes or parentheses. */
@@ -187,6 +199,19 @@ function parseOther(kind: NonLengthKind, negative: boolean, t: string): string |
       const parts = t.split(",").map((p) => p.trim());
       return parts.every((p) => /^-?[a-z][a-z0-9-]*$/.test(p)) ? parts.join(", ") : null;
     }
+    case "marker":
+      return null; // parsed before (parseMarker)
+    case "position": {
+      // Up to four parts: side keywords, lengths (a bare number is px) and
+      // percentages, by spaces or Tailwind's `_`.
+      const parts = t.replace(/_/g, " ").trim().split(" ");
+      if (parts.length > 4) return null;
+      const length = lengthPattern(negative);
+      const out = parts.map((p) =>
+        POSITION_KEYWORDS.includes(p) ? p : /^-?\d*\.?\d+$/.test(p) ? `${p}px` : length.test(p) || /^-?\d*\.?\d+%$/.test(p) ? p : null,
+      );
+      return out.every((p) => p !== null) ? out.join(" ") : null;
+    }
     case "percent": {
       // `50` and `50%` are 50%; a fraction of 1 written with a point (`0.5`,
       // `.25`, `1.0`) is that share, as CSS would read it. Within 0–100.
@@ -199,7 +224,19 @@ function parseOther(kind: NonLengthKind, negative: boolean, t: string): string |
   }
 }
 
-type NonLengthKind = "integer" | "number" | "line-height" | "grid-line" | "grid-span" | "ratio" | "percent" | "idents";
+type NonLengthKind =
+  | "integer"
+  | "number"
+  | "line-height"
+  | "grid-line"
+  | "grid-span"
+  | "ratio"
+  | "percent"
+  | "idents"
+  | "marker"
+  | "position";
+
+const POSITION_KEYWORDS = ["top", "right", "bottom", "left", "center"];
 
 /**
  * A width / height ratio, as CSS writes it: `16/9`, `16 / 9`, `16:9` →
@@ -317,6 +354,8 @@ function stepOther(
     }
     case "ratio":
     case "idents":
+    case "marker":
+    case "position":
       return null;
     case "percent": {
       // `t` is the field's text, 0–100 (`50` or `50%`); an empty field steps

@@ -6,7 +6,7 @@ import { EditHistory } from "../../edits/history.ts";
 import { orderEditor } from "../order/OrderEditor.tsx";
 import { matchEditors } from "../registry.ts";
 import type { PropertyEditor } from "../types.ts";
-import { colEndEditor, colSpanEditor, colStartEditor } from "./GridColumnEditor.tsx";
+import { colEndEditor, colSpanEditor, colStartEditor, rowEndEditor, rowSpanEditor, rowStartEditor } from "./GridColumnEditor.tsx";
 import { inlinePreview } from "../../test/inlinePreview.ts";
 
 let element: HTMLElement;
@@ -70,6 +70,31 @@ describe("col-span", () => {
   });
 });
 
+describe("row-span, row-start, row-end", () => {
+  it("work like the column ones, on grid-row", () => {
+    mount(rowSpanEditor);
+    expect(container.querySelector(".property-label")?.textContent).toBe("row-span");
+    typeAndEnter("row-span", "2");
+    expect(element.style.getPropertyValue("grid-row")).toBe("span 2 / span 2");
+    expect(field("row-span").value).toBe("2");
+    for (const [editor, label, property, text] of [
+      [rowStartEditor, "row-start", "grid-row-start", "2"],
+      [rowEndEditor, "row-end", "grid-row-end", "-1"],
+    ] as const) {
+      mount(editor);
+      typeAndEnter(label, text);
+      expect(element.style.getPropertyValue(property)).toBe(text);
+    }
+  });
+
+  it("Tailwind's names find each one", () => {
+    expect(matchEditors("row-span").map((e) => e.id)).toEqual(["grid-row"]);
+    expect(matchEditors("row-start").map((e) => e.id)).toEqual(["grid-row-start"]);
+    expect(matchEditors("row-end").map((e) => e.id)).toEqual(["grid-row-end"]);
+    expect(matchEditors("grid-rows").map((e) => e.id)).toEqual(["grid-rows"]);
+  });
+});
+
 describe("col-start, col-end, order", () => {
   it("take whole numbers, without a unit, and no drag handle", () => {
     for (const [editor, label, property, text] of [
@@ -86,13 +111,14 @@ describe("col-start, col-end, order", () => {
 });
 
 describe("search", () => {
-  it("Tailwind's names find each one; col finds all three (and gap, by column-gap)", () => {
+  it("Tailwind's names find each one; col finds all three (and gap, by column-gap, and color)", () => {
     expect(matchEditors("col-span").map((e) => e.id)).toEqual(["grid-column"]);
     expect(matchEditors("col-start").map((e) => e.id)).toEqual(["grid-column-start"]);
     expect(matchEditors("col-end").map((e) => e.id)).toEqual(["grid-column-end"]);
     expect(matchEditors("order").map((e) => e.id)).toEqual(["order"]);
     // column-gap is a property gap writes: it starts with col too.
-    expect(matchEditors("col").map((e) => e.id)).toEqual(["gap", "grid-column", "grid-column-start", "grid-column-end"]);
+    // color starts with col too, and prefix ties aren't capped.
+    expect(matchEditors("col").map((e) => e.id)).toEqual(["gap", "grid-column", "grid-column-start", "grid-column-end", "color"]);
     // cols is still the grid's columns.
     expect(matchEditors("cols").map((e) => e.id)).toEqual(["grid-columns"]);
   });

@@ -61,7 +61,7 @@ export interface CssPropertyInfo {
    * - "line-height": a bare number stays unitless (`1.5`); lengths and
    *   percentages as usual. Unitless values step by tenths.
    * - "font-family": a list of font names, as typed (case kept). Not stepped.
-   * - "grid-line": a line number (not 0), `span 2`, or `auto` (grid-column-start/end);
+   * - "grid-line": a line number (not 0), `span 2`, or `auto` (grid-column-start/end, grid-row-start/end);
    * - "grid-span": how many columns an item spans, for the grid-column
    *   shorthand: `3` writes `span 3 / span 3` (Tailwind's col-span-3), `full`
    *   writes `1 / -1` (first line to last). Shown back as `3` and `full`.
@@ -73,6 +73,13 @@ export interface CssPropertyInfo {
    *   Steps by whole numbers.
    * - "idents": names, comma-separated (will-change: `opacity, transform`),
    *   lowercase, joined with ", ", checked by the browser. Not stepped.
+   * - "marker": a list marker (list-style-type): a counter style's name
+   *   (`lower-greek`), or any text as the marker (`—`, `"→ "`), quoted as
+   *   typed, case kept. Not stepped.
+   * - "position": where a box sits inside another (object-position): up to
+   *   four parts, each a side keyword (`top`, `left`, `center`…), a length
+   *   (a bare number is px) or a percentage, separated by spaces, or by `_`
+   *   as Tailwind writes them (`25%_75%`). Checked by the browser. Not stepped.
    */
   kind?:
     | "length"
@@ -84,7 +91,9 @@ export interface CssPropertyInfo {
     | "grid-span"
     | "ratio"
     | "percent"
-    | "idents";
+    | "idents"
+    | "marker"
+    | "position";
 }
 
 const SIZE_KEYWORDS = ["auto", "fit-content", "min-content", "max-content", "stretch"];
@@ -111,6 +120,18 @@ export const JUSTIFY_CONTENT_VALUES = ["start", "end", "center", "space-between"
 /** The align-items values Pilot offers, in menu order (each has an icon). */
 export const ALIGN_ITEMS_VALUES = ["start", "center", "end", "stretch", "baseline"] as const;
 
+/** justify-items' values, in menu order: align-items' on the other axis (Tailwind's, no baseline). */
+export const JUSTIFY_ITEMS_VALUES = ["start", "center", "end", "stretch"] as const;
+
+/** align-content's values, in menu order: justify-content's on the other axis, and stretch. */
+export const ALIGN_CONTENT_VALUES = [...JUSTIFY_CONTENT_VALUES, "stretch"] as const;
+
+/** align-self's values, in menu order: auto (follow the parent's align-items), then align-items'. */
+export const ALIGN_SELF_VALUES = ["auto", ...ALIGN_ITEMS_VALUES] as const;
+
+/** justify-self's values, in menu order: auto (follow the parent's justify-items), then justify-items'. */
+export const JUSTIFY_SELF_VALUES = ["auto", ...JUSTIFY_ITEMS_VALUES] as const;
+
 /** flex-direction's options, in menu order. */
 export const FLEX_DIRECTION_VALUES = ["row", "row-reverse", "column", "column-reverse"] as const;
 
@@ -136,10 +157,42 @@ export const VISIBILITY_VALUES = ["visible", "hidden", "collapse"] as const;
 export const OVERFLOW_VALUES = ["visible", "hidden", "clip", "scroll", "auto"] as const;
 
 /** object-fit's options, in menu order. */
-export const OBJECT_FIT_VALUES = ["fill", "contain", "cover", "none", "scale-down"] as const;
+export const OBJECT_FIT_VALUES = ["cover", "fill", "contain", "scale-down", "none"] as const;
+
+/** object-position's presets, in menu order: Tailwind's nine, as their CSS (custom takes any other). */
+export const OBJECT_POSITION_VALUES = [
+  "top left",
+  "top",
+  "top right",
+  "left",
+  "center",
+  "right",
+  "bottom left",
+  "bottom",
+  "bottom right",
+] as const;
 
 /** isolation's options, in menu order. */
 export const ISOLATION_VALUES = ["auto", "isolate"] as const;
+
+/** list-style-type's presets, in menu order (none last; custom takes any other style or text). */
+export const LIST_STYLE_TYPE_VALUES = [
+  "disc",
+  "circle",
+  "square",
+  "decimal",
+  "lower-alpha",
+  "upper-alpha",
+  "lower-roman",
+  "upper-roman",
+  "none",
+] as const;
+
+/** list-style-position's options, in menu order. */
+export const LIST_STYLE_POSITION_VALUES = ["outside", "inside"] as const;
+
+/** float's options, in menu order. */
+export const FLOAT_VALUES = ["left", "right", "inline-start", "inline-end", "none"] as const;
 
 /** box-sizing's options, in menu order. */
 export const BOX_SIZING_VALUES = ["border-box", "content-box"] as const;
@@ -162,6 +215,18 @@ export const FONT_VARIANT_NUMERIC_VALUES = [
 
 /** text-overflow's options, in menu order. */
 export const TEXT_OVERFLOW_VALUES = ["clip", "ellipsis"] as const;
+
+/** text-decoration-line's options, in menu order (none last). A combination set another way is still shown. */
+export const TEXT_DECORATION_LINE_VALUES = ["underline", "overline", "line-through", "none"] as const;
+
+/** vertical-align's presets, in menu order (Tailwind's; custom takes a length or percentage). */
+export const VERTICAL_ALIGN_VALUES = ["baseline", "top", "middle", "bottom", "text-top", "text-bottom", "sub", "super"] as const;
+
+/** text-transform's options, in menu order (none last). */
+export const TEXT_TRANSFORM_VALUES = ["uppercase", "lowercase", "capitalize", "none"] as const;
+
+/** text-decoration-style's options, in menu order. */
+export const TEXT_DECORATION_STYLE_VALUES = ["solid", "double", "dotted", "dashed", "wavy"] as const;
 
 /** text-wrap's options, in menu order. */
 export const TEXT_WRAP_VALUES = ["wrap", "nowrap", "balance", "pretty"] as const;
@@ -247,11 +312,16 @@ export const WILL_CHANGE_VALUES = ["auto", "scroll-position", "contents", "trans
 export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   display: { initial: "inline", keywords: [...DISPLAY_VALUES], negative: false },
   "grid-template-columns": { initial: "none", keywords: ["none"], negative: false },
+  "grid-template-rows": { initial: "none", keywords: ["none"], negative: false },
   gap: { initial: "normal", keywords: ["normal"], negative: false },
   "row-gap": { initial: "normal", keywords: ["normal"], negative: false },
   "column-gap": { initial: "normal", keywords: ["normal"], negative: false },
   "justify-content": { initial: "normal", keywords: ["normal", ...JUSTIFY_CONTENT_VALUES], negative: false },
   "align-items": { initial: "normal", keywords: ["normal", ...ALIGN_ITEMS_VALUES], negative: false },
+  "justify-items": { initial: "legacy", keywords: ["normal", "legacy", ...JUSTIFY_ITEMS_VALUES], negative: false },
+  "align-content": { initial: "normal", keywords: ["normal", ...ALIGN_CONTENT_VALUES], negative: false },
+  "align-self": { initial: "auto", keywords: ["normal", ...ALIGN_SELF_VALUES], negative: false },
+  "justify-self": { initial: "auto", keywords: ["normal", ...JUSTIFY_SELF_VALUES], negative: false },
   "flex-direction": { initial: "row", keywords: [...FLEX_DIRECTION_VALUES], negative: false },
   "flex-wrap": { initial: "nowrap", keywords: [...FLEX_WRAP_VALUES], negative: false },
   order: { initial: "0", keywords: [], negative: true, kind: "integer" },
@@ -261,6 +331,9 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   "grid-column": { initial: "auto", keywords: ["auto"], negative: false, kind: "grid-span" },
   "grid-column-start": { initial: "auto", keywords: ["auto"], negative: true, kind: "grid-line" },
   "grid-column-end": { initial: "auto", keywords: ["auto"], negative: true, kind: "grid-line" },
+  "grid-row": { initial: "auto", keywords: ["auto"], negative: false, kind: "grid-span" },
+  "grid-row-start": { initial: "auto", keywords: ["auto"], negative: true, kind: "grid-line" },
+  "grid-row-end": { initial: "auto", keywords: ["auto"], negative: true, kind: "grid-line" },
   width: { initial: "auto", keywords: SIZE_KEYWORDS, negative: false },
   "min-width": { initial: "auto", keywords: SIZE_KEYWORDS, negative: false },
   "max-width": { initial: "none", keywords: ["none", ...SIZE_KEYWORDS.filter((k) => k !== "auto")], negative: false },
@@ -269,6 +342,12 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   "max-height": { initial: "none", keywords: ["none", ...SIZE_KEYWORDS.filter((k) => k !== "auto")], negative: false },
   "aspect-ratio": { initial: "auto", keywords: ["auto"], negative: false, kind: "ratio" },
   "object-fit": { initial: "fill", keywords: [...OBJECT_FIT_VALUES], negative: false },
+  "object-position": {
+    initial: "50% 50%",
+    keywords: ["top", "right", "bottom", "left", "center"],
+    negative: true,
+    kind: "position",
+  },
   overflow: { initial: "visible", keywords: [...OVERFLOW_VALUES], negative: false },
   isolation: { initial: "auto", keywords: [...ISOLATION_VALUES], negative: false },
   ...sides((side) => `padding-${side}`, { initial: "0", keywords: [], negative: false }),
@@ -292,6 +371,9 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   // Edited by its own editor (css/colors.ts), not as a length.
   color: { initial: "canvastext", keywords: ["currentcolor", "transparent"], negative: false },
   "background-color": { initial: "transparent", keywords: ["currentcolor", "transparent"], negative: false },
+  float: { initial: "none", keywords: [...FLOAT_VALUES], negative: false },
+  "list-style-type": { initial: "disc", keywords: [...LIST_STYLE_TYPE_VALUES], negative: false, kind: "marker" },
+  "list-style-position": { initial: "outside", keywords: [...LIST_STYLE_POSITION_VALUES], negative: false },
   "box-sizing": { initial: "content-box", keywords: [...BOX_SIZING_VALUES], negative: false },
   "overscroll-behavior": { initial: "auto", keywords: [...OVERSCROLL_VALUES], negative: false },
   "font-variant-numeric": { initial: "normal", keywords: [...FONT_VARIANT_NUMERIC_VALUES], negative: false },
@@ -300,6 +382,14 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   "-webkit-line-clamp": { initial: "none", keywords: ["none"], negative: false, kind: "integer" },
   "-webkit-box-orient": { initial: "horizontal", keywords: ["horizontal", "vertical"], negative: false },
   "text-overflow": { initial: "clip", keywords: [...TEXT_OVERFLOW_VALUES], negative: false },
+  "text-decoration-line": { initial: "none", keywords: [...TEXT_DECORATION_LINE_VALUES], negative: false },
+  // Edited by the color editor, not as a length.
+  "text-decoration-color": { initial: "currentcolor", keywords: ["currentcolor", "transparent"], negative: false },
+  "text-decoration-style": { initial: "solid", keywords: [...TEXT_DECORATION_STYLE_VALUES], negative: false },
+  "text-decoration-thickness": { initial: "auto", keywords: ["auto", "from-font"], negative: false },
+  "vertical-align": { initial: "baseline", keywords: [...VERTICAL_ALIGN_VALUES], negative: true },
+  "text-transform": { initial: "none", keywords: [...TEXT_TRANSFORM_VALUES], negative: false },
+  "text-underline-offset": { initial: "auto", keywords: ["auto"], negative: true },
   "text-wrap": { initial: "wrap", keywords: [...TEXT_WRAP_VALUES], negative: false },
   "text-indent": { initial: "0", keywords: [], negative: true },
   "white-space": { initial: "normal", keywords: [...WHITE_SPACE_VALUES], negative: false },

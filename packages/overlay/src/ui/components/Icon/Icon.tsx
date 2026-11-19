@@ -12,13 +12,13 @@ type Item = { x: number; y: number; w?: number; h?: number };
  * its border), as in the designed icons. Colors are tokens, not currentColor:
  * the design uses two.
  */
-const layout = (items: Item[]) => ({
+const layout = (items: Item[], fill = "var(--plt-color-accent)") => ({
   size: 12,
   body: (
     <>
       <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
       {items.map(({ x, y, w = 2, h = 2 }) => (
-        <rect key={`${x},${y},${w},${h}`} x={x} y={y} width={w} height={h} fill="var(--plt-color-accent)" />
+        <rect key={`${x},${y},${w},${h}`} x={x} y={y} width={w} height={h} fill={fill} />
       ))}
     </>
   ),
@@ -152,6 +152,28 @@ const textAlign = (middle: [number, number]) => ({
 /** justify-content: two items in a row, at `xs` (vertically centered). */
 const justify = (xs: [number, number]) => layout(xs.map((x) => ({ x, y: 5 })));
 
+/** align-content: justify-content turned a quarter: two items in a column, at `ys` (horizontally centered). */
+const alignContent = (ys: [number, number], h = 2) => layout(ys.map((y) => ({ x: 5, y, h })));
+
+/**
+ * justify-items: align-items turned a quarter: a short item (2px) and a wide
+ * one (4px) one above the other, at `x` (short) and `wideX` (wide).
+ */
+const justifyItems = (x: number, wideX: number, w = 2, wideW = 4) =>
+  layout([
+    { x, y: 3.5, w },
+    { x: wideX, y: 6.5, w: wideW },
+  ]);
+
+/** align-self: align-items' tall item alone, at `y` (`fill`: auto's is contrast-low). */
+const alignSelf = (y: number, h = 4, fill?: string) => layout([{ x: 5, y, h }], fill);
+
+/** justify-self: justify-items' wide item alone, at `x` (`fill`: auto's is contrast-low). */
+const justifySelf = (x: number, w = 4, fill?: string) => layout([{ x, y: 5, w }], fill);
+
+/** The self icons' auto: the centered item, in contrast-low (follows the parent). */
+const AUTO_FILL = "var(--plt-color-contrast-low)";
+
 /**
  * align-items: a short item (2px) and a tall one (4px) side by side, at `y`
  * (short) and `tallY` (tall). Stretch makes both full height.
@@ -161,6 +183,25 @@ const align = (y: number, tallY: number, h = 2, tallH = 4) =>
     { x: 3.5, y, h },
     { x: 6.5, y: tallY, h: tallH },
   ]);
+
+/**
+ * object-position: a 2px box at `x`, `y` inside the frame (top left is the
+ * designed icon: 1px in from the frame; the others are on the same 3×3 grid).
+ */
+const objectAt = (x: 2 | 5 | 8, y: 2 | 5 | 8) => layout([{ x, y }]);
+
+/** text-transform's "Ag" (capitalize, and none in contrast-low): an A, then a g. */
+const capitalizeAg = (stroke: string) => ({
+  size: 12,
+  body: (
+    <g stroke={stroke} stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6.04541 8.16667L3.66541 2.5H3.54675L1.16675 8.16667" />
+      <path d="M1.72681 6.83337H5.48547" />
+      <path d="M8.96674 4.5H9.1034C9.87476 4.5 10.5001 5.12531 10.5001 5.89667V6.43667C10.5001 7.20802 9.87476 7.83333 9.1034 7.83333H8.96674C8.19538 7.83333 7.57007 7.20802 7.57007 6.43667V5.89667C7.57007 5.12531 8.19538 4.5 8.96674 4.5Z" />
+      <path d="M10.4999 4.5V8.702C10.4999 9.51133 9.84394 10.1667 9.03527 10.1667C8.54994 10.1667 8.11994 9.93067 7.85327 9.56733" />
+    </g>
+  ),
+});
 
 /**
  * Pilot's icons. Single-color ones are drawn in `currentColor`, so they take
@@ -560,6 +601,95 @@ const ICONS = {
   },
   "flex-wrap": layout([item3(1, 2.5), item3(5, 2.5), item3(1, 6.5)]),
   "flex-wrap-reverse": layout([item3(1, 6.5), item3(5, 6.5), item3(1, 2.5)]),
+  // text-transform: the designed icons. none is capitalize's "Ag" in contrast-low.
+  "text-transform-uppercase": {
+    size: 12,
+    body: (
+      <g stroke="var(--plt-color-accent)" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5.54541 8.83329L3.16541 3.16663H3.04675L0.666748 8.83329" />
+        <path d="M1.22681 7.5H4.98547" />
+        <path d="M11.0199 4.03196C10.8006 3.74329 10.2406 3.16663 9.26992 3.16663C7.84592 3.16663 6.83325 4.18129 6.83325 6.03596C6.83325 7.66529 7.82792 8.83329 9.12592 8.83329C9.87592 8.83329 11.3033 8.71796 11.3033 6.19463H9.19792" />
+      </g>
+    ),
+  },
+  "text-transform-lowercase": {
+    size: 12,
+    body: (
+      <g stroke="var(--plt-color-accent)" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2.15601 4.82271C2.48001 4.47404 2.94134 4.33337 3.41001 4.33337C4.19601 4.33337 4.83267 4.97071 4.83267 5.75604V8.16671" />
+        <path d="M4.83333 6.33331C4.83333 7.34531 4.012 8.16664 3 8.16664H2.8924C2.39953 8.16664 2 7.76711 2 7.27424C2 6.84518 2.30533 6.47684 2.72693 6.39731L4.24513 6.13071C4.60413 6.06298 4.8384 5.72064 4.77927 5.36658" />
+        <path d="M8.29999 4.5H8.43665C9.20801 4.5 9.83332 5.12531 9.83332 5.89667V6.43667C9.83332 7.20802 9.20801 7.83333 8.43665 7.83333H8.29999C7.52863 7.83333 6.90332 7.20802 6.90332 6.43667V5.89667C6.90332 5.12531 7.52863 4.5 8.29999 4.5Z" />
+        <path d="M9.83343 4.5V8.702C9.83343 9.51133 9.17743 10.1667 8.36877 10.1667C7.88343 10.1667 7.45343 9.93067 7.18677 9.56733" />
+      </g>
+    ),
+  },
+  "text-transform-capitalize": capitalizeAg("var(--plt-color-accent)"),
+  "text-transform-none": capitalizeAg("var(--plt-color-contrast-low)"),
+  // object-fit: the designed icons (fill stretches the picture, none shows it at its own size, cropped).
+  "object-fit-cover": {
+    size: 12,
+    body: (
+      <>
+        <path d="M11 1L11 11L1 11L11 1Z" fill="var(--plt-color-accent)" />
+        <circle cx="2.5" cy="2.5" r="1.5" fill="var(--plt-color-accent)" />
+        <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+      </>
+    ),
+  },
+  "object-fit-fill": {
+    size: 12,
+    body: (
+      <>
+        <path d="M12 0L12 12L0 12L12 0Z" fill="var(--plt-color-accent)" />
+        <ellipse cx="2.5" cy="1.5" rx="2.5" ry="1.5" fill="var(--plt-color-accent)" />
+        <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+      </>
+    ),
+  },
+  // Its clip path is the whole 12×12 box, which crops nothing: left out.
+  "object-fit-none": {
+    size: 12,
+    body: (
+      <>
+        <path d="M6 0L6 6L0 6L6 0Z" fill="var(--plt-color-accent)" />
+        <circle cx="1" cy="1" r="1" fill="var(--plt-color-accent)" />
+        <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+      </>
+    ),
+  },
+  "object-fit-scale-down": {
+    size: 12,
+    body: (
+      <>
+        <path d="M3 3H9V9H3V3Z" fill="var(--plt-color-accent)" />
+        <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+      </>
+    ),
+  },
+  "object-fit-contain": {
+    size: 12,
+    body: (
+      <>
+        <path d="M3 1H9V11H3V1Z" fill="var(--plt-color-accent)" />
+        <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+      </>
+    ),
+  },
+  // object-position: top left and custom are designed; the others move top left's box.
+  "object-top-left": objectAt(2, 2),
+  "object-top": objectAt(5, 2),
+  "object-top-right": objectAt(8, 2),
+  "object-left": objectAt(2, 5),
+  "object-center": objectAt(5, 5),
+  "object-right": objectAt(8, 5),
+  "object-bottom-left": objectAt(2, 8),
+  "object-bottom": objectAt(5, 8),
+  "object-bottom-right": objectAt(8, 8),
+  // Custom: two crossing lines, at any spot.
+  "object-custom": layout([
+    { x: 3, y: 0, w: 1, h: 12 },
+    { x: 0, y: 3, w: 12, h: 1 },
+  ]),
   // justify-content: start is the designed icon; the others move its items.
   "justify-start": justify([0, 3]),
   "justify-end": justify([7, 10]),
@@ -575,6 +705,32 @@ const ICONS = {
   "align-stretch": align(0, 0, 12, 12),
   // Bottoms on one line (y 7), the tall item rising above it.
   "align-baseline": align(5, 3),
+  // Derived, not designed: align-content turns justify-content's icons a
+  // quarter (stretch: the two items fill the height); justify-items turns
+  // align-items'; align-self and justify-self show their tall or wide item
+  // alone (baseline reuses align-items').
+  "align-content-start": alignContent([0, 3]),
+  "align-content-end": alignContent([7, 10]),
+  "align-content-center": alignContent([3.5, 6.5]),
+  "align-content-between": alignContent([0, 10]),
+  "align-content-around": alignContent([2, 8]),
+  "align-content-evenly": alignContent([8 / 3, 2 + (2 * 8) / 3]),
+  "align-content-stretch": alignContent([0, 6.5], 5.5),
+  "justify-items-start": justifyItems(0, 0),
+  "justify-items-center": justifyItems(5, 4),
+  "justify-items-end": justifyItems(10, 8),
+  "justify-items-stretch": justifyItems(0, 0, 12, 12),
+  // auto (the owner's call): the centered item in contrast-low.
+  "align-self-auto": alignSelf(4, 4, AUTO_FILL),
+  "justify-self-auto": justifySelf(4, 4, AUTO_FILL),
+  "align-self-start": alignSelf(0),
+  "align-self-center": alignSelf(4),
+  "align-self-end": alignSelf(8),
+  "align-self-stretch": alignSelf(0, 12),
+  "justify-self-start": justifySelf(0),
+  "justify-self-center": justifySelf(4),
+  "justify-self-end": justifySelf(8),
+  "justify-self-stretch": justifySelf(0, 12),
   // Nothing set (any layout property): the container, crossed out.
   // text-align: center and justify are designed; left and right are derived from center.
   "text-align-left": textAlign([2.5, 6]),

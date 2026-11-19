@@ -23,6 +23,7 @@ The dialog **lists the editors for every property the element has a value for** 
 - Rows a revealing editor shows are set in `LIST_ORDER` too, per value (`rowsOf()`): display's grid and flex rows, position's inset. An editor another one shows as a row (gap under `display: grid`) is left to that one. A row that shows on its own (gap on an element that isn't a grid) is listed right after display.
 - The list is taken when the search is empty and kept while you edit, so clearing a value doesn't make its row vanish.
 - **A reset's values don't list.** A property whose value comes only from a rule for every element (`*`, `:where(*)`: `* { box-sizing: border-box }`, Tailwind's preflight with its `margin: 0`, `padding: 0`) isn't listed, or every element would list them (`isFromReset()` in [dom/declared.ts](../packages/overlay/src/dom/declared.ts)). The element's own rules (`.card { box-sizing: border-box }`, a `box-border` class) and Pilot's edits still list; searching finds the property either way, with its value. Deciding by value instead (hide `border-box`) was rejected: it would also hide those deliberate settings and Pilot's edits, and leave the reset's margin and padding.
+- **A shorthand's implicit reset isn't a value.** `text-decoration: none` sets the line to none and puts the color, style and thickness back to their initial values without naming them; CSSOM reads those as `initial`. Pilot counts them as nothing declared (`isImplicitReset()` in [dom/declared.ts](../packages/overlay/src/dom/declared.ts): the value is `initial` and the rule's text doesn't name the property), so the fields show the initial value dimmed and the list leaves them out. The rule still wins the cascade: a less specific rule's value doesn't show through. `initial` written by the page is a value like any other.
 - Size, which writes nothing of its own, isn't listed.
 - `LIST_ALL_EDITORS = true` in `PropertyDialog.tsx` lists every editor, set or not (handy while many editors are built together). It's `false`.
 
@@ -36,6 +37,8 @@ Type a property (`opacity`, `padding`, `radius`…) and the matching editors rep
 
 Only three things: the editor's **label**, the **CSS property names** it writes (and their logical equivalents, `padding-inline`), and **Tailwind's class names** (its `aliases`, plus a row label that's neither, like `grid-columns`). There are no extra search keywords ("spacing", "layout"…): they matched things the designer didn't mean (`spa` found padding through "spacing"). Aliases borrow Tailwind's utility names, so a designer who knows them gets there in a keystroke or two.
 
+**An alias is a class Tailwind really has** (`underline`, `grid`, `items-center`), not a bare prefix of a family of classes (`text`, `bg`). An exact alias beats every prefix, so `text` as font-size's alias hid text-align and the other text-* rows, and `bg` as bg-color's hid bg-blend-mode. Those families are found by their prefix instead (`text-lg` is font-size). The one-letter spacing aliases (`p`, `m`, `w`, `h`) are Tailwind's own classes for one editor on purpose.
+
 ### Ranking
 
 `searchEditors()` and `matchEditors()` in [editors/registry.ts](../packages/overlay/src/editors/registry.ts), best first:
@@ -43,17 +46,18 @@ Only three things: the editor's **label**, the **CSS property names** it writes 
 1. an exact **alias**;
 2. an exact label or property name;
 3. a prefix (`pad`);
-4. a later word starting with the query (`spa` → the "span" in col-span, `ite` → align-items, `cols` → `grid-cols`): a word being typed counts;
-5. a substring;
-6. an **abbreviation**, only when nothing better matches: the query's letters in order in a property name, starting at a word start (`wdt` → width, `mxw` → max-width, `pdg` → the padding rows). Requiring a word start keeps it sensible (`dt` won't match width through its middle letters). Starting at a later word (the "width" in `min-width`) counts as one more skipped letter, so `wdt` prefers width itself. Among several, the fewest skipped letters win, then the shortest name.
+4. a Tailwind class whose first word starts with the query (`items` → `items-center`, align-items; `self` → align-self): it beats a name that only has the word later (justify-items). The first word only, so `cols` isn't `col-start`;
+5. a later word starting with the query (`spa` → the "span" in col-span, `ite` → align-items, `cols` → `grid-cols`): a word being typed counts;
+6. a substring;
+7. an **abbreviation**, only when nothing better matches: the query's letters in order in a property name, starting at a word start (`wdt` → width, `mxw` → max-width, `pdg` → the padding rows). Requiring a word start keeps it sensible (`dt` won't match width through its middle letters). Starting at a later word (the "width" in `min-width`) counts as one more skipped letter, so `wdt` prefers width itself. Among several, the fewest skipped letters win, then the shortest name.
 
 Hyphens and spaces are ignored on both sides: `minw`, `min w`, `min-w` and `minwidth` are the same query, and `paddingtop` finds padding-top. Swapped letters (`widht`) aren't handled yet.
 
 The dialog shows:
 
-- **every editor tied for the best match**, if that match is a prefix or better (`w` → width, min-width and max-width; `min` → min-width and min-height), or an abbreviation skipping as many letters (`pdg` → the four padding rows). A substring-only best match shows just the top editor, so a single letter doesn't flood the dialog. Tied editors keep the registry's order;
+- **every editor tied for the best match**, if that match is a Tailwind class's first word or better (`w` → width, min-width and max-width; `min` → min-width and min-height; `font` → all five font editors; `content` → display's `contents` and align-content), or an abbreviation skipping as many letters (`pdg` → the four padding rows). A substring-only best match shows just the top editor, so a single letter doesn't flood the dialog. Tied editors keep the registry's order;
 - **plus the family** of each editor shown. Editors can declare a `family`: min-width and max-width belong to `width`. A query that lands on the family's main editor brings the whole family, main one first (`w`, `width` → width, min-width, max-width). A query that lands on a member shows only that member (`min-w`, `max-width`);
-- at most 4 editors.
+- no limit for those prefix-or-better ties: they're the family the designer is typing, and cutting one hid it (`font` lost font-variant-numeric). An abbreviation shows at most 4 editors.
 
 Padding shows how far this goes without extra logic: its four sides each carry the Tailwind aliases that include them, so `p` shows all four, `px` right and left, `pt` one. Equal matches show together.
 

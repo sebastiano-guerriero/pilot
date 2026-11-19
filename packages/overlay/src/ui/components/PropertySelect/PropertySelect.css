@@ -29,6 +29,12 @@
     text-overflow: ellipsis;
   }
 
+  /* A value's word (font-weight's 700 → bold): dimmed, 4px after it. */
+  .hint {
+    margin-left: 4px;
+    color: var(--plt-color-contrast-low);
+  }
+
   /* No value set: "Select", dimmed. */
   .placeholder {
     color: var(--plt-color-contrast-low);

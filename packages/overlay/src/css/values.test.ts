@@ -12,6 +12,31 @@ describe("parseValue", () => {
     expect(stepValue("will-change", "opacity", 1, undefined)).toBeNull();
   });
 
+  it("position (object-position): sides, lengths and percentages, Tailwind's _ as a space", () => {
+    expect(parseValue("object-position", "Top Left")).toBe("top left");
+    expect(parseValue("object-position", "25%_75%")).toBe("25% 75%");
+    expect(parseValue("object-position", "right 10 bottom 2rem")).toBe("right 10px bottom 2rem");
+    expect(parseValue("object-position", "center")).toBe("center");
+    expect(parseValue("object-position", "middle")).toBeNull();
+    expect(parseValue("object-position", "1px 2px 3px 4px 5px")).toBeNull();
+    expect(stepValue("object-position", "top", 1, undefined)).toBeNull();
+  });
+
+  it("marker (list-style-type): a style's name, or any text, quoted with its case", () => {
+    expect(parseValue("list-style-type", "Lower-Greek")).toBe("lower-greek");
+    expect(parseValue("list-style-type", "—")).toBe('"—"');
+    expect(parseValue("list-style-type", '"→ "')).toBe('"→ "');
+    expect(parseValue("list-style-type", "Step")).toBe("step");
+    expect(parseValue("list-style-type", "A.")).toBe('"A."');
+    expect(stepValue("list-style-type", "disc", 1, undefined)).toBeNull();
+  });
+
+  it("vertical-align: its keywords, or a length (negatives too) or percentage", () => {
+    expect(parseValue("vertical-align", "middle")).toBe("middle");
+    expect(parseValue("vertical-align", "-2")).toBe("-2px");
+    expect(parseValue("vertical-align", "10%")).toBe("10%");
+  });
+
   it("takes a bare number as px", () => {
     expect(parseValue("width", " 120 ")).toBe("120px");
     expect(parseValue("width", "0")).toBe("0px");

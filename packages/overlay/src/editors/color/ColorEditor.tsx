@@ -141,11 +141,13 @@ export const textColorEditor = colorEditor({ property: "color", label: "Color" }
 
 /**
  * background-color, labeled `bg-color` (the full name doesn't fit the row's
- * label). Found by its name, the label, and Tailwind's `bg`.
+ * label). Found by its name and the label. Not `bg` alone as an alias: an
+ * exact alias beats every prefix, and it hid bg-blend-mode (`bg` isn't a
+ * Tailwind class itself; bg-red-500 is). `bg` still finds it, by bg-color.
  */
 export const backgroundColorEditor = colorEditor({
   property: "background-color",
   name: "bg-color",
   label: "Background color",
-  aliases: ["bg", "bg-color"],
+  aliases: ["bg-color"],
 });

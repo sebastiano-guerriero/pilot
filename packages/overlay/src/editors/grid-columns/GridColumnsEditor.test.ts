@@ -4,8 +4,9 @@ import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EditHistory } from "../../edits/history.ts";
 import type { FocusRequest } from "../types.ts";
-import { columnsCount, columnsMode, columnsValue, parseCustomColumns } from "./ColumnsRow.tsx";
+import { tracksCount, tracksMode, tracksValue, parseCustomTracks } from "./TracksRow.tsx";
 import { gridColumnsEditor } from "./GridColumnsEditor.tsx";
+import { gridRowsEditor } from "../grid-rows/GridRowsEditor.tsx";
 import { inlinePreview } from "../../test/inlinePreview.ts";
 
 const GridColumnsEditor = gridColumnsEditor.component;
@@ -142,7 +143,7 @@ describe("grid-columns", () => {
     act(() => field("column count")?.focus());
     for (const k of ["ArrowDown", "ArrowUp", "ArrowUp", "ArrowDown"]) key(field("column count") as HTMLInputElement, k);
     // ↓ at the default 1 writes nothing; then 2, 3, 2.
-    expect(changes.map(([, v]) => columnsCount(v))).toEqual(["2", "3", "2"]);
+    expect(changes.map(([, v]) => tracksCount(v))).toEqual(["2", "3", "2"]);
   });
 
   it("custom: any valid CSS, shown as it is", () => {
@@ -200,9 +201,59 @@ describe("grid-columns", () => {
   });
 });
 
+describe("grid-rows", () => {
+  const mountRows = () =>
+    act(() => {
+      render(
+        h(gridRowsEditor.component, {
+          element,
+          values: {},
+          onChange: (p: string, v: string) => {
+            changes.push([p, v]);
+            history.apply(element, p, v);
+            mountRows();
+          },
+        }),
+        container,
+      );
+    });
+
+  it("with nothing set, shows repeat and an empty count (auto: as many rows as the items need)", () => {
+    element.style.display = "grid";
+    mountRows();
+    expect(select("grid-rows").textContent).toBe("repeat");
+    expect(field("row count")?.value).toBe("");
+    expect(field("row count")?.placeholder).toBe("auto");
+    expect(changes).toEqual([]);
+  });
+
+  it("a count writes equal rows; 1 is written too, since it isn't the default", () => {
+    element.style.display = "grid";
+    mountRows();
+    typeAndEnter("row count", "1");
+    expect(changes).toEqual([["grid-template-rows", "repeat(1, minmax(0, 1fr))"]]);
+    typeAndEnter("row count", "3");
+    expect(element.style.gridTemplateRows).toBe("repeat(3, minmax(0, 1fr))");
+    expect(field("row count")?.value).toBe("3");
+  });
+
+  it("↑ on the empty count is one row; ↓ writes nothing", () => {
+    element.style.display = "grid";
+    mountRows();
+    key(field("row count") as HTMLInputElement, "ArrowDown");
+    expect(changes).toEqual([]);
+    key(field("row count") as HTMLInputElement, "ArrowUp");
+    expect(changes).toEqual([["grid-template-rows", "repeat(1, minmax(0, 1fr))"]]);
+  });
+
+  it("custom: checked as grid-template-rows", () => {
+    expect(parseCustomTracks("grid-template-rows", " auto   1fr ")).toBe("auto 1fr");
+  });
+});
+
 describe("columns value", () => {
   it("tells the mode from the value", () => {
-    expect(["", "repeat(3, minmax(0, 1fr))", "subgrid", "none", "1fr 2fr", "repeat(3, 1fr)"].map(columnsMode)).toEqual([
+    expect(["", "repeat(3, minmax(0, 1fr))", "subgrid", "none", "1fr 2fr", "repeat(3, 1fr)"].map(tracksMode)).toEqual([
       "",
       "repeat",
       "subgrid",
@@ -213,14 +264,14 @@ describe("columns value", () => {
   });
 
   it("custom: cleared removes, whitespace is tidied", () => {
-    expect(parseCustomColumns("  ")).toBe("");
-    expect(parseCustomColumns(" 1fr   200px ")).toBe("1fr 200px");
+    expect(parseCustomTracks("grid-template-columns", "  ")).toBe("");
+    expect(parseCustomTracks("grid-template-columns", " 1fr   200px ")).toBe("1fr 200px");
   });
 
   it("round-trips, including the browser's minmax(0px, …)", () => {
-    expect(columnsValue(4)).toBe("repeat(4, minmax(0, 1fr))");
-    expect(columnsCount("repeat(4, minmax(0, 1fr))")).toBe("4");
-    expect(columnsCount("repeat(4, minmax(0px, 1fr))")).toBe("4");
-    expect(columnsCount("1fr 2fr")).toBeNull();
+    expect(tracksValue(4)).toBe("repeat(4, minmax(0, 1fr))");
+    expect(tracksCount("repeat(4, minmax(0, 1fr))")).toBe("4");
+    expect(tracksCount("repeat(4, minmax(0px, 1fr))")).toBe("4");
+    expect(tracksCount("1fr 2fr")).toBeNull();
   });
 });

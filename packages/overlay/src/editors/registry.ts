@@ -1,4 +1,6 @@
+import { alignContentEditor } from "./align/AlignContentEditor.tsx";
 import { alignItemsEditor } from "./align/AlignItemsEditor.tsx";
+import { alignSelfEditor, justifySelfEditor } from "./align/SelfEditors.tsx";
 import { backgroundBlendModeEditor, mixBlendModeEditor } from "./blend/BlendEditors.tsx";
 import { boxSizingEditor } from "./box-sizing/BoxSizingEditor.tsx";
 import {
@@ -9,26 +11,44 @@ import {
   willChangeEditor,
 } from "./interactivity/InteractivityEditors.tsx";
 import { lineClampEditor } from "./line-clamp/LineClampEditor.tsx";
+import {
+  textDecorationColorEditor,
+  textDecorationLineEditor,
+  textDecorationStyleEditor,
+  textDecorationThicknessEditor,
+  textUnderlineOffsetEditor,
+} from "./text-decoration/TextDecorationEditors.tsx";
+import { listStylePositionEditor, listStyleTypeEditor } from "./list-style/ListStyleEditors.tsx";
 import { overscrollEditor } from "./overscroll/OverscrollEditor.tsx";
 import { fillEditor, strokeEditor, strokeWidthEditor } from "./svg/SvgEditors.tsx";
 import { aspectRatioEditor } from "./aspect-ratio/AspectRatioEditor.tsx";
 import { borderRadiusEditor } from "./border-radius/BorderRadiusEditor.tsx";
 import { displayEditor } from "./display/DisplayEditor.tsx";
+import { floatEditor } from "./float/FloatEditor.tsx";
 import { flexDirectionEditor, flexWrapEditor } from "./flex/FlexEditors.tsx";
 import { flexBasisEditor, flexGrowEditor, flexShrinkEditor } from "./flex-item/FlexItemEditors.tsx";
 import { gapEditor } from "./gap/GapEditor.tsx";
 import { backgroundColorEditor, textColorEditor } from "./color/ColorEditor.tsx";
-import { colEndEditor, colSpanEditor, colStartEditor } from "./grid-column/GridColumnEditor.tsx";
+import {
+  colEndEditor,
+  colSpanEditor,
+  colStartEditor,
+  rowEndEditor,
+  rowSpanEditor,
+  rowStartEditor,
+} from "./grid-column/GridColumnEditor.tsx";
 import { gridColumnsEditor } from "./grid-columns/GridColumnsEditor.tsx";
+import { gridRowsEditor } from "./grid-rows/GridRowsEditor.tsx";
 import { heightEditor, maxHeightEditor, minHeightEditor } from "./height/HeightEditor.tsx";
 import { justifyContentEditor } from "./justify/JustifyContentEditor.tsx";
+import { justifyItemsEditor } from "./justify/JustifyItemsEditor.tsx";
 import { marginEditor } from "./margin/MarginEditor.tsx";
 import { orderEditor } from "./order/OrderEditor.tsx";
 import { paddingEditor } from "./padding/PaddingEditor.tsx";
 import { positionEditor } from "./position/PositionEditor.tsx";
 import { insetEditor } from "./inset/InsetEditor.tsx";
 import { isolationEditor } from "./isolation/IsolationEditor.tsx";
-import { objectFitEditor } from "./object-fit/ObjectFitEditor.tsx";
+import { objectFitEditor, objectPositionEditor } from "./object-fit/ObjectFitEditor.tsx";
 import { opacityEditor } from "./opacity/OpacityEditor.tsx";
 import { overflowEditor } from "./overflow/OverflowEditor.tsx";
 import {
@@ -42,7 +62,9 @@ import {
   textAlignEditor,
   textIndentEditor,
   textOverflowEditor,
+  textTransformEditor,
   textWrapEditor,
+  verticalAlignEditor,
   whiteSpaceEditor,
 } from "./typography/TypographyEditors.tsx";
 import { visibilityEditor } from "./visibility/VisibilityEditor.tsx";
@@ -70,20 +92,30 @@ export const editors: PropertyEditor[] = [
   aspectRatioEditor,
   boxSizingEditor,
   displayEditor,
+  floatEditor,
   gridColumnsEditor,
+  gridRowsEditor,
   flexDirectionEditor,
   flexWrapEditor,
   gapEditor,
   justifyContentEditor,
+  justifyItemsEditor,
   alignItemsEditor,
+  alignContentEditor,
+  alignSelfEditor,
+  justifySelfEditor,
   colSpanEditor,
   colStartEditor,
   colEndEditor,
+  rowSpanEditor,
+  rowStartEditor,
+  rowEndEditor,
   orderEditor,
   flexGrowEditor,
   flexShrinkEditor,
   flexBasisEditor,
   objectFitEditor,
+  objectPositionEditor,
   overflowEditor,
   overscrollEditor,
   isolationEditor,
@@ -110,6 +142,15 @@ export const editors: PropertyEditor[] = [
   whiteSpaceEditor,
   textOverflowEditor,
   lineClampEditor,
+  textDecorationLineEditor,
+  textDecorationColorEditor,
+  textDecorationStyleEditor,
+  textDecorationThicknessEditor,
+  textUnderlineOffsetEditor,
+  textTransformEditor,
+  verticalAlignEditor,
+  listStyleTypeEditor,
+  listStylePositionEditor,
   cursorEditor,
   pointerEventsEditor,
   userSelectEditor,
@@ -140,14 +181,18 @@ export function searchEditors(query: string, list: PropertyEditor[] = editors): 
   return rank(q, list).map((x) => x.editor);
 }
 
-/** Most editors the dialog shows at once for one query. */
+/**
+ * Most editors the dialog shows at once for an abbreviation. Prefix ties
+ * aren't capped: they're a family the designer is typing (`font` → all five).
+ */
 const MAX_SHOWN = 4;
 
 /**
  * The editors the dialog shows for a query:
  * - every editor tied for the best match, if that match is a prefix or better
- *   (`min` → min-width and, later, min-height) or an equally good abbreviation
- *   (`pdg` → the four padding rows); a substring-only best match shows just
+ *   (`min` → min-width and, later, min-height; a Tailwind class's first word:
+ *   `content` → contents, content-center) or an equally good abbreviation
+ *   (`pdg` → the four padding rows, at most MAX_SHOWN); a substring-only best match shows just
  *   the top one, so a single letter doesn't flood the dialog;
  * - plus, for each shown editor that heads a family, the family's members
  *   (`w` → width, min-width, max-width). Landing on a member directly
@@ -164,8 +209,8 @@ export function matchEditors(query: string, list: PropertyEditor[] = editors): P
   // the name-length tiebreak is ignored here).
   const tied = (x: (typeof ranked)[number]) =>
     x.score === best.score &&
-    (best.score >= 2 || (best.score === 0.5 && Math.floor(x.penalty) === Math.floor(best.penalty)));
-  const top = (best.score >= 2 || best.score === 0.5 ? ranked.filter(tied).map((x) => x.editor) : [best.editor])
+    (best.score >= 1.75 || (best.score === 0.5 && Math.floor(x.penalty) === Math.floor(best.penalty)));
+  const top = (best.score >= 1.75 || best.score === 0.5 ? ranked.filter(tied).map((x) => x.editor) : [best.editor])
     // Equally good matches keep the registry's order (padding: top, right, bottom, left).
     .sort((a, b) => list.indexOf(a) - list.indexOf(b));
   const shown: PropertyEditor[] = [];
@@ -174,7 +219,7 @@ export function matchEditors(query: string, list: PropertyEditor[] = editors): P
       if (!shown.includes(e)) shown.push(e);
     }
   }
-  return shown.slice(0, MAX_SHOWN);
+  return best.score >= 1.75 ? shown : shown.slice(0, MAX_SHOWN);
 }
 
 function rank(q: string, list: PropertyEditor[]): Array<{ editor: PropertyEditor; score: number; penalty: number }> {
@@ -184,6 +229,10 @@ function rank(q: string, list: PropertyEditor[]): Array<{ editor: PropertyEditor
     const names = [e.label, ...e.properties].map(normalizeQuery);
     if (names.some((n) => n === q)) return 3;
     if (names.some((n) => n.startsWith(q))) return 2;
+    // A Tailwind class whose first word starts with it (`items` →
+    // items-center: align-items, not justify-items, whose name only has the
+    // word later). The first word only: `cols` isn't col-start.
+    if (e.aliases?.some((a) => a.toLowerCase().split(/[\s-]+/)[0]?.startsWith(q))) return 1.75;
     const laterWords = [e.label, ...e.properties, ...(e.aliases ?? [])].flatMap((n) => n.toLowerCase().split(/[\s-]+/).slice(1));
     if (laterWords.some((w) => w.startsWith(q))) return 1.5;
     if (names.some((n) => n.includes(q))) return 1;

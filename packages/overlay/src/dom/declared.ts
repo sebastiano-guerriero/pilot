@@ -212,6 +212,17 @@ export function declaredWithout(
   return resolve(property, inline, rules);
 }
 
+/**
+ * Whether `value` is a longhand a shorthand reset without naming it: CSSOM
+ * reads it as `initial`, and the declaration's text doesn't name the
+ * longhand (it does when the page wrote `initial` itself).
+ */
+function isImplicitReset(style: CSSStyleDeclaration, property: string, value: string): boolean {
+  if (value !== "initial") return false;
+  const named = new RegExp(`(?:^|[;{\\s])${property.replace(/-/g, "\\-")}\\s*:`);
+  return !named.test(style.cssText ?? "");
+}
+
 /** The winner for `property` among the inline style and the matched rules. */
 export function resolve(
   property: string,
@@ -224,17 +235,27 @@ export function resolve(
       const text = style.getPropertyValue(source.property).trim();
       if (!text) continue;
       const value = source.side ? pickSide(text, source.side) : text;
-      if (value) return { value, important: style.getPropertyPriority(source.property) === "important" };
+      if (value) {
+        const important = style.getPropertyPriority(source.property) === "important";
+        return { value, important, implicit: isImplicitReset(style, source.property, value) };
+      }
     }
     return null;
   };
 
   const fromInline = inline ? read(inline) : null;
-  let best: { rule: MatchedRule; value: string; important: boolean } | null = null;
+  let best: { rule: MatchedRule; value: string; important: boolean; implicit: boolean } | null = null;
   for (const rule of rules) {
     const found = read(rule.style);
     if (found && (!best || beats({ ...found, rule }, best))) best = { ...found, rule };
   }
+  // A shorthand's implicit reset (`text-decoration: none` sets the color to
+  // its initial value) wins the cascade like any value, but the page didn't
+  // set this property: nothing declared, so the field shows the initial value
+  // dimmed and the empty search doesn't list it.
+  const winner =
+    fromInline?.important ? fromInline : best?.important ? best : fromInline ?? best;
+  if (winner?.implicit) return null;
   // Important declarations beat normal ones; within the same importance,
   // inline (element-attached) styles beat any rule.
   if (fromInline?.important) return { ...fromInline, source: "inline" };

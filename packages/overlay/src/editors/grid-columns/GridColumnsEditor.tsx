@@ -1,16 +1,17 @@
 import { declaredOf } from "../declared.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
-import { ColumnsRow } from "./ColumnsRow.tsx";
+import { TracksRow } from "./TracksRow.tsx";
 
 /**
  * grid-columns (`grid-template-columns`): a mode select plus a field, see
- * ColumnsRow. Found on its own (`cols`, `grid-cols`), and shown by display
+ * TracksRow. Found on its own (`cols`, `grid-cols`), and shown by display
  * as one of its grid rows.
  */
 function GridColumnsEditor(props: PropertyEditorProps) {
   const { onChange, focusRequest, onReturnToSearch, onTabOut } = props;
   return (
-    <ColumnsRow
+    <TracksRow
+      axis="columns"
       value={declaredOf(props, "grid-template-columns")}
       focusRequest={focusRequest}
       onChange={(value) => onChange("grid-template-columns", value)}
