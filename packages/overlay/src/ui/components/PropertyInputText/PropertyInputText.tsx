@@ -79,9 +79,9 @@ interface PropertyInputTextProps {
    */
   tokens?: { kinds: readonly TokenKind[]; property: string };
   /**
-   * The value the element ends up with (computed), for a field with `tokens`:
-   * while it holds math (`100% - 20px`), hovering it shows what that comes
-   * to (`= 180px`), except while it's being edited.
+   * The value the element ends up with (computed): while the field holds
+   * math (`100% - 20px`), hovering it shows what that comes to (`= 180px`),
+   * except while it's being edited.
    */
   computed?: string;
 }
@@ -151,6 +151,21 @@ export function PropertyInputText({
       document.removeEventListener("selectionchange", report);
     };
   });
+
+  // Hovered while not being edited, a tooltip says what the field can't:
+  // the whole value when it's cut (an ellipsis), and what math comes to.
+  // Whether it's cut is measured when the pointer comes (the variable button
+  // then takes room) and after every render (a new value, maybe longer).
+  // Always in the tooltip, empty when there's nothing to say: the input
+  // mustn't be made anew, and lose its focus, when there comes to be.
+  const [cut, setCut] = useState(false);
+  const measure = () => {
+    const el = ref.current;
+    setCut(!!el && el.scrollWidth > el.clientWidth + 1);
+  };
+  useLayoutEffect(measure);
+  const result = draft === null ? mathResult(value, computed) : null;
+  const tip = draft !== null ? "" : cut && value ? (result ? `${value} = ${result}` : value) : result ? `= ${result}` : "";
 
   const commit = () => {
     if (draft !== null && draft !== value) onCommit(draft);
@@ -356,13 +371,10 @@ export function PropertyInputText({
   // there's nothing to draw: the focused look (data-mirror-focus) shows it.
   const drawnSelection = !!mirror?.selected && !!shown;
   const withTokens = !!tokens?.kinds.length;
-  if (!onScrub && !icon && !drawnSelection && !withTokens) return input;
+  const needsWrap = !!onScrub || !!icon || drawnSelection || withTokens;
 
   // With an icon, a scrub handle, a drawn selection or variables: a wrapper
-  // the input fills, with them on top. With variables, in a tooltip that says
-  // what math comes to (always there, empty otherwise: the input mustn't be
-  // made anew, and lose its focus, when the value turns into math).
-  const result = draft === null ? mathResult(value, computed) : null;
+  // the input fills, with them on top.
   const wrapped = (
     <span
       class={onScrub ? "input-wrap scrub-field" : "input-wrap"}
@@ -410,12 +422,10 @@ export function PropertyInputText({
       )}
     </span>
   );
-  return withTokens ? (
-    <Tooltip text={result ? `= ${result}` : ""} block>
-      {wrapped}
+  return (
+    <Tooltip text={tip} block align="end" onEnter={measure}>
+      {needsWrap ? wrapped : input}
     </Tooltip>
-  ) : (
-    wrapped
   );
 }
 

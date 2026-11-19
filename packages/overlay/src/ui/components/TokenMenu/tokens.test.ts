@@ -82,6 +82,7 @@ describe("stepping a token along its scale", () => {
     expect(stepToken("var(--space-2)", -10, scale, ["length"])).toBe("var(--space-1)");
     expect(stepToken("var(--space-4)", 1, scale, ["length"])).toBe("var(--space-4)");
     expect(stepToken("var(--gray-100)", 1, scale, ["color"])).toBe("var(--gray-500)");
+    expect(stepToken("--space-1", 1, scale, ["length"])).toBe("var(--space-2)"); // as the field shows it
   });
 
   it("anything else steps its number instead: no scale, math, a token of another kind", () => {

@@ -1,3 +1,4 @@
+import { withVars } from "./values.ts";
 /**
  * Colors, as the color editor shows and writes them: a color and an opacity
  * (0–100), edited in two fields, written back as one CSS value.
@@ -49,7 +50,7 @@ export function joinColor(color: string, opacity: number | null): string {
  * keeps its alpha (splitColor takes it apart).
  */
 export function parseColor(text: string): string | null {
-  const t = text.trim();
+  const t = withVars(text.trim()); // a token typed by its name, as the field shows it
   if (!t) return null;
   const hex = expandHex(t);
   if (hex) return hex;

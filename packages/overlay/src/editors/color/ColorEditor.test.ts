@@ -95,7 +95,7 @@ describe("color editor", () => {
   it("a named color below 100 is written as color-mix; how it's named is kept", () => {
     element.style.color = "var(--brand)";
     mount();
-    expect(field("color").value).toBe("var(--brand)");
+    expect(field("color").value).toBe("--brand") // a lone token by its name;
     commit(field("color opacity"), "30");
     expect(changes.at(-1)).toEqual(["color", "color-mix(in srgb, var(--brand) 30%, transparent)"]);
   });

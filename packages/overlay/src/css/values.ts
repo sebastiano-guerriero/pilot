@@ -28,7 +28,26 @@ const MATH_CHARS = /^[\d.%a-zA-Z_()+\-*/\s,]+$/;
 const BINARY_PLUS_MINUS = new RegExp(String.raw`(?<=(?:\d|\))(?:${UNIT})?)\s*([+-])\s*(?=[\d.(]|[a-z-]+\()`, "g");
 
 /**
- * The value as the field shows it: an outer `calc(…)` is left out. For a
+ * A value that's one token, as a field shows it: its name, `var(--space-4)`
+ * → `--space-4` (with a fallback, `var(--a, 4px)`, it stays as is). Anything
+ * else as it is: a token inside a value keeps its var(), `calc(var(--a) * 2)`.
+ */
+export function bareToken(value: string): string {
+  return /^var\(\s*(--[\w-]+)\s*\)$/.exec(value.trim())?.[1] ?? value;
+}
+
+/**
+ * Typed text with every token written as a name (`--space-4`, as fields
+ * show a lone one, bareToken) in its var(): `--a * 2` → `var(--a) * 2`.
+ * The ones in a var() already are left alone.
+ */
+export function withVars(text: string): string {
+  return text.replace(/(?<![\w-])(?<!var\(\s*)--[\w-]+/g, (name) => `var(${name})`);
+}
+
+/**
+ * The value as the field shows it: a lone token by its name (bareToken), an
+ * outer `calc(…)` left out. For a
  * column span (grid-column), `span 3 / span 3` shows as `3` and `1 / -1` as
  * `full`, the way they're typed. A percent (opacity) shows 0–100 without
  * the %: `50%` and `0.5` both show as `50`.
@@ -45,7 +64,7 @@ export function displayValue(value: string, property?: string): string {
     if (count) return count;
   }
   const inner = unwrapCalc(value.trim());
-  return inner ?? value;
+  return bareToken(inner ?? value);
 }
 
 /**
@@ -79,7 +98,8 @@ function spanCount(value: string): string | null {
  * Checked against the grammar above, then by the browser itself where
  * `CSS.supports` is real.
  */
-export function parseValue(property: string, text: string): string | null {
+export function parseValue(property: string, typed: string): string | null {
+  const text = withVars(typed);
   let t = lowerExceptNames(text.trim().replace(/\s+/g, " "));
   if (!t) return null;
   const info = cssProperty(property);
@@ -397,7 +417,7 @@ export function mathResult(text: string, computed: string | undefined): string |
 
 /** A function (`var(--gap)`, `min(…)`) or math (`100% - 20px`, a calc() shown without it): what the field holds isn't a number of its own. */
 function isExpression(t: string): boolean {
-  return /[()]/.test(t) || isMath(t);
+  return /[()]/.test(t) || /^--[\w-]+$/.test(t) || isMath(t);
 }
 
 function isMath(t: string): boolean {

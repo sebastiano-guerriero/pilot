@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from "preact/hooks";
 import { joinColor, parseColor, parseOpacity, splitColor } from "../../css/colors.ts";
+import { bareToken } from "../../css/values.ts";
 import { Icon } from "../../ui/components/Icon/Icon.tsx";
 import { PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
 import { allTokens } from "../../dom/tokens.ts";
@@ -77,7 +78,7 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
     <PropertyRow label={label}>
       <div class="color-editor">
         <PropertyInputText
-          value={color}
+          value={bareToken(color)}
           label={label}
           placeholder={isMixed(props, property) ? MIXED : undefined}
           icon={swatch}

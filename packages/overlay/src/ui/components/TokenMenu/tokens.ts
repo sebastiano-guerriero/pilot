@@ -136,7 +136,7 @@ export function tokenScale(tokens: readonly Token[], name: string): Token[] | nu
 }
 
 /**
- * ↑/↓ (and the wheel) on a field holding one token, `var(--space-3)`: the
+ * ↑/↓ (and the wheel) on a field holding one token, `--space-3`: the
  * next one along its scale (tokenScale), up or down by one whatever the step
  * (Shift too). At either end it stays (`text` as is): stepping never leaves
  * the scale for a number. Null when the field holds no token of `kinds` with
@@ -144,7 +144,9 @@ export function tokenScale(tokens: readonly Token[], name: string): Token[] | nu
  * holds a token or math (css/values.ts, stepValue).
  */
 export function stepToken(text: string, delta: number, tokens: readonly Token[], kinds: readonly TokenKind[]): string | null {
-  const name = /^var\(\s*(--[\w-]+)\s*(?:,[^()]*)?\)$/.exec(text.trim())?.[1];
+  // As the field shows it (`--space-3`, bareToken) or written out.
+  const m = /^(?:var\(\s*(--[\w-]+)\s*(?:,[^()]*)?\)|(--[\w-]+))$/.exec(text.trim());
+  const name = m?.[1] ?? m?.[2];
   const token = name ? tokens.find((t) => t.name === name) : undefined;
   if (!name || !token || !kinds.includes(token.kind) || !delta) return null;
   const scale = tokenScale(tokens, name);

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 import { cssProperty, LENGTH_UNITS } from "./properties.ts";
-import { displayValue, mathResult, parseValue, scrubIncrement, stepSize, stepValue } from "./values.ts";
+import { bareToken, displayValue, mathResult, parseValue, scrubIncrement, stepSize, stepValue, withVars } from "./values.ts";
 
 describe("parseValue", () => {
   it("idents (will-change): names, comma-separated, joined with a comma and a space", () => {
@@ -299,7 +299,7 @@ describe("percent (opacity)", () => {
     expect(displayValue("0.5", "opacity")).toBe("50");
     expect(displayValue("1", "opacity")).toBe("100");
     expect(displayValue("0", "opacity")).toBe("0");
-    expect(displayValue("var(--fade)", "opacity")).toBe("var(--fade)");
+    expect(displayValue("var(--fade)", "opacity")).toBe("--fade");
   });
 
   it("steps the field's 0–100 by whole numbers within 0–100, an empty field from the computed fraction", () => {
@@ -320,5 +320,26 @@ describe("what math comes to", () => {
     expect(mathResult("var(--space-2)", "8px")).toBeNull();
     expect(mathResult("12px", "12px")).toBeNull();
     expect(mathResult("100% - 20px", undefined)).toBeNull();
+  });
+});
+
+describe("a lone token in a field", () => {
+  it("shows by its name; inside a value it keeps its var()", () => {
+    expect(displayValue("var(--space-4)", "padding-top")).toBe("--space-4");
+    expect(displayValue("calc(var(--space-4) * 2)", "padding-top")).toBe("var(--space-4) * 2");
+    expect(displayValue("var(--a, 4px)", "padding-top")).toBe("var(--a, 4px)");
+    expect(bareToken("var(--brand)")).toBe("--brand");
+  });
+
+  it("typed by its name, it goes in its var(), alone or in math", () => {
+    expect(withVars("--space-4")).toBe("var(--space-4)");
+    expect(withVars("--a * 2 + var(--b)")).toBe("var(--a) * 2 + var(--b)");
+    expect(withVars("calc(--a - 1px)")).toBe("calc(var(--a) - 1px)");
+    expect(parseValue("padding-top", "--space-4")).toBe("var(--space-4)");
+    expect(parseValue("padding-top", "--space-4 * 2")).toBe("calc(var(--space-4) * 2)");
+  });
+
+  it("steps from the computed value when it has no scale", () => {
+    expect(stepValue("padding-top", "--gutter", 1, "20px")).toBe("21px");
   });
 });

@@ -21,6 +21,8 @@ interface TooltipProps {
   forceOpen?: boolean;
   /** Fill the width it's given (a field), instead of hugging the trigger. */
   block?: boolean;
+  /** The pointer came onto the trigger: a moment to work out what to say (whether a field's text is cut), before it opens. */
+  onEnter?(): void;
   /** The trigger: a button, usually. Give it an `aria-label` of its own: the tooltip is visual only. */
   children: ComponentChildren;
 }
@@ -42,7 +44,17 @@ function focusVisible(el: Element): boolean {
  * (delay.ts). Keyboard focus opens it at once. Use it instead of `title` in
  * Pilot's own UI.
  */
-export function Tooltip({ text, detail, side = "top", align = "center", gap, forceOpen = false, block = false, children }: TooltipProps) {
+export function Tooltip({
+  text,
+  detail,
+  side = "top",
+  align = "center",
+  gap,
+  forceOpen = false,
+  block = false,
+  onEnter,
+  children,
+}: TooltipProps) {
   const [open, setOpen] = useState(false);
   // No transition (Tooltip.css) while moving between triggers: opened
   // straight after another one closed, or left for one that opened so.
@@ -103,6 +115,7 @@ export function Tooltip({ text, detail, side = "top", align = "center", gap, for
       onPointerEnter={(e) => {
         if (e.pointerType === "touch") return;
         hovered.current = true;
+        onEnter?.();
         const delay = openDelay();
         show(delay, delay === 0);
       }}
