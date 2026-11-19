@@ -17,6 +17,11 @@ interface ColorConfig {
   property: string;
   /** The row's label, when it isn't the property (`bg-color`). */
   name?: string;
+  /**
+   * Values that aren't colors, accepted as typed (fill and stroke's `none`).
+   * They have no opacity: the opacity field stays empty.
+   */
+  keywords?: readonly string[];
 }
 
 /**
@@ -38,7 +43,8 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
   const { property } = config;
   const label = config.name ?? property;
   const value = declaredOf(props, property);
-  const { color, opacity } = splitColor(value);
+  const keyword = config.keywords?.includes(value.trim().toLowerCase()) ?? false;
+  const { color, opacity } = keyword ? { color: value.trim(), opacity: null } : splitColor(value);
   const colorRef = useRef<HTMLInputElement>(null);
   const opacityRef = useRef<HTMLInputElement>(null);
 
@@ -55,7 +61,7 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
     if (next !== value) onChange(property, next, gesture ? { gesture } : undefined);
   };
   const setOpacity = (o: number, gesture?: object) => {
-    if (color) write(joinColor(color, o), gesture);
+    if (color && !keyword) write(joinColor(color, o), gesture);
   };
 
   const swatch = color ? (
@@ -75,6 +81,8 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
           inputRef={colorRef}
           onCommit={(text) => {
             if (!text.trim()) return write("");
+            const word = text.trim().toLowerCase();
+            if (config.keywords?.includes(word)) return write(word);
             const typed = parseColor(text);
             if (!typed) return;
             const parts = splitColor(typed);
@@ -109,8 +117,8 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
 
 /** Define a color editor for `property` (see ColorEditor). */
 export function colorEditor(definition: { label: string; aliases?: string[] } & ColorConfig): PropertyEditor {
-  const { property, name, ...rest } = definition;
-  const config: ColorConfig = { property, name };
+  const { property, name, keywords, ...rest } = definition;
+  const config: ColorConfig = { property, name, keywords };
   return {
     id: property,
     properties: [property],

@@ -152,9 +152,11 @@ describe("bg-color editor", () => {
   });
 
   it("is found by background-color, bg-color and Tailwind's bg; color still finds just color", () => {
-    for (const q of ["background-color", "bg-color", "bg", "background"]) {
+    for (const q of ["background-color", "bg-color", "bg"]) {
       expect(matchEditors(q).map((e) => e.id), q).toEqual(["background-color"]);
     }
+    // Both start with it: tied, like min → min-width and min-height.
+    expect(matchEditors("background").map((e) => e.id)).toEqual(["background-color", "background-blend-mode"]);
     expect(matchEditors("color").map((e) => e.id)).toEqual(["color"]);
   });
 });

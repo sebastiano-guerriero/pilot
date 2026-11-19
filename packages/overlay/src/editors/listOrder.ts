@@ -33,9 +33,11 @@ export const LIST_ORDER: ReadonlyArray<{ group: string; entries: readonly ListEn
       "min-height",
       "max-height",
       "aspect-ratio",
+      "box-sizing",
       "padding",
       "margin",
       "overflow",
+      "overscroll-behavior",
       "order",
       // a flex item's share of the space
       "flex-grow",
@@ -59,11 +61,36 @@ export const LIST_ORDER: ReadonlyArray<{ group: string; entries: readonly ListEn
   },
   {
     group: "Appearance",
-    entries: ["background-color", "border-radius", "opacity"],
+    entries: ["background-color", "border-radius", "opacity", "mix-blend-mode", "background-blend-mode"],
   },
   {
     group: "Typography",
-    entries: ["color", "font-family", "font-size", "font-style", "font-weight", "line-height", "letter-spacing", "text-align"],
+    entries: [
+      "color",
+      "font-family",
+      "font-size",
+      "font-style",
+      "font-weight",
+      "font-variant-numeric",
+      "line-height",
+      "letter-spacing",
+      "text-align",
+      "text-indent",
+      "text-wrap",
+      "white-space",
+      "text-overflow",
+      "line-clamp",
+    ],
+  },
+  {
+    // How the element responds to the pointer.
+    group: "Interactivity",
+    entries: ["cursor", "pointer-events", "user-select", "appearance", "will-change"],
+  },
+  {
+    // An SVG's paint.
+    group: "SVG",
+    entries: ["fill", "stroke", "stroke-width"],
   },
   {
     // What's drawn of the element (mask, clip-path… will join it).

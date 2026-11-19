@@ -1,5 +1,5 @@
 import { type ElementState, STATES, sortStates } from "@pilot/protocol";
-import { isPreviewSheet } from "./preview.ts";
+import { isPilotSheet } from "./preview.ts";
 
 /**
  * Declared values: the CSS that actually applies to an element for a
@@ -315,8 +315,8 @@ function signatureOf(element: Element): string {
 }
 
 /**
- * The page's stylesheets for the element's root, without Pilot's preview
- * sheets: declared values are the page's own. Pilot's edits are read from
+ * The page's stylesheets for the element's root, without Pilot's own
+ * (the preview sheets, select mode's cursor): declared values are the page's own. Pilot's edits are read from
  * the edit history instead (EditHistory.valueOf), which also works where the
  * preview's @layer can't be parsed.
  */
@@ -325,7 +325,7 @@ function sheetsOf(element: Element): CSSStyleSheet[] {
   return [
     ...Array.from(root.styleSheets ?? []),
     ...Array.from((root as { adoptedStyleSheets?: CSSStyleSheet[] }).adoptedStyleSheets ?? []),
-  ].filter((sheet) => !isPreviewSheet(sheet));
+  ].filter((sheet) => !isPilotSheet(sheet));
 }
 
 interface Walk {

@@ -174,6 +174,11 @@ function parseOther(kind: NonLengthKind, negative: boolean, t: string): string |
     }
     case "ratio":
       return normalizeRatio(t);
+    case "idents": {
+      // Names, comma-separated (`opacity, transform`), joined with ", ".
+      const parts = t.split(",").map((p) => p.trim());
+      return parts.every((p) => /^-?[a-z][a-z0-9-]*$/.test(p)) ? parts.join(", ") : null;
+    }
     case "percent": {
       // `50` and `50%` are 50%; a fraction of 1 written with a point (`0.5`,
       // `.25`, `1.0`) is that share, as CSS would read it. Within 0–100.
@@ -186,7 +191,7 @@ function parseOther(kind: NonLengthKind, negative: boolean, t: string): string |
   }
 }
 
-type NonLengthKind = "integer" | "number" | "line-height" | "grid-line" | "grid-span" | "ratio" | "percent";
+type NonLengthKind = "integer" | "number" | "line-height" | "grid-line" | "grid-span" | "ratio" | "percent" | "idents";
 
 /**
  * A width / height ratio, as CSS writes it: `16/9`, `16 / 9`, `16:9` →
@@ -300,6 +305,7 @@ function stepOther(
       return `span ${next} / span ${next}`;
     }
     case "ratio":
+    case "idents":
       return null;
     case "percent": {
       // `t` is the field's text, 0–100 (`50` or `50%`); an empty field steps

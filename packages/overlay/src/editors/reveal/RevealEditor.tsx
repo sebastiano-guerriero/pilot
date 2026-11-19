@@ -11,8 +11,11 @@ export interface RevealConfig {
   property: string;
   /** Search label: "Display". */
   label: string;
-  /** The select's values, in menu order. */
-  options: readonly string[];
+  /**
+   * The select's values, in menu order; or, for the value set now, the
+   * values to offer (display offers -webkit-box only while it's set).
+   */
+  options: readonly string[] | ((value: string) => readonly string[]);
   /**
    * The editors it can show as rows, by id. Which ones, and in what order,
    * for each value is set in LIST_ORDER (editors/listOrder.ts, `rowsOf`).
@@ -72,7 +75,7 @@ export function RevealEditor({ config, ...props }: PropertyEditorProps & { confi
     <div class="reveal-editor">
       <SelectRow
         property={config.property}
-        options={config.options}
+        options={typeof config.options === "function" ? config.options(value) : config.options}
         value={value}
         mixed={isMixed(props, config.property)}
         focusRequest={requestFor(0)}

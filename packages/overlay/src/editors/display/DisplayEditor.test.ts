@@ -6,7 +6,7 @@ import { EditHistory } from "../../edits/history.ts";
 import { matchEditors } from "../registry.ts";
 import type { FocusRequest } from "../types.ts";
 import { gridColumnsEditor } from "../grid-columns/GridColumnsEditor.tsx";
-import { displayEditor } from "./DisplayEditor.tsx";
+import { displayEditor, displayOptions } from "./DisplayEditor.tsx";
 import { inlinePreview } from "../../test/inlinePreview.ts";
 
 const DisplayEditor = displayEditor.component;
@@ -293,5 +293,13 @@ describe("search", () => {
     expect(matchEditors("justify-content").map((e) => e.id)).toEqual(["justify-content"]);
     expect(matchEditors("align-items").map((e) => e.id)).toEqual(["align-items"]);
     expect(matchEditors("align").map((e) => e.id)).toEqual(["align-items"]);
+  });
+});
+
+describe("displayOptions", () => {
+  it("offers -webkit-box before none only while it's set (line-clamp sets it)", () => {
+    expect(displayOptions("block")).not.toContain("-webkit-box");
+    expect(displayOptions("").slice(-1)).toEqual(["none"]);
+    expect(displayOptions("-webkit-box").slice(-2)).toEqual(["-webkit-box", "none"]);
   });
 });

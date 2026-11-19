@@ -169,3 +169,16 @@ export function isPreviewSheet(sheet: CSSStyleSheet): boolean {
   const owner = sheet.ownerNode;
   return owner instanceof Element && owner.hasAttribute(PREVIEW_ATTRIBUTE);
 }
+
+/** The id of select mode's <style> (the crosshair cursor, select/useElementPicker.ts). */
+export const SELECT_CURSOR_STYLE_ID = "pilot-select-cursor";
+
+/**
+ * Whether a stylesheet is Pilot's own: a preview sheet, or select mode's
+ * cursor (`cursor: crosshair !important` on everything, which the cursor
+ * field would otherwise show as the page's).
+ */
+export function isPilotSheet(sheet: CSSStyleSheet): boolean {
+  const owner = sheet.ownerNode;
+  return isPreviewSheet(sheet) || (owner instanceof Element && owner.id === SELECT_CURSOR_STYLE_ID);
+}

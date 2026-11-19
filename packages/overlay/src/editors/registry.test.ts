@@ -57,6 +57,36 @@ describe("searchEditors", () => {
     }
   });
 
+  it("finds the text, blend, interactivity and SVG editors by their names and Tailwind's", async () => {
+    const { editors } = await import("./registry.ts");
+    const cases: Record<string, string[]> = {
+      "box-sizing": ["box-sizing", "box-border", "box-content"],
+      "overscroll-behavior": ["overscroll", "overscroll-behavior", "overscroll-contain"],
+      "font-variant-numeric": ["font-numeric", "font-variant-numeric", "tabular-nums", "slashed-zero"],
+      "line-clamp": ["line-clamp", "-webkit-line-clamp"],
+      "text-overflow": ["text-overflow", "text-ellipsis", "truncate"],
+      "text-wrap": ["text-wrap", "text-balance", "text-pretty", "text-nowrap"],
+      "text-indent": ["text-indent", "indent"],
+      "white-space": ["white-space", "whitespace"],
+      "mix-blend-mode": ["mix-blend-mode", "mix-blend"],
+      "background-blend-mode": ["background-blend-mode", "bg-blend", "bg-blend-mode"],
+      cursor: ["cursor"],
+      "pointer-events": ["pointer-events"],
+      "user-select": ["user-select", "select"],
+      appearance: ["appearance"],
+      "will-change": ["will-change"],
+      fill: ["fill"],
+      stroke: ["stroke"],
+      "stroke-width": ["stroke-width"],
+      // What line-clamp also writes doesn't find it.
+      display: ["display"],
+      overflow: ["overflow"],
+    };
+    for (const [id, queries] of Object.entries(cases)) {
+      for (const q of queries) expect(searchEditors(q, editors)[0]?.id, q).toBe(id);
+    }
+  });
+
   it("returns everything for an empty query", () => {
     expect(searchEditors("  ", list)).toHaveLength(3);
   });

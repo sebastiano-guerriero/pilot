@@ -46,7 +46,7 @@ The workspace packages (`@pilot/overlay`, `@pilot/protocol`, `@pilot/cli`) are i
 mountPilot({ dev: { select: ".button--primary" } });
 ```
 
-On every load this launches Pilot (even after a Quit), turns on select mode, and selects the first element matching `select`. Add `query: "padding"` to pre-fill the search and open that editor. Remove `dev` for the real flow.
+On every load this launches Pilot (even after a Quit), turns on select mode, and selects the first element matching `select`. Add `query: "padding"` to pre-fill the search and open that editor. Remove `dev` for the real flow. In the playground, `?select=<selector>` in the URL selects another element instead (`/?select=.review-props`), and stays across reloads.
 
 ## Trying Pilot in your own projects, unreleased
 

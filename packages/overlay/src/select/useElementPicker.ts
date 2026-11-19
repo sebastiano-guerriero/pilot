@@ -1,5 +1,6 @@
 import { useLayoutEffect, useState } from "preact/hooks";
 import { type EditableElement, isEditable } from "../dom/target.ts";
+import { SELECT_CURSOR_STYLE_ID } from "../dom/preview.ts";
 import { TEXT_EDIT_ATTRIBUTE } from "../dom/text.ts";
 
 /** Pointer events Pilot swallows in select mode so the page doesn't react to picking clicks. */
@@ -13,8 +14,6 @@ const BLOCKED_EVENTS = [
   "auxclick",
   "contextmenu",
 ] as const;
-
-const CURSOR_STYLE_ID = "pilot-select-cursor";
 
 /**
  * Select mode. While `active`:
@@ -90,7 +89,7 @@ export function useElementPicker(
     // UI then shows its own cursors: arrow on panels, text in inputs,
     // pointer on buttons.
     const cursor = document.createElement("style");
-    cursor.id = CURSOR_STYLE_ID;
+    cursor.id = SELECT_CURSOR_STYLE_ID; // left out of the page's declared values (dom/declared.ts)
     // The element edited inline shows the text cursor, and no focus ring of
     // its own: the selection outline marks it.
     cursor.textContent = `html, html *:not(${host.localName}) { cursor: crosshair !important; }

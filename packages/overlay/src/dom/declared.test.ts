@@ -10,6 +10,7 @@ import {
   specificity,
   splitTopLevel,
 } from "./declared.ts";
+import { SELECT_CURSOR_STYLE_ID } from "./preview.ts";
 
 describe("specificity", () => {
   it("counts ids, classes/attributes/pseudo-classes, and types/pseudo-elements", () => {
@@ -144,6 +145,19 @@ describe("declaredValue (with real stylesheets)", () => {
   it("nothing declared: null", () => {
     sheet(".other { max-width: 50%; }");
     expect(declaredValue(element, "max-width")).toBeNull();
+  });
+
+  it("leaves out select mode's crosshair cursor: it's Pilot's, not the page's", () => {
+    sheet(".card { cursor: pointer; }");
+    const cursor = document.createElement("style");
+    cursor.id = SELECT_CURSOR_STYLE_ID;
+    cursor.textContent = "html, html *:not(pilot-root) { cursor: crosshair !important; }";
+    document.head.append(cursor);
+    // happy-dom doesn't set it; browsers do.
+    const own = Array.from(document.styleSheets).find((s) => Array.from(s.cssRules).some((r) => r.cssText.includes("crosshair")));
+    if (own && !own.ownerNode) Object.defineProperty(own, "ownerNode", { value: cursor });
+    expect(declaredValue(element, "cursor")?.value).toBe("pointer");
+    cursor.remove();
   });
 
   it("the more specific rule wins; at equal specificity, the later one", () => {

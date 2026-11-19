@@ -4,6 +4,14 @@ import { cssProperty, LENGTH_UNITS } from "./properties.ts";
 import { displayValue, parseValue, scrubIncrement, stepSize, stepValue } from "./values.ts";
 
 describe("parseValue", () => {
+  it("idents (will-change): names, comma-separated, joined with a comma and a space", () => {
+    expect(parseValue("will-change", "Opacity")).toBe("opacity");
+    expect(parseValue("will-change", "opacity,transform")).toBe("opacity, transform");
+    expect(parseValue("will-change", "12px")).toBeNull();
+    expect(parseValue("will-change", "opacity,")).toBeNull();
+    expect(stepValue("will-change", "opacity", 1, undefined)).toBeNull();
+  });
+
   it("takes a bare number as px", () => {
     expect(parseValue("width", " 120 ")).toBe("120px");
     expect(parseValue("width", "0")).toBe("0px");

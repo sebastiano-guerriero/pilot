@@ -1,4 +1,16 @@
 import { alignItemsEditor } from "./align/AlignItemsEditor.tsx";
+import { backgroundBlendModeEditor, mixBlendModeEditor } from "./blend/BlendEditors.tsx";
+import { boxSizingEditor } from "./box-sizing/BoxSizingEditor.tsx";
+import {
+  appearanceEditor,
+  cursorEditor,
+  pointerEventsEditor,
+  userSelectEditor,
+  willChangeEditor,
+} from "./interactivity/InteractivityEditors.tsx";
+import { lineClampEditor } from "./line-clamp/LineClampEditor.tsx";
+import { overscrollEditor } from "./overscroll/OverscrollEditor.tsx";
+import { fillEditor, strokeEditor, strokeWidthEditor } from "./svg/SvgEditors.tsx";
 import { aspectRatioEditor } from "./aspect-ratio/AspectRatioEditor.tsx";
 import { borderRadiusEditor } from "./border-radius/BorderRadiusEditor.tsx";
 import { displayEditor } from "./display/DisplayEditor.tsx";
@@ -23,10 +35,15 @@ import {
   fontFamilyEditor,
   fontSizeEditor,
   fontStyleEditor,
+  fontVariantNumericEditor,
   fontWeightEditor,
   letterSpacingEditor,
   lineHeightEditor,
   textAlignEditor,
+  textIndentEditor,
+  textOverflowEditor,
+  textWrapEditor,
+  whiteSpaceEditor,
 } from "./typography/TypographyEditors.tsx";
 import { visibilityEditor } from "./visibility/VisibilityEditor.tsx";
 import { zIndexEditor } from "./z-index/ZIndexEditor.tsx";
@@ -51,6 +68,7 @@ export const editors: PropertyEditor[] = [
   maxHeightEditor,
   sizeEditor,
   aspectRatioEditor,
+  boxSizingEditor,
   displayEditor,
   gridColumnsEditor,
   flexDirectionEditor,
@@ -67,6 +85,7 @@ export const editors: PropertyEditor[] = [
   flexBasisEditor,
   objectFitEditor,
   overflowEditor,
+  overscrollEditor,
   isolationEditor,
   positionEditor,
   insetEditor,
@@ -74,6 +93,8 @@ export const editors: PropertyEditor[] = [
   backgroundColorEditor,
   borderRadiusEditor,
   opacityEditor,
+  mixBlendModeEditor,
+  backgroundBlendModeEditor,
   visibilityEditor,
   fontFamilyEditor,
   fontSizeEditor,
@@ -83,6 +104,20 @@ export const editors: PropertyEditor[] = [
   letterSpacingEditor,
   textAlignEditor,
   textColorEditor,
+  fontVariantNumericEditor,
+  textIndentEditor,
+  textWrapEditor,
+  whiteSpaceEditor,
+  textOverflowEditor,
+  lineClampEditor,
+  cursorEditor,
+  pointerEventsEditor,
+  userSelectEditor,
+  appearanceEditor,
+  willChangeEditor,
+  fillEditor,
+  strokeEditor,
+  strokeWidthEditor,
 ];
 
 /**

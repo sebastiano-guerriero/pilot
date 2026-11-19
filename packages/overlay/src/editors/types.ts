@@ -39,12 +39,19 @@ export interface PropertyEditor {
    * the search: searching for them finds the embedded editor on its own.
    */
   embeds?: PropertyEditor[];
+  /**
+   * Other properties it reads, and writes along with its own (line-clamp sets
+   * display and overflow). Fed to it like `properties`, but neither the search
+   * nor the list of set properties counts them as its own: searching
+   * `display` doesn't find line-clamp.
+   */
+  reads?: string[];
   component: ComponentType<PropertyEditorProps>;
 }
 
-/** Every property an editor reads: its own, then its embedded editors'. */
+/** Every property an editor reads: its own, its `reads`, then its embedded editors'. */
 export function propertiesOf(editor: PropertyEditor): string[] {
-  return [...editor.properties, ...(editor.embeds ?? []).flatMap(propertiesOf)];
+  return [...editor.properties, ...(editor.reads ?? []), ...(editor.embeds ?? []).flatMap(propertiesOf)];
 }
 
 export interface PropertyEditorProps {

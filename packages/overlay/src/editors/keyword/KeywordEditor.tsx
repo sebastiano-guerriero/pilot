@@ -13,6 +13,8 @@ interface KeywordOptions {
    * without one (set some other way) shows no icon.
    */
   icons?: Record<string, IconName>;
+  /** The row's label, when it isn't the property's name (overscroll-behavior → overscroll). */
+  name?: string;
 }
 
 /**
@@ -33,12 +35,13 @@ export function KeywordEditor({
     if (focusRequest) ref.current?.focus();
   }, [focusRequest]);
   const { icons } = config;
+  const name = config.name ?? property;
   return (
-    <PropertyRow label={property}>
+    <PropertyRow label={name}>
       <PropertySelect
         value={value}
         options={config.options}
-        label={property}
+        label={name}
         placeholder={isMixed(props, property) ? MIXED : undefined}
         triggerRef={ref}
         iconFor={
@@ -65,8 +68,8 @@ export function keywordEditor(
     family?: string;
   } & KeywordOptions,
 ): PropertyEditor {
-  const { property, options, icons, ...rest } = definition;
-  const config: KeywordOptions = { options, icons };
+  const { property, options, icons, name, ...rest } = definition;
+  const config: KeywordOptions = { options, icons, name };
   return {
     id: property,
     properties: [property],

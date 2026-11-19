@@ -71,8 +71,20 @@ export interface CssPropertyInfo {
    *   editor's): `50` or `50%` write `50%`, a fraction (`0.5`, `.25`) is
    *   that share of 100, kept within 0–100. The page's `0.5` shows as 50.
    *   Steps by whole numbers.
+   * - "idents": names, comma-separated (will-change: `opacity, transform`),
+   *   lowercase, joined with ", ", checked by the browser. Not stepped.
    */
-  kind?: "length" | "integer" | "number" | "line-height" | "font-family" | "grid-line" | "grid-span" | "ratio" | "percent";
+  kind?:
+    | "length"
+    | "integer"
+    | "number"
+    | "line-height"
+    | "font-family"
+    | "grid-line"
+    | "grid-span"
+    | "ratio"
+    | "percent"
+    | "idents";
 }
 
 const SIZE_KEYWORDS = ["auto", "fit-content", "min-content", "max-content", "stretch"];
@@ -129,6 +141,109 @@ export const OBJECT_FIT_VALUES = ["fill", "contain", "cover", "none", "scale-dow
 /** isolation's options, in menu order. */
 export const ISOLATION_VALUES = ["auto", "isolate"] as const;
 
+/** box-sizing's options, in menu order. */
+export const BOX_SIZING_VALUES = ["border-box", "content-box"] as const;
+
+/** overscroll-behavior's options, in menu order. */
+export const OVERSCROLL_VALUES = ["auto", "contain", "none"] as const;
+
+/** font-variant-numeric's options, in menu order (one each; a combination set another way is still shown). */
+export const FONT_VARIANT_NUMERIC_VALUES = [
+  "normal",
+  "tabular-nums",
+  "proportional-nums",
+  "lining-nums",
+  "oldstyle-nums",
+  "slashed-zero",
+  "ordinal",
+  "diagonal-fractions",
+  "stacked-fractions",
+] as const;
+
+/** text-overflow's options, in menu order. */
+export const TEXT_OVERFLOW_VALUES = ["clip", "ellipsis"] as const;
+
+/** text-wrap's options, in menu order. */
+export const TEXT_WRAP_VALUES = ["wrap", "nowrap", "balance", "pretty"] as const;
+
+/** white-space's options, in menu order. */
+export const WHITE_SPACE_VALUES = ["normal", "nowrap", "pre", "pre-line", "pre-wrap", "break-spaces"] as const;
+
+/** The blend modes, for background-blend-mode (mix-blend-mode adds the plus- ones), in menu order. */
+export const BLEND_MODE_VALUES = [
+  "normal",
+  "multiply",
+  "screen",
+  "overlay",
+  "darken",
+  "lighten",
+  "color-dodge",
+  "color-burn",
+  "hard-light",
+  "soft-light",
+  "difference",
+  "exclusion",
+  "hue",
+  "saturation",
+  "color",
+  "luminosity",
+] as const;
+
+/** mix-blend-mode's options, in menu order. */
+export const MIX_BLEND_MODE_VALUES = [...BLEND_MODE_VALUES, "plus-darker", "plus-lighter"] as const;
+
+/** cursor's options, in menu order. */
+export const CURSOR_VALUES = [
+  "auto",
+  "default",
+  "pointer",
+  "text",
+  "move",
+  "grab",
+  "grabbing",
+  "not-allowed",
+  "wait",
+  "progress",
+  "help",
+  "crosshair",
+  "zoom-in",
+  "zoom-out",
+  "copy",
+  "alias",
+  "context-menu",
+  "cell",
+  "vertical-text",
+  "no-drop",
+  "all-scroll",
+  "col-resize",
+  "row-resize",
+  "n-resize",
+  "e-resize",
+  "s-resize",
+  "w-resize",
+  "ne-resize",
+  "nw-resize",
+  "se-resize",
+  "sw-resize",
+  "ew-resize",
+  "ns-resize",
+  "nesw-resize",
+  "nwse-resize",
+  "none",
+] as const;
+
+/** pointer-events' options, in menu order. */
+export const POINTER_EVENTS_VALUES = ["auto", "none"] as const;
+
+/** user-select's options, in menu order. */
+export const USER_SELECT_VALUES = ["auto", "text", "all", "none"] as const;
+
+/** appearance's options, in menu order. */
+export const APPEARANCE_VALUES = ["auto", "none"] as const;
+
+/** will-change's presets, in menu order (Tailwind's; custom takes any other). */
+export const WILL_CHANGE_VALUES = ["auto", "scroll-position", "contents", "transform"] as const;
+
 export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   display: { initial: "inline", keywords: [...DISPLAY_VALUES], negative: false },
   "grid-template-columns": { initial: "none", keywords: ["none"], negative: false },
@@ -177,6 +292,28 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   // Edited by its own editor (css/colors.ts), not as a length.
   color: { initial: "canvastext", keywords: ["currentcolor", "transparent"], negative: false },
   "background-color": { initial: "transparent", keywords: ["currentcolor", "transparent"], negative: false },
+  "box-sizing": { initial: "content-box", keywords: [...BOX_SIZING_VALUES], negative: false },
+  "overscroll-behavior": { initial: "auto", keywords: [...OVERSCROLL_VALUES], negative: false },
+  "font-variant-numeric": { initial: "normal", keywords: [...FONT_VARIANT_NUMERIC_VALUES], negative: false },
+  // line-clamp, as browsers support it: with display: -webkit-box and
+  // -webkit-box-orient: vertical (editors/line-clamp).
+  "-webkit-line-clamp": { initial: "none", keywords: ["none"], negative: false, kind: "integer" },
+  "-webkit-box-orient": { initial: "horizontal", keywords: ["horizontal", "vertical"], negative: false },
+  "text-overflow": { initial: "clip", keywords: [...TEXT_OVERFLOW_VALUES], negative: false },
+  "text-wrap": { initial: "wrap", keywords: [...TEXT_WRAP_VALUES], negative: false },
+  "text-indent": { initial: "0", keywords: [], negative: true },
+  "white-space": { initial: "normal", keywords: [...WHITE_SPACE_VALUES], negative: false },
+  "mix-blend-mode": { initial: "normal", keywords: [...MIX_BLEND_MODE_VALUES], negative: false },
+  "background-blend-mode": { initial: "normal", keywords: [...BLEND_MODE_VALUES], negative: false },
+  cursor: { initial: "auto", keywords: [...CURSOR_VALUES], negative: false },
+  "pointer-events": { initial: "auto", keywords: [...POINTER_EVENTS_VALUES], negative: false },
+  "user-select": { initial: "auto", keywords: [...USER_SELECT_VALUES], negative: false },
+  appearance: { initial: "none", keywords: [...APPEARANCE_VALUES], negative: false },
+  "will-change": { initial: "auto", keywords: [...WILL_CHANGE_VALUES], negative: false, kind: "idents" },
+  // SVG paint, edited like colors (css/colors.ts); `none` paints nothing.
+  fill: { initial: "black", keywords: ["none", "currentcolor", "transparent"], negative: false },
+  stroke: { initial: "none", keywords: ["none", "currentcolor", "transparent"], negative: false },
+  "stroke-width": { initial: "1px", keywords: [], negative: false },
   // inset's sides: the offsets of a positioned element.
   ...sides((side) => side, { initial: "auto", keywords: ["auto"], negative: true }),
 };

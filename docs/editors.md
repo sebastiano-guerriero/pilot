@@ -41,11 +41,13 @@ Don't fork the pieces per property; extend their config.
 | Builder | For | Used by |
 | --- | --- | --- |
 | `lengthEditor({ … })` ([editors/length](../packages/overlay/src/editors/length)) | One value. Also for non-lengths: give the property a `kind` in `css/properties.ts`, and `name` for a row label that isn't the property name. `scrub: true` adds a drag handle | width, height and their min/max, flex-basis, border-radius, opacity, z-index, order, col-*, typography |
-| `keywordEditor({ property, options, icons })` ([editors/keyword](../packages/overlay/src/editors/keyword)) | A keyword property: a select, with an icon per value if given | justify-content, align-items, flex-direction, flex-wrap, object-fit, isolation, overflow, visibility, font-style, text-align |
+| `keywordEditor({ property, options, icons, name })` ([editors/keyword](../packages/overlay/src/editors/keyword)) | A keyword property: a select, with an icon per value if given, and `name` for a row label that isn't the property name | justify-content, align-items, flex-direction, flex-wrap, object-fit, isolation, overflow, overscroll-behavior, box-sizing, the blend modes, visibility, font-style, text-align, text-wrap, white-space, text-overflow, font-variant-numeric, the interactivity selects |
 | `splitEditor({ … })` ([editors/split](../packages/overlay/src/editors/split)) | A shorthand as one value or each part, switched by a button in `PropertyRow`'s `action` slot; configured with the parts' properties, icons, page areas, search words, and pairs typed together | gap directly; padding, margin, inset through `sidesEditor({ … })` ([editors/sides](../packages/overlay/src/editors/sides)) |
-| `presetEditor({ property, presets, customLabel, placeholder })` ([editors/preset](../packages/overlay/src/editors/preset)) | A few values plus `custom`, which adds a field for any other value. A value set some other way that means a preset (`16/9`, `1.0`) shows as that preset | aspect-ratio, flex-grow, flex-shrink, font-weight |
-| `revealEditor({ property, options, rows })` ([editors/reveal](../packages/overlay/src/editors/reveal)) | A select that reveals other editors as rows, per value, from `LIST_ORDER`, with Tab running through them | display, position |
-| `colorEditor({ property, name, label, aliases })` ([editors/color](../packages/overlay/src/editors/color)) | A color and its opacity | color, background-color |
+| `presetEditor({ property, presets, customLabel, placeholder })` ([editors/preset](../packages/overlay/src/editors/preset)) | A few values plus `custom`, which adds a field for any other value. A value set some other way that means a preset (`16/9`, `1.0`) shows as that preset | aspect-ratio, flex-grow, flex-shrink, font-weight, will-change |
+| `revealEditor({ property, options, rows })` ([editors/reveal](../packages/overlay/src/editors/reveal)) | A select that reveals other editors as rows, per value, from `LIST_ORDER`, with Tab running through them. `options` can depend on the value set now (display's `-webkit-box`) | display, position |
+| `colorEditor({ property, name, label, aliases, keywords })` ([editors/color](../packages/overlay/src/editors/color)) | A color and its opacity; `keywords` are values that aren't colors, taken as typed, with no opacity (fill and stroke's `none`) | color, background-color, fill, stroke |
+
+**An editor that writes more than its property** lists the others in `reads`: they're fed to it like `properties` (declared and computed values), but the search and the list of set properties don't count them, so searching `display` doesn't find line-clamp.
 
 **Revealing properties.** When a property or value brings others with it (`display: grid` shows grid-columns, gap, justify-content, align-items), the revealed ones are editors of their own, listed in the revealing editor's `embeds` and rendered as its rows. Only the revealing property reveals: searching a revealed one (`gap`, `grid-cols`, `items-center`) shows just that editor. Don't add revealed properties to the revealing editor's `properties` or `aliases`, or the search finds it too. The search doesn't look at `embeds`.
 
@@ -53,7 +55,7 @@ Don't fork the pieces per property; extend their config.
 
 ### PropertyRow
 
-[PropertyRow](../packages/overlay/src/ui/components/PropertyRow/PropertyRow.tsx): the property name (`PropertyLabel`) on the left and a fixed **128px value area** on the right; the labels get the rest, enough for `padding-bottom`, the longest so far. Fields in the value area share it equally (a grid of equal columns, so a field's own padding doesn't change its share). The `action` slot puts a control at the end of the value area (split editors' view button); the fields give up its width, and its right edge lines up with other rows' fields.
+[PropertyRow](../packages/overlay/src/ui/components/PropertyRow/PropertyRow.tsx): the property name (`PropertyLabel`) on the left and a fixed **128px value area** on the right; the labels get the rest, 92px at the dialog's width, enough for `padding-bottom` or `mix-blend-mode`. A property name that doesn't fit gets a shorter row label (`name`), taken from the property, not from Tailwind's class names: `bg-color`, `bg-blend-mode`, `overscroll`, `font-numeric`, `line-clamp`. Fields in the value area share it equally (a grid of equal columns, so a field's own padding doesn't change its share). The `action` slot puts a control at the end of the value area (split editors' view button); the fields give up its width, and its right edge lines up with other rows' fields.
 
 ### PropertyInputText
 
@@ -124,7 +126,7 @@ What each one decides beyond the shared pieces. Their order in the list is `LIST
 
 ### Layout
 
-- **Display** (`display/`): a `revealEditor` select (block, inline-block, inline, flex, inline-flex, grid, inline-grid, contents, none; Tailwind's display utilities are its aliases, `hidden` included). `grid`/`inline-grid` reveal grid-columns, gap, justify-content, align-items; `flex`/`inline-flex` reveal flex-direction, flex-wrap, gap, justify-content, align-items. Each row writes its own property, so each change is its own undo step, and undoing back past `grid` hides the rows. It shows the declared `display`, so a grid through its stylesheet shows its grid rows. `flex` alone finds display.
+- **Display** (`display/`): a `revealEditor` select (block, inline-block, inline, flex, inline-flex, grid, inline-grid, contents, none; Tailwind's display utilities are its aliases, `hidden` included). `grid`/`inline-grid` reveal grid-columns, gap, justify-content, align-items; `flex`/`inline-flex` reveal flex-direction, flex-wrap, gap, justify-content, align-items. Each row writes its own property, so each change is its own undo step, and undoing back past `grid` hides the rows. It shows the declared `display`, so a grid through its stylesheet shows its grid rows. `flex` alone finds display. While display is `-webkit-box` (line-clamp sets it), the menu offers it before `none` (`displayOptions()`); it isn't offered otherwise, since nobody picks it on its own.
 - **Width, min-width, max-width** (`width/`) and **height, min-height, max-height** (`height/`): `lengthEditor`s with a drag handle. `w` and `width` bring the family; `min-w` finds just min-width; `min` finds min-width and min-height. Typing `auto` makes it explicit, so it shows as a value.
 - **Size** (`size/`): Tailwind's `size`, width and height as two rows. Only `size` finds it: width and height are its `embeds`. From the search it lands on width with height linked, like `px` on padding (`LengthLink`: what's typed shows in both, Enter writes both as one undo step). The link lasts while focus stays on width; arrows and drags change one row. It writes nothing of its own, so it isn't in the empty-search list.
 - **Aspect ratio** (`aspect-ratio/`): a `presetEditor` with the common ratios (`1 / 1`, `4 / 3`, `3 / 2`, `16 / 9`, `21 / 9`, their portrait versions, `auto`) and custom (placeholder `x/y`), which writes nothing until a ratio is typed. A listed ratio set some other way (`16/9`, `1`) shows as that option. Found by `aspect` and Tailwind's `aspect-auto`, `aspect-square`, `aspect-video`.
@@ -137,7 +139,9 @@ What each one decides beyond the shared pieces. Their order in the list is `LIST
   - Tab goes through the sides, then on. The view button isn't a Tab stop: the search switches views from the keyboard. It changes nothing on the page.
   - Clearing a side after setting the one value shows the page's own value for that side (`revert-layer` in the preview).
   - Hovering or focusing a field stripes its area on the page.
+- **Box sizing** (`box-sizing/`): border-box, content-box; Tailwind's `box-border`, `box-content`.
 - **Overflow** (`overflow/`): visible, hidden, clip, scroll, auto. It writes the shorthand, so a page value on one axis only (`overflow-x`) isn't shown.
+- **Overscroll** (`overscroll/`, labeled `overscroll`, writes `overscroll-behavior`): auto, contain, none. Like overflow, it writes the shorthand.
 - **Order** (`order/`): an integer, negatives too.
 - **Flex grow, flex shrink, flex basis** (`flex-item/`): grow and shrink are `presetEditor`s with `0`, `1` and custom; basis is a length with a drag handle, or a size keyword. Tailwind's `grow`, `shrink`, `basis`.
 - **col-span, col-start, col-end** (`grid-column/`): where a grid item sits, named the Tailwind way; `col` finds all three (`cols` is grid-columns). col-span writes `grid-column` (the grid-span kind); col-start/col-end write `grid-column-start`/`-end`. They share `grid-column`, so the latest edit wins where they overlap: set col-span first, then col-start, for "start at 2, span 3" (`2 / span 3`). Undo restores each end exactly.
@@ -167,11 +171,12 @@ What each one decides beyond the shared pieces. Their order in the list is `LIST
 - **Background color** (`color/`, labeled `bg-color`, since the full name doesn't fit): found by `background-color`, `background`, `bg-color`, `bg`; `color` still finds only the text color.
 - **Border radius** (`border-radius/`): one value for every corner, a length or percentage, never negative. Found by `radius` and `rounded`.
 - **Opacity** (`opacity/`): the percent kind; drags stop at 0 and 100.
+- **Mix blend mode** and **background blend mode** (`blend/`, the second labeled `bg-blend-mode`): the blend modes (mix-blend-mode adds `plus-darker`, `plus-lighter`); Tailwind's `mix-blend`, `bg-blend`. `background` finds both background editors.
 - **Border** is removed while its new component is designed; the old box diagram is gone too.
 
 ### Typography
 
-[editors/typography](../packages/overlay/src/editors/typography/TypographyEditors.tsx), plus color. font-size, line-height and letter-spacing have a drag handle; the others don't.
+[editors/typography](../packages/overlay/src/editors/typography/TypographyEditors.tsx), plus color. font-size, line-height, letter-spacing and text-indent have a drag handle; the others don't.
 
 - **color** ([editors/color](../packages/overlay/src/editors/color/ColorEditor.tsx)): two fields sharing the value area as one box: the color with a swatch, and its opacity (0–100, with a drag handle). The swatch shows the computed color; with no color set it shows the "nothing set" icon. The color field shows hex, or how the page names the color (`var(--brand)`, `oklch(…)`), as written. Typing takes hex with or without `#` (3 to 8 digits) or any CSS color; a hex with alpha sets the opacity too. Written back as one value ([css/colors.ts](../packages/overlay/src/css/colors.ts)): `#000000`, `#00000080` below 100, or `color-mix(in srgb, var(--brand) 50%, transparent)` for a named color. Clearing the color removes it; clearing the opacity makes it 100.
 - **font-family**: Tailwind's `font-sans`, `font-serif`, `font-mono`.
@@ -181,7 +186,21 @@ What each one decides beyond the shared pieces. Their order in the list is `LIST
 - **line-height**: ↑ and drags from nothing set start at 1.2, about what `normal` is; a unitless value drags by 0.1 per pixel; Tailwind's `leading`.
 - **letter-spacing**: a length, negatives too, or `normal`; `tracking`.
 - **text-align**: an icon select (left, center, right, justify; `start` set some other way still shows); `text-left`… `text-end`. `text` alone finds font-size.
+- **font-variant-numeric** (labeled `font-numeric`): one value from the select (`tabular-nums`, `slashed-zero`…); a combination set some other way still shows. Tailwind's numeric class names.
+- **text-indent**: a length, negatives too; `indent`.
+- **text-wrap**: wrap, nowrap, balance, pretty; `text-nowrap`, `text-balance`, `text-pretty`.
+- **white-space**: normal, nowrap, pre, pre-line, pre-wrap, break-spaces; `whitespace`.
+- **text-overflow**: clip, ellipsis; `text-ellipsis`, `text-clip`, `truncate`. Ellipsis shows only with `overflow: hidden` and `white-space: nowrap`, which it doesn't set: Tailwind's `truncate` is all three.
+- **line-clamp** ([editors/line-clamp](../packages/overlay/src/editors/line-clamp/LineClampEditor.tsx)): a number of lines, or `none`. Browsers don't support the unprefixed `line-clamp` yet, so it writes what Tailwind's `line-clamp-3` does, as one undo step: `-webkit-line-clamp`, plus `display: -webkit-box`, `-webkit-box-orient: vertical` and `overflow: hidden` where they aren't set already. Cleared (or `none`), it clears those that still hold the clamp's values and leaves the page's own (`display: flex`). The page's line-clamp class shows as its number.
 - `font` shows the four font-* editors; `size` finds the size editor, not font-size.
+
+### Interactivity
+
+[editors/interactivity](../packages/overlay/src/editors/interactivity/InteractivityEditors.tsx). **cursor** (the shapes, `pointer` and `text` first), **pointer-events** (auto, none), **user-select** (auto, text, all, none; Tailwind's `select`), **appearance** (auto, none). **will-change** is a `presetEditor`: Tailwind's four (auto, scroll-position, contents, transform), and custom for any property names (`opacity, transform`, the `idents` kind). Tailwind names the others after the property, so they have no aliases.
+
+### SVG
+
+[editors/svg](../packages/overlay/src/editors/svg/SvgEditors.tsx): **fill** and **stroke** are color editors that also take `none` (no opacity then); **stroke-width** is a length (`2` is 2px) with a drag handle. The swatch shows the paint applied: `currentcolor` shows the text color. Tailwind's `stroke-2` would collide with stroke's name, so stroke-width has no alias.
 
 ### Visibility
 

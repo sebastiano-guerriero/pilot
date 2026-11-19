@@ -24,13 +24,25 @@ const ROW_EDITORS: PropertyEditor[] = [
 ];
 
 /**
+ * The display values offered for the one set now: DISPLAY_VALUES, plus
+ * `-webkit-box` before `none` while it's set (line-clamp sets it, see
+ * editors/line-clamp). It's offered only then: on its own it's a legacy value
+ * nobody picks.
+ */
+export function displayOptions(value: string): readonly string[] {
+  if (value !== "-webkit-box") return DISPLAY_VALUES;
+  const at = DISPLAY_VALUES.indexOf("none");
+  return [...DISPLAY_VALUES.slice(0, at), "-webkit-box", ...DISPLAY_VALUES.slice(at)];
+}
+
+/**
  * Display, as a select. Picking `grid` (or `inline-grid`) shows the grid rows
  * below it, `flex` (or `inline-flex`) the flex rows (see RevealEditor).
  */
 export const displayEditor = revealEditor({
   property: "display",
   label: "Display",
-  options: DISPLAY_VALUES,
+  options: displayOptions,
   rows: ROW_EDITORS,
   // Tailwind's display utilities: they all land here.
   aliases: ["grid", "inline-grid", "flex", "inline-flex", "block", "inline-block", "inline", "hidden", "contents"],

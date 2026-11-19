@@ -51,11 +51,13 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 
 ### Property editors
 
-- [x] Layout: display (with its grid and flex rows), width, height and their min/max, size, aspect-ratio, padding, margin, overflow, order, flex-grow, flex-shrink, flex-basis, col-span, col-start, col-end, object-fit
+- [x] Layout: display (with its grid and flex rows), width, height and their min/max, size, aspect-ratio, box-sizing, padding, margin, overflow, overscroll-behavior, order, flex-grow, flex-shrink, flex-basis, col-span, col-start, col-end, object-fit
 - [x] Grid and flex rows: grid-columns, gap, justify-content, align-items, flex-direction, flex-wrap
 - [x] Position: position (with inset), inset, z-index, isolation
-- [x] Appearance: background color, border radius, opacity
-- [x] Typography: color, font-family, font-size, font-style, font-weight, line-height, letter-spacing, text-align
+- [x] Appearance: background color, border radius, opacity, mix-blend-mode, background-blend-mode
+- [x] Typography: color, font-family, font-size, font-style, font-weight, font-variant-numeric, line-height, letter-spacing, text-align, text-indent, text-wrap, white-space, text-overflow, line-clamp
+- [x] Interactivity: cursor, pointer-events, user-select, appearance, will-change
+- [x] SVG: fill, stroke, stroke-width
 - [x] Visibility: visibility
 - [ ] Border: a new component is being designed
 - [ ] Inset areas on the page (none designed)

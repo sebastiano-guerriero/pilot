@@ -92,12 +92,27 @@ describe("z-index, border-radius and visibility", () => {
     }
   });
 
-  it("Position (position, inset, z-index, isolation), then Appearance (bg-color, border-radius, opacity), then Typography (color first)", () => {
+  it("Position (position, inset, z-index, isolation), then Appearance (bg-color, border-radius, opacity, the blend modes), then Typography (color first)", () => {
     const ids = inListOrder(editors).map((e) => e.id);
     const at = ids.indexOf("position");
-    const order = ["position", "inset", "z-index", "isolation", "background-color", "border-radius", "opacity", "color"];
+    const order = [
+      "position",
+      "inset",
+      "z-index",
+      "isolation",
+      "background-color",
+      "border-radius",
+      "opacity",
+      "mix-blend-mode",
+      "background-blend-mode",
+      "color",
+    ];
     expect(ids.slice(at, at + order.length)).toEqual(order);
-    expect(order.map(groupOf)).toEqual(["Position", "Position", "Position", "Position", "Appearance", "Appearance", "Appearance", "Typography"]);
+    expect(order.map(groupOf)).toEqual([
+      ...Array(4).fill("Position"),
+      ...Array(5).fill("Appearance"),
+      "Typography",
+    ]);
   });
 });
 
