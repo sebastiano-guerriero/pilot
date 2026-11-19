@@ -1,6 +1,6 @@
 import type { Job } from "@pilot/protocol";
 import { describe, expect, it } from "vitest";
-import { followUp, INSTRUCTIONS, jobPrompt, MAX_BATCH, takeQueued, taskFollowUp } from "./mcp.ts";
+import { INSTRUCTIONS, jobPrompt, MAX_BATCH, takeQueued, taskFollowUp } from "./mcp.ts";
 
 const target = { selector: ".card", path: "main > div.card", tag: "div", classes: ["card"], text: "BMW M4" };
 const job = (patch: Partial<Job> = {}): Job => ({
@@ -17,27 +17,6 @@ const job = (patch: Partial<Job> = {}): Job => ({
   createdAt: "",
   updatedAt: "",
   ...patch,
-});
-
-describe("followUp", () => {
-  it("says a deleted or added element that isn't in the page yet in words", () => {
-    const edits = { ...job().changeSet, request: undefined, edits: [{ target, changes: [], removed: true as const }] };
-    const text = followUp(
-      job({
-        changeSet: edits,
-        attempt: 2,
-        differences: [
-          { selector: ".card", property: "dom:remove", expected: "removed", outcome: "differs", actual: "still on the page" },
-          { selector: ".card", property: "dom:insert:x1", expected: "a new element after it", outcome: "differs", actual: "not on the page" },
-          { selector: ".card", property: "padding-top", expected: "24px", outcome: "differs", actual: "16px" },
-        ],
-      }),
-    );
-    expect(text).toContain("deleted by the designer, but it's still on the page.");
-    expect(text).toContain("a new element after it was added by the designer, but it's not on the page.");
-    expect(text).toContain("`padding-top` should be `24px`, the page gives `16px`.");
-    expect(text).not.toContain("dom:");
-  });
 });
 
 describe("jobPrompt", () => {

@@ -32,13 +32,9 @@ export interface DomRow {
 const HIDDEN_TAGS = new Set(["script", "style", "link", "meta", "template", "noscript", "head", "title", "base", "pilot-root"]);
 const MAX_TEXT = 32;
 
-/**
- * The children shown for an element: its elements (no scripts, styles,
- * Pilot), in order, without the ones in `hidden` (deleted in the tree:
- * still on the page, hidden by the preview).
- */
-export function domChildren(element: Element, hidden?: ReadonlySet<Element>): Element[] {
-  return Array.from(element.children).filter((c) => !HIDDEN_TAGS.has(c.tagName.toLowerCase()) && !hidden?.has(c));
+/** The children shown for an element: its elements (no scripts, styles, Pilot), in order. */
+export function domChildren(element: Element): Element[] {
+  return Array.from(element.children).filter((c) => !HIDDEN_TAGS.has(c.tagName.toLowerCase()));
 }
 
 /** The element's ::before / ::after, when they're drawn (`content` set). */
@@ -50,19 +46,14 @@ export function pseudoElements(element: Element): Array<"::before" | "::after"> 
   });
 }
 
-/**
- * The rows to show under `root`: each expanded element's children and
- * pseudo-elements, depth first, leaving out the elements in `hidden`. The
- * tree's root is the document element, so its one row is the body (the head
- * is hidden): the wrapper of everything, the only row on an empty page.
- */
-export function domRows(root: Element, expanded: ReadonlySet<Element>, hidden?: ReadonlySet<Element>): DomRow[] {
+/** The rows to show under `root`: each expanded element's children and pseudo-elements, depth first. */
+export function domRows(root: Element, expanded: ReadonlySet<Element>): DomRow[] {
   const rows: DomRow[] = [];
   const walk = (parent: Element, depth: number) => {
     const pseudos = pseudoElements(parent);
     if (pseudos.includes("::before")) rows.push(pseudoRow(parent, "::before", depth));
-    for (const element of domChildren(parent, hidden)) {
-      const expandable = domChildren(element, hidden).length > 0 || pseudoElements(element).length > 0;
+    for (const element of domChildren(parent)) {
+      const expandable = domChildren(element).length > 0 || pseudoElements(element).length > 0;
       const open = expandable && expanded.has(element);
       rows.push({ element, ...describe(element), depth, expandable, expanded: open });
       if (open) walk(element, depth + 1);

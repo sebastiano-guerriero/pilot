@@ -1,8 +1,6 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
 import { type DomRow, ancestorsWithin, isSelectableRow, domRows } from "../../../dom/domTree.ts";
 import { scrollWithin } from "../../../dom/reveal.ts";
-import { isMovable } from "../../../edits/structure.ts";
-import { ContextMenu } from "../ContextMenu/ContextMenu.tsx";
 import { px } from "../../px.ts";
 import { Icon } from "../Icon/Icon.tsx";
 import { ScrollThumb } from "../ScrollThumb/ScrollThumb.tsx";
@@ -21,21 +19,11 @@ interface DomTreeProps {
    * selection, the last picked first.
    */
   onSelect(element: Element, how?: { add?: boolean; range?: readonly Element[] }): void;
-  /** Elements deleted in the tree (still on the page, hidden): their rows are left out. */
-  removed?: ReadonlySet<Element>;
-  /**
-   * An action from a row's menu (right-click), on `elements`: the selection
-   * when the row is in it, else the row's element (selected first).
-   */
-  onAction?(action: DomAction, elements: Element[]): void;
   onClose(): void;
 }
 
-/** What a row's menu does (edits/structure.ts). */
-export type DomAction = "duplicate" | "delete" | "add-child" | "add-sibling";
-
 /** The panel's width and its distance from the window's edges, in px (DomTree.css). */
-const WIDTH = 240;
+const WIDTH = 260;
 const EDGE = 8;
 /** The shortest the panel can be resized to: the header and a few rows. */
 export const MIN_HEIGHT = 120;
@@ -92,17 +80,13 @@ const keyOf = (el: Element, pseudo = "") => {
  *   things), not selectable: changes are for elements.
  * The tree updates as the page changes (a MutationObserver on the body).
  */
-export function DomTree({ selected, also = [], onHover, onSelect, removed, onAction, onClose }: DomTreeProps) {
-  // The document element: its one row is the body, the wrapper of everything
-  // (the head is hidden), selectable, and open from the start.
-  const root = document.documentElement;
+export function DomTree({ selected, also = [], onHover, onSelect, onClose }: DomTreeProps) {
+  const root = document.body;
   // Open down to the selection from the first render, so the panel opens
   // centered on its real height (and the effect below keeps it following).
   const [expanded, setExpanded] = useState<Set<Element>>(() =>
-    selected ? new Set([document.body, ...ancestorsWithin(selected, root), selected]) : new Set([document.body]),
+    selected ? new Set([...ancestorsWithin(selected, root), selected]) : new Set(),
   );
-  // A row's menu: where it was asked for, and what it acts on.
-  const [menu, setMenu] = useState<{ x: number; y: number; elements: Element[] } | null>(null);
   const [, refresh] = useReducer((n: number) => n + 1, 0);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -208,7 +192,7 @@ export function DomTree({ selected, also = [], onHover, onSelect, removed, onAct
     };
   }, []);
 
-  const rows = domRows(root, expanded, removed);
+  const rows = domRows(root, expanded);
   const selectedIndex = rows.findIndex((r) => !r.pseudo && r.element === selected);
 
   // Keep the selected row in view, sideways too: its name, not the whole
@@ -336,15 +320,6 @@ export function DomTree({ selected, also = [], onHover, onSelect, removed, onAct
               data-pseudo={row.pseudo ? "" : undefined}
               style={{ paddingLeft: px(8 + row.depth * 12) }}
               onPointerEnter={() => onHover(row.element)}
-              onContextMenu={(e) => {
-                e.preventDefault();
-                if (!isSelectableRow(row) || !onAction) return;
-                // A row in the selection acts on all of it; another row is selected first.
-                const inSelection = row.element === selected || also.includes(row.element);
-                if (!inSelection) pick(row.element);
-                const elements = inSelection && selected ? [selected, ...also.filter((el) => el !== selected)] : [row.element];
-                setMenu({ x: e.clientX, y: e.clientY, elements });
-              }}
               onClick={(e) => {
                 if (!isSelectableRow(row)) return;
                 if (e.metaKey || e.ctrlKey) {
@@ -382,17 +357,6 @@ export function DomTree({ selected, also = [], onHover, onSelect, removed, onAct
         <ScrollThumb target={listRef} />
         <ScrollThumb target={listRef} axis="x" />
       </div>
-      {menu && onAction && (
-        <ContextMenu
-          x={menu.x}
-          y={menu.y}
-          items={menuItems(menu.elements, (action) => onAction(action, menu.elements))}
-          onClose={() => {
-            setMenu(null);
-            listRef.current?.focus();
-          }}
-        />
-      )}
       {/* The resize strip: 6px along the bottom edge (it adds no height). */}
       <div
         class="resize-handle"
@@ -404,19 +368,4 @@ export function DomTree({ selected, also = [], onHover, onSelect, removed, onAct
       />
     </div>
   );
-}
-
-/**
- * A row's menu. The body can only get children: it can't be deleted,
- * duplicated or given a sibling (isMovable). No keys yet: shortcuts are
- * still to be decided.
- */
-function menuItems(elements: readonly Element[], run: (action: DomAction) => void) {
-  const movable = elements.some(isMovable);
-  return [
-    { label: "Add child", onSelect: () => run("add-child") },
-    { label: "Add sibling", onSelect: () => run("add-sibling"), disabled: !movable },
-    { label: "Duplicate", onSelect: () => run("duplicate"), disabled: !movable },
-    { label: "Delete", onSelect: () => run("delete"), disabled: !movable },
-  ];
 }

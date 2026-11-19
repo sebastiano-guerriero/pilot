@@ -6,7 +6,7 @@
   :scope {
     position: fixed;
     z-index: var(--plt-z-ui);
-    width: 240px;
+    width: 260px;
     /* Room below the list, so the horizontal scroll thumb sits clear of the
        panel's rounded bottom edge (7px up: these 4px and its own 3px). */
     padding-bottom: 4px;

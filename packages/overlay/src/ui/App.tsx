@@ -8,8 +8,6 @@ import { isTextOnly, normalizeText, textProperty, textRunAt } from "../dom/text.
 import { formatPrompt } from "@pilot/protocol";
 import { buildChangeSet, copyText } from "../edits/changeSet.ts";
 import { type EditHistory, historyShortcut } from "../edits/history.ts";
-import { addElements, duplicateElements, removeElements } from "../edits/structure.ts";
-import { domChildren } from "../dom/domTree.ts";
 import { clickWidth } from "../edits/widths.ts";
 import type { PilotDevOptions } from "../mount.tsx";
 import { caretAt, editText } from "../select/inlineText.ts";
@@ -21,7 +19,7 @@ import { Highlight } from "./components/Highlight/Highlight.tsx";
 import { PropertyDialog, type WidthPick } from "./components/PropertyDialog/PropertyDialog.tsx";
 import { awaitsAnswer, type CommentThread, type JobRecord, needsYou, type PilotSession } from "../bridge/session.ts";
 import { statusText, whatText } from "./components/JobList/JobList.tsx";
-import { type DomAction, DomTree } from "./components/DomTree/DomTree.tsx";
+import { DomTree } from "./components/DomTree/DomTree.tsx";
 import { actionsBox, type Busy, SelectionActions } from "./components/SelectionActions/SelectionActions.tsx";
 import { type CommentOutcome, CommentWidget } from "./components/CommentWidget/CommentWidget.tsx";
 import { Confetti } from "./components/Confetti/Confetti.tsx";
@@ -153,32 +151,6 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   useEffect(() => {
     if (!domOpen) setDomHover(null);
   }, [domOpen]);
-  // A row's menu in the DOM tree: changes to the DOM itself (edits/structure.ts),
-  // one undo step. What it adds is selected; after Delete, the row next to the
-  // first deleted one (or before it, or its parent), so the tree keeps a selection.
-  const onDomAction = (action: DomAction, elements: Element[]) => {
-    const targets = elements.filter(isEditable);
-    const first = targets[0];
-    if (!first) return;
-    let next: EditableElement[] = [];
-    if (action === "delete") {
-      const gone = new Set<Element>([...history.removed(), ...targets]);
-      const shown = (el: Element | null | undefined): el is EditableElement => !!el && isEditable(el) && !gone.has(el);
-      const siblings = first.parentElement ? domChildren(first.parentElement) : [];
-      const at = siblings.indexOf(first);
-      const after = siblings.slice(at + 1).find(shown);
-      const before = siblings.slice(0, Math.max(at, 0)).reverse().find(shown);
-      const fallback = after ?? before ?? (shown(first.parentElement) ? first.parentElement : null);
-      removeElements(history, targets);
-      if (fallback) next = [fallback];
-    } else if (action === "duplicate") next = duplicateElements(history, targets);
-    else next = addElements(history, targets, action === "add-child" ? "inside" : "after");
-    const [lead, ...rest] = next;
-    if (!lead) return;
-    setSelected((prev) => ({ element: lead, key: (prev?.key ?? 0) + 1, from: "dom" }));
-    setOthers(rest);
-    setLatest(next.at(-1) ?? null);
-  };
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!e.altKey || e.metaKey || e.ctrlKey || e.code !== "KeyD") return;
@@ -697,8 +669,6 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
           also={others}
           onHover={setDomHover}
           onSelect={pickFromDom}
-          removed={history.removed()}
-          onAction={onDomAction}
           onClose={() => setDomOpen(false)}
         />
       )}

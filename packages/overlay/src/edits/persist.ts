@@ -1,5 +1,4 @@
 import type { ElementTarget } from "@pilot/protocol";
-import { resolveNew, withoutInserted } from "../dom/structure.ts";
 import { type EditableElement, isEditable } from "../dom/target.ts";
 import { EditHistory, type SavedHistory } from "./history.ts";
 
@@ -26,13 +25,9 @@ const STORAGE_KEY = "pilot:edits";
 
 /** The live element for a saved change, or a detached stand-in. */
 export function resolveTarget(target: ElementTarget, path: string): EditableElement {
-  // An element Pilot added, or one inside it: the history made it again (EditHistory.load).
-  const added = resolveNew(target.selector);
-  if (added) return added;
   if (path === location.pathname) {
     try {
-      // Looked up as it was taken: with Pilot's new elements out (dom/structure.ts).
-      const element = withoutInserted(() => document.querySelector(target.selector));
+      const element = document.querySelector(target.selector);
       if (isEditable(element)) return element;
     } catch {
       // A selector this document can't parse: treat as not found.

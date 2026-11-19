@@ -1,7 +1,6 @@
 import type { ElementState, ElementTarget, StyleSource, WidthRange } from "@pilot/protocol";
-import { DOM_REMOVE, sortStates } from "@pilot/protocol";
+import { sortStates } from "@pilot/protocol";
 import { type Forced, type Preview, stylesheetPreview } from "../dom/preview.ts";
-import { type InsertRule, type StructurePreview, domStructurePreview, insertIdOf, isStructural, parseSpec } from "../dom/structure.ts";
 import { type TextPreview, domTextPreview, textRunOf } from "../dom/text.ts";
 import { sameStates } from "./states.ts";
 import { type EditableElement, describeElement } from "../dom/target.ts";
@@ -55,8 +54,6 @@ export interface RecordedChange {
   element: EditableElement;
   /** The element as described when it was first changed (see Entry). */
   target: ElementTarget;
-  /** The page it was changed on (`location.pathname`). */
-  path: string;
   property: string;
   /** The value set (a removal's preview when `removal` is set). */
   value: string;
@@ -115,7 +112,6 @@ export class EditHistory {
   constructor(
     private readonly preview: Preview = stylesheetPreview,
     private readonly text: TextPreview = domTextPreview,
-    private readonly structure: StructurePreview = domStructurePreview,
   ) {}
 
   /** Call `listener` after every change, undo, redo and restore. Returns the unsubscribe. */
@@ -138,15 +134,6 @@ export class EditHistory {
    */
   load(saved: SavedHistory, resolve: Resolve): void {
     if (saved?.version !== 1) return;
-    // The new elements first (dom/structure.ts), made again from their
-    // markup: the changes on them and inside them are found in them.
-    for (const step of [...(saved.done ?? []), ...(saved.undone ?? [])]) {
-      if (!Array.isArray(step)) continue;
-      for (const e of step) {
-        const id = insertIdOf(e.property);
-        if (id) this.structure.node(id, parseSpec(e.value));
-      }
-    }
     const elements = new Map<string, EditableElement>();
     const element = (e: SavedEntry) => {
       const key = `${e.path}|${e.target.selector}`;
@@ -238,10 +225,9 @@ export class EditHistory {
     return this.rules()
       .filter((r) => r.value !== "")
       .filter((r) => (filter.unsent ? !r.job : true) && (filter.job === undefined || r.job === filter.job))
-      .map(({ element, target, path, property, value, removal, widths, states, job, from }) => ({
+      .map(({ element, target, property, value, removal, widths, states, job, from }) => ({
         element,
         target,
-        path,
         property,
         value,
         removal,
@@ -304,7 +290,7 @@ export class EditHistory {
    * what the page gives against what a job asked for (edits/verify.ts).
    */
   probe<T>(changes: RecordedChange[], measure: () => T): T {
-    this.preview.render(changes.filter((c) => textRunOf(c.property) === null && !isStructural(c.property)).map((c) => (c.value === "" ? { ...c, value: "revert-layer" } : c)));
+    this.preview.render(changes.filter((c) => textRunOf(c.property) === null).map((c) => (c.value === "" ? { ...c, value: "revert-layer" } : c)));
     try {
       return measure();
     } finally {
@@ -413,8 +399,6 @@ export class EditHistory {
   }
 
   private render(): void {
-    // The new elements first: the stylesheet and the text preview show changes inside them too.
-    this.structure.render(this.insertRules());
     this.preview.render(this.previewRules(), this.forced);
     this.text.render(
       this.rules()
@@ -424,34 +408,11 @@ export class EditHistory {
     for (const listener of this.listeners) listener();
   }
 
-  /**
-   * The stylesheet's rules: the CSS changes (text changes are shown by the
-   * text preview, new elements by the structure preview), then the deleted
-   * elements hidden, last so no change of Pilot's shows them again.
-   */
+  /** The stylesheet's rules: the CSS changes (text changes are shown by the text preview). */
   private previewRules() {
-    const rules = this.rules();
-    const css = rules
-      .filter((r) => textRunOf(r.property) === null && !isStructural(r.property))
+    return this.rules()
+      .filter((r) => textRunOf(r.property) === null)
       .map((r) => (r.value === "" ? { ...r, value: "revert-layer" } : r));
-    const hidden = rules.filter((r) => r.property === DOM_REMOVE).map((r) => ({ element: r.element, property: "display", value: "none" }));
-    return [...css, ...hidden];
-  }
-
-  /** The new elements in effect, in the order added (dom/structure.ts). */
-  private insertRules(): InsertRule[] {
-    const out: InsertRule[] = [];
-    for (const r of this.rules()) {
-      const id = insertIdOf(r.property);
-      const spec = id ? parseSpec(r.value) : null;
-      if (id && spec) out.push({ anchor: r.element, id, spec });
-    }
-    return out;
-  }
-
-  /** The elements deleted (in the DOM tree), still on the page but hidden by the preview. */
-  removed(): Set<Element> {
-    return new Set(this.rules().filter((r) => r.property === DOM_REMOVE && r.value !== "").map((r) => r.element));
   }
 
   /**

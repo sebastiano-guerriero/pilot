@@ -129,41 +129,7 @@ export interface ElementEdit {
   changes: StyleChange[];
   /** New texts for the element, when the designer edited them (one per text run). */
   texts?: TextChange[];
-  /** The designer deleted the element (the DOM tree's Delete): it goes from the code. */
-  removed?: true;
-  /** Elements the designer added next to it or inside it (the DOM tree's Duplicate, Add child, Add sibling), in the order added. */
-  inserts?: Insertion[];
-  /**
-   * The element is one the designer added (`inserts` of another edit), or
-   * inside one (a copy's child): that insertion's `id`. Its changes are for
-   * the new element, once it's in the code.
-   */
-  newElement?: string;
 }
-
-/**
- * An element the designer added in the DOM tree. It isn't in the code yet:
- * Pilot shows it on the page with an element of its own until the agent
- * writes it.
- */
-export interface Insertion {
-  /** What the change set calls it (`new-1`), which `ElementEdit.newElement` refers to. */
-  id: string;
-  /** Right after the edit's element, or inside it, as its last child. */
-  place: "after" | "inside";
-  /** A copy of the edit's element as the page shows it (its children too), or a new empty element. */
-  kind: "copy" | "new";
-  tag: string;
-}
-
-/**
- * The history's reserved properties for changes to the DOM itself (not
- * CSS): a deleted element, and an element added after or inside one (one
- * property per new element: `dom:insert:<id>`). They show up in the check's
- * results (`ChangeResult.property`), so the follow-up can say them in words.
- */
-export const DOM_REMOVE = "dom:remove";
-export const DOM_INSERT = "dom:insert:";
 
 /**
  * A task for the agent about one element, sent instead of edits: the
