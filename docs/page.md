@@ -60,12 +60,13 @@ Why the union and not the shared properties: what one card sets and the others d
 
 The name says what's about to be selected ([dom/name.ts](../packages/overlay/src/dom/name.ts)), the most telling one first:
 
-1. its id: `section#features`;
-2. a naming data attribute: the project's own first (`mountPilot({ nameAttributes: ["data-block"] })`), then the common ones, `data-testid`, `data-test`, `data-cy`, `data-qa`, `data-slot` (shadcn/ui), `data-component`, `data-name`, `data-section`: `div[data-testid=hero]`;
-3. a form field's `name`: `input[name=email]`;
-4. its tag: `article`, `a`.
+1. the component it's the top-level element of, by name, in a React or Vue app (`componentName()`, *Components* above): `ProductCard` for the card, while the title inside it keeps its own name (`h3`). With Server Components, only the app's, never the framework's own (`InnerLayoutRouter`). Found by walking up from the element only, never the whole tree, as it runs on every hover;
+2. its id: `section#features`;
+3. a naming data attribute: the project's own first (`mountPilot({ nameAttributes: ["data-block"] })`), then the common ones, `data-testid`, `data-test`, `data-cy`, `data-qa`, `data-slot` (shadcn/ui), `data-component`, `data-name`, `data-section`: `div[data-testid=hero]`;
+4. a form field's `name`: `input[name=email]`;
+5. its tag: `article`, `a`.
 
-Classes are never used: there's no reliable way to tell a meaningful one (`card`) from a utility (`flex`, `p-4`). Nor are other data attributes, which libraries use for state (`data-state="open"`), nor `aria-label` and the element's text, which are for readers, not what an element is styled by. Component names (React, Vue, Svelte…) will come first once Pilot reads them. The change set's DOM path still uses classes (`shortName()`), since they help the agent find the element. The playground has an example of each.
+Classes are never used: there's no reliable way to tell a meaningful one (`card`) from a utility (`flex`, `p-4`). Nor are other data attributes, which libraries use for state (`data-state="open"`), nor `aria-label` and the element's text, which are for readers, not what an element is styled by. The change set's DOM path still uses classes (`shortName()`), since they help the agent find the element. The playground has an example of each.
 
 ### Selection actions
 

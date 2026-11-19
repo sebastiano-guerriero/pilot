@@ -73,6 +73,57 @@ export function componentSource(element: Element): ComponentSource | null {
   }
 }
 
+/**
+ * The component an element is the top-level element of (the card a
+ * `<ProductCard>` renders), for the hover label: its name, or null (an
+ * element inside a component, or no component Pilot reads). Cheap, as it
+ * runs on every hover: it walks up from the element only, never the whole
+ * tree. The innermost one when several share the element; with Server
+ * Components on the page, only the app's (as for Select similar).
+ */
+export function componentName(element: Element): string | null {
+  try {
+    const fiber = reactFiberOf(element);
+    if (fiber) return reactRootName(fiber);
+    const owner = vueOwnerOf(element);
+    if (owner && vueRoots(owner.subTree).includes(element)) return vueName(owner.type) || null;
+  } catch {
+    // A framework's internals Pilot didn't expect: no name.
+  }
+  return null;
+}
+
+function reactRootName(fiber: Fiber): string | null {
+  // A Server Component whose output starts here.
+  const server = serversAt(fiber)[0];
+  if (server) return server.name;
+  // Up to the next element: the components on the way render this one at their top level.
+  let rsc: boolean | null = null;
+  for (let f = fiber.return; f && !isHost(f); f = f.return) {
+    if (serversAt(f)[0]) return (serversAt(f)[0] as ServerComponent).name;
+    if (!isComponent(f)) continue;
+    rsc ??= usesServerComponents(fiber);
+    if (!rsc || ownedByServerComponent(f)) return reactName(f.type) || null;
+  }
+  return null;
+}
+
+/** Whether the page renders Server Components: React's records of them on the way up to the root. */
+function usesServerComponents(fiber: Fiber): boolean {
+  for (let f: Fiber | null = fiber; f; f = f.return) if (serversAt(f).length) return true;
+  return false;
+}
+
+/** Whether the chain of who created `fiber` reaches a Server Component (the app's, see isAppComponent). */
+function ownedByServerComponent(fiber: Fiber): boolean {
+  let owner = fiber._debugOwner ?? null;
+  for (let i = 0; owner && i < 200; i++) {
+    if (isServerComponent(owner)) return true;
+    owner = isFiber(owner) ? (owner._debugOwner ?? null) : ((owner as ServerComponent).owner ?? null);
+  }
+  return false;
+}
+
 function readerFor(element: Element): Reader | null {
   if (reactFiberOf(element)) return react;
   if (vueOwnerOf(element)) return vue;

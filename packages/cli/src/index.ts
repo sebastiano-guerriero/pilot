@@ -10,7 +10,7 @@ import { AGENT_IDS, type AgentId, init } from "./init.ts";
 import { setup } from "./setup.ts";
 import { update } from "./update.ts";
 
-const HELP = `usepilot: take the controls from your coding agent
+const HELP = `usepilot: design in your running app, your agents write the code
 
 Usage: npx usepilot <command>
 

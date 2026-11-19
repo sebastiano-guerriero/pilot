@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
-import { componentSource, fileFromStack, ownersOf } from "./component.ts";
+import { componentName, componentSource, fileFromStack, ownersOf } from "./component.ts";
+import { elementName } from "./name.ts";
 import { similarOf } from "./similar.ts";
 
 /**
@@ -124,6 +125,16 @@ describe("components: React", () => {
     expect(similarOf(titles[2] as HTMLElement)).toEqual({ component: "CardTitle", elements: [titles[0], titles[1]] });
   });
 
+  it("the hover label: a component's top-level element by its name; elements inside it by their own", () => {
+    const titles = page();
+    const card = document.querySelector("article") as HTMLElement;
+    expect(componentName(card)).toBe("ProductCard");
+    expect(elementName(card)).toBe("ProductCard");
+    expect(componentName(titles[0] as HTMLElement)).toBeNull();
+    expect(elementName(titles[0] as HTMLElement)).toBe("h3");
+    expect(elementName(document.querySelector(".app > h3") as HTMLElement)).toBe("Hero");
+  });
+
   it("a component with one instance on the page passes it on; none repeats: the page's structure", () => {
     page();
     const hero = document.querySelector(".app > h3") as HTMLElement;
@@ -197,6 +208,13 @@ describe("components: React Server Components (Next.js App Router)", () => {
     expect(similarOf(titles[0] as HTMLElement)).toEqual({ component: "ProductCard", elements: [titles[1], titles[2]] });
     const cards = [...document.querySelectorAll("article")];
     expect(similarOf(cards[2] as HTMLElement)).toEqual({ component: "ProductCard", elements: [cards[0], cards[1]] });
+  });
+
+  it("the hover label: Server Components by name, never the framework's own components", () => {
+    page();
+    expect(elementName(document.querySelector("article") as HTMLElement)).toBe("ProductCard");
+    expect(elementName(document.querySelector("main") as HTMLElement)).toBe("Home");
+    expect(elementName(document.querySelector("body > div") as HTMLElement)).toBe("div");
   });
 
   it("the source: the Server Component that wrote the element; a client component it created counts as the app's", () => {

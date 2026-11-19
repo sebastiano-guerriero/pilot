@@ -1,13 +1,13 @@
 # What Pilot is
 
-Pilot is a control surface for coding agents, and it checks their results. It isn't a design tool: it runs inside your app in development instead of on a separate canvas, and everything you do in it becomes work for your agent.
+Pilot lets you design in your running app while your agents write the code. It's a design tool that works on the real page, in development, instead of on a separate canvas: everything you do in it (an edit, a comment, a task) becomes a job for your agent, and Pilot checks the result on the page, so you see what the code does, not what the agent says it did.
 
 You're building with an agent. When you want to steer it precisely, you launch Pilot and work on the running page itself. Select an element and change it with a purpose-built control, leave a comment on it, or ask for a task like **Make responsive**. Each one goes to the agent as a job, and the agent writes it into the source using the project's conventions. Then Pilot checks the result on the page: changes that landed stop being previewed, what didn't goes back to the agent once, and tasks are measured at every width. You see what the code does, not what the agent says it did.
 
 ## The loop
 
 ```
- you + agent working            you take the controls                  agent takes them back
+ you + agent working            you design in the page                 the agent writes the code
 ┌──────────────────┐     ┌───────────────────────────────────┐     ┌──────────────────────────┐
 │ "/pilot"         │ ──▶ │ select element                    │ ──▶ │ reads the change set     │
 │                  │     │ search "opa" → opacity editor     │     │ translates plain CSS to  │

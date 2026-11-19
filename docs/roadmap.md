@@ -4,7 +4,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 
 ## Next
 
-- [ ] **One description of what Pilot is, everywhere** (from an outside review): the GitHub README's "Design in your running app. Your agents write the code." Today npm's README and `usepilot help` still say "Take the controls from your coding agent", [product.md](product.md) says "It isn't a design tool" (and, later, "an alternative to Figma"), and the loop diagram says "you take the controls / agent takes them back". Align product.md's opening and Principles, the diagram, npm's README and the CLI's help; the owner approves the new product.md opening first. Agents read these docs and repeat them in prompts, commits and copy.
+- [x] **One description of what Pilot is, everywhere:** "Design in your running app. Your agents write the code." in both READMEs, `usepilot help`, product.md and the loop diagram.
 
 ## Foundation
 
@@ -20,7 +20,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 
 - [x] Element selection: hover highlight and label, click to select (page clicks blocked), Esc to clear
 - [x] Hover label: name (id, naming data attributes, form field name, tag; never classes or text) and size; none on the selection
-- [ ] Component names in the label (React, Vue, Svelte, Angular dev info), before the id
+- [x] Component names in the label (React, Vue), before the id: a component's top-level element by its name
 - [x] Several elements: Shift+click on the page, Cmd/Ctrl+click and Shift+click ranges in the DOM tree; the dialog edits them all (one undo step, one job), Mixed for differing values
 - [x] Comments and tasks on several elements: one job, the thread on the first one, loaders on all
 - [ ] The width check of a task on several elements measures each one, not only the first
@@ -28,7 +28,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [x] Select similar by component instance (React, Vue), whatever the instances' props
 - [ ] Svelte and Angular components (Svelte 5's `__svelte_meta`, Angular's `ng.getOwningComponent`)
 - [x] The agent asks "all of them or only this one?" in a comment when the code is shared and only some copies were changed (Pilot counts each element's look-alikes); the answer sends the job back
-- [ ] Selection actions: select parent / first child, and the scope ("this element" / "all N like it")
+- [ ] Selection actions: select parent / first child. (No scope control: Select similar says "all of them" up front, and the agent asks when only some copies of shared code were changed.)
 - [ ] Parent/child navigation for the selection (picking the wrapper instead of the text inside it)
 - [x] Property dialog next to the selection: spot picked once, fixed while editing, moves with scroll, stays on screen, draggable
 - [x] Dialog = search + the matching editors: best matches plus their family, Tab across all of them

@@ -1,8 +1,8 @@
 # Pilot
 
-**Take the controls from your coding agent.**
+**Design in your running app. Your agents write the code.**
 
-Pilot lets you point at your running app and tell your coding agent exactly what to change. It runs inside your app in development, so you work on the real page with real data, not on a separate canvas:
+Pilot turns the page you're building into a design surface for your agents. It runs inside your app in development, so you work on the real page with real data, not on a separate canvas:
 
 - **Edit.** Select an element, type a property the way you'd type a Tailwind class (`pt`, `w`, `gap-x`), and set it with a visual control. You see the change live.
 - **Ask for a change.** Click an element with the comment tool and say what you want, in your own words, with a screenshot or a file if it helps. The agent makes the change and tells you in a line what it did.
