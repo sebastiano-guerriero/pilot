@@ -47,6 +47,24 @@ export interface Declared {
   rule?: CSSStyleDeclaration;
 }
 
+/**
+ * A selector that matches every element, as a CSS reset writes it: `*`
+ * (`* { box-sizing: border-box }`; Tailwind's preflight is `*, ::before,
+ * ::after…`, whose matching part is `*`), or `:where(*)` / `:is(*)`.
+ */
+const UNIVERSAL = /^(?:\*|:(?:where|is)\(\s*\*\s*\))$/;
+
+/**
+ * Whether a declared value comes from a reset: its winning rule's selector
+ * matches every element. The empty search's list leaves these out, so the
+ * reset's box-sizing, margin: 0, padding: 0 don't list on every element
+ * (PropertyDialog's editorsWithValues). An element's own rule
+ * (`.card { box-sizing: border-box }`, a `box-border` class) still counts.
+ */
+export function isFromReset(declared: Declared | null | undefined): boolean {
+  return !!declared && declared.source !== "inline" && UNIVERSAL.test(declared.source.selector.trim());
+}
+
 /** A style rule that matches the element, with what the cascade needs to rank it. */
 export interface MatchedRule {
   style: CSSStyleDeclaration;

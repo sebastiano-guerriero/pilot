@@ -4,6 +4,7 @@ import {
   beats,
   declaredValue,
   declaredWithout,
+  isFromReset,
   matchedRules as matchedRulesFor,
   pickSide,
   sourcesOf,
@@ -110,6 +111,18 @@ describe("the cascade", () => {
     const direct = [0, Number.POSITIVE_INFINITY]; // in @layer a
     const sub = [0, 0, Number.POSITIVE_INFINITY]; // in @layer a.b
     expect(beats(normal(rule(direct, [0, 0, 1], 0)), normal(rule(sub, [0, 1, 0], 1)))).toBe(true);
+  });
+});
+
+describe("isFromReset", () => {
+  const rule = (selector: string) => ({ value: "0", important: false, source: { selector } });
+  it("a rule for every element: *, :where(*), :is(*)", () => {
+    for (const s of ["*", " * ", ":where(*)", ":is( * )"]) expect(isFromReset(rule(s)), s).toBe(true);
+  });
+  it("not an element's own rule, the style attribute, or nothing", () => {
+    for (const s of ["*.card", ".card", "div", "html *", "* + *"]) expect(isFromReset(rule(s)), s).toBe(false);
+    expect(isFromReset({ value: "0", important: false, source: "inline" })).toBe(false);
+    expect(isFromReset(null)).toBe(false);
   });
 });
 

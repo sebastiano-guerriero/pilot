@@ -691,6 +691,31 @@ describe("placement", () => {
     expect(labels()).toEqual([]);
   });
 
+  it("with nothing typed, a reset's values (a `*` rule) aren't listed; the element's own rules and Pilot's edits are", async () => {
+    const { editors: registry } = await import("../../../editors/registry.ts");
+    const style = document.createElement("style");
+    style.textContent = "*, ::before, ::after { box-sizing: border-box; margin: 0; } .own { box-sizing: content-box; }";
+    document.head.append(style);
+    const history = new EditHistory();
+    act(() => {
+      render(h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors: registry, history, listAll: false }), container);
+    });
+    expect(editorIds()).not.toContain("box-sizing");
+    expect(editorIds()).not.toContain("margin");
+    type("box-sizing"); // searching still finds it
+    expect(editorIds()).toEqual(["box-sizing"]);
+    // The list is taken when the search empties: change things while searching.
+    history.apply(element, "margin-top", "0px"); // Pilot's own edit, even to the reset's value
+    type("");
+    expect(editorIds()).toContain("margin");
+    expect(editorIds()).not.toContain("box-sizing");
+    type("box");
+    element.className = "own"; // its own rule
+    type("");
+    expect(editorIds()).toContain("box-sizing");
+    style.remove();
+  });
+
   it("listAll (off by default): with nothing typed, every editor, with a value or not, in list order", async () => {
     const { editors: registry } = await import("../../../editors/registry.ts");
     act(() => {

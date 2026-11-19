@@ -22,6 +22,7 @@ The dialog **lists the editors for every property the element has a value for** 
 - The list (and only this one: searching shows the matches alone) is **grouped**: each group starts with its label, and a dotted line separates groups (`groupOf()`).
 - Rows a revealing editor shows are set in `LIST_ORDER` too, per value (`rowsOf()`): display's grid and flex rows, position's inset. An editor another one shows as a row (gap under `display: grid`) is left to that one. A row that shows on its own (gap on an element that isn't a grid) is listed right after display.
 - The list is taken when the search is empty and kept while you edit, so clearing a value doesn't make its row vanish.
+- **A reset's values don't list.** A property whose value comes only from a rule for every element (`*`, `:where(*)`: `* { box-sizing: border-box }`, Tailwind's preflight with its `margin: 0`, `padding: 0`) isn't listed, or every element would list them (`isFromReset()` in [dom/declared.ts](../packages/overlay/src/dom/declared.ts)). The element's own rules (`.card { box-sizing: border-box }`, a `box-border` class) and Pilot's edits still list; searching finds the property either way, with its value. Deciding by value instead (hide `border-box`) was rejected: it would also hide those deliberate settings and Pilot's edits, and leave the reset's margin and padding.
 - Size, which writes nothing of its own, isn't listed.
 - `LIST_ALL_EDITORS = true` in `PropertyDialog.tsx` lists every editor, set or not (handy while many editors are built together). It's `false`.
 

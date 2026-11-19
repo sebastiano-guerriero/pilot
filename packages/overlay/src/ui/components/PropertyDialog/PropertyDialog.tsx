@@ -1,6 +1,6 @@
 import type { ElementState, WidthRange } from "@pilot/protocol";
 import { type ComponentChildren, Fragment } from "preact";
-import { declaredValues, forcedDeclarations } from "../../../dom/declared.ts";
+import { declaredValues, forcedDeclarations, isFromReset } from "../../../dom/declared.ts";
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import type { BoxArea } from "../../../dom/boxModel.ts";
 import type { EditableElement } from "../../../dom/target.ts";
@@ -482,12 +482,20 @@ export function raisedSpot(
  * The editors for the properties `element` has a value for (from any source:
  * stylesheets, classes, inline styles, Pilot's edits; removed ones don't
  * count), in LIST_ORDER (editors/listOrder.ts). An editor another one shows as its rows (gap
- * under display: grid) is left to that one.
+ * under display: grid) is left to that one. A page value that only a reset
+ * gives (a `*` rule: box-sizing, margin: 0 on every element, isFromReset)
+ * doesn't count; Pilot's own edits always do. Searching still finds them.
  */
 function editorsWithValues(element: EditableElement, editors: PropertyEditor[], history: EditHistory): PropertyEditor[] {
   const properties = [...new Set(editors.flatMap((e) => e.properties))];
-  const declared = fieldValues(element, properties, history);
-  const isSet = (p: string) => !!declared[p];
+  const page = declaredValues(element, properties);
+  const width = window.innerWidth;
+  const isSet = (p: string) => {
+    if (history.removalOf(element, p, width)) return false;
+    if (history.valueOf(element, p, width) !== null) return true;
+    const declared = page[p];
+    return !!declared?.value && !isFromReset(declared);
+  };
   const shown = editors.filter((e) => e.properties.some(isSet));
   const embedded = new Set(shown.flatMap((e) => e.embeds ?? []));
   return inListOrder(shown.filter((e) => !embedded.has(e)));
