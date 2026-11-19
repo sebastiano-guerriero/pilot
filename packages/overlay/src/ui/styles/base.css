@@ -40,6 +40,20 @@ img, picture, video, canvas, svg {
   background: hsl(from var(--plt-color-accent) h s l / 20%);
 }
 
+/* A color's preview (the color editor's swatch, the variables and @ lists):
+   the color, given in --_color, over a checkerboard, every other square in
+   contrast-high at 12%, so a see-through color shows as such (transparent,
+   or an opacity below 100). Squares of whole pixels (--_square), so they
+   come out equal: 3px in a 12px swatch (4 × 4); a 10px one sets 2px (5 × 5). */
+.color-preview {
+  --_square: 3px;
+
+  background:
+    linear-gradient(var(--_color, transparent), var(--_color, transparent)),
+    repeating-conic-gradient(hsl(from var(--plt-color-contrast-high) h s l / 0.12) 0 25%, transparent 0 50%) 0 0 /
+      calc(var(--_square) * 2) calc(var(--_square) * 2);
+}
+
 /* The box every value control is drawn in (PropertyInputText, PropertySelect),
    so they all look the same. Components only add their content and layout. */
 .field-box {
@@ -51,8 +65,8 @@ img, picture, video, canvas, svg {
   background: hsl(from var(--plt-color-background-light) h s l / 90%);
   box-shadow: inset 0 1px 0 hsl(0 0% 100% / 7%);
 
-  /* Hovered: the fill turns solid (no transition). */
-  &:hover {
+  /* Hovered: the fill turns solid (no transition). Not a field that can't be edited. */
+  &:hover:not(:disabled) {
     background: var(--plt-color-background-light);
   }
 

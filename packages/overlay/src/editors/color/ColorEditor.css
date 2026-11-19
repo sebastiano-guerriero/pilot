@@ -28,7 +28,7 @@
     letter-spacing: -0.02em;
   }
 
-  /* The color, 12px, square, with a 1px white ring at 30% drawn over it
+  /* The color, 12px, square, over a checkerboard (.color-preview, base.css), with a 1px white ring at 30% drawn over it
      (so a color close to the field's own still shows its edge). Placed by
      the field's icon slot: 6px from the left, 6px before the text. */
   .color-swatch {

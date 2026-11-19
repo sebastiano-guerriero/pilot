@@ -616,6 +616,8 @@
   }
 
   .mention-swatch {
+    --_square: 2px; /* the checkerboard's (.color-preview): 5 × 5 */
+
     flex-shrink: 0;
     width: 10px;
     height: 10px;

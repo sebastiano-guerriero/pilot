@@ -791,7 +791,7 @@ export function CommentWidget({
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => pickMention(i)}
                   >
-                    {o.swatch && <span class="mention-swatch" style={{ background: o.swatch }} aria-hidden="true" />}
+                    {o.swatch && <span class="mention-swatch color-preview" style={{ "--_color": o.swatch }} aria-hidden="true" />}
                     <span class="action-name">{o.label}</span>
                     {o.detail && <span class="action-description">{o.detail}</span>}
                   </div>

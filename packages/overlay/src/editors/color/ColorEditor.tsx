@@ -40,7 +40,8 @@ interface ColorConfig {
  *   keeps the opacity as it is.
  * - Clearing the color removes it (the element doesn't set a color);
  *   clearing the opacity makes it 100.
- * Tab goes color → opacity → next editor.
+ * Tab goes color → opacity → next editor. Just `transparent`: the opacity is
+ * 0, dimmed and not editable (no color to make more or less opaque), and Tab skips it.
  */
 function ColorEditor({ config, ...props }: PropertyEditorProps & { config: ColorConfig }) {
   const { onChange, onRevert, values, focusRequest, onReturnToSearch, onTabOut } = props;
@@ -49,6 +50,10 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
   const value = declaredOf(props, property);
   const keyword = config.keywords?.includes(value.trim().toLowerCase()) ?? false;
   const { color, opacity } = keyword ? { color: value.trim(), opacity: null } : splitColor(value);
+  // Just `transparent`: no color to make more or less opaque, so the opacity
+  // shows 0, dimmed, and can't be edited (the drag handle stays, inactive;
+  // Tab skips it).
+  const clear = !keyword && color.trim().toLowerCase() === "transparent";
   const colorRef = useRef<HTMLInputElement>(null);
   const opacityRef = useRef<HTMLInputElement>(null);
 
@@ -57,7 +62,7 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
     ref.current?.select();
   };
   useLayoutEffect(() => {
-    if (focusRequest) focus(focusRequest.edge === "last" ? opacityRef : colorRef);
+    if (focusRequest) focus(focusRequest.edge === "last" && !clear ? opacityRef : colorRef);
   }, [focusRequest]);
   const tabOut = (direction: 1 | -1) => (onTabOut ? onTabOut(direction) : onReturnToSearch?.());
 
@@ -69,7 +74,7 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
   };
 
   const swatch = color ? (
-    <span class="color-swatch" style={{ background: values?.[property] || "transparent" }} />
+    <span class="color-swatch color-preview" style={{ "--_color": values?.[property] || "transparent" }} />
   ) : (
     <Icon name="layout-empty" />
   );
@@ -99,18 +104,19 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
             if (next && next !== text) write(joinColor(next, opacity ?? 100), gesture);
           }}
           onSubmit={onReturnToSearch}
-          onTab={(direction) => (direction > 0 ? focus(opacityRef) : tabOut(-1))}
+          onTab={(direction) => (direction < 0 ? tabOut(-1) : clear ? tabOut(1) : focus(opacityRef))}
         />
         <PropertyInputText
-          value={opacity === null ? "" : String(opacity)}
+          value={clear ? "0" : opacity === null ? "" : String(opacity)}
           label={`${label} opacity`}
           inputRef={opacityRef}
+          disabled={clear}
           onCommit={(text) => {
             if (!text.trim()) return setOpacity(100);
             const o = parseOpacity(text);
             if (o !== null) setOpacity(o);
           }}
-          onStep={(delta, text, gesture) => setOpacity((parseOpacity(text) ?? opacity ?? 100) + delta, gesture)}
+          onStep={clear ? undefined : (delta, text, gesture) => setOpacity((parseOpacity(text) ?? opacity ?? 100) + delta, gesture)}
           onScrub={(steps, startText, gesture) => {
             const start = parseOpacity(startText) ?? opacity ?? 100;
             const next = Math.min(100, Math.max(0, start + steps));

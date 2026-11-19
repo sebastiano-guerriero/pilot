@@ -84,6 +84,8 @@ interface PropertyInputTextProps {
    * except while it's being edited.
    */
   computed?: string;
+  /** Shown, dimmed, but not editable: what it holds doesn't apply (a transparent color's opacity). A scrub handle stays, inactive. */
+  disabled?: boolean;
 }
 
 /** The wheel's scroll per step (px), and the pause that ends a burst of steps (ms). */
@@ -113,6 +115,7 @@ export function PropertyInputText({
   placeholder,
   tokens,
   computed,
+  disabled = false,
 }: PropertyInputTextProps) {
   const ownRef = useRef<HTMLInputElement>(null);
   const ref = inputRef ?? ownRef;
@@ -331,6 +334,7 @@ export function PropertyInputText({
       spellcheck={false}
       autocomplete="off"
       aria-label={label}
+      disabled={disabled}
       data-scrub={onScrub ? "" : undefined}
       data-icon={icon ? "" : undefined}
       // Linked to the field being edited: it shows focused too (base.css).
@@ -378,6 +382,7 @@ export function PropertyInputText({
   const wrapped = (
     <span
       class={onScrub ? "input-wrap scrub-field" : "input-wrap"}
+      data-disabled={disabled ? "" : undefined}
       data-tokens={withTokens ? "" : undefined}
       data-tokens-open={menu ? "" : undefined}
     >

@@ -44,6 +44,15 @@
       color: var(--plt-color-contrast-low);
       opacity: 1;
     }
+
+    /* Not editable (what it holds doesn't apply): dimmed, and the browser's
+       own disabled look left out. */
+    &:disabled {
+      color: var(--plt-color-contrast-low);
+      -webkit-text-fill-color: currentColor;
+      opacity: 1;
+      cursor: default;
+    }
   }
 }
 
@@ -140,3 +149,9 @@
   }
 }
 
+/* A field that can't be edited: its scrub handle stays, but doesn't drag. */
+@scope (.input-wrap[data-disabled]) {
+  .scrub-handle {
+    pointer-events: none;
+  }
+}

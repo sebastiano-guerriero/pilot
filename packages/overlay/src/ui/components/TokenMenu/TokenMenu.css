@@ -45,6 +45,8 @@
   }
 
   .token-swatch {
+    --_square: 2px; /* the checkerboard's (.color-preview): 5 × 5 */
+
     flex: none;
     width: 10px;
     height: 10px;

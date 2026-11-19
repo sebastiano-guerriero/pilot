@@ -65,7 +65,7 @@ export function TokenMenu({ tokens, any, active, anchor, onActive, onPick }: Tok
               onPointerMove={() => onActive(index)}
               onClick={() => onPick(token)}
             >
-              {token.kind === "color" && <span class="token-swatch" style={{ background: token.value }} aria-hidden="true" />}
+              {token.kind === "color" && <span class="token-swatch color-preview" style={{ "--_color": token.value }} aria-hidden="true" />}
               {/* A file's token by its own name, its file on hover. */}
             <span class="token-name" title={token.source ? `${token.source.file}${token.source.line ? `:${token.source.line}` : ""}` : undefined}>
               {token.source?.name ?? token.name}

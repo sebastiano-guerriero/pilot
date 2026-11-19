@@ -95,9 +95,19 @@ describe("color editor", () => {
   it("a named color below 100 is written as color-mix; how it's named is kept", () => {
     element.style.color = "var(--brand)";
     mount();
-    expect(field("color").value).toBe("--brand") // a lone token by its name;
+    expect(field("color").value).toBe("--brand"); // a lone token by its name
     commit(field("color opacity"), "30");
     expect(changes.at(-1)).toEqual(["color", "color-mix(in srgb, var(--brand) 30%, transparent)"]);
+  });
+
+  it("just transparent: the opacity can't be edited, and Tab skips it", () => {
+    element.style.color = "transparent";
+    mount();
+    expect(field("color opacity").disabled).toBe(true);
+    expect(field("color opacity").value).toBe("0");
+    commit(field("color"), "ff0000");
+    expect(field("color opacity").disabled).toBe(false);
+    expect(field("color opacity").value).toBe("100");
   });
 
   it("clearing the color removes it; clearing the opacity makes it 100; ↑/↓ step it", () => {
