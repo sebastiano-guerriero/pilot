@@ -38,7 +38,7 @@ Ask your agent to **update Pilot**, or run this in your project's folder:
 npx usepilot@latest update
 ```
 
-Then restart your app and open a new chat.
+Then restart your app and open a new chat. In Cursor, also switch `pilot` off and on in Cursor Settings → MCP.
 
 ### If something doesn't work
 

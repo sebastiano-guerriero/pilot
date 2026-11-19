@@ -425,6 +425,65 @@ describe("PilotSession", () => {
     ]);
   });
 
+  it("stuck: jobs no agent is waiting for, said once it has lasted; an agent busy or between waits isn't stuck", async () => {
+    vi.useFakeTimers();
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    history.apply(el, "padding-top", "20px");
+    const sent = s.send() as { id: string };
+    // Queued, and the agent stops waiting (it ended its turn).
+    hub().emit({ type: "agents", agents: [agent], waiting: 0 });
+    expect(s.stuck).toBeNull(); // not yet: it may be between two waits
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(s.stuck).toMatchObject({ kind: "not-listening", title: "Claude Code isn't listening", detail: "Run /pilot again in its chat", jobs: [sent.id] });
+    expect(s.isStuck(s.jobs[0] as never)).toBe(true);
+    // It waits again: not stuck.
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    expect(s.stuck).toBeNull();
+    // On a job: the others queued behind it aren't stuck.
+    hub().emit({ type: "job", job: job({ id: sent.id, status: "working", agent }) });
+    hub().emit({ type: "agents", agents: [agent], waiting: 0 });
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(s.stuck).toBeNull();
+    // The agent left: no agent is connected.
+    hub().emit({ type: "agents", agents: [], waiting: 0 });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(s.stuck).toMatchObject({ kind: "no-agent", title: "No agent is connected", detail: "Run /pilot in your agent's chat" });
+    // The hub is gone: Pilot can't reach the agent.
+    hub().readyState = 2;
+    hub().onerror?.();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(s.stuck).toMatchObject({ kind: "offline", title: "Pilot can't reach your agent", detail: "Open its chat and run /pilot" });
+    s.destroy();
+  });
+
+  it("stuck without jobs: cancelling them doesn't hide that the agent isn't listening; with no agent and no job, nothing's stuck", async () => {
+    vi.useFakeTimers();
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    history.apply(el, "padding-top", "20px");
+    const sent = s.send() as { id: string };
+    hub().emit({ type: "agents", agents: [agent], waiting: 0 });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(s.stuck?.jobs).toEqual([sent.id]);
+    s.cancel(sent.id);
+    // Nothing waits now, but the agent still isn't listening: it stays said.
+    expect(s.stuck).toMatchObject({ kind: "not-listening", title: "Claude Code isn't listening", jobs: [] });
+    // Listening again: gone. Not listening, no job waiting: said later this time.
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    expect(s.stuck).toBeNull();
+    hub().emit({ type: "agents", agents: [agent], waiting: 0 });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(s.stuck).toBeNull();
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(s.stuck).toMatchObject({ kind: "not-listening", jobs: [] });
+    // No agent and no job: the page is in Copy prompt mode, nothing's stuck.
+    hub().emit({ type: "agents", agents: [], waiting: 0 });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(s.stuck).toBeNull();
+    s.destroy();
+  });
+
   it("with no agent, a comment is kept and its prompt is there to copy; threads survive a reload", () => {
     const s = session();
     const { job: sent, changeSet } = s.comment(el, "Swap these two");

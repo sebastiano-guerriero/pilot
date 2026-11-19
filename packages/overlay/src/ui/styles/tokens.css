@@ -18,6 +18,7 @@
   --plt-color-contrast-higher: #fff;
   --plt-color-border: hsl(from var(--plt-color-contrast-high) h s l / 0.125);
   --plt-color-accent: #1CF69E;
+  --plt-color-red: #FF4650;
 
   /* Typography */
   /* Main font: Geist, bundled and registered by ui/fonts.ts. */

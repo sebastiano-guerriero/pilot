@@ -1,13 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { basename } from "node:path";
+import { existsSync } from "node:fs";
+import { basename, isAbsolute, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AgentInfo, Job } from "@pilot/protocol";
-import { DEFAULT_BRIDGE_PORT, EDIT_GUIDELINES, formatPrompt, formatWidthCheck, MAX_CHOICES, originOf, questionOf, SHARED_CHOICES, sharedChoiceMeaning } from "@pilot/protocol";
+import { DEFAULT_BRIDGE_PORT, DOM_INSERT, DOM_REMOVE, EDIT_GUIDELINES, formatPrompt, formatWidthCheck, MAX_CHOICES, originOf, questionOf, SHARED_CHOICES, sharedChoiceMeaning } from "@pilot/protocol";
 import { z } from "zod";
 import { Bridge } from "./agent.ts";
 import { attachmentBlocks } from "./attachments.ts";
-import { whereSection } from "./locate.ts";
-import { VERSION } from "./version.ts";
+import { searchable, whereSection, withComponentFiles } from "./locate.ts";
+import { clientOf, RESTART } from "./clients.ts";
+import { installedVersion } from "./init.ts";
+import { olderThan, VERSION } from "./version.ts";
 
 /**
  * Pilot's MCP server: the tools an agent uses to hand the UI to the designer
@@ -37,7 +41,7 @@ const PROGRESS_MS = 20_000;
 export const INSTRUCTIONS = `Pilot lets the designer edit the running app in the browser and send the edits back to you as jobs.
 
 The loop, when the user asks to launch or start Pilot, runs /pilot, or asks to hand the design over:
-1. Find the page: the URL of the app's dev server, from the dev script and its config (vite.config → server.port, Next.js → 3000, a --port flag…) or a server already running. If it isn't running, start it in the background; if you can't tell the URL, ask. Call pilot_launch with that URL: Pilot opens in that page (if the page isn't open, tell the user to open it), then tell the user in one line that Pilot is ready: select an element, edit, press Send.
+1. Find the page: the URL of the app's dev server, from the dev script and its config (vite.config → server.port, Next.js → 3000, a --port flag…) or a server already running. If it isn't running, start it in the background; if you can't tell the URL, ask. Call pilot_launch with that URL and \`folder\`, the project's folder as an absolute path (your working directory: Pilot searches the code there for each job, and some clients start its server in another folder): Pilot opens in that page (if the page isn't open, tell the user to open it), then tell the user in one line that Pilot is ready: select an element, edit, press Send.
 2. Call pilot_wait_for_edits. It returns a job when the designer presses Send, or "no edits yet" after a while: then call it again. (In Claude Code a long wait moves to the background: the job arrives as its result.)
 3. Apply the job's edits to the source: they're design instructions, not code, so write production code the way the project already styles things, whatever it uses (see the job's guidelines). Edits are basic: every value is given, so be fast (no screenshots or browser checks: Pilot checks the page). A "make responsive" job is an advanced task: make one element work at every viewport width. A "break and fix" job is one too: stress-test one element with odd but realistic content, fix what breaks, and put the real content back. Their prompts list the steps; check the result with pilot_check_widths (numbers for every width, instead of screenshots). If you can hand advanced tasks to a more capable model than the one you run on (a subagent, or another model your agent offers), do. A "comment" job is the designer's own words about one element: do what it asks (simple asks right away, open-ended ones as advanced tasks), and your pilot_done notes are your reply in their thread: one short sentence, like a chat message, not a report.
 4. Call pilot_done with the job id and short notes (values you approximated, anything you did differently). When part of a job needs the designer's decision (they changed only some copies of shared code: each element's "Look-alikes" line counts the others; the jobs' guidelines say when, and what each answer means), do the rest, leave that part, and ask with pilot_done's question and choices ("${SHARED_CHOICES.all.label}", "${SHARED_CHOICES.one.label}", "${SHARED_CHOICES.variant.label}", your suggestion first); go on with other jobs, and their answer comes back as that job. Then call pilot_wait_for_edits again. When several jobs were queued, one wait returns them all: do them all, then call pilot_done once per job, each with its own id and notes.
@@ -127,7 +131,10 @@ export function followUp(job: Job): string {
   for (const d of job.differences ?? []) {
     const edit = job.changeSet.edits.find((e) => e.target.selector === d.selector);
     const where = edit ? `\`${edit.target.path}\` (selector \`${d.selector}\`${edit.target.text ? `, text "${edit.target.text}"` : ""})` : `\`${d.selector}\``;
-    lines.push(`- ${where}: \`${d.property}\` should be \`${d.expected}\`, the page gives \`${d.actual ?? "?"}\`.`);
+    // A change to the DOM itself: in words, there's no value to compare.
+    if (d.property === DOM_REMOVE) lines.push(`- ${where}: deleted by the designer, but it's still on the page.`);
+    else if (d.property.startsWith(DOM_INSERT)) lines.push(`- ${where}: ${d.expected} was added by the designer, but it's not on the page.`);
+    else lines.push(`- ${where}: \`${d.property}\` should be \`${d.expected}\`, the page gives \`${d.actual ?? "?"}\`.`);
   }
   lines.push(
     "",
@@ -209,21 +216,58 @@ export function taskFollowUp(job: Job): string {
   return lines.join("\n");
 }
 
+/**
+ * A project's folder Pilot can search (absolute, there, with a package.json
+ * or a .git), from a path or a `file://` URI; null otherwise.
+ */
+export function projectFolder(candidate: string | undefined): string | null {
+  if (!candidate) return null;
+  let path = candidate;
+  if (path.startsWith("file://")) {
+    try {
+      path = fileURLToPath(path);
+    } catch {
+      return null;
+    }
+  }
+  if (!isAbsolute(path)) return null;
+  path = resolve(path);
+  return existsSync(path) && searchable(path) ? path : null;
+}
+
 export function createPilotServer(options: { port?: number; cwd?: string; waitMs?: number } = {}) {
   const port = options.port ?? (Number(process.env.PILOT_PORT) || DEFAULT_BRIDGE_PORT);
+  // The project's folder: where Pilot searches the code (the elements' lines, the components' files) and what the
+  // agent is labeled by. The folder the server started in, when it's a project (Claude Code starts it there); else
+  // the client's workspace (its MCP roots), or the folder the agent passes to pilot_launch: Cursor starts a server
+  // set up for the machine in the home folder.
   const cwd = options.cwd ?? process.cwd();
+  let project = cwd;
+  let client: string | undefined;
   // Known once the client has connected (see waitMsFor).
   let waitMs = options.waitMs ?? waitMsFor(undefined);
   const server = new McpServer({ name: "pilot", version: VERSION }, { instructions: INSTRUCTIONS });
   const agent: AgentInfo = { id: randomUUID(), label: agentLabel(undefined, cwd) };
   const bridge = new Bridge(agent, port);
   let origin: string | null = null;
+  const useProject = (folder: string) => {
+    project = folder;
+    agent.label = agentLabel(client, folder);
+  };
 
-  // The client's name is known once it has connected.
+  // The client's name is known once it has connected, and so are its workspace folders, when it shares them.
   server.server.oninitialized = () => {
-    const client = server.server.getClientVersion()?.name;
-    agent.label = agentLabel(client, cwd);
+    client = server.server.getClientVersion()?.name;
+    agent.label = agentLabel(client, project);
     waitMs = options.waitMs ?? waitMsFor(client);
+    if (searchable(project) || !server.server.getClientCapabilities()?.roots) return;
+    void server.server
+      .listRoots()
+      .then(({ roots }) => {
+        const folder = roots.map((r) => projectFolder(r.uri)).find((f): f is string => !!f);
+        if (folder && !searchable(project)) useProject(folder);
+      })
+      .catch(() => {});
   };
 
   const text = (t: string, isError = false) => ({ content: [{ type: "text" as const, text: t }], isError });
@@ -238,19 +282,38 @@ export function createPilotServer(options: { port?: number; cwd?: string; waitMs
         url: z
           .string()
           .describe("The page's URL on the app's dev server, e.g. http://localhost:5173 (find it in the dev server's config or output)."),
+        folder: z
+          .string()
+          .optional()
+          .describe(
+            "The project's folder, as an absolute path: your working directory (the app's folder, with its package.json). Pilot searches its code there for each job. Always pass it: some clients start Pilot's server in another folder.",
+          ),
       },
     },
-    async ({ url }) => {
+    async ({ url, folder }) => {
       const o = originOf(url);
       if (!o) return text(`"${url}" isn't a page URL. Pass the dev server's URL, e.g. http://localhost:5173.`, true);
       origin = o;
+      const given = projectFolder(folder);
+      if (given) useProject(given);
+      // Started outside the project, and no folder to go by: say so, so the agent passes it.
+      const lost =
+        !searchable(project) && !given
+          ? ` Pilot can't search the project's code from ${project}${folder ? ` (nor from ${folder}: it needs a package.json or a .git)` : ""}: call pilot_launch again with \`folder\` set to the project's folder (absolute).`
+          : "";
       try {
         const pages = await bridge.launch(o);
         const where =
           pages > 0
             ? `Pilot is open in ${pages === 1 ? "the page" : `${pages} pages`} at ${o}.`
             : `No page at ${o} is connected yet. Ask the designer to open ${url} (with the dev server running): Pilot opens there.`;
-        return text(`${where} Now call pilot_wait_for_edits and wait for the designer to press Send.`);
+        // This server older than the project's Pilot (a client that keeps its server running, like Cursor, after an update): say how to restart it.
+        const installed = searchable(project) ? installedVersion(project, project) : null;
+        const stale =
+          installed && olderThan(VERSION, installed)
+            ? ` This chat's Pilot server is ${VERSION}, older than the project's ${installed}: tell the user to restart it, so it loads ${installed}. ${RESTART[clientOf(client) ?? "other"]}`
+            : "";
+        return text(`${where} Now call pilot_wait_for_edits and wait for the designer to press Send.${lost}${stale}`);
       } catch (error) {
         return text(`Pilot couldn't start its bridge: ${(error as Error).message}`, true);
       }
@@ -289,12 +352,16 @@ ${EDIT_GUIDELINES.join("\n")}`,
         // The other jobs already queued for this page come too (see takeQueued): one round trip for several Sends.
         const jobs = [job, ...(await takeQueued(job, () => bridge.wait(origin as string, 0, extra.signal)))];
         const parts = await Promise.all(
-          jobs.map(async (j) => ({
-            // Where its elements' code probably is: found here, in the project, so the agent can go straight to the edit.
-            text: jobPrompt(j, j.attempt === 2 ? "" : whereSection(j, cwd)),
-            // A comment's images and text files come with it, so the agent sees them without opening files.
-            blocks: await attachmentBlocks(j),
-          })),
+          jobs.map(async (taken) => {
+            // Its components' files, found here by name when the page couldn't tell (React 19 under Turbopack, Server Components).
+            const j = withComponentFiles(taken, project);
+            return {
+              // Where its elements' code probably is: found here, in the project, so the agent can go straight to the edit.
+              text: jobPrompt(j, j.attempt === 2 ? "" : whereSection(j, project)),
+              // A comment's images and text files come with it, so the agent sees them without opening files.
+              blocks: await attachmentBlocks(j),
+            };
+          }),
         );
         if (parts.length === 1) return { content: [{ type: "text" as const, text: parts[0]?.text ?? "" }, ...(parts[0]?.blocks ?? [])], isError: false };
         return {

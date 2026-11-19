@@ -69,19 +69,50 @@ To use the Pilot you're working on in another project without publishing a versi
 
 **The responsive lab.** `../pilot-lab-responsive`, next to this repo (its own git repository, linked as above): a small Vite + Tailwind marketing page designed for a 1280px desktop only, to try **Make responsive**. Only its Features grid is responsive (`sm:` / `lg:`), the pattern an agent should find and follow; the header, hero, stats, pricing, dashboard (fixed sidebar, wide table), team, call to action and footer break below desktop widths. Start it with the `lab-responsive` entry in `.claude/launch.json` (port 5183) or `npm run dev` there; `npm run reset` there puts the page back after a test. Run `/pilot` in a chat opened in that folder.
 
+## What each agent does that Pilot relies on
+
+Pilot's loop runs inside other people's software, and a client's update can change how it behaves. Two checks keep that in view:
+
+- **Pilot's side, automatically:** [stdio.test.ts](../packages/cli/src/stdio.test.ts) (part of `pnpm test`) builds the CLI, starts the bundle the way an agent does (`node dist/index.js mcp`, over stdio) and drives the loop with the official MCP client against a page on the hub: the tools and instructions, `pilot_launch` with a folder, a batch of two jobs in one wait with where their code is, `pilot_done` for each, a wait that runs out.
+- **The clients' side, by hand:** the list below, and the smoke test after it, in each client you can, before each release. A client that behaves differently gets its row (and the code) changed.
+
+| What the client does | Clients | What depends on it |
+| --- | --- | --- |
+| A tool call can run for minutes; past about 2, it moves to the background and the job arrives as its result | Claude Code | 25-minute waits (`waitMsFor` in [mcp.ts](../packages/cli/src/mcp.ts)); the skill's "end your turn with a short Waiting…" |
+| A stdio server that sends nothing for about 30 minutes is dropped | Claude Code | progress notifications while a wait runs (`PROGRESS_MS`) |
+| A request times out after about 60 seconds (the MCP default) | Cursor, VS Code, Codex, most others | 50-second waits that end in "No edits yet: call again" |
+| The chat may end its turn instead of calling the wait again | Cursor (seen) | the instructions' "keep looping"; the page's stuck alerts (`PilotSession.stuck`, [handoff.md](handoff.md), *When something's stuck*) |
+| One server for all chats while the app runs: a new chat keeps the old version | Cursor, VS Code | the restart steps (`RESTART` in [clients.ts](../packages/cli/src/clients.ts)); `pilot_launch` noticing an outdated server |
+| A server set up for the machine starts in the home folder, not the project | Cursor | `pilot_launch`'s `folder`, the client's MCP roots (`projectFolder`) |
+| A repo's new servers stay off until switched on | Cursor | `init`'s note with `--project`; the README's troubleshooting; the skill's step 0 |
+| Where its MCP config and skills live, how a server is registered | Claude Code: `claude mcp add --scope user`, `~/.claude/skills`. Cursor: `~/.cursor/mcp.json`, `~/.cursor/skills`. VS Code: its user `mcp.json` (per OS), `~/.copilot/skills`. Codex: `codex mcp add`, `~/.agents/skills` | `MACHINE` and `AGENTS` in [init.ts](../packages/cli/src/init.ts); `agentsWithPilot()` for `update` |
+| How the skill is run | `/pilot`; `$pilot` in Codex | the skill; the stuck alerts' command |
+| Its name in `clientInfo` | `claude-code`, `cursor`…, VS Code's, Codex's: confirm in the smoke test (step 2 shows it) | the agent's label (`agentLabel`), the waits (`waitMsFor`), the restart steps (`clientOf`) |
+
+**The smoke test, about 5 minutes per client,** in a project with Pilot (the playground, or a lab), with the version about to be released (`pnpm link-experiment`, or the packed tarball):
+
+1. Set up or update: `npx usepilot init --agent <client>` (or `update`), then do what it prints, the client's restart included.
+2. In a new chat, `/pilot`: Pilot opens in the page, and the page's agent reads `<Client> · <the project's folder>` (the job list's agent name): not the home folder, not "Agent".
+3. Select, edit, Send: the job arrives, the agent applies it, and the change's preview goes once the code has it.
+4. Two Sends while the agent works on the first: the next wait brings the rest together.
+5. Leave it waiting longer than the client's timeout (a minute; in Claude Code, past 2 minutes: the call moves to the background), then Send: the job still arrives.
+6. Interrupt the chat's loop: within about 10 seconds the toolbar says "<Client> isn't listening"; `/pilot` again clears it and the jobs go.
+7. A comment with an image: the agent sees it, and its reply comes back in the thread.
+
 ## Releasing `usepilot`
 
 The published package is [packages/usepilot](../packages/usepilot). Publishing builds it first (`prepack` runs the build and copies `dist/`, `cli/` and the license in).
 
 1. Bump the version in [packages/usepilot/package.json](../packages/usepilot/package.json) (0.x for now: a patch for fixes, a minor for new features and for a new bridge version, which older Pilots can't join), or run `npm version patch --no-git-tag-version` there. Set the same version in [version.ts](../packages/cli/src/version.ts) (`VERSION`: the MCP server reports it, `update` and `init` compare with it); `version.test.ts` fails until both match.
-2. Publish, from that folder (it asks for your npm security key):
+2. Run the smoke test ([What each agent does that Pilot relies on](#what-each-agent-does-that-pilot-relies-on)) in the clients you can, with this version; fix what breaks first.
+3. Publish, from that folder (it asks for your npm security key):
 
    ```bash
    cd packages/usepilot && npm publish
    ```
 
-3. Commit the version bump.
-4. **Tag it and publish it on GitHub**, right after npm, without being asked: an annotated tag `vX.Y.Z` on the version-bump commit (`git tag -a vX.Y.Z <commit> -m "usepilot X.Y.Z"`, pushed), then a release from it (`gh release create vX.Y.Z --verify-tag --title vX.Y.Z --notes-file …`). The notes are written for users, not copied from commits: a few bullets on what's new since the last release, in plain language, and an **Update every agent** line when the bridge version changed (older Pilots can't join the hub). Only versions published on npm get one.
+4. Commit the version bump.
+5. **Tag it and publish it on GitHub**, right after npm, without being asked: an annotated tag `vX.Y.Z` on the version-bump commit (`git tag -a vX.Y.Z <commit> -m "usepilot X.Y.Z"`, pushed), then a release from it (`gh release create vX.Y.Z --verify-tag --title vX.Y.Z --notes-file …`). The notes are written for users, not copied from commits: a few bullets on what's new since the last release, in plain language, and an **Update every agent** line when the bridge version changed (older Pilots can't join the hub). Only versions published on npm get one.
 
 npm can take a minute or two to show a new version. Users update with `npm install -D usepilot@latest`. A published version can't be changed or reused: fix forward with a new version. To try the package before publishing, `npm pack` makes the tarball, and a separate app installs it with `npm install -D <path to the .tgz>`.
 

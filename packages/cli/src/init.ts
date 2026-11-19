@@ -180,6 +180,24 @@ export function skillFolders(root: string, home: string): string[] {
   return [...new Set([...machine, ...project])];
 }
 
+/**
+ * The agents Pilot is set up for, on this machine or in the repo at
+ * `root`: its MCP server in the agent's config, or its skill in the agent's
+ * folder. For `update`, to say how each loads the new version.
+ */
+export function agentsWithPilot(root: string, home: string, platform: NodeJS.Platform = process.platform): AgentId[] {
+  const hasServer = (file: string, key: string) => !!(readJson<Record<string, Record<string, unknown>>>(file)?.[key] ?? {}).pilot;
+  return AGENTS.filter((a) => {
+    if (a.id === "other") return false;
+    const machine = MACHINE[a.id];
+    if (machine.mcp && hasServer(machine.mcp.file(home, platform), machine.mcp.key)) return true;
+    if (machine.command?.has(home)) return true;
+    if (a.mcp && hasServer(join(root, a.mcp.file), a.mcp.key)) return true;
+    // A skill folder of its own (Codex shares `~/.agents/skills` with others: its server says it).
+    return a.id !== "codex" && existsSync(join(machine.skills(home), "pilot"));
+  }).map((a) => a.id);
+}
+
 /** The command that adds `spec` as a dev dependency with `pm`. */
 export function installArgs(pm: "npm" | "pnpm" | "yarn" | "bun", spec = "usepilot"): string[] {
   return pm === "npm" ? ["install", "-D", spec] : pm === "bun" ? ["add", "-d", spec] : ["add", "-D", spec];

@@ -214,6 +214,13 @@
     }
   }
 
+  /* Something's wrong (a stuck job, a send that failed): the agent's reply's shape, in red. */
+  .message[data-error] {
+    background: hsl(from var(--plt-color-red) h s l / 0.2);
+    box-shadow: inset 0 0 0 1px hsl(from var(--plt-color-red) h s l / 0.1);
+    white-space: normal;
+  }
+
   /* The agent's reply, as markdown (markdown.tsx): blocks 6px apart, lists
      indented, code in Geist Mono on contrast-high at 10%, bold in the brightest color. */
   .message[data-from="agent"]:not([data-pending]) {

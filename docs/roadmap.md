@@ -2,6 +2,10 @@
 
 One line per item. Tick it when it ships; the details go in the doc for its area.
 
+## Next
+
+- [ ] **One description of what Pilot is, everywhere** (from an outside review): the GitHub README's "Design in your running app. Your agents write the code." Today npm's README and `usepilot help` still say "Take the controls from your coding agent", [product.md](product.md) says "It isn't a design tool" (and, later, "an alternative to Figma"), and the loop diagram says "you take the controls / agent takes them back". Align product.md's opening and Principles, the diagram, npm's README and the CLI's help; the owner approves the new product.md opening first. Agents read these docs and repeat them in prompts, commits and copy.
+
 ## Foundation
 
 - [x] pnpm monorepo, TypeScript, Vite, Vitest
@@ -38,6 +42,13 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [x] Element states: `hover:`, `focus:`, `focus-visible:`, `active:` pills, the element shown in those states, states per change
 - [x] The `/` menu of modifiers
 - [x] DOM tree (plumbing; design pending)
+- [x] DOM tree starts at the body (selectable; the only row on an empty page)
+- [x] Changing the DOM from the tree's row menu: Delete, Duplicate, Add child, Add sibling (one undo step, previewed with Pilot's own nodes, checked after done)
+- [ ] Keys for the row menu's actions (simpler than Emmet-style abbreviations, which were rejected)
+- [ ] Double-click a row to edit it: its tag (a new element's first), its text
+- [ ] Drag rows to move elements (a grip on hover, on the row's left)
+- [ ] Attribute edits (`href`, `src`) in the tree
+- [ ] A new element's later changes move to the real element once its insert lands
 - [x] Preview from a stylesheet Pilot adds (`@layer` + `!important`, `@media` per width range)
 - [x] The page's breakpoints on the ruler, clickable
 - [ ] `from-md` in the search (breakpoint names, where the page exposes them)
@@ -64,6 +75,13 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [ ] Mask, clip-path and other properties about what's drawn
 
 ## Handoff
+
+Next (found testing in Cursor: jobs queued forever while the connected chat had stopped waiting for them):
+
+- [x] **Say when the agent isn't listening**, and when no agent is connected or the hub is gone (the owner's design: red pills, the corner's warning, a red reply); a job whose agent left goes back to the queue.
+- [x] **Work from the project, not the agent's start folder:** `pilot_launch` takes the project's `folder` (every agent is told to pass it), or the client's MCP roots; Cursor starts machine-level servers in the home folder.
+- [x] **Restarting the server, per client:** `update` says how for each agent Pilot is set up for (a new chat in Claude Code and Codex; restart the server in Cursor and VS Code), and `pilot_launch` notices a server older than the project's Pilot.
+- [x] **What each client does that Pilot relies on:** a checklist and a 5-minute smoke test per client in [development.md](development.md), run before each release; and `stdio.test.ts`, the built CLI driven over stdio by the official MCP client (launch, a batch, done, a wait that runs out).
 
 - [x] Copy prompt
 - [x] Launch shortcut (Option+P / Alt+P)
@@ -94,7 +112,8 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [x] Faster jobs: Pilot finds each element's code in the project for the agent, the edit guidelines read once, each job's step times recorded
 - [x] Jobs queued for a page come in one wait, so several Sends cost one round trip (each still its own job)
 - [x] Source hints (`target.source`): the component and its file from React (line too in React 18 and earlier) and Vue in development, so agents open the right file without searching
-- [ ] Source hints for React 19 under Turbopack (its stack names chunks, not files), and lines for React 19
+- [x] Source hints under Turbopack and for Server Components, and lines for React 19: the CLI finds the component's declaration by name in the project, then the element's line in it
+- [x] Next.js App Router (Server Components, Turbopack): components from React's records of them, never the framework's own components
 - [ ] A history of the session's jobs (what changed, how it landed, files touched, a summary to copy), in place of the job list
 - [ ] Design the Send states and the job status (placeholder look now)
 - [ ] The bridge watches token files that only live in code (Tailwind v3 config, `tokens.json`, Style Dictionary) ([design-tokens.md](design-tokens.md))

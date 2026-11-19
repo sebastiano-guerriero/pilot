@@ -52,6 +52,15 @@
     animation: spin 0.8s steps(8) infinite;
   }
 
+  /* The job is stuck (see Busy.stuck): red, with the warning in the background's color, still. */
+  .busy[data-stuck] {
+    background: var(--plt-color-red);
+
+    & .spinner {
+      animation: none;
+    }
+  }
+
   @keyframes spin {
     to {
       rotate: 1turn;

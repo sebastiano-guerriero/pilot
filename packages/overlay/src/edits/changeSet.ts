@@ -1,5 +1,7 @@
 import type { AgentRequest, ChangeSet, CommentAttachment, CommentMessage, ElementEdit, ElementTarget, StyleChange } from "@pilot/protocol";
+import { DOM_REMOVE } from "@pilot/protocol";
 import { pageBreakpoints } from "../dom/breakpoints.ts";
+import { domStructurePreview, insertIdOf, newIdOf, newRootOf, parseSpec } from "../dom/structure.ts";
 import { declaredValue } from "../dom/declared.ts";
 import { similarOf } from "../dom/similar.ts";
 import { describeElement } from "../dom/target.ts";
@@ -17,6 +19,10 @@ import type { EditHistory, RecordedChange } from "./history.ts";
  * - A removal says so (`removed`), with the removed value and its source.
  * - `widths`, when the change is for some widths only.
  * - Text changes are the edit's `texts`: per text run, the page's own text and the new one.
+ * - A deleted element is `removed` (its other changes are left out, and so
+ *   is everything inside it); elements added after it or inside it are its
+ *   `inserts`, named `new-1`, `new-2`… in the order added, and the edits of
+ *   a new element (or of what's inside it) say which (`newElement`).
  * Elements still on the page are described afresh; one that isn't (another
  * page of the app, or re-rendered) keeps the description taken when it was
  * first changed. `unsent`: only the changes not sent to the agent yet (what
@@ -28,13 +34,48 @@ export function buildChangeSet(
   options: { unsent?: boolean; id?: string; only?: (change: RecordedChange) => boolean } = {},
 ): ChangeSet {
   const edits = new Map<Element, ElementEdit>();
+  // The new elements in effect, sent or not, by their name in the prompt.
+  const names = new Map<string, string>();
+  for (const c of history.changes()) {
+    const id = insertIdOf(c.property);
+    if (id && !names.has(id)) names.set(id, `new-${names.size + 1}`);
+  }
+  const removed = history.removed();
+  // On the page as the designer left it: not inside a deleted element, nor in a new one taken back.
+  const kept = (element: Element) => {
+    if ([...removed].some((r) => r !== element && r.contains(element))) return false;
+    for (let root = newRootOf(element); root; root = root.parentElement && newRootOf(root.parentElement)) {
+      if (!names.has(newIdOf(root) ?? "")) return false;
+    }
+    return true;
+  };
   for (const change of history.changes({ unsent: options.unsent })) {
     if (options.only && !options.only(change)) continue;
     const { element, property, value, removal, widths, states } = change;
+    const insert = insertIdOf(property);
+    if (!kept(element)) continue;
+    // A deleted element: only that, and what's added after it.
+    if (removed.has(element) && property !== DOM_REMOVE && !(insert && parseSpec(value)?.place === "after")) continue;
     let edit = edits.get(element);
     if (!edit) {
       edit = { target: element.isConnected ? describeElement(element) : change.target, changes: [] };
+      const root = newRootOf(element);
+      const name = root && names.get(newIdOf(root) ?? "");
+      if (name) edit.newElement = name;
       edits.set(element, edit);
+    }
+    if (property === DOM_REMOVE) {
+      edit.removed = true;
+      continue;
+    }
+    if (insert) {
+      const spec = parseSpec(value);
+      const node = domStructurePreview.node(insert, spec);
+      if (spec) {
+        const name = names.get(insert) as string;
+        (edit.inserts ??= []).push({ id: name, place: spec.place, kind: spec.kind, tag: node?.tagName.toLowerCase() ?? "div" });
+      }
+      continue;
     }
     const run = textRunOf(property);
     if (run !== null) {
@@ -110,9 +151,10 @@ function withLookAlikes(edits: Map<Element, ElementEdit>): void {
 }
 
 function lookAlikes(element: Element, inJob: readonly Element[]): { lookAlikes?: number; lookAlikesOf?: string } {
-  if (!(element instanceof HTMLElement || element instanceof SVGElement)) return {};
+  if (!(element instanceof HTMLElement || element instanceof SVGElement) || newRootOf(element)) return {};
   const similar = similarOf(element);
-  const n = similar.elements.filter((e) => !inJob.includes(e)).length;
+  // Pilot's copies aren't the page's: they're in the job.
+  const n = similar.elements.filter((e) => !inJob.includes(e) && !newRootOf(e)).length;
   return n ? { lookAlikes: n, ...(similar.component ? { lookAlikesOf: similar.component } : {}) } : {};
 }
 

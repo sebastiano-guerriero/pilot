@@ -39,6 +39,12 @@ interface SelectionActionsProps {
 export interface Busy {
   text: string;
   onCancel?(): void;
+  /**
+   * The job is stuck (see PilotSession.stuck): the loader gives way to a
+   * red warning, and the tooltip says what's wrong and what to do. Hovering
+   * still turns it into an X when it can be taken back.
+   */
+  stuck?: { title: string; detail: string };
 }
 
 /** The actions' size and their gap to the selection, in px. */
@@ -123,22 +129,29 @@ export function SelectionActions({
       )}
       {busy &&
         (busy.onCancel ? (
-          <Tooltip text="Cancel job" side={side}>
+          <Tooltip text={busy.stuck?.title ?? "Cancel job"} detail={busy.stuck?.detail} side={side}>
             <button
               type="button"
               class="action busy"
-              aria-label={`Cancel job (${busy.text})`}
+              data-stuck={busy.stuck ? "" : undefined}
+              aria-label={busy.stuck ? `${busy.stuck.title}. ${busy.stuck.detail}. Cancel job (${busy.text})` : `Cancel job (${busy.text})`}
               onMouseDown={(e) => e.preventDefault()}
               onClick={busy.onCancel}
             >
-              <Icon name="busy" class="spinner" />
+              <Icon name={busy.stuck ? "warning" : "busy"} class="spinner" />
               <Icon name="close" class="cancel" />
             </button>
           </Tooltip>
         ) : (
-          <Tooltip text={busy.text} side={side}>
-            <span class="action busy" role="status" aria-label={busy.text} tabIndex={0}>
-              <Icon name="busy" class="spinner" />
+          <Tooltip text={busy.stuck?.title ?? busy.text} detail={busy.stuck?.detail} side={side}>
+            <span
+              class="action busy"
+              data-stuck={busy.stuck ? "" : undefined}
+              role="status"
+              aria-label={busy.stuck ? `${busy.stuck.title}. ${busy.stuck.detail}` : busy.text}
+              tabIndex={0}
+            >
+              <Icon name={busy.stuck ? "warning" : "busy"} class="spinner" />
             </span>
           </Tooltip>
         ))}

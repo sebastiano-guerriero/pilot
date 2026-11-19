@@ -18,7 +18,8 @@ interface Fiber {
   sibling: Fiber | null;
   _debugSource?: { fileName: string; lineNumber: number };
   _debugStack?: { stack: string };
-  _debugOwner?: Fiber;
+  _debugOwner?: Fiber | object;
+  _debugInfo?: object[];
 }
 
 const fiber = (tag: number, type: unknown, stateNode: unknown = null): Fiber => ({
@@ -157,6 +158,52 @@ describe("components: React", () => {
       ].join("\n"),
     };
     expect(componentSource(titles[0] as HTMLElement)).toEqual({ component: "ProductCard", file: "src/components/ProductCard.tsx" });
+  });
+});
+
+describe("components: React Server Components (Next.js App Router)", () => {
+  function InnerLayoutRouter() {}
+  function Badge() {}
+
+  /**
+   * Three ProductCard Server Components (no fibers: React records each on
+   * the element it rendered, `_debugInfo`, and as the owner of the elements
+   * it wrote, `_debugOwner`), inside the framework's own client components
+   * (no owner), the second card with a client Badge it created.
+   */
+  const page = () => {
+    const home = { name: "Home", env: "Server" };
+    const cards = ["One", "Two", "Three"].map((text, i) => {
+      const info = { name: "ProductCard", env: "Server", owner: home, props: {} };
+      const title = host("h3", { text });
+      title._debugOwner = info;
+      const extra = i === 1 ? [component(Badge, host("span", { text: "New" }))] : [];
+      for (const c of extra) c._debugOwner = info;
+      const article = host("article", { class: ["bg-white p-4", "bg-black p-6 shadow", "ring-1"][i] }, ...extra, title);
+      article._debugInfo = [{ time: 1 }, info, { time: 2 }];
+      article._debugOwner = info;
+      return article;
+    });
+    const main = host("main", {}, ...cards);
+    main._debugInfo = [home];
+    // The framework's own client components around the page: two of them, created by nothing of the app's.
+    mountReact(host("div", {}, component(InnerLayoutRouter, component(InnerLayoutRouter, main))));
+    return [...document.querySelectorAll("article h3")] as HTMLElement[];
+  };
+
+  it("each card's title: every ProductCard instance, never the framework's components", () => {
+    const titles = page();
+    expect(ownersOf(titles[0] as HTMLElement).map((o) => o.name)).toEqual(["ProductCard", "Home"]);
+    expect(similarOf(titles[0] as HTMLElement)).toEqual({ component: "ProductCard", elements: [titles[1], titles[2]] });
+    const cards = [...document.querySelectorAll("article")];
+    expect(similarOf(cards[2] as HTMLElement)).toEqual({ component: "ProductCard", elements: [cards[0], cards[1]] });
+  });
+
+  it("the source: the Server Component that wrote the element; a client component it created counts as the app's", () => {
+    const titles = page();
+    expect(componentSource(titles[1] as HTMLElement)).toEqual({ component: "ProductCard" });
+    const badge = document.querySelector("span") as HTMLElement;
+    expect(ownersOf(badge).map((o) => o.name)).toEqual(["Badge", "ProductCard", "Home"]);
   });
 });
 

@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { extname, join, relative } from "node:path";
-import { type ElementTarget, type Job, requestTargets } from "@pilot/protocol";
+import { basename, extname, isAbsolute, join, relative } from "node:path";
+import type { AgentRequest, ElementTarget, Job } from "@pilot/protocol";
+import { requestTargets } from "@pilot/protocol";
 
 /**
  * Where an element's code probably is, found by Pilot before the agent gets
@@ -124,6 +125,20 @@ function needles(target: ElementTarget) {
 /** Where `target` probably is under `root`, or null when no line is clearly it. */
 export function locate(target: ElementTarget, root: string, deadline = Date.now() + BUDGET_MS): Location | null {
   const n = needles(target);
+  // Its component's file and line are known (the framework said, or componentFile found it): the
+  // element's own line in that component (its classes or tag are enough there), else the component's.
+  const known = target.source?.file && target.source.line ? sourcePath(target.source.file, root) : null;
+  if (known && target.source?.line) {
+    try {
+      const lines = readFileSync(join(root, known), "utf8").split("\n");
+      const from = target.source.line - 1;
+      const own = bestLine(n, lines, from);
+      const index = own && own.score >= 2 ? own.index : from;
+      return { file: known, line: index + 1, snippet: snippetAt(lines, index) };
+    } catch {
+      // Not readable: search as usual.
+    }
+  }
   if (!n.id && !n.text && !n.lead && n.classes.length < 3) return null;
   let best: { file: string; line: number; score: number; lines: string[] } | null = null;
   for (const file of sourceFiles(root)) {
@@ -143,31 +158,132 @@ export function locate(target: ElementTarget, root: string, deadline = Date.now(
       if (n.classes.length < 3) continue;
     }
     const lines = content.split("\n");
-    const classesOn = (i: number) => (lines[i] === undefined ? 0 : n.classes.filter((re) => re.test(lines[i] as string)).length);
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i] as string;
-      let score = 0;
-      if (n.id?.test(line)) score += 8;
-      if (n.text && line.includes(n.text)) score += 6;
-      else if (n.lead && line.includes(n.lead)) score += 4;
-      // Classes on this line, or on the lines just above (the opening tag of a multi-line element).
-      let classes = 0;
-      for (let j = Math.max(0, i - 3); j <= i; j++) classes = Math.max(classes, classesOn(j));
-      score += classes;
-      if (n.classes.length && classes === n.classes.length) score += 2;
-      if (n.tag.test(line)) score += 1;
-      if (!best || score > best.score) best = { file, line: i, score, lines };
-    }
+    const found = bestLine(n, lines);
+    if (found && (!best || found.score > best.score)) best = { file, line: found.index, score: found.score, lines };
   }
   // Clearly the element: its id or text, or nearly all of several classes.
   const enough = best && (best.score >= 6 || (n.classes.length >= 3 && best.score >= n.classes.length + 2));
   if (!best || !enough) return null;
-  const from = Math.max(0, best.line - 2);
-  const snippet = best.lines
-    .slice(from, best.line + 3)
+  return { file: relative(root, best.file), line: best.line + 1, snippet: snippetAt(best.lines, best.line) };
+}
+
+/**
+ * The line of `lines` (from `from` on) most like the element: its id, its
+ * text (whole, or its first words), its classes (on the line or just above,
+ * for a multi-line tag) and its tag. The first of the best, with its score.
+ */
+function bestLine(n: ReturnType<typeof needles>, lines: string[], from = 0): { index: number; score: number } | null {
+  const classesOn = (i: number) => (lines[i] === undefined ? 0 : n.classes.filter((re) => re.test(lines[i] as string)).length);
+  let best: { index: number; score: number } | null = null;
+  for (let i = from; i < lines.length; i++) {
+    const line = lines[i] as string;
+    let score = 0;
+    if (n.id?.test(line)) score += 8;
+    if (n.text && line.includes(n.text)) score += 6;
+    else if (n.lead && line.includes(n.lead)) score += 4;
+    let classes = 0;
+    for (let j = Math.max(from, i - 3); j <= i; j++) classes = Math.max(classes, classesOn(j));
+    score += classes;
+    if (n.classes.length && classes === n.classes.length) score += 2;
+    if (n.tag.test(line)) score += 1;
+    if (!best || score > best.score) best = { index: i, score };
+  }
+  return best;
+}
+
+/** The lines around `index` (0-based), long ones cut. */
+function snippetAt(lines: string[], index: number): string {
+  return lines
+    .slice(Math.max(0, index - 2), index + 3)
     .map((l) => (l.length > 160 ? `${l.slice(0, 159)}…` : l))
     .join("\n");
-  return { file: relative(root, best.file), line: best.line + 1, snippet };
+}
+
+/** A file the framework named, relative to `root` when it's in the project (absolute, or relative already); null when it isn't there. */
+function sourcePath(file: string, root: string): string | null {
+  const rel = isAbsolute(file) ? relative(root, file) : file.replace(/^\.\//, "");
+  if (rel.startsWith("..") || isAbsolute(rel)) return null;
+  return existsSync(join(root, rel)) ? rel : null;
+}
+
+/**
+ * Where a component is declared in the project, by its name: the file and
+ * line of `function ProductCard`, `const ProductCard =`, `class
+ * ProductCard`, exported or not. A file named after it wins (`ProductCard.tsx`),
+ * then an exported declaration. For when the framework names the component
+ * but not its file: React 19 under Turbopack (its stacks name bundle chunks),
+ * Server Components (their stacks are the server's), and React 19's lines
+ * anywhere (its stacks are the transformed module's).
+ */
+export function componentFile(
+  name: string,
+  root: string,
+  deadline = Date.now() + BUDGET_MS,
+  within?: string,
+): { file: string; line: number } | null {
+  if (!/^[A-Za-z_$][\w$]*$/.test(name)) return null;
+  const declaration = new RegExp(
+    `^\\s*(export\\s+(?:default\\s+)?)?(?:(?:async\\s+)?function\\s*\\*?\\s+${name}\\b|class\\s+${name}\\b|(?:const|let|var)\\s+${name}\\s*[:=])`,
+  );
+  let best: { file: string; line: number; score: number } | null = null;
+  const files = within ? [join(root, within)] : sourceFiles(root);
+  for (const file of files) {
+    if (Date.now() > deadline) break;
+    if (!/\.[jt]sx?$|\.mjs$/.test(file)) continue;
+    let content: string;
+    try {
+      content = readFileSync(file, "utf8");
+    } catch {
+      continue;
+    }
+    if (!content.includes(name)) continue;
+    const lines = content.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const m = declaration.exec(lines[i] as string);
+      if (!m) continue;
+      const score = (basename(file).replace(/\.[^.]+$/, "") === name ? 2 : 0) + (m[1] ? 1 : 0);
+      if (!best || score > best.score) best = { file, line: i + 1, score };
+      break;
+    }
+  }
+  return best ? { file: relative(root, best.file), line: best.line } : null;
+}
+
+/**
+ * The job with its elements' component files filled in, where the page
+ * named a component but not its file or line (see componentFile): the
+ * prompt's "Component" line and the "Where the code probably is" section
+ * then point at the declaration. The job the hub keeps is left as it is.
+ */
+export function withComponentFiles(job: Job, root: string): Job {
+  if (!searchable(root)) return job;
+  const deadline = Date.now() + BUDGET_MS;
+  const fill = (target: ElementTarget): ElementTarget => {
+    const source = target.source;
+    if (!source?.component || source.line) return target;
+    const known = source.file ? sourcePath(source.file, root) : null;
+    if (source.file && !known) return target; // Outside the project (a dependency's): nothing to find here.
+    const found = componentFile(source.component, root, deadline, known ?? undefined);
+    return found ? { ...target, source: { ...source, file: found.file, line: found.line } } : target;
+  };
+  const { changeSet } = job;
+  const request = changeSet.request;
+  return {
+    ...job,
+    changeSet: {
+      ...changeSet,
+      edits: changeSet.edits.map((e) => ({ ...e, target: fill(e.target) })),
+      ...(request
+        ? {
+            request: {
+              ...request,
+              target: fill(request.target),
+              ...(request.others ? { others: request.others.map(fill) } : {}),
+            } as AgentRequest,
+          }
+        : {}),
+    },
+  };
 }
 
 /**
@@ -195,7 +311,7 @@ export function whereSection(job: Job, root: string): string {
   return [
     "## Where the code probably is",
     "",
-    "Pilot searched the project for these elements (by id, text and classes). Start there; if it isn't the right place (the text comes from a prop, a translation, a CMS), search as usual.",
+    "Pilot searched the project for these elements (by component, id, text and classes). Start there; if it isn't the right place (the text comes from a prop, a translation, a CMS), search as usual.",
     "",
     ...found,
   ].join("\n");

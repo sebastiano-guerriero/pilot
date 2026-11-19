@@ -136,6 +136,19 @@ describe("Hub", () => {
     expect(hub.answer(APP, "j1", "Yes")).toBeNull();
   });
 
+  it("an agent that leaves mid-job: its job goes back to the queue, and to another chat waiting", async () => {
+    const hub = new Hub();
+    const p = page(hub);
+    hub.register(a, APP);
+    hub.postJob(APP, { id: "j1", changeSet: changeSet("j1") });
+    await hub.wait(a, APP, 10);
+    expect(hub.job("j1")?.status).toBe("working");
+    const other = hub.wait(b, APP, 50);
+    hub.unregister("a");
+    expect((await other).job?.id).toBe("j1");
+    expect(p.events.some((e) => e.type === "job" && e.job.id === "j1" && e.job.status === "queued")).toBe(true);
+  });
+
   it("launch reaches the open pages of the agent's origin only", () => {
     const hub = new Hub();
     const p = page(hub);

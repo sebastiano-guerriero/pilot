@@ -37,6 +37,20 @@
       scale 0.1s ease-in 40ms,
       visibility 0.1s 40ms;
 
+    /* Two lines (an alert: what's wrong, then what to do): the second one dimmed. */
+    &[data-detail] {
+      height: auto;
+      padding: 6px 8px;
+      line-height: 14px;
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+
+      & .detail {
+        color: var(--plt-color-contrast-low);
+      }
+    }
+
     &[data-side="bottom"] {
       bottom: auto;
       top: 100%;

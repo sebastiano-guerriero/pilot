@@ -44,6 +44,13 @@ interface ToolbarProps {
   /** The jobs button: scroll to the next job's elements (see App's nextJob). */
   onNextJob(): void;
   onQuit(): void;
+  /**
+   * Jobs stuck (nothing will move them by itself, see PilotSession.stuck),
+   * on the button they belong to: `comment` for comments and tasks asked in
+   * a thread, `send` for the rest. The button's pill turns red with "!", and
+   * its tooltip says what's wrong and what to do.
+   */
+  alerts?: { comment?: ToolbarAlert; send?: ToolbarAlert };
   /** Where it was dragged to (null: centered at the bottom). */
   spot?: ToolbarSpot | null;
   /** Dragged (by the strip along its top edge), or moved to stay on screen. */
@@ -57,6 +64,21 @@ interface ToolbarProps {
  * Send shows how many changes it would send in a pill (like the comments
  * to review), and is dimmed when there's nothing to send.
  */
+/** An alert on a toolbar button: what's wrong, and what to do. */
+export interface ToolbarAlert {
+  title: string;
+  detail: string;
+}
+
+/** The red "!" pill of a button with an alert. */
+function AlertPill() {
+  return (
+    <span class="pill" data-alert aria-hidden="true">
+      !
+    </span>
+  );
+}
+
 export function Toolbar({
   tool,
   onTool,
@@ -68,6 +90,7 @@ export function Toolbar({
   pending,
   onNextJob,
   onQuit,
+  alerts = {},
   spot = null,
   onMove,
 }: ToolbarProps) {
@@ -149,20 +172,34 @@ export function Toolbar({
       >
         <Icon name="grip" />
       </div>
-      <Tooltip text={attention ? `${attention} ${attention === 1 ? "comment" : "comments"} to review` : "Comment"} gap={TIP_GAP}>
+      <Tooltip
+        text={alerts.comment?.title ?? (attention ? `${attention} ${attention === 1 ? "comment" : "comments"} to review` : "Comment")}
+        detail={alerts.comment?.detail}
+        gap={TIP_GAP}
+      >
         <button
           type="button"
           class="button"
           aria-pressed={tool === "comment"}
-          aria-label={attention ? `Comment: ${attention} to review, go to the next` : "Comment"}
+          aria-label={
+            alerts.comment
+              ? `Comment: ${alerts.comment.title}. ${alerts.comment.detail}`
+              : attention
+                ? `Comment: ${attention} to review, go to the next`
+                : "Comment"
+          }
           aria-keyshortcuts="Alt+C"
           onClick={() => onTool("comment")}
         >
           <Icon name="comment" />
-          {attention > 0 && (
-            <span class="pill" aria-hidden="true">
-              {attention}
-            </span>
+          {alerts.comment ? (
+            <AlertPill />
+          ) : (
+            attention > 0 && (
+              <span class="pill" aria-hidden="true">
+                {attention}
+              </span>
+            )
           )}
         </button>
       </Tooltip>
@@ -180,14 +217,25 @@ export function Toolbar({
         </button>
       </Tooltip>
       {/* After a send or copy, its tooltip says so for a moment, hovered or not. */}
-      <Tooltip text={done ? doneText : canSend ? action : idle} gap={TIP_GAP} forceOpen={!!done}>
+      <Tooltip
+        text={done ? doneText : (alerts.send?.title ?? (canSend ? action : idle))}
+        detail={done ? undefined : alerts.send?.detail}
+        gap={TIP_GAP}
+        forceOpen={!!done}
+      >
         <button
           type="button"
           class="button send"
-          aria-label={done ? doneText : `${mode === "send" ? "Send to agent" : "Copy prompt"}${sendCount ? ` (${sendCount} ${sendCount === 1 ? "change" : "changes"})` : ""}`}
+          aria-label={
+            done
+              ? doneText
+              : `${mode === "send" ? "Send to agent" : "Copy prompt"}${sendCount ? ` (${sendCount} ${sendCount === 1 ? "change" : "changes"})` : ""}${alerts.send ? `. ${alerts.send.title}. ${alerts.send.detail}` : ""}`
+          }
           data-mode={mode}
           data-ready={canSend || undefined}
-          disabled={!canSend}
+          // With an alert it stays hoverable (its tooltip says what's stuck), only its icon dimmed when there's nothing to send.
+          data-idle={!canSend && alerts.send ? "" : undefined}
+          disabled={!canSend && !alerts.send}
           onClick={async () => {
             const result = await onSend();
             if (result !== false) setDone(typeof result === "string" ? result : true);
@@ -202,10 +250,15 @@ export function Toolbar({
           ) : (
             <Icon name="send" />
           )}
-          {canSend && sendCount > 0 && (
-            <span class="pill" aria-hidden="true">
-              {sendCount}
-            </span>
+          {alerts.send ? (
+            <AlertPill />
+          ) : (
+            canSend &&
+            sendCount > 0 && (
+              <span class="pill" aria-hidden="true">
+                {sendCount}
+              </span>
+            )
           )}
         </button>
       </Tooltip>

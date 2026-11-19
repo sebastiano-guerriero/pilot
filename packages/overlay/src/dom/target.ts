@@ -1,5 +1,6 @@
 import type { ElementTarget } from "@pilot/protocol";
 import { componentSource } from "./component.ts";
+import { newSelector, withoutInserted } from "./structure.ts";
 import { pageTextContent } from "./text.ts";
 
 /** An element Pilot can edit: anything with an inline `style`. */
@@ -15,14 +16,18 @@ const MAX_TEXT = 60;
 
 /** Describe an element so the agent can find it again in the source. */
 export function describeElement(el: Element): ElementTarget {
+  // An element Pilot added (or inside one) is found from it; the page's own
+  // with Pilot's elements out, as the page's own DOM has it (dom/structure.ts):
+  // its selector, and its text, which the agent greps the source for.
+  const added = newSelector(el);
   const target: ElementTarget = {
-    selector: uniqueSelector(el),
+    selector: added ?? withoutInserted(() => uniqueSelector(el)),
     path: domPath(el),
     tag: el.tagName.toLowerCase(),
     classes: [...el.classList],
   };
   if (el.id) target.id = el.id;
-  const text = textSnippet(el);
+  const text = added ? textSnippet(el) : withoutInserted(() => textSnippet(el));
   if (text) target.text = text;
   const source = componentSource(el);
   if (source) target.source = source;

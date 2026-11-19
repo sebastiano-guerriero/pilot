@@ -220,7 +220,7 @@ describe("formatPrompt", () => {
         },
       ],
     });
-    expect(instances).toContain("- Component: `ProductCard`, in `src/ProductCard.tsx:12` (from the framework's dev info)");
+    expect(instances).toContain("- Component: `ProductCard`, in `src/ProductCard.tsx:12`\n");
     expect(instances).toContain("- Look-alikes: 11 more on the page (other instances of `ProductCard`, the same part of each), not in this job");
     // One element reads as before.
     expect(formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, others: [], thread, breakpoints: [] } })).toContain("## `main > section.hero > h1`");

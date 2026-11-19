@@ -84,6 +84,15 @@
       pointer-events: none;
       opacity: 0.3;
     }
+
+    /* Nothing to send, but an alert on it: hoverable for its tooltip, the icon dimmed, the red pill not. */
+    &[data-idle] {
+      cursor: default;
+
+      & > .icon {
+        opacity: 0.3;
+      }
+    }
   }
 
   /* Copy prompt (no agent): the copy icon, which morphs into a check once
@@ -185,6 +194,14 @@
     line-height: 1;
     animation: pop-in 0.2s ease-out 0.1s both;
   }
+
+  /* Something's stuck on this button (see ToolbarProps.alerts): red, with a white "!". */
+  .pill[data-alert] {
+    background: var(--plt-color-red);
+    color: var(--plt-color-contrast-higher);
+    font-weight: 700;
+  }
+
 
   /* Between the tools and Send, and before Quit: contrast-high at 15%
      (the border token's 12.5%, a little stronger). */

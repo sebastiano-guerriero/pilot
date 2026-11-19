@@ -9,6 +9,8 @@ let page: HTMLElement;
 let selected: Element | null;
 let hovered: Element | null;
 let closed: number;
+let removed: Set<Element>;
+let actions: Array<[string, Element[]]>;
 
 const mount = () =>
   act(() => {
@@ -20,6 +22,8 @@ const mount = () =>
           selected = el;
           mount();
         },
+        removed,
+        onAction: (action: string, elements: Element[]) => actions.push([action, elements]),
         onClose: () => closed++,
       }),
       container,
@@ -35,6 +39,8 @@ beforeEach(() => {
   selected = null;
   hovered = null;
   closed = 0;
+  removed = new Set();
+  actions = [];
 });
 afterEach(() => {
   render(null, container);
@@ -51,7 +57,7 @@ describe("DomTree", () => {
   it("opens down to the selection, one level into it", () => {
     selected = page.querySelector(".actions");
     mount();
-    expect(rows()).toEqual(["1:main", "2:section#hero", "3:h1", "3:div*", "4:a", "4:a", "2:footer#foot"]);
+    expect(rows()).toEqual(["1:body", "2:main", "3:section#hero", "4:h1", "4:div*", "5:a", "5:a", "3:footer#foot"]);
   });
 
   it("hovering a row highlights its element; clicking selects it", () => {
@@ -71,18 +77,18 @@ describe("DomTree", () => {
     mount();
     key("ArrowDown");
     expect(selected).toBe(page.querySelector(".actions"));
-    expect(rows()).toEqual(["1:main", "2:section#hero", "3:h1", "3:div*", "2:footer#foot"]);
+    expect(rows()).toEqual(["1:body", "2:main", "3:section#hero", "4:h1", "4:div*", "3:footer#foot"]);
     key("ArrowDown");
     expect(selected).toBe(page.querySelector("#foot"));
     key("ArrowUp");
     key("ArrowRight");
-    expect(rows()).toEqual(["1:main", "2:section#hero", "3:h1", "3:div*", "4:a", "4:a", "2:footer#foot"]);
+    expect(rows()).toEqual(["1:body", "2:main", "3:section#hero", "4:h1", "4:div*", "5:a", "5:a", "3:footer#foot"]);
     key("ArrowRight");
     expect(selected).toBe(page.querySelector(".actions a"));
     key("ArrowLeft");
     expect(selected).toBe(page.querySelector(".actions"));
     key("ArrowLeft");
-    expect(rows()).toEqual(["1:main", "2:section#hero", "3:h1", "3:div*", "2:footer#foot"]);
+    expect(rows()).toEqual(["1:body", "2:main", "3:section#hero", "4:h1", "4:div*", "3:footer#foot"]);
     key("ArrowUp");
     expect(selected).toBe(page.querySelector("h1"));
   });
@@ -92,12 +98,12 @@ describe("DomTree", () => {
     mount();
     const div = [...container.querySelectorAll(".row")].find((r) => r.querySelector(".tag")?.textContent === "div") as HTMLElement;
     act(() => div.click());
-    expect(rows()).toEqual(["1:main", "2:section#hero", "3:h1", "3:div*", "2:footer#foot"]);
+    expect(rows()).toEqual(["1:body", "2:main", "3:section#hero", "4:h1", "4:div*", "3:footer#foot"]);
     selected = page.querySelector("#hero");
     mount();
     selected = page.querySelector(".actions");
     mount();
-    expect(rows()).toEqual(["1:main", "2:section#hero", "3:h1", "3:div*", "4:a", "4:a", "2:footer#foot"]);
+    expect(rows()).toEqual(["1:body", "2:main", "3:section#hero", "4:h1", "4:div*", "5:a", "5:a", "3:footer#foot"]);
   });
 
   it("→ and ← never scroll the list sideways", () => {
@@ -110,6 +116,47 @@ describe("DomTree", () => {
       });
       expect(e.defaultPrevented).toBe(true);
     }
+  });
+
+  it("starts at the body, open, selectable: the only row on an empty page", () => {
+    page.remove();
+    mount();
+    expect(rows()).toEqual(["1:body"]);
+    const body = container.querySelector(".row") as HTMLElement;
+    act(() => body.click());
+    expect(selected).toBe(document.body);
+  });
+
+  it("leaves out the elements deleted in it", () => {
+    removed = new Set([page.querySelector("#hero") as Element]);
+    selected = page.querySelector("#foot");
+    mount();
+    expect(rows()).toEqual(["1:body", "2:main", "3:footer#foot*"]);
+  });
+
+  it("right-click opens a row's menu; its actions are for the row, selected first", () => {
+    selected = page.querySelector("#hero");
+    mount();
+    const footer = [...container.querySelectorAll(".row")].find((r) => r.querySelector(".tag")?.textContent === "footer") as HTMLElement;
+    act(() => {
+      footer.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 20, clientY: 30 }));
+    });
+    expect(selected).toBe(page.querySelector("#foot"));
+    const items = [...container.querySelectorAll(".context-menu .item")];
+    expect(items.map((i) => i.textContent)).toEqual(["Add child", "Add sibling", "Duplicate", "Delete"]);
+    act(() => (items[2] as HTMLElement).click());
+    expect(actions).toEqual([["duplicate", [page.querySelector("#foot")]]]);
+    expect(container.querySelector(".context-menu")).toBeNull();
+  });
+
+  it("the body's menu only adds children", () => {
+    mount();
+    const body = container.querySelector(".row") as HTMLElement;
+    act(() => {
+      body.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+    });
+    const disabled = [...container.querySelectorAll(".context-menu .item")].map((i) => i.hasAttribute("aria-disabled"));
+    expect(disabled).toEqual([false, true, true, true]);
   });
 
   it("Esc closes it", () => {

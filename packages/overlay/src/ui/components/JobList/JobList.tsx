@@ -39,10 +39,20 @@ export function whatText(job: JobRecord): string {
   return `${n} ${n === 1 ? "change" : "changes"}`;
 }
 
+/**
+ * How long an agent has been on a job, from a minute on (" · 12 min"): a
+ * long task isn't stuck (Pilot can't tell slow from stuck), but the designer
+ * sees how long it's been.
+ */
+export function elapsed(since: string | undefined, now = Date.now()): string {
+  const minutes = since ? Math.floor((now - Date.parse(since)) / 60_000) : 0;
+  return minutes >= 1 ? ` · ${minutes} min` : "";
+}
+
 /** Where a job stands, in words. A task is checked at every width once done (checks/widths.ts). */
 export function statusText(job: JobRecord): string {
   if (job.status === "queued") return "Waiting for an agent";
-  if (job.status === "working") return `${job.agent?.label ?? "The agent"} is ${job.changeSet.request ? "working" : "applying"}`;
+  if (job.status === "working") return `${job.agent?.label ?? "The agent"} is ${job.changeSet.request ? "working" : "applying"}${elapsed(job.takenAt)}`;
   if (job.status === "cancelled") return "Cancelled";
   if (job.changeSet.request?.kind === "comment") return "Done";
   if (job.changeSet.request) return job.checked ? "Done" : "Checking widths";

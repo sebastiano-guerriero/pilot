@@ -12,6 +12,15 @@
  *   whatever its props. The file comes from the element's `_debugSource`
  *   (React 18 and earlier) or the stack React 19 records where the element
  *   was created (`_debugStack`), when its frames point at a source file.
+ *   **Server Components** (Next.js's App Router, the default there) have no
+ *   fibers on the client: React records them in development on the fibers
+ *   they rendered (`_debugInfo`) and as the owner of the elements they wrote
+ *   (`_debugOwner`), by name. An instance is one such record, its elements
+ *   the fibers that carry it. With Server Components on the page, a client
+ *   component counts only when it was created, step by step, by one of them
+ *   (the app's pages and layouts): the framework's own components
+ *   (`InnerLayoutRouter`, `SegmentViewNode`…) trace back to none, so they're
+ *   never taken for the app's.
  * - **Vue 3**: each element carries the component that rendered it
  *   (`__vueParentComponent`); the instances come from walking the app's
  *   tree from its root; the file is the component's `__file`.
@@ -81,8 +90,24 @@ interface Fiber {
   sibling: Fiber | null;
   _debugSource?: { fileName?: string; lineNumber?: number };
   _debugStack?: { stack?: string };
-  _debugOwner?: Fiber | null;
+  _debugOwner?: Fiber | ServerComponent | null;
+  _debugInfo?: unknown[] | null;
 }
+
+/** A Server Component as React records it in development (ReactComponentInfo). */
+interface ServerComponent {
+  name: string;
+  env?: string;
+  owner?: Fiber | ServerComponent | null;
+}
+
+const isFiber = (x: unknown): x is Fiber => typeof (x as Fiber | null)?.tag === "number";
+/** A Server Component record (not React's timing records, nor a framework's own `__next…`). */
+const isServerComponent = (x: unknown): x is ServerComponent =>
+  !!x && typeof x === "object" && typeof (x as ServerComponent).name === "string" && !isFiber(x) && !(x as ServerComponent).name.startsWith("__");
+/** The Server Components whose output starts at `f`, the innermost first. */
+const serversAt = (f: Fiber): ServerComponent[] => (Array.isArray(f._debugInfo) ? f._debugInfo.filter(isServerComponent).reverse() : []);
+const SERVER = "rsc:";
 
 /** Fiber tags (React's ReactWorkTags). */
 const FUNCTION = 0;
@@ -112,10 +137,12 @@ function reactName(type: unknown): string {
   return t?.displayName || t?.name || t?.render?.displayName || t?.render?.name || "";
 }
 
-/** The live tree: every component fiber by type, and the host fiber of each element. */
+/** The live tree: every component fiber by type, the host fiber of each element, and each Server Component's fibers. */
 interface ReactTree {
   byType: Map<unknown, Fiber[]>;
   hostOf: Map<Element, Fiber>;
+  /** By name, each instance (its record) and the fibers it rendered. */
+  servers: Map<string, Map<ServerComponent, Fiber[]>>;
 }
 
 function reactTree(element: Element): ReactTree | null {
@@ -125,10 +152,16 @@ function reactTree(element: Element): ReactTree | null {
   if (!current) return null;
   const byType = new Map<unknown, Fiber[]>();
   const hostOf = new Map<Element, Fiber>();
+  const servers = new Map<string, Map<ServerComponent, Fiber[]>>();
   const stack: Fiber[] = [current];
   let visited = 0;
   while (stack.length && visited++ < 50_000) {
     const f = stack.pop() as Fiber;
+    for (const info of serversAt(f)) {
+      const instances = servers.get(info.name) ?? new Map<ServerComponent, Fiber[]>();
+      servers.set(info.name, instances);
+      instances.set(info, [...(instances.get(info) ?? []), f]);
+    }
     if (isComponent(f)) {
       const list = byType.get(f.type);
       if (list) list.push(f);
@@ -137,8 +170,31 @@ function reactTree(element: Element): ReactTree | null {
     if (f.sibling) stack.push(f.sibling);
     if (f.child) stack.push(f.child);
   }
-  return { byType, hostOf };
+  return { byType, hostOf, servers };
 }
+
+/**
+ * Whether a client component is the app's: always, on a page without Server
+ * Components; with them, when the chain of who created it reaches one.
+ */
+function isAppComponent(fiber: Fiber, tree: ReactTree): boolean {
+  if (!tree.servers.size) return true;
+  let owner = fiber._debugOwner ?? null;
+  for (let i = 0; owner && i < 200; i++) {
+    if (isServerComponent(owner)) return true;
+    owner = isFiber(owner) ? (owner._debugOwner ?? null) : ((owner as ServerComponent).owner ?? null);
+  }
+  return false;
+}
+
+/** A fiber's top-level DOM elements: itself for an element, else what it renders. */
+const hostsOf = (f: Fiber): Element[] => (isHost(f) ? (f.stateNode instanceof Element ? [f.stateNode] : []) : reactRoots(f));
+
+const serverInstance = (tree: ReactTree, info: ServerComponent): ComponentInstance => ({
+  type: SERVER + info.name,
+  name: info.name,
+  roots: (tree.servers.get(info.name)?.get(info) ?? []).flatMap(hostsOf),
+});
 
 /** A component fiber's top-level DOM elements (a portal's aren't on its spot of the page). */
 function reactRoots(fiber: Fiber): Element[] {
@@ -158,22 +214,38 @@ const reactInstance = (f: Fiber): ComponentInstance => ({ type: f.type, name: re
 
 const react: Reader = {
   ownersOf(element) {
-    const host = reactTree(element)?.hostOf.get(element);
+    const tree = reactTree(element);
+    const host = tree?.hostOf.get(element);
     const owners: ComponentInstance[] = [];
-    for (let f = host?.return ?? null; f; f = f.return) if (isComponent(f)) owners.push(reactInstance(f));
+    if (!tree) return owners;
+    // Up from the element: the client components rendering it, and the Server Components whose output starts on the way.
+    for (let f: Fiber | null = host ?? null; f; f = f.return) {
+      if (f !== host && isComponent(f) && isAppComponent(f, tree)) owners.push(reactInstance(f));
+      for (const info of serversAt(f)) owners.push(serverInstance(tree, info));
+    }
     return owners;
   },
   instancesOf(element, type) {
-    return (reactTree(element)?.byType.get(type) ?? []).map(reactInstance);
+    const tree = reactTree(element);
+    if (!tree) return [];
+    if (typeof type === "string" && type.startsWith(SERVER)) {
+      return [...(tree.servers.get(type.slice(SERVER.length))?.keys() ?? [])].map((info) => serverInstance(tree, info));
+    }
+    return (tree.byType.get(type) ?? []).map(reactInstance);
   },
   sourceOf(element) {
     const fiber = reactFiberOf(element);
     if (!fiber) return null;
-    // The component whose code wrote this element (its owner), else the nearest one rendering it.
-    let owner = fiber._debugOwner ?? null;
-    if (!owner || !isComponent(owner)) for (owner = fiber.return; owner && !isComponent(owner); owner = owner.return);
+    // The component whose code wrote this element (its owner: a client component, or a Server Component's record), else the nearest one rendering it.
+    const writer = fiber._debugOwner ?? null;
+    let name = "";
+    if (isServerComponent(writer)) name = writer.name;
+    else {
+      let owner: Fiber | null = isFiber(writer) && isComponent(writer) ? writer : null;
+      if (!owner) for (owner = fiber.return; owner && !isComponent(owner); owner = owner.return);
+      name = owner ? reactName(owner.type) : "";
+    }
     const source: ComponentSource = {};
-    const name = owner && reactName(owner.type);
     if (name) source.component = name;
     const at = fiber._debugSource;
     if (at?.fileName) {
