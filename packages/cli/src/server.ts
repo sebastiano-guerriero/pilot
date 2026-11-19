@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AgentInfo, ChangeResult, PageEvent, WidthCheck } from "@pilot/protocol";
 import { BRIDGE_VERSION, originKey, questionOf } from "@pilot/protocol";
 import { attachmentsDir, extensionOf, MAX_ATTACHMENT_BYTES, saveAttachment, sweepAttachments, withAttachmentPaths } from "./attachments.ts";
+import { projectComponents } from "./components.ts";
 import { Hub, type JobPost } from "./hub.ts";
 
 /**
@@ -100,6 +101,9 @@ async function handle(hub: Hub, req: IncomingMessage, res: ServerResponse, attac
 
   if (req.method !== "POST") return json(res, 405, { error: "POST only" });
   if (!hub.hasAgents(origin)) return json(res, 403, { error: "no agent works on this page: run /pilot in your agent" });
+
+  // The project's components, for the comment box's `@` list (components.ts).
+  if (path === "/components") return json(res, 200, { components: projectComponents(hub.folders(origin)) });
 
   if (path === "/attachments") {
     const type = req.headers["content-type"] ?? "";

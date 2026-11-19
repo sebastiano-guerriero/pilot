@@ -14,7 +14,7 @@ Each doc covers one area. Read the one for the area you're changing before you c
 | [handoff.md](handoff.md) | Agent handoff: `/pilot`, jobs, the check after done, Make responsive and the width check, comments, elements being worked on, the hub |
 | [development.md](development.md) | Working on Pilot: scripts, the playground, trying it in other projects, the responsive lab, releasing, styling, fonts |
 | [roadmap.md](roadmap.md) | What's built, what's next, open questions |
-| [design-tokens.md](design-tokens.md) | Design tokens (planned) |
+| [design-tokens.md](design-tokens.md) | Design tokens (in part planned) |
 
 ## How to write these docs
 

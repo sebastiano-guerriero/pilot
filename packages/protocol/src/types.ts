@@ -149,6 +149,8 @@ export interface ResponsiveRequest {
   breakpoints: number[];
   /** Files the designer attached when asking (from the comment box's `/` actions), as on a comment. */
   attachments?: CommentAttachment[];
+  /** What the designer mentioned with `@` in its note, as on a comment (see CommentReference). */
+  references?: CommentReference[];
 }
 
 /**
@@ -166,6 +168,8 @@ export interface BreakFixRequest {
   breakpoints: number[];
   /** Files the designer attached when asking, as on a comment. */
   attachments?: CommentAttachment[];
+  /** What the designer mentioned with `@` in its note, as on a comment (see CommentReference). */
+  references?: CommentReference[];
 }
 
 /** A task about one element (not edits, not a comment): Pilot checks it at every width when it's done. */
@@ -192,6 +196,33 @@ export interface CommentMessage {
   attachments?: CommentAttachment[];
   /** The designer's message asked for an action (Make responsive), sent as a task: see CommentAction. */
   action?: CommentAction;
+  /** What the designer mentioned with `@` (a token, a component, an element), picked from Pilot's list: exact, for the agent to use as is. */
+  references?: CommentReference[];
+}
+
+/**
+ * Something the designer mentioned in a comment with `@`, picked from
+ * Pilot's list or typed: a design token with its value now, a component
+ * (with an instance on the page, or its file in the project), an element on
+ * the page, or a name Pilot found nowhere (`unlisted`, for the agent to look
+ * for). `name` is the thing's own name: the text reads it as `mentionText()`
+ * (a token as is, the others after `@`).
+ */
+export type CommentReference =
+  | { kind: "token"; name: string; value: string }
+  | { kind: "component"; name: string; target?: ElementTarget; source?: ComponentFile }
+  | { kind: "element"; name: string; target: ElementTarget }
+  | { kind: "unlisted"; name: string };
+
+/** Where a component is declared in the project, relative to the project's folder. */
+export interface ComponentFile {
+  file: string;
+  line?: number;
+}
+
+/** How a reference reads in the comment's text: a token by its name (`--color-accent`), the others after `@` (`@ProductCard`). */
+export function mentionText(reference: CommentReference): string {
+  return reference.kind === "token" ? reference.name : `@${reference.name}`;
 }
 
 /**

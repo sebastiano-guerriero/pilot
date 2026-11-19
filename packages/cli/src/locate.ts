@@ -1,7 +1,8 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, extname, isAbsolute, join, relative } from "node:path";
-import type { AgentRequest, ElementTarget, Job } from "@pilot/protocol";
+import type { AgentRequest, CommentReference, ElementTarget, Job } from "@pilot/protocol";
 import { requestTargets } from "@pilot/protocol";
+import { workspaceRoot } from "./components.ts";
 
 /**
  * Where an element's code probably is, found by Pilot before the agent gets
@@ -266,6 +267,31 @@ export function withComponentFiles(job: Job, root: string): Job {
     const found = componentFile(source.component, root, deadline, known ?? undefined);
     return found ? { ...target, source: { ...source, file: found.file, line: found.line } } : target;
   };
+  // What the comment mentions with `@`: a project component's file (sent
+  // relative to the workspace's root, components.ts) relative to this
+  // project instead; a component or a typed name with no file, looked for
+  // by its declaration, across the workspace (a monorepo's packages too).
+  const workspace = workspaceRoot(root);
+  const declared = (name: string) => {
+    const found = componentFile(name, workspace, deadline);
+    return found ? { file: relative(root, join(workspace, found.file)), line: found.line } : null;
+  };
+  const mention = (r: CommentReference): CommentReference => {
+    if (r.kind === "element") return { ...r, target: fill(r.target) };
+    if (r.kind === "unlisted") {
+      const source = declared(r.name);
+      return source ? { kind: "component", name: r.name, source } : r;
+    }
+    if (r.kind !== "component") return r;
+    if (r.source) {
+      const path = join(workspace, r.source.file);
+      return existsSync(path) ? { ...r, source: { ...r.source, file: relative(root, path) } } : r;
+    }
+    if (r.target?.source?.file) return { ...r, target: fill(r.target) };
+    const source = declared(r.name);
+    return source ? { ...r, source } : r;
+  };
+  const mentions = (refs: CommentReference[] | undefined) => (refs?.length ? { references: refs.map(mention) } : {});
   const { changeSet } = job;
   const request = changeSet.request;
   return {
@@ -279,6 +305,9 @@ export function withComponentFiles(job: Job, root: string): Job {
               ...request,
               target: fill(request.target),
               ...(request.others ? { others: request.others.map(fill) } : {}),
+              ...(request.kind === "comment"
+                ? { thread: request.thread.map((m) => ({ ...m, ...mentions(m.references) })) }
+                : mentions(request.references)),
             } as AgentRequest,
           }
         : {}),

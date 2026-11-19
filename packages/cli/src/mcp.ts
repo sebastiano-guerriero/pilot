@@ -245,12 +245,14 @@ export function createPilotServer(options: { port?: number; cwd?: string; waitMs
   // Known once the client has connected (see waitMsFor).
   let waitMs = options.waitMs ?? waitMsFor(undefined);
   const server = new McpServer({ name: "pilot", version: VERSION }, { instructions: INSTRUCTIONS });
-  const agent: AgentInfo = { id: randomUUID(), label: agentLabel(undefined, cwd) };
+  const agent: AgentInfo = { id: randomUUID(), label: agentLabel(undefined, cwd), ...(searchable(cwd) ? { folder: cwd } : {}) };
   const bridge = new Bridge(agent, port);
   let origin: string | null = null;
   const useProject = (folder: string) => {
     project = folder;
     agent.label = agentLabel(client, folder);
+    // For the hub, which reads the project's components from it (never shown to pages).
+    agent.folder = folder;
   };
 
   // The client's name is known once it has connected, and so are its workspace folders, when it shares them.

@@ -1,4 +1,4 @@
-import type { AgentInfo, ChangeResult, Job, PageEvent, WidthCheck } from "@pilot/protocol";
+import type { AgentInfo, ChangeResult, Job, PageEvent, ProjectComponent, WidthCheck } from "@pilot/protocol";
 import { DEFAULT_BRIDGE_PORT } from "@pilot/protocol";
 
 /** Where the hub listens (see packages/cli: `pilot mcp`). */
@@ -86,6 +86,24 @@ export class BridgeClient {
       return typeof id === "string" ? id : null;
     } catch {
       return null;
+    }
+  }
+
+  /**
+   * The project's components, as the agents' server reads them from the
+   * code (for the `@` list); none when the hub isn't there, has no agent for
+   * this page, or is older than this route.
+   */
+  async components(): Promise<ProjectComponent[]> {
+    try {
+      const res = await fetch(`${this.url}/components`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      if (!res.ok) return [];
+      const { components } = (await res.json()) as { components?: unknown };
+      return Array.isArray(components)
+        ? components.filter((c): c is ProjectComponent => typeof c?.name === "string" && typeof c?.file === "string")
+        : [];
+    } catch {
+      return [];
     }
   }
 

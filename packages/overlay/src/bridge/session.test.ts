@@ -301,6 +301,56 @@ describe("PilotSession", () => {
     expect(s.threadFor(el)).toBeNull();
   });
 
+  it("a comment takes its element's unsent edits along when asked: one job, the edits checked like Send's, the reply in the thread", async () => {
+    vi.useFakeTimers();
+    const other = document.createElement("p");
+    other.className = "other";
+    document.body.append(other);
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    history.apply(el, "padding-top", "20px");
+    history.apply(other, "color", "red"); // another element's: stays for Send
+    const { thread, job: sent } = s.comment(el, "Like this, on mobile too", [], undefined, [], [], true);
+    const posted = posts.at(-1)?.body as { changeSet: { edits: Array<{ changes: Array<{ property: string }> }>; request: { kind: string } } };
+    expect(posted.changeSet.request.kind).toBe("comment");
+    expect(posted.changeSet.edits.flatMap((e) => e.changes.map((c) => c.property))).toEqual(["padding-top"]);
+    expect(s.unsent).toBe(1);
+    expect(s.threadFor(el)?.messages[0]?.edits).toBe(1);
+    // Done, and the edit is in the page's CSS: it settles, and the notes are the reply.
+    sheet.textContent = ".card { padding-top: 20px; }";
+    hub().emit({ type: "job", job: job({ id: (sent as { id: string }).id, status: "done", agent, notes: "Done, and on mobile." }) });
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(history.changes({ job: (sent as { id: string }).id })).toEqual([]);
+    expect(s.threadFor(el)?.messages.map((m) => m.text)).toEqual(["Like this, on mobile too", "Done, and on mobile."]);
+    s.resolve(thread.id);
+  });
+
+  it("without the chip (or with an action), a comment leaves the edits for Send", () => {
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    history.apply(el, "padding-top", "20px");
+    const { thread } = s.comment(el, "Calmer", [], undefined, [], [], false);
+    expect((posts.at(-1)?.body as { changeSet: { edits: unknown[] } }).changeSet.edits).toEqual([]);
+    expect(s.unsent).toBe(1);
+    s.resolve(thread.id);
+  });
+
+  it("what a comment mentions with @ goes with it, to the agent and in the thread; with an action, in the task", () => {
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    const token = { kind: "token" as const, name: "--color-accent", value: "#1cf69e" };
+    const { thread } = s.comment(el, "Use --color-accent", [], undefined, [], [token]);
+    const posted = posts.at(-1)?.body as { changeSet: { request: { thread: Array<{ references?: unknown[] }> } } };
+    expect(posted.changeSet.request.thread[0]?.references).toEqual([token]);
+    expect(thread.messages[0]?.references).toEqual([token]);
+    s.resolve(thread.id);
+    const other = document.createElement("p");
+    document.body.append(other);
+    s.comment(other, "Use --color-accent", [], "responsive", [], [token]);
+    const task = posts.at(-1)?.body as { changeSet: { request: { kind: string; references?: unknown[] } } };
+    expect(task.changeSet.request).toMatchObject({ kind: "responsive", references: [token] });
+  });
+
   it("an action from the comment box (/responsive) goes as that task, with the words and files, and the agent's notes come back in the thread", async () => {
     vi.useFakeTimers();
     const s = session();

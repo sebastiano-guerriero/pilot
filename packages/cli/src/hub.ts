@@ -42,9 +42,11 @@ export interface WaitResult {
 }
 
 interface Agent {
+  /** As pages may see it: without its folder. */
   info: AgentInfo;
   origin: string;
   seen: number;
+  folder?: string;
 }
 
 interface Waiter {
@@ -74,7 +76,8 @@ export class Hub {
   register(info: AgentInfo, origin: string): void {
     const key = originKey(origin);
     const known = this.agents.get(info.id);
-    this.agents.set(info.id, { info, origin: key, seen: this.now() });
+    const { folder, ...shown } = info;
+    this.agents.set(info.id, { info: shown, origin: key, seen: this.now(), folder: folder ?? known?.folder });
     if (!known || known.origin !== key) {
       if (known) this.notifyAgents(known.origin);
       this.notifyAgents(key);
@@ -98,6 +101,17 @@ export class Hub {
     this.dispatch(agent.origin);
   }
 
+  /** An agent's info as pages see it (no folder). */
+  private shown(info: AgentInfo): AgentInfo {
+    return this.agents.get(info.id)?.info ?? { id: info.id, label: info.label };
+  }
+
+  /** The project folders of the agents working on pages of `origin`: where its components are read from. */
+  folders(origin: string): string[] {
+    const key = originKey(origin);
+    return [...new Set([...this.agents.values()].filter((a) => a.origin === key && a.folder).map((a) => a.folder as string))];
+  }
+
   /** Drops agents not heard from in AGENT_TTL (`keep`: the ones in this process, always alive). */
   sweep(keep: Set<string> = new Set()): void {
     const cutoff = this.now() - AGENT_TTL;
@@ -109,7 +123,7 @@ export class Hub {
   /** An agent ran /pilot: registers it and tells the open pages of `origin` to launch Pilot. Returns how many pages got it. */
   launch(info: AgentInfo, origin: string): number {
     this.register(info, origin);
-    return this.sendTo(originKey(origin), { type: "launch", agent: info });
+    return this.sendTo(originKey(origin), { type: "launch", agent: this.shown(info) });
   }
 
   /**
@@ -121,7 +135,7 @@ export class Hub {
     this.register(info, origin);
     const key = originKey(origin);
     const queued = this.oldestQueued(key);
-    if (queued) return Promise.resolve({ job: this.take(queued, info) });
+    if (queued) return Promise.resolve({ job: this.take(queued, this.shown(info)) });
     return new Promise((resolve) => {
       const waiter: Waiter = {
         agentId: info.id,

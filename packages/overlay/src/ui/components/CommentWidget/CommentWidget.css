@@ -454,7 +454,15 @@
      pending the design. */
   .action-chip-row {
     display: flex;
+    gap: 4px;
     padding-top: 12px;
+  }
+
+  /* On a sent message: its action and how many edits went with it. */
+  .message-chips {
+    display: flex;
+    gap: 4px;
+    align-self: flex-start;
   }
 
   .action-chip {
@@ -473,6 +481,13 @@
 
     &:has(.action-remove) {
       padding-inline: 4px 1px;
+    }
+
+    /* The editor's changes going with the comment: not an action, so not
+       the accent. Placeholder look, pending the design. */
+    &[data-kind="edits"] {
+      background: hsl(from var(--plt-color-contrast-high) h s l / 15%);
+      color: var(--plt-color-contrast-high);
     }
   }
 
@@ -505,8 +520,10 @@
     font-size: var(--plt-text-base);
     line-height: 1;
     margin: 0 -8px;
-    /* 12px to the buttons below. */
-    padding-bottom: 12px;
+    /* The buttons hide while it's open: 22px from the last row's text to the
+       box's edge (its 6px, these 4px, the composer's 12px), as from the
+       field's text to the first row. */
+    padding-bottom: 4px;
   }
 
   .action-option {
@@ -532,6 +549,57 @@
   .action-none {
     padding: 6px 8px;
     color: var(--plt-color-contrast-low);
+  }
+
+  /* The @ menu: the / menu's rows on one line (a color's swatch, the name,
+     its value), under a heading per group. Placeholder look, pending the
+     design. */
+  .mention-group {
+    padding: 8px 8px 2px;
+    color: var(--plt-color-contrast-low);
+    font-size: 10px;
+
+    /* The same space above every group: the first sits under the field's
+       12px padding (and its 2px of leading), the others under a row's 6px
+       and the list's 2px gap, so they take 6px more. */
+    &:not(:first-child) {
+      padding-top: 14px;
+    }
+  }
+
+  .mention-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+
+    .action-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .action-description {
+      margin-left: auto;
+      flex-shrink: 0;
+      max-width: 50%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .mention-swatch {
+    flex-shrink: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 15%);
+  }
+
+  /* A mention in a sent comment: apart from the words around it. Placeholder look. */
+  .mention {
+    color: var(--plt-color-accent);
   }
 
   .field {
@@ -560,6 +628,10 @@
   .buttons {
     display: flex;
     justify-content: space-between;
+
+    &[hidden] {
+      display: none;
+    }
   }
 
   .attach,

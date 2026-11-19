@@ -1,10 +1,11 @@
-import type { CommentAction, ElementState, WidthRange } from "@pilot/protocol";
+import type { CommentAction, CommentReference, ElementState, WidthRange } from "@pilot/protocol";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import { type BoxArea, hidesSelection } from "../dom/boxModel.ts";
 import { measuredBoxes } from "../dom/measure.ts";
 import { revealInWindow } from "../dom/reveal.ts";
+import { mentionables } from "../dom/mentions.ts";
 import { findSimilar } from "../dom/similar.ts";
-import { type EditableElement, isEditable } from "../dom/target.ts";
+import { describeElement, type EditableElement, isEditable } from "../dom/target.ts";
 import { isTextOnly, normalizeText, textProperty, textRunAt } from "../dom/text.ts";
 import { formatPrompt } from "@pilot/protocol";
 import { buildChangeSet, copyText } from "../edits/changeSet.ts";
@@ -25,6 +26,7 @@ import { statusText, whatText } from "./components/JobList/JobList.tsx";
 import { DomTree } from "./components/DomTree/DomTree.tsx";
 import { actionsBox, type Busy, SelectionActions } from "./components/SelectionActions/SelectionActions.tsx";
 import { type CommentOutcome, CommentWidget } from "./components/CommentWidget/CommentWidget.tsx";
+import { type MentionOption, mentionOptions } from "./components/CommentWidget/mentions.ts";
 import { Confetti } from "./components/Confetti/Confetti.tsx";
 import { thumbnail } from "../dom/thumbnail.ts";
 import { type Tool, Toolbar } from "./components/Toolbar/Toolbar.tsx";
@@ -461,13 +463,27 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // Comments go to an agent only: without one on the page, the widget's send is disabled.
   // Attached files go to the hub first (it saves them for the agent); nothing is sent if one fails.
   // An action picked from the `/` menu (Make responsive) goes as that task, the words as its note.
-  const sendComment = async (element: Element, text: string, files: File[], action?: CommentAction): Promise<CommentOutcome> => {
+  // What `@` mentioned goes as exact references: a token with its value, a
+  // component or an element described as the page shows it now.
+  // The selected elements' edits not sent yet go with the comment, unless the designer took its chip off (`withEdits`).
+  const sendComment = async (
+    element: Element,
+    text: string,
+    files: File[],
+    action?: CommentAction,
+    mentions: MentionOption[] = [],
+    withEdits = false,
+  ): Promise<CommentOutcome> => {
     if (!session || !sendToAgent) return false;
     const attachments = files.length ? await session.uploadFiles(files, thumbnail) : [];
     if (!attachments) return { title: "The file couldn't be attached", detail: "Try again, or send it without the file" };
-    session.comment(element, text, attachments, action, othersRef.current);
+    session.comment(element, text, attachments, action, othersRef.current, mentions.flatMap(toReference), withEdits);
     return "sent";
   };
+  // How many of them there are, for the chip (changeCount re-renders this as the history changes).
+  const unsentOnSelection = selected
+    ? history.changes({ unsent: true }).filter((c) => c.element === selected.element || others.includes(c.element)).length
+    : 0;
 
   const hideSelection = !!inspect?.some(hidesSelection) || measuring;
   // Beside the latest one added, while it's still selected (taken out: back to the first).
@@ -575,7 +591,10 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
             error={threadJob && isStuck(threadJob) ? stuckAlert : undefined}
             agentName={agentName(threadJob?.agent?.label ?? session?.state.agents[0]?.label)}
             agentOn={sendToAgent}
-            onSend={(text, files, action) => sendComment(selected.element, text, files, action)}
+            onSend={(text, files, action, mentions, withEdits) => sendComment(selected.element, text, files, action, mentions, withEdits)}
+            edits={unsentOnSelection}
+            mentions={() => mentionOptions(mentionables(nameAttributes))}
+            projectComponents={session ? () => session.projectComponents() : undefined}
             // Resolved: the thread goes, and the widget closes (the next one is the Comment button's click away).
             onResolve={
               thread
@@ -811,4 +830,13 @@ function isTextField(el: Element | null): boolean {
   if (!el) return false;
   if (el instanceof HTMLElement && el.isContentEditable) return true;
   return el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
+}
+
+/** What the comment mentions as the references it carries (see CommentReference); an element gone from the page since, none. */
+function toReference(o: MentionOption): CommentReference[] {
+  if (o.group === "Tokens") return [{ kind: "token", name: o.label, value: o.detail ?? "" }];
+  if (o.group === "Unlisted") return [{ kind: "unlisted", name: o.label }];
+  const target = o.element?.isConnected ? describeElement(o.element) : undefined;
+  if (o.group === "Components") return [{ kind: "component", name: o.label, ...(target ? { target } : {}), ...(o.source ? { source: o.source } : {}) }];
+  return target ? [{ kind: "element", name: o.label, target }] : [];
 }

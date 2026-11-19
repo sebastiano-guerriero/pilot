@@ -1,6 +1,6 @@
-# Design tokens in Pilot (planned)
+# Design tokens in Pilot (in part planned)
 
-> Status: **not built yet**. This note collects what was decided in discussion, so the work can start from here. When it's built, move the parts that become real into the docs for their area (see [README.md](README.md)) and trim this note to what's still open.
+> Status: **reading the page's tokens is built**, for the comment box's `@` mentions ([handoff.md](handoff.md), *Mentions*): `pageTokens()` in [dom/tokens.ts](../packages/overlay/src/dom/tokens.ts) collects the root's CSS variables, live, with their values and kinds. The rest is planned: fields offering tokens, steps along the scale, and tokens that only live in code (read by the hub, then listed in `@` too). When a part is built, move it into the docs for its area (see [README.md](README.md)) and trim this note to what's still open.
 
 ## Goal
 

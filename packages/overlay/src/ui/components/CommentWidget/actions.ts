@@ -2,8 +2,9 @@ import type { CommentAction } from "@pilot/protocol";
 
 /**
  * What the comment box's `/` menu offers: tasks for the agent about the
- * element. Picked, an action becomes a chip at the start of the message;
- * the words typed after it, and any files, go with it. Each is sent as a
+ * element. `/` at the start of any word opens it (not in a word: "and/or",
+ * URLs), as `@` does. Picked, an action becomes a chip at the start of the
+ * message, its `/word` leaves the text; the words, and any files, go with it. Each is sent as a
  * job of its own (see PilotSession.comment), and shows in the thread as
  * the designer's message, with the agent's reply after it.
  */
@@ -30,14 +31,27 @@ export const ACTIONS: Action[] = [
   },
 ];
 
-/** The message starts with `/` (and nothing else yet but the action's name): the menu is open. */
-export function isActionQuery(text: string): boolean {
-  return /^\/\S*$/.test(text);
+/** The `/` being typed right before the caret (at the start, or after a space), and what follows it; null otherwise. */
+export function actionAt(text: string, caret: number): { start: number; query: string } | null {
+  const before = text.slice(0, caret);
+  const m = /(^|\s)\/([^\s/]*)$/.exec(before);
+  if (!m) return null;
+  return { start: before.length - (m[2] as string).length - 1, query: m[2] as string };
+}
+
+/** `text` without the `/query` at `at` (it became the chip), one space kept where it was; and where the caret goes. */
+export function withoutQuery(text: string, at: { start: number; query: string }): { text: string; caret: number } {
+  let before = text.slice(0, at.start);
+  let after = text.slice(at.start + 1 + at.query.length);
+  if (!before.trim()) before = "";
+  if (before.endsWith(" ") && after.startsWith(" ")) after = after.slice(1);
+  if (!before) after = after.trimStart();
+  return { text: before + after, caret: before.length };
 }
 
 /** The actions for what's typed after `/`: by command or name, those that start with it first. */
-export function matchActions(text: string): Action[] {
-  const query = text.slice(1).toLowerCase();
+export function matchActions(typed: string): Action[] {
+  const query = typed.toLowerCase();
   if (!query) return ACTIONS;
   const words = (a: Action) => [a.command, ...a.name.toLowerCase().split(/\s+/)];
   const starts = ACTIONS.filter((a) => words(a).some((w) => w.startsWith(query)));

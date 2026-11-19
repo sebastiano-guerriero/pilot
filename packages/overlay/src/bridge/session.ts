@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentQuestion, AgentRequest, ChangeResult, ChangeSet, CommentAction, CommentAttachment, CommentMessage, ElementTarget, Job, JobStatus, WidthCheck } from "@pilot/protocol";
+import type { AgentInfo, AgentQuestion, AgentRequest, ChangeResult, ChangeSet, CommentAction, CommentAttachment, CommentMessage, CommentReference, ElementTarget, Job, JobStatus, ProjectComponent, WidthCheck } from "@pilot/protocol";
 import { attachmentType, requestTargets } from "@pilot/protocol";
 import { checkWidths, problemLines, snapshotAt, type StyleSnapshot, widthsToCheck } from "../checks/widths.ts";
 import { describeElement } from "../dom/target.ts";
@@ -86,6 +86,10 @@ export type ThreadMessage = Omit<CommentMessage, "attachments"> & {
   /** The question's one-click answers. */
   choices?: string[];
   attachments?: ThreadAttachment[];
+  /** The designer's edits on the comment's elements, not sent yet, go with it (see PilotSession.comment): when it's posted. */
+  takesEdits?: boolean;
+  /** How many of them went with it, for the thread. */
+  edits?: number;
 };
 
 /** A file on a designer's message: the hub's id for it, and for an image a small preview (a data URL) for the thread. */
@@ -333,13 +337,13 @@ export class PilotSession {
   request(
     element: Element,
     kind: AgentRequest["kind"],
-    extras: { id?: string; note?: string; attachments?: CommentAttachment[]; others?: Element[] } = {},
+    extras: { id?: string; note?: string; attachments?: CommentAttachment[]; references?: CommentReference[]; others?: Element[] } = {},
   ): JobRecord | null {
     const others = extras.others ?? [];
     if (!this.canSendToAgent || this.anyBusy([element, ...others])) return null;
     const id = extras.id ?? newJobId();
     this.jobElements.set(id, [element, ...others]);
-    const job = this.post(id, buildRequest(element, kind, { id, note: extras.note, attachments: extras.attachments, others }));
+    const job = this.post(id, buildRequest(element, kind, { id, note: extras.note, attachments: extras.attachments, references: extras.references, others }));
     // The element at the designer's width as the code has it now (no
     // previews), while the agent starts: to tell what it changed there.
     const { page, request } = job.changeSet;
@@ -397,6 +401,8 @@ export class PilotSession {
     attachments: ThreadAttachment[] = [],
     action?: CommentAction,
     others: Element[] = [],
+    references: CommentReference[] = [],
+    takesEdits = false,
   ): { thread: CommentThread; job: JobRecord | null; changeSet: ChangeSet; waiting: boolean } {
     let thread = this.threadFor(element);
     // The agent asked something here: this message is the answer, and goes with its job.
@@ -421,6 +427,9 @@ export class PilotSession {
     const message: ThreadMessage = { from: "designer", text: text.trim(), at: new Date().toISOString() };
     if (attachments.length) message.attachments = attachments;
     if (action) message.action = action;
+    if (references.length) message.references = references;
+    // Not with an action: a task goes apart from the changes (see request), which wait for Send.
+    if (takesEdits && !action) message.takesEdits = true;
     const waiting = this.canSendToAgent && this.anyBusy([element, ...others]);
     if (waiting) message.waiting = true;
     const messages = [...thread.messages, message];
@@ -432,12 +441,13 @@ export class PilotSession {
   /** A comment job's change set: the thread so far, as the agent reads it. */
   private commentSet(element: Element, messages: ThreadMessage[], others: Element[], id?: string): ChangeSet {
     // Attachments go by id (the hub adds where it saved them); their previews stay here.
-    const thread = messages.map(({ from, text, at, attachments, action }) => ({
+    const thread = messages.map(({ from, text, at, attachments, action, references }) => ({
       from,
       text,
       at,
       ...(attachments?.length ? { attachments: attachments.map(({ id, name }) => ({ id, name })) } : {}),
       ...(action ? { action } : {}),
+      ...(references?.length ? { references } : {}),
     }));
     return buildRequest(element, "comment", { id, thread, others });
   }
@@ -448,6 +458,11 @@ export class PilotSession {
    * an image with a small preview for the thread. Null when any fails, or
    * isn't a type Pilot takes (nothing is sent then).
    */
+  /** The project's components, for the `@` list (see BridgeClient.components); none without an agent on the page. */
+  projectComponents(): Promise<ProjectComponent[]> {
+    return this.bridge && this.canSendToAgent ? this.bridge.components() : Promise.resolve([]);
+  }
+
   async uploadFiles(files: File[], preview: (file: File) => Promise<string | undefined>): Promise<ThreadAttachment[] | null> {
     if (!this.bridge) return null;
     const bridge = this.bridge;
@@ -477,22 +492,41 @@ export class PilotSession {
     const action = unsent.find((m) => m.action)?.action;
     let job: JobRecord | null;
     let changeSet: ChangeSet;
+    let sentEdits = 0;
     if (action) {
       const note = unsent
         .map((m) => m.text)
         .filter(Boolean)
         .join("\n\n");
       const attachments = unsent.flatMap((m) => m.attachments ?? []).map(({ id, name }) => ({ id, name }));
-      job = this.request(element, action, { id, note, attachments, others });
-      changeSet = job?.changeSet ?? buildRequest(element, action, { id, note, attachments, others });
+      const references = unsent.flatMap((m) => m.references ?? []);
+      job = this.request(element, action, { id, note, attachments, references, others });
+      changeSet = job?.changeSet ?? buildRequest(element, action, { id, note, attachments, references, others });
       if (!job) return { job: null, changeSet };
     } else {
       changeSet = this.commentSet(element, thread.messages, others, id);
       if (!this.canSendToAgent) return { job: null, changeSet };
-      this.jobElements.set(id, [element, ...others]);
+      // The designer's edits on these elements, not sent yet, go with the
+      // comment when it asks (its chip, kept): one job, checked like Send's
+      // once the agent is done (see verify), the comment's reply in the thread.
+      const elements = [element, ...others];
+      const only = (change: RecordedChange) => elements.includes(change.element);
+      const edits = unsent.some((m) => m.takesEdits) ? this.history.changes({ unsent: true }).filter(only).length : 0;
+      if (edits) {
+        changeSet = { ...changeSet, edits: buildChangeSet(this.history, { unsent: true, id, only }).edits };
+        this.history.send(id, only);
+        for (const e of elements) this.held.delete(e);
+        this.saveHeld();
+      }
+      sentEdits = edits;
+      this.jobElements.set(id, elements);
       job = this.post(id, changeSet);
     }
-    const messages = thread.messages.map((m) => (m.from === "designer" && (m.waiting || !m.jobId) ? { ...m, jobId: id, waiting: undefined } : m));
+    const messages = thread.messages.map((m) =>
+      m.from === "designer" && (m.waiting || !m.jobId)
+        ? { ...m, jobId: id, waiting: undefined, takesEdits: undefined, ...(sentEdits && m === unsent.at(-1) ? { edits: sentEdits } : {}) }
+        : m,
+    );
     this.patchThread(threadId, { messages });
     return { job, changeSet };
   }
@@ -714,14 +748,16 @@ export class PilotSession {
    */
   private verify(job: JobRecord): void {
     if (this.watching.has(job.id)) return;
-    // A comment: nothing to check (free text). Its notes are the agent's reply.
-    if (job.changeSet.request?.kind === "comment") {
+    // A comment: its notes are the agent's reply. The words are free text,
+    // nothing to check; edits that went with it are checked as Send's are.
+    const comment = job.changeSet.request?.kind === "comment";
+    if (comment && !job.changeSet.edits.length) {
       this.reply(job);
       return this.accept(job.id);
     }
-    if (job.changeSet.request) return this.verifyTask(job);
-    // An edits job the designer answered a question about: the agent's notes are its reply in that thread.
-    if (job.answer) this.reply(job);
+    if (job.changeSet.request && !comment) return this.verifyTask(job);
+    // A comment with edits, or an edits job the designer answered a question about: the agent's notes are its reply in that thread.
+    if (comment || job.answer) this.reply(job);
     const stop = watchJob(this.history, job.id, (results) => {
       this.watching.delete(job.id);
       const differences = results.filter((r) => r.outcome === "differs");

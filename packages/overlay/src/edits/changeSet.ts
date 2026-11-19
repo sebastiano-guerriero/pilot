@@ -1,4 +1,4 @@
-import type { AgentRequest, ChangeSet, CommentAttachment, CommentMessage, ElementEdit, ElementTarget, StyleChange } from "@pilot/protocol";
+import type { AgentRequest, ChangeSet, CommentAttachment, CommentMessage, CommentReference, ElementEdit, ElementTarget, StyleChange } from "@pilot/protocol";
 import { pageBreakpoints } from "../dom/breakpoints.ts";
 import { declaredValue } from "../dom/declared.ts";
 import { similarOf } from "../dom/similar.ts";
@@ -71,7 +71,14 @@ export function buildChangeSet(
 export function buildRequest(
   element: Element,
   kind: AgentRequest["kind"],
-  options: { id?: string; thread?: CommentMessage[]; note?: string; attachments?: CommentAttachment[]; others?: Element[] } = {},
+  options: {
+    id?: string;
+    thread?: CommentMessage[];
+    note?: string;
+    attachments?: CommentAttachment[];
+    references?: CommentReference[];
+    others?: Element[];
+  } = {},
 ): ChangeSet {
   // Several selected together: one request about all of them, `element` first.
   const selected = [element, ...(options.others ?? []).filter((e) => e !== element)];
@@ -84,7 +91,14 @@ export function buildRequest(
   const request: AgentRequest =
     kind === "comment"
       ? { kind, target, ...several, breakpoints, thread: options.thread ?? [] }
-      : { kind, target, ...several, breakpoints, ...(options.attachments?.length ? { attachments: options.attachments } : {}) };
+      : {
+          kind,
+          target,
+          ...several,
+          breakpoints,
+          ...(options.attachments?.length ? { attachments: options.attachments } : {}),
+          ...(options.references?.length ? { references: options.references } : {}),
+        };
   return {
     id: options.id ?? `cs_${Date.now().toString(36)}`,
     createdAt: new Date().toISOString(),

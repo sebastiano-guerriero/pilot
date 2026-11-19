@@ -32,10 +32,27 @@ export const DEFAULT_BRIDGE_PORT = 4747 + BRIDGE_VERSION;
 export type JobStatus = "queued" | "working" | "done" | "cancelled";
 
 /** An agent connected to the hub, as the page shows it. */
+/**
+ * A component declared in the agent's project (`POST /components`, for the
+ * comment box's `@` list): its name and where it is, relative to the
+ * project's folder (see ComponentFile).
+ */
+export interface ProjectComponent {
+  name: string;
+  file: string;
+  line?: number;
+}
+
 export interface AgentInfo {
   id: string;
   /** "Claude Code · pilot": the agent's client name and its project folder. */
   label: string;
+  /**
+   * The agent's project folder (absolute), for the hub to read the
+   * project's components from (`POST /components`). The hub keeps it to
+   * itself: what it sends pages never has it.
+   */
+  folder?: string;
 }
 
 /** One Send: a change set for an agent to apply. */

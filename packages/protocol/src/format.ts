@@ -1,11 +1,12 @@
 import type { WidthCheck } from "./bridge.ts";
-import { attachmentKind, requestTargets } from "./types.ts";
+import { attachmentKind, mentionText, requestTargets } from "./types.ts";
 import type {
   BreakFixRequest,
   ChangeSet,
   CommentAction,
   CommentAttachment,
   CommentMessage,
+  CommentReference,
   CommentRequest,
   ElementEdit,
   ElementState,
@@ -24,7 +25,7 @@ import type {
 export function formatPrompt(changeSet: ChangeSet, options: { guidelines?: boolean } = {}): string {
   if (changeSet.request?.kind === "responsive") return formatResponsive(changeSet, changeSet.request);
   if (changeSet.request?.kind === "break-and-fix") return formatBreakFix(changeSet, changeSet.request);
-  if (changeSet.request?.kind === "comment") return formatComment(changeSet, changeSet.request);
+  if (changeSet.request?.kind === "comment") return formatComment(changeSet, changeSet.request, options);
   const { page, edits, note } = changeSet;
   const lines: string[] = [
     "# Pilot design edits",
@@ -162,6 +163,7 @@ function formatBreakFix(changeSet: ChangeSet, request: BreakFixRequest): string 
   if (note?.trim()) lines.push("", `Designer note: ${note.trim()}`);
   if (request.attachments?.length)
     lines.push("", ...attachmentLines(request.attachments, `The designer attached ${countFiles(request.attachments.length)}:`));
+  if (request.references?.length) lines.push("", ...referenceLines(request.references));
   lines.push(
     "",
     ...elementsSection(request),
@@ -217,6 +219,7 @@ function formatResponsive(changeSet: ChangeSet, request: ResponsiveRequest): str
   if (note?.trim()) lines.push("", `Designer note: ${note.trim()}`);
   if (request.attachments?.length)
     lines.push("", ...attachmentLines(request.attachments, `The designer attached ${countFiles(request.attachments.length)}:`));
+  if (request.references?.length) lines.push("", ...referenceLines(request.references));
   lines.push(
     "",
     ...elementsSection(request),
@@ -246,8 +249,8 @@ function formatResponsive(changeSet: ChangeSet, request: ResponsiveRequest): str
  * Simple, specific asks are done right away; open-ended ones are advanced
  * tasks (the stronger model). The agent's notes are its reply in the thread.
  */
-function formatComment(changeSet: ChangeSet, request: CommentRequest): string {
-  const { page } = changeSet;
+function formatComment(changeSet: ChangeSet, request: CommentRequest, options: { guidelines?: boolean } = {}): string {
+  const { page, edits } = changeSet;
   const { thread, breakpoints } = request;
   const several = requestTargets(request).length;
   const latest = thread.at(-1);
@@ -271,6 +274,18 @@ function formatComment(changeSet: ChangeSet, request: CommentRequest): string {
     "",
     ...commentLines(latest),
   ];
+  // The designer's edits on these elements, sent with the comment: exact values, applied as Send's are (and checked by Pilot after).
+  if (edits.length) {
+    lines.push(
+      "",
+      "## The designer's edits, sent with the comment",
+      "",
+      "Before writing it, the designer changed these in Pilot's editor: apply them too, exactly, as design edits. The comment may be about them (\"like this, on mobile too\"). Pilot checks them on the page when you're done.",
+      "",
+      ...(options.guidelines === false ? [EDIT_GUIDELINES_REMINDER] : ["Guidelines:", ...EDIT_GUIDELINES]),
+    );
+    edits.forEach((edit, index) => lines.push("", ...formatEdit(edit, index + 1).map((l) => (l.startsWith("## ") ? `#${l}` : l))));
+  }
   if (earlier.length) {
     lines.push("", "## The thread so far (you already did what it asked)", "");
     for (const m of earlier) {
@@ -305,6 +320,9 @@ function commentLines(message: CommentMessage | undefined): string[] {
   const text = message?.text.trim() ?? "";
   const files = message?.attachments ?? [];
   const out = text ? [quote(text)] : [];
+  // What the designer mentioned with `@`, picked from Pilot's list: exact names, to use as they are.
+  const references = message?.references ?? [];
+  if (references.length) out.push("", ...referenceLines(references));
   if (!files.length) return out.length ? out : ["> (empty)"];
   const one = files.length === 1;
   if (out.length) out.push("");
@@ -316,6 +334,44 @@ function commentLines(message: CommentMessage | undefined): string[] {
     ...attachmentLines(files),
   );
   return out;
+}
+
+/** What the designer mentioned with `@`, exact, as the agent reads it. */
+function referenceLines(references: CommentReference[]): string[] {
+  const picked = references.some((r) => r.kind !== "unlisted");
+  return [
+    picked
+      ? "What it mentions with `@`, each as it reads in the comment (the ones picked from Pilot's list are exact: use them, don't look for others):"
+      : "What it mentions with `@`, as it reads in the comment:",
+    "",
+    ...references.map(referenceLine),
+  ];
+}
+
+/**
+ * A mentioned token, component or element, as the agent reads it: first as
+ * it reads in the comment, then what it is and where to find it (a file and
+ * line when Pilot knows them; else what to search for).
+ */
+function referenceLine(reference: CommentReference): string {
+  const as = `- \`${mentionText(reference)}\`:`;
+  if (reference.kind === "token")
+    return `${as} a design token (a CSS variable on the page), now \`${reference.value}\`. Use this token (\`var(${reference.name})\`, or the project's form of it).`;
+  if (reference.kind === "unlisted")
+    return `${as} a name the designer typed that Pilot didn't find on the page or among the project's components: probably a component or a part of the page. Search the project for \`${reference.name}\`, and ask in your reply if it's unclear what it is.`;
+  if (reference.kind === "component") {
+    const t = reference.target;
+    const source = reference.source ?? (t?.source?.file ? { file: t.source.file, line: t.source.line } : undefined);
+    const where = source
+      ? `, declared in \`${source.file}${source.line ? `:${source.line}` : ""}\``
+      : `; find its declaration (\`function ${reference.name}\`, \`const ${reference.name} =\`, \`class ${reference.name}\`, or a \`${reference.name}.vue\` or \`.svelte\` file)`;
+    return t
+      ? `${as} the \`${reference.name}\` component${where}; one of its instances on the page: \`${t.selector}\`.`
+      : `${as} the \`${reference.name}\` component${where}. It isn't on this page.`;
+  }
+  const el = reference.target;
+  const component = el.source?.component ? `, inside the \`${el.source.component}\` component` : "";
+  return `${as} an element on the page: \`${el.path}\`, selector \`${el.selector}\`${el.text ? `, text "${el.text}"` : ""}${component}.`;
 }
 
 /** Attached files, one per line with how the agent gets each; after `intro` when given. */

@@ -187,6 +187,46 @@ describe("formatPrompt", () => {
     expect(first).not.toContain("The thread so far");
   });
 
+  it("what the comment mentions with @: each as it reads in the comment, then what it is and where to find it", () => {
+    const target = changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"];
+    const references = [
+      { kind: "token" as const, name: "--color-accent", value: "#1cf69e" },
+      { kind: "component" as const, name: "ProductCard", target: { ...target, source: { file: "src/ProductCard.tsx", line: 4 } } },
+      { kind: "component" as const, name: "PricingTable", source: { file: "../../packages/ui/src/pricing.tsx", line: 12 } },
+      { kind: "component" as const, name: "Hero" },
+      { kind: "element" as const, name: "h1", target },
+      { kind: "unlisted" as const, name: "Footer" },
+    ];
+    const thread = [{ from: "designer" as const, text: "Use --color-accent like @ProductCard", at: "", references }];
+    const text = formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, thread, breakpoints: [] } });
+    expect(text).toContain("What it mentions with `@`, each as it reads in the comment (the ones picked from Pilot's list are exact: use them, don't look for others):");
+    expect(text).toContain("- `--color-accent`: a design token (a CSS variable on the page), now `#1cf69e`. Use this token (`var(--color-accent)`, or the project's form of it).");
+    expect(text).toContain("- `@ProductCard`: the `ProductCard` component, declared in `src/ProductCard.tsx:4`; one of its instances on the page: `");
+    expect(text).toContain("- `@PricingTable`: the `PricingTable` component, declared in `../../packages/ui/src/pricing.tsx:12`. It isn't on this page.");
+    expect(text).toContain("- `@Hero`: the `Hero` component; find its declaration (`function Hero`, `const Hero =`, `class Hero`, or a `Hero.vue` or `.svelte` file). It isn't on this page.");
+    expect(text).toContain(`- \`@h1\`: an element on the page: \`${target.path}\`, selector \`${target.selector}\``);
+    expect(text).toContain("- `@Footer`: a name the designer typed that Pilot didn't find on the page or among the project's components: probably a component or a part of the page. Search the project for `Footer`");
+    // In a task's note (from the / menu) too.
+    const task = formatPrompt({ ...changeSet, edits: [], note: "Use --color-accent", request: { kind: "responsive", target, breakpoints: [], references: references.slice(0, 1) } });
+    expect(task).toContain("now `#1cf69e`");
+    // Only typed names: nothing claims to be exact.
+    const typed = formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, breakpoints: [], thread: [{ ...thread[0]!, references: [references[5]!] }] } });
+    expect(typed).toContain("What it mentions with `@`, as it reads in the comment:");
+  });
+
+  it("a comment with the designer's edits: they're listed with their values, to apply exactly, as Send's are", () => {
+    const target = changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"];
+    const thread = [{ from: "designer" as const, text: "Like this, on mobile too", at: "" }];
+    const text = formatPrompt({ ...changeSet, request: { kind: "comment", target, thread, breakpoints: [] } }, { guidelines: false });
+    expect(text).toContain("## The designer's edits, sent with the comment");
+    expect(text).toContain("apply them too, exactly, as design edits");
+    expect(text).toContain("Follow Pilot's edit guidelines");
+    expect(text).toContain("### 1. `");
+    expect(text).toContain("| `opacity` | `1` | `0.8` |");
+    // Without edits, none of it.
+    expect(formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, thread, breakpoints: [] } })).not.toContain("sent with the comment");
+  });
+
   it("a comment or task on several elements: each listed, the ask for all of them, the shared-component rule", () => {
     const target = changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"];
     const other = { ...target, selector: "section.cta > h2", path: "main > section.cta > h2", tag: "h2", text: "Start now" };

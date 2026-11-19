@@ -233,6 +233,27 @@ describe("the loop, through MCP", () => {
     expect(await rooted.call("pilot_launch", { url: APP })).not.toContain("folder");
   });
 
+  it("the page asks for the project's components (the `@` list): read from the agent's folder, which pages never see", async () => {
+    const project = await mkdtemp(join(tmpdir(), "pilot-app-"));
+    cleanup.push(() => rm(project, { recursive: true, force: true }));
+    await writeFile(join(project, "package.json"), "{}");
+    await mkdir(join(project, "src"));
+    await writeFile(join(project, "src/Pricing.tsx"), "export function PricingTable() {\n  return <table />;\n}\n");
+    const port = nextPort++;
+    const agent = await agentClient(port, 2000, { cwd: project });
+    await agent.call("pilot_launch", { url: APP });
+    const app = fakePage(port);
+    await app.ready;
+    const res = await app.post("/components", {});
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ components: [{ name: "PricingTable", file: "src/Pricing.tsx", line: 1 }] });
+    // Another site gets nothing.
+    expect((await fakePage(port, "https://evil.example").post("/components", {})).status).toBe(403);
+    // The folder stays in the hub: the page's events (agents, launch) never carry it.
+    await until(() => app.events.some((e) => e.type === "agents" && e.agents.length > 0));
+    expect(JSON.stringify(app.events)).not.toContain(project);
+  });
+
   it("launch opens Pilot in the pages already open", async () => {
     const port = nextPort++;
     const agent = await agentClient(port);

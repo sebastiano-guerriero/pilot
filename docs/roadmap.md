@@ -52,6 +52,8 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [x] Inline text editing: a text-only element whole, or the text run under the pointer
 - [ ] Change list in the panel (review and undo before handoff)
 - [ ] Designer note field
+- [x] `@` in the comment box: the page's tokens (its CSS variables), components and named elements, sent as exact references ([handoff.md](handoff.md), *Mentions*)
+- [x] `@` lists the project's components too (read by the agents' server, kept current), and typed `@names` count; each mention tells the agent where it is
 - [ ] Design tokens: the page's custom properties offered in fields, steps along the scale, token names for the agent ([design-tokens.md](design-tokens.md))
 
 ### Property editors
@@ -98,7 +100,7 @@ Next (found testing in Cursor: jobs queued forever while the connected chat had 
 - [x] The jobs button goes to the next job; jobs cancelled from their loader; the job list hidden
 - [ ] Preferences panel: change or remove Pilot's shortcuts
 - [ ] Send in the property dialog for the element's changes
-- [ ] A comment carries the element's unsent changes as an attachment (applied and checked with it)
+- [x] A comment carries the element's unsent changes (a chip in the box; applied and checked with it)
 - [x] Comment attachments (images, text files, PDFs): picked, previewed, sent with the comment or alone, saved by the hub in the OS temp folder, shown to the agent with the job
 - [ ] Design the file tile for attachments that aren't images (placeholder now)
 - [ ] Element markers for unsent changes
@@ -110,7 +112,7 @@ Next (found testing in Cursor: jobs queued forever while the connected chat had 
 - [x] Next.js App Router (Server Components, Turbopack): components from React's records of them, never the framework's own components
 - [ ] A history of the session's jobs (what changed, how it landed, files touched, a summary to copy), in place of the job list
 - [ ] Design the Send states and the job status (placeholder look now)
-- [ ] The bridge watches token files that only live in code (Tailwind v3 config, `tokens.json`, Style Dictionary) ([design-tokens.md](design-tokens.md))
+- [ ] The bridge watches token files that only live in code (`tokens.json` and Style Dictionary first, then Sass variables, Tailwind v3 configs last), listed in `@` too, with a files list in the comment box ([design-tokens.md](design-tokens.md))
 - [x] `/pilot` in any agent with skills: `init` writes the skill for Codex and Cursor (`.agents/skills`), Claude Code and Copilot
 
 ## Distribution

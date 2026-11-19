@@ -1,4 +1,5 @@
-import { ATTACHMENT_ACCEPT, attachmentKind, attachmentType, type CommentAction } from "@pilot/protocol";
+import { ATTACHMENT_ACCEPT, attachmentKind, attachmentType, type CommentAction, type ProjectComponent } from "@pilot/protocol";
+import { Fragment } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { CommentThread } from "../../../bridge/session.ts";
 import { px } from "../../px.ts";
@@ -6,8 +7,9 @@ import { Icon } from "../Icon/Icon.tsx";
 import { dialogPosition, dialogSpot, raisedSpot } from "../PropertyDialog/PropertyDialog.tsx";
 import { ScrollThumb } from "../ScrollThumb/ScrollThumb.tsx";
 import { Tooltip } from "../Tooltip/Tooltip.tsx";
-import { actionName, isActionQuery, matchActions } from "./actions.ts";
+import { actionAt, actionName, matchActions, withoutQuery } from "./actions.ts";
 import { renderMarkdown } from "./markdown.tsx";
+import { insertMention, matchMentions, type MentionOption, mentionAt, mentionsIn, projectOptions, splitMentions } from "./mentions.ts";
 
 /** How sending went: to the agent, or not at all. */
 /** What sending did: sent; not sent, quietly (nothing to send); or not sent, and why (shown as a red reply). */
@@ -53,9 +55,26 @@ interface CommentWidgetProps {
   /**
    * Sends the comment: its words, the files attached, and the action picked
    * from the `/` menu (Make responsive); any of them may be missing, but
-   * not all.
+   * not all; and what it mentions with `@` (see mentionsIn: picked from
+   * the list, or typed).
    */
-  onSend(text: string, files: File[], action?: CommentAction): Promise<CommentOutcome> | CommentOutcome;
+  onSend(
+    text: string,
+    files: File[],
+    action?: CommentAction,
+    mentions?: MentionOption[],
+    withEdits?: boolean,
+  ): Promise<CommentOutcome> | CommentOutcome;
+  /**
+   * The selected elements' edits not sent yet (the editor's): they go with
+   * the comment, shown as a chip the designer can take off (then they wait
+   * for Send). Not with an action: a task goes apart from the changes.
+   */
+  edits?: number;
+  /** What `@` can mention, read from the page each time the list opens (App: tokens, components, elements). */
+  mentions?(): MentionOption[];
+  /** The project's components, from Pilot's server (with an agent on the page), asked for each time the list opens: listed after the page's. */
+  projectComponents?(): Promise<ProjectComponent[]>;
   /** The designer is done with the thread: it goes. `from` is Mark as solved's box (for its confetti). */
   onResolve?(from?: DOMRect): void;
   onClose(): void;
@@ -83,6 +102,18 @@ const toAttachment = (file: File): Attachment => ({
 /** A file's tile when it isn't an image: its extension ("PDF", "MD"). Placeholder look, pending the design. */
 function FileTile({ name }: { name: string }) {
   return <span class="file-type">{(name.split(".").pop() ?? "").slice(0, 4).toUpperCase()}</span>;
+}
+
+/** The field's placeholder: what to write, and the two lists it opens (`/` actions, `@` mentions, when there's something to mention). */
+function placeholder(withAction: boolean, reply: boolean, mentions: boolean): string {
+  if (withAction) return mentions ? "Add details (optional), @ to mention" : "Add details (optional)";
+  const lead = reply ? "Reply" : "Ask the agent";
+  return mentions ? `${lead}, / for actions, @ to mention` : `${lead}, or / for actions`;
+}
+
+/** The edits chip's words: how many of the editor's changes go with the comment. Placeholder wording, pending the design. */
+export function editsLabel(n: number): string {
+  return n === 1 ? "1 change" : `${n} changes`;
 }
 
 /** The longest the field grows to before it scrolls, in px. */
@@ -113,6 +144,9 @@ export function CommentWidget({
   onClose,
   autoFocus = true,
   agentOn = true,
+  mentions,
+  projectComponents,
+  edits = 0,
 }: CommentWidgetProps) {
   const ref = useRef<HTMLDivElement>(null);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
@@ -282,27 +316,102 @@ export function CommentWidget({
   };
   useLayoutEffect(fit, [text]);
 
-  // The `/` menu: `/` at the start of the message lists the actions (see
-  // actions.ts), filtered by what follows. ↑/↓ move, Enter or Tab picks
-  // (the action becomes a chip, and what's typed next goes with it), Esc
-  // closes it by clearing the `/…` text. Backspace at the start of the
-  // field removes the chip.
+  // Where the caret is (the lists open for what's typed right before it),
+  // and where it goes after a pick changes the text.
+  const [caret, setCaret] = useState(0);
+  const nextCaret = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const field = fieldRef.current;
+    if (nextCaret.current === null || !field) return;
+    field.setSelectionRange(nextCaret.current, nextCaret.current);
+    setCaret(nextCaret.current);
+    nextCaret.current = null;
+  }, [text]);
+
+  // The `/` menu: `/` at the start of any word lists the actions (see
+  // actions.ts), filtered by what follows; one action per message. ↑/↓
+  // move, Enter or Tab picks (the action becomes a chip at the start, its
+  // `/word` leaves the text, and the words go with it as its note), Esc
+  // closes it, leaving the text as typed. With nothing matching it doesn't
+  // show: a `/about` is just text, and Enter sends it. Backspace at the
+  // start of the field removes the chip.
   const [action, setAction] = useState<CommentAction | null>(null);
-  const menuOpen = !action && isActionQuery(text);
-  const options = menuOpen ? matchActions(text) : [];
+  const slash = action ? null : actionAt(text, caret);
+  const [slashDismissed, setSlashDismissed] = useState<number | null>(null);
+  useEffect(() => {
+    if (!slash) setSlashDismissed(null);
+  }, [slash?.start]);
+  const options = slash && slashDismissed !== slash.start ? matchActions(slash.query) : [];
+  const menuOpen = options.length > 0;
   const [active, setActive] = useState(0);
   useEffect(() => setActive(0), [text]);
   const pick = (index: number) => {
     const chosen = options[index];
-    if (!chosen) return;
+    if (!chosen || !slash) return;
     setAction(chosen.id);
-    setText("");
+    const next = withoutQuery(text, slash);
+    nextCaret.current = next.caret;
+    setText(next.text);
     fieldRef.current?.focus();
   };
 
+  // The `@` menu: `@` at the start of a word, anywhere in the text, lists
+  // what can be mentioned (tokens, components, elements on the page; see
+  // mentions.ts), filtered by what follows, read from the page when it
+  // opens. ↑/↓ move, Enter or Tab picks (its name goes into the text, and
+  // the comment carries it as an exact reference), Esc closes it, leaving
+  // the text as typed.
+  const mention = menuOpen || !mentions ? null : mentionAt(text, caret);
+  const [dismissed, setDismissed] = useState<number | null>(null);
+  const mentionOpen = !!mention && dismissed !== mention.start;
+  // Read as the list opens, in this render (not an effect): a key pressed
+  // right after `@x` (Enter, Tab) must find the list there, or it would
+  // send the comment, or move focus. Read again the next time it opens.
+  // The project's components come a moment later, from the server: the
+  // last ones it sent show meanwhile, and the list grows when they arrive.
+  const poolRef = useRef<MentionOption[] | null>(null);
+  if (!mentionOpen) poolRef.current = null;
+  else if (!poolRef.current) poolRef.current = mentions?.() ?? [];
+  const [project, setProject] = useState<ProjectComponent[]>([]);
+  useEffect(() => {
+    if (!mentionOpen || !projectComponents) return;
+    let current = true;
+    projectComponents().then(
+      (list) => current && setProject(list),
+      () => {},
+    );
+    return () => {
+      current = false;
+    };
+  }, [mentionOpen]);
+  const withProject = (page: MentionOption[]) => [...page, ...projectOptions(project, page)];
+  const pool = poolRef.current && withProject(poolRef.current);
+  useEffect(() => {
+    if (!mention) setDismissed(null);
+  }, [mention?.start]);
+  const mentionMatches = mentionOpen && pool && mention ? matchMentions(pool, mention.query) : [];
+  const [picked, setPicked] = useState<MentionOption[]>([]);
+  const pickMention = (index: number) => {
+    const chosen = mentionMatches[index];
+    if (!chosen || !mention) return;
+    const next = insertMention(text, mention, chosen.insert);
+    setPicked((all) => [...all, chosen]);
+    nextCaret.current = next.caret;
+    setText(next.text);
+    fieldRef.current?.focus();
+  };
+  const readCaret = () => {
+    const field = fieldRef.current;
+    if (field) setCaret(field.selectionStart ?? field.value.length);
+  };
+
+  // The edits chip: on until the designer takes it off, for this message.
+  const [withEdits, setWithEdits] = useState(true);
+  const editsGo = edits > 0 && withEdits && !action;
+
   // Words, files, an action, or any of them together; files upload first, so sending can take a moment.
   const [sending, setSending] = useState(false);
-  const canSend = agentOn && !sending && !menuOpen && (!!text.trim() || attachments.length > 0 || !!action);
+  const canSend = agentOn && !sending && (!!text.trim() || attachments.length > 0 || !!action);
   const send = async () => {
     if (!canSend) return;
     setSending(true);
@@ -310,6 +419,9 @@ export function CommentWidget({
       text.trim(),
       attachments.map((a) => a.file),
       action ?? undefined,
+      // Read only when the text could mention something (reading the page takes a moment).
+      /@|--/.test(text) ? mentionsIn(text, picked, pool ?? withProject(mentions?.() ?? [])) : [],
+      editsGo,
     );
     setSending(false);
     if (outcome === false) return;
@@ -318,6 +430,8 @@ export function CommentWidget({
     setFailed(null);
     setText("");
     setAction(null);
+    setPicked([]);
+    setWithEdits(true);
     for (const a of attachments) if (a.url) URL.revokeObjectURL(a.url);
     setAttachments([]);
   };
@@ -331,21 +445,40 @@ export function CommentWidget({
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
+    if (mentionOpen && mention && e.target === fieldRef.current) {
+      const n = mentionMatches.length;
+      if ((e.key === "ArrowDown" || e.key === "ArrowUp") && n) {
+        e.preventDefault();
+        setActive((i) => (i + (e.key === "ArrowDown" ? 1 : -1) + n) % n);
+        return;
+      }
+      if ((e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) && !e.isComposing && n) {
+        e.preventDefault();
+        pickMention(active);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation(); // only the menu closes, not the box
+        setDismissed(mention.start);
+        return;
+      }
+    }
     if (menuOpen && e.target === fieldRef.current) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         if (options.length) setActive((i) => (i + (e.key === "ArrowDown" ? 1 : -1) + options.length) % options.length);
         return;
       }
-      if ((e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) && !e.isComposing) {
+      if ((e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) && !e.isComposing && options.length) {
         e.preventDefault();
         pick(active);
         return;
       }
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && slash) {
         e.preventDefault();
         e.stopPropagation(); // only the menu closes, not the box
-        setText("");
+        setSlashDismissed(slash.start);
         return;
       }
     }
@@ -419,7 +552,16 @@ export function CommentWidget({
             {thread?.messages.map((m, i) =>
               m.from === "designer" ? (
                 <div key={m.at + m.from} class="message">
-                  {m.action && <span class="action-chip">{actionName(m.action)}</span>}
+                  {(m.action || m.edits) && (
+                    <span class="message-chips">
+                      {m.action && <span class="action-chip">{actionName(m.action)}</span>}
+                      {m.edits ? (
+                        <span class="action-chip" data-kind="edits">
+                          {editsLabel(m.edits)}
+                        </span>
+                      ) : null}
+                    </span>
+                  )}
                   {m.attachments?.length ? (
                     <ul class="sent-images" aria-label="Attachments">
                       {m.attachments.map((file) => (
@@ -433,7 +575,19 @@ export function CommentWidget({
                       ))}
                     </ul>
                   ) : null}
-                  {m.text && <p>{m.text}</p>}
+                  {m.text && (
+                    <p>
+                      {splitMentions(m.text, m.references).map((part, j) =>
+                        part.mention ? (
+                          <span key={j} class="mention">
+                            {part.text}
+                          </span>
+                        ) : (
+                          part.text
+                        ),
+                      )}
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div key={m.at + m.from} class="message" data-from="agent" aria-label={`${agentName ?? "Agent"}: ${m.text}`}>
@@ -478,22 +632,41 @@ export function CommentWidget({
         </div>
       )}
       <div class="composer">
-        {action && (
+        {(action || (edits > 0 && withEdits)) && (
           <div class="action-chip-row">
-            <span class="action-chip">
-              {actionName(action)}
-              <button
-                type="button"
-                class="action-remove"
-                aria-label={`Remove ${actionName(action)}`}
-                onClick={() => {
-                  setAction(null);
-                  fieldRef.current?.focus();
-                }}
-              >
-                <Icon name="close-small" />
-              </button>
-            </span>
+            {/* The editor's changes on the selection go with the comment (not with an action: they wait for Send). */}
+            {edits > 0 && withEdits && !action && (
+              <span class="action-chip" data-kind="edits" title="Your edits on this element, not sent yet, go with the comment">
+                {editsLabel(edits)}
+                <button
+                  type="button"
+                  class="action-remove"
+                  aria-label={`Don't send the ${editsLabel(edits)} with the comment`}
+                  onClick={() => {
+                    setWithEdits(false);
+                    fieldRef.current?.focus();
+                  }}
+                >
+                  <Icon name="close-small" />
+                </button>
+              </span>
+            )}
+            {action && (
+              <span class="action-chip">
+                {actionName(action)}
+                <button
+                  type="button"
+                  class="action-remove"
+                  aria-label={`Remove ${actionName(action)}`}
+                  onClick={() => {
+                    setAction(null);
+                    fieldRef.current?.focus();
+                  }}
+                >
+                  <Icon name="close-small" />
+                </button>
+              </span>
+            )}
           </div>
         )}
         {attachments.length > 0 && (
@@ -514,38 +687,81 @@ export function CommentWidget({
           data-reply={count > 0 || undefined}
           rows={1}
           value={text}
-          placeholder={action ? "Add details (optional)" : count ? "Reply, or / for actions" : "Ask the agent, or / for actions"}
+          placeholder={placeholder(!!action, count > 0, !!mentions)}
           aria-label="Comment"
-          onInput={(e) => setText((e.currentTarget as HTMLTextAreaElement).value)}
-          aria-controls={menuOpen ? "pilot-actions" : undefined}
-          aria-activedescendant={menuOpen && options[active] ? `pilot-action-${options[active].id}` : undefined}
+          onInput={(e) => {
+            const field = e.currentTarget as HTMLTextAreaElement;
+            setText(field.value);
+            setCaret(field.selectionStart ?? field.value.length);
+          }}
+          onKeyUp={(e) => {
+            if (e.key.startsWith("Arrow") || e.key === "Home" || e.key === "End") readCaret();
+          }}
+          onClick={readCaret}
+          aria-controls={menuOpen ? "pilot-actions" : mentionOpen ? "pilot-mentions" : undefined}
+          aria-activedescendant={
+            menuOpen && options[active]
+              ? `pilot-action-${options[active].id}`
+              : mentionOpen && mentionMatches[active]
+                ? `pilot-mention-${active}`
+                : undefined
+          }
         />
-        {menuOpen && (
-          <div class="actions-menu" id="pilot-actions" role="listbox" aria-label="Actions">
-            {options.length ? (
-              options.map((a, i) => (
-                <div
-                  key={a.id}
-                  id={`pilot-action-${a.id}`}
-                  class="action-option"
-                  role="option"
-                  aria-selected={i === active}
-                  data-active={i === active || undefined}
-                  onPointerEnter={() => setActive(i)}
-                  // Keep focus in the field.
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => pick(i)}
-                >
-                  <span class="action-name">{a.name}</span>
-                  <span class="action-description">{a.description}</span>
-                </div>
+        {mentionOpen && pool && (
+          <div class="actions-menu" id="pilot-mentions" role="listbox" aria-label="Mention">
+            {mentionMatches.length ? (
+              mentionMatches.map((o, i) => (
+                <Fragment key={o.group + o.label}>
+                  {o.group !== mentionMatches[i - 1]?.group && (
+                    <div class="mention-group" role="presentation">
+                      {o.group}
+                    </div>
+                  )}
+                  <div
+                    id={`pilot-mention-${i}`}
+                    class="action-option mention-option"
+                    role="option"
+                    aria-selected={i === active}
+                    data-active={i === active || undefined}
+                    onPointerEnter={() => setActive(i)}
+                    // Keep focus in the field.
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => pickMention(i)}
+                  >
+                    {o.swatch && <span class="mention-swatch" style={{ background: o.swatch }} aria-hidden="true" />}
+                    <span class="action-name">{o.label}</span>
+                    {o.detail && <span class="action-description">{o.detail}</span>}
+                  </div>
+                </Fragment>
               ))
             ) : (
-              <div class="action-none">No action matches</div>
+              <div class="action-none">{pool.length ? "Nothing matches" : "Nothing to mention on this page"}</div>
             )}
           </div>
         )}
-        <div class="buttons">
+        {menuOpen && (
+          <div class="actions-menu" id="pilot-actions" role="listbox" aria-label="Actions">
+            {options.map((a, i) => (
+              <div
+                key={a.id}
+                id={`pilot-action-${a.id}`}
+                class="action-option"
+                role="option"
+                aria-selected={i === active}
+                data-active={i === active || undefined}
+                onPointerEnter={() => setActive(i)}
+                // Keep focus in the field.
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pick(i)}
+              >
+                <span class="action-name">{a.name}</span>
+                <span class="action-description">{a.description}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {/* While a list is open (`/`, `@`), only it and the field show: picking is the next step, not sending or attaching. */}
+        <div class="buttons" hidden={menuOpen || (mentionOpen && !!pool)}>
           <Tooltip text="Attach files" align="start">
             <button type="button" class="attach" aria-label="Attach files" onClick={() => fileRef.current?.click()}>
               <Icon name="attach" />
