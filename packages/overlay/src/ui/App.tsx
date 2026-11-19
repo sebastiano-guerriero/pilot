@@ -222,9 +222,19 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // A job waiting for the designer's answer shows no loader: its question, in the thread, says so (see PilotSession.ask).
   const jobShown = (job: JobRecord | null) => (job && !awaitsAnswer(job) ? job : null);
   const selectedJob = selected && session ? jobShown(session.jobOn(selected.element)) : null;
+  // Jobs nothing will move by themselves (see PilotSession.stuck): said on their elements, the toolbar and the thread.
+  const stuck = session?.stuck ?? null;
+  const isStuck = (job: JobRecord | null | undefined) => !!job && !!stuck?.jobs.includes(job.id);
+  const stuckAlert = stuck ? { title: stuck.title, detail: stuck.detail } : undefined;
+  /** Whether a job is on an element and moving: its fill breathes (not while it's stuck). */
+  const workingOn = (element: Element) => {
+    const job = session?.jobOn(element);
+    return !!job && !isStuck(job);
+  };
   const busyOf = (job: JobRecord): Busy => ({
     text: jobText(job),
     onCancel: session?.canCancel(job) ? () => session.cancel(job.id) : undefined,
+    ...(isStuck(job) ? { stuck: stuckAlert } : {}),
   });
   const selectedBusy = selectedJob ? busyOf(selectedJob) : undefined;
   // What shows on elements' top-right corners, selected or not: a job's
@@ -246,6 +256,20 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   };
   // Jobs not finished yet: waiting, an agent applying, checking the page.
   const pending = (session?.jobs ?? []).filter((j) => j.status === "queued" || j.status === "working" || (j.status === "done" && !j.checked)).length;
+  // The toolbar's alerts. An agent that isn't listening: on Comment and Send both, jobs or not (whatever goes
+  // next goes to it), so cancelling the stuck jobs doesn't hide it. No agent, or no hub: on Comment for stuck
+  // jobs asked in a thread (comments, tasks from the comment box), on Send for the rest.
+  const inThread = (id: string) => !!session?.threads.some((t) => t.messages.some((m) => m.jobId === id));
+  const toolbarAlerts = !stuck
+    ? undefined
+    : stuck.kind === "not-listening"
+      ? { comment: stuckAlert, send: stuckAlert }
+      : {
+          ...(stuck.jobs.some(inThread) ? { comment: stuckAlert } : {}),
+          ...(stuck.jobs.some((id) => !inThread(id)) ? { send: stuckAlert } : {}),
+        };
+  // Every job stuck: none is being worked on, so the jobs button (its spinner) goes.
+  const running = stuck && stuck.jobs.length >= pending ? 0 : pending;
   // Where the designer dragged the toolbar (null: centered at the bottom), kept through reloads.
   const [toolbarSpot, setToolbarSpot] = useState<ToolbarSpot | null>(loadSpot);
   const moveToolbar = (spot: ToolbarSpot) => {
@@ -430,7 +454,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   const sendComment = async (element: Element, text: string, files: File[], action?: CommentAction): Promise<CommentOutcome> => {
     if (!session || !sendToAgent) return false;
     const attachments = files.length ? await session.uploadFiles(files, thumbnail) : [];
-    if (!attachments) return false;
+    if (!attachments) return { title: "The file couldn't be attached", detail: "Try again, or send it without the file" };
     session.comment(element, text, attachments, action, othersRef.current);
     return "sent";
   };
@@ -512,9 +536,9 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
       ))}
       {selected && selectedRect && commenting && (
         <>
-          <Highlight element={selected.element} rect={selectedRect} variant="selected" label={false} working={!!selectedJob} />
+          <Highlight element={selected.element} rect={selectedRect} variant="selected" label={false} working={!!selectedJob && !isStuck(selectedJob)} />
           {others.map((element) => (
-            <SelectedOutline key={elementKey(element)} element={element} working={!!session?.jobOn(element)} />
+            <SelectedOutline key={elementKey(element)} element={element} working={workingOn(element)} />
           ))}
           {/* Before the panel (same layer: DOM order decides), so the panel covers them when it's over the element's corner. */}
           <SelectionActions
@@ -534,6 +558,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
             placeBy={placeBy}
             thread={thread}
             status={threadStatus}
+            error={threadJob && isStuck(threadJob) ? stuckAlert : undefined}
             agentName={agentName(threadJob?.agent?.label ?? session?.state.agents[0]?.label)}
             agentOn={sendToAgent}
             onSend={(text, files, action) => sendComment(selected.element, text, files, action)}
@@ -571,14 +596,14 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
               // No name and size on the selection: you know what you clicked,
               // and its corner is kept for the selection's actions.
               label={false}
-              working={!!selectedJob}
+              working={!!selectedJob && !isStuck(selectedJob)}
             />
           )}
           {inspect && <BoxAreas element={selected.element} areas={inspect} />}
           {!hideSelection && <GridOverlay element={selected.element} part="numbers" orParent />}
           {/* The other selected elements: the selection's outline, and dots. */}
           {others.map((element) => (
-            <SelectedOutline key={elementKey(element)} element={element} working={!!session?.jobOn(element)} />
+            <SelectedOutline key={elementKey(element)} element={element} working={workingOn(element)} />
           ))}
           {/* Before the dialog (same layer: DOM order decides), so the dialog
               covers them when it's over the element's corner. */}
@@ -662,7 +687,8 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
         canSend={sendCount > 0}
         sendCount={sendCount}
         onSend={sendToAgent ? sendChanges : copyPrompt}
-        pending={pending}
+        pending={running}
+        alerts={toolbarAlerts}
         onNextJob={nextJob}
         onQuit={onQuit}
         spot={toolbarSpot}
@@ -723,7 +749,7 @@ function CornerMarks({ element, busy, onOpenThread }: { element: Element; busy?:
   if (!rect) return null;
   return (
     <>
-      <Highlight element={element} rect={rect} variant="busy" label={false} working={!!busy} />
+      <Highlight element={element} rect={rect} variant="busy" label={false} working={!!busy && !busy.stuck} />
       <SelectionActions rect={rect} busy={busy} onOpenThread={onOpenThread} />
     </>
   );

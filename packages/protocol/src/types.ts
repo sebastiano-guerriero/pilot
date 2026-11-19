@@ -33,7 +33,7 @@ export interface ElementTarget {
    * than by the page's structure.
    */
   lookAlikesOf?: string;
-  /** The component rendering it and its file, from the framework's dev info (React, Vue), when the page has it. */
+  /** The component rendering it and its file, from the framework's dev info (React, Vue), when the page has it; the CLI finds a file the page couldn't name (`componentFile`). */
   source?: {
     component?: string;
     file?: string;

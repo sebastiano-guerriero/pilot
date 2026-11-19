@@ -98,6 +98,32 @@ const HELD_KEY = "pilot:held";
 const APPLIED_LINGER = 8_000;
 /** How long after a task is done Pilot checks it: hot reload's time. */
 const TASK_SETTLE = 800;
+/**
+ * How long a stuck state lasts before the page says so: past a reconnect
+ * (the hub's process restarting) and the moment between two waits of an
+ * agent (it asks again right after "no edits yet").
+ */
+const STUCK_OFFLINE_MS = 5_000;
+const STUCK_NOT_LISTENING_MS = 10_000;
+/**
+ * With no job waiting, an agent that isn't listening blocks nothing yet
+ * (the next Send would wait): said later, past an agent writing its
+ * message between `pilot_done` and its next wait.
+ */
+const STUCK_IDLE_MS = 30_000;
+
+/**
+ * Jobs nothing will move by themselves, and why: the page says so (the
+ * toolbar's pills, the elements' corners, the thread) instead of a loader
+ * spinning for ever. `title` and `detail` are what to show; `jobs`, the ids
+ * of the jobs it's about.
+ */
+export interface Stuck {
+  kind: "offline" | "no-agent" | "not-listening";
+  title: string;
+  detail: string;
+  jobs: string[];
+}
 
 export interface SessionOptions {
   /** The hub's URL, or false for no bridge (Send is never offered: Copy prompt only). */
@@ -162,12 +188,15 @@ export class PilotSession {
 
   start(): void {
     this.bridge?.start();
+    // Jobs from before a reload, and no hub to reach: that counts from now.
+    this.watchStuck();
   }
 
   destroy(): void {
     this.bridge?.stop();
     for (const stop of this.watching.values()) stop();
     for (const t of this.timers) clearTimeout(t);
+    clearTimeout(this.stuckTimer);
   }
 
   subscribe(listener: () => void): () => void {
@@ -778,7 +807,73 @@ export class PilotSession {
     this.notify();
   }
 
+  // Stuck jobs
+
+  /** What's stuck now, once it has lasted (see Stuck), or null. */
+  get stuck(): Stuck | null {
+    const now = this.stuckNow();
+    if (!now || this.stuckSince?.kind !== now.kind) return null;
+    // Once said, it stays until it's solved (cancelling the stuck jobs doesn't make the agent listen).
+    return this.stuckSince.shown || Date.now() - this.stuckSince.at >= stuckAfter(now) ? now : null;
+  }
+
+  /** Whether `job` is one of the stuck ones (see stuck). */
+  isStuck(job: JobRecord): boolean {
+    return !!this.stuck?.jobs.includes(job.id);
+  }
+
+  private stuckSince: { kind: Stuck["kind"]; at: number; shown?: boolean } | null = null;
+  private stuckTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /**
+   * What would be stuck right now, before it has lasted. Only jobs waiting
+   * for an agent or with one count (not one being checked, nor one whose
+   * question waits for the designer: that's the designer's turn):
+   * - offline: the page can't reach the hub (every chat running Pilot closed);
+   * - no-agent: it can, but no agent works on this page;
+   * - not-listening: no agent is waiting for a job, and none is on one: jobs
+   *   wait, or none does yet (the next Send would wait; cancelling the stuck
+   *   jobs doesn't make the agent listen). An agent on another job, or
+   *   between two waits, isn't stuck.
+   * Without an agent and with no job waiting, the page is in Copy prompt
+   * mode: nothing's stuck.
+   */
+  private stuckNow(): Stuck | null {
+    if (!this.bridge) return null;
+    const open = this.jobs.filter((j) => j.status === "queued" || j.status === "working");
+    const { connected, agents, waiting } = this.state;
+    if (!open.length && !(connected && agents.length)) return null;
+    const label = agents[0]?.label ?? open.find((j) => j.agent)?.agent?.label;
+    const name = label?.split(" · ")[0] || "Your agent";
+    const command = /codex/i.test(label ?? "") ? "$pilot" : "/pilot";
+    const ids = (jobs: JobRecord[]) => jobs.map((j) => j.id);
+    if (!connected) return { kind: "offline", title: "Pilot can't reach your agent", detail: `Open its chat and run ${command}`, jobs: ids(open) };
+    if (!agents.length) return { kind: "no-agent", title: "No agent is connected", detail: `Run ${command} in your agent's chat`, jobs: ids(open) };
+    const queued = open.filter((j) => j.status === "queued");
+    if (waiting > 0 || open.some((j) => j.status === "working")) return null;
+    return agents.length > 1
+      ? { kind: "not-listening", title: "No chat is listening", detail: `Run ${command} again in one of them`, jobs: ids(queued) }
+      : { kind: "not-listening", title: `${name} isn't listening`, detail: `Run ${command} again in its chat`, jobs: ids(queued) };
+  }
+
+  /** Keeps `stuckSince` in step, and tells the listeners when a stuck state has lasted long enough to show. */
+  private watchStuck(): void {
+    const now = this.stuckNow();
+    if (!now) {
+      this.stuckSince = null;
+      clearTimeout(this.stuckTimer);
+      return;
+    }
+    if (this.stuckSince?.kind !== now.kind) this.stuckSince = { kind: now.kind, at: Date.now() };
+    // Tell the listeners when it's due (again, as how long it takes can change: the last stuck job cancelled).
+    clearTimeout(this.stuckTimer);
+    const due = stuckAfter(now) - (Date.now() - this.stuckSince.at);
+    if (due > 0 && !this.stuckSince.shown) this.stuckTimer = setTimeout(() => this.notify(), due);
+    else this.stuckSince.shown = true;
+  }
+
   private notify(): void {
+    this.watchStuck();
     for (const listener of this.listeners) listener();
   }
 }
@@ -786,6 +881,12 @@ export class PilotSession {
 /** The agent spoke last in the thread: it's the designer's turn (reply or resolve). */
 export function needsYou(thread: CommentThread): boolean {
   return thread.messages.at(-1)?.from === "agent";
+}
+
+/** How long a stuck state lasts before the page says so (see the STUCK_ constants). */
+function stuckAfter(stuck: Stuck): number {
+  if (stuck.kind !== "not-listening") return STUCK_OFFLINE_MS;
+  return stuck.jobs.length ? STUCK_NOT_LISTENING_MS : STUCK_IDLE_MS;
 }
 
 /** Done, with a question for the designer not answered yet (see PilotSession.ask). */

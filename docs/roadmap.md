@@ -63,6 +63,12 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 
 ## Handoff
 
+Next (found testing in Cursor: jobs queued forever while the connected chat had stopped waiting for them):
+
+- [x] **Say when the agent isn't listening**, and when no agent is connected or the hub is gone (the owner's design: red pills, the corner's warning, a red reply); a job whose agent left goes back to the queue.
+- [ ] **Work from the project, not the agent's start folder.** Cursor starts machine-level MCP servers in the home folder, so Pilot can't search the project (and labels the agent "Cursor · sebastiano"). `pilot_launch` takes the project's folder from the agent (or the client's MCP roots), for the code search and the component files.
+- [ ] **Restarting the server, per client.** Cursor keeps one Pilot server for all its chats: a new chat doesn't load a new version. `update` and the README say how for Cursor (switch `pilot` off and on in its MCP settings). Part of a checklist of what each client does that Pilot relies on (long waits, background calls, servers off by default, start folder), with a smoke test per client before each release.
+
 - [x] Copy prompt
 - [x] Launch shortcut (Option+P / Alt+P)
 - [x] `usepilot mcp`: MCP server and localhost hub in one process; several agents share one hub, with takeover
@@ -92,7 +98,8 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [x] Faster jobs: Pilot finds each element's code in the project for the agent, the edit guidelines read once, each job's step times recorded
 - [x] Jobs queued for a page come in one wait, so several Sends cost one round trip (each still its own job)
 - [x] Source hints (`target.source`): the component and its file from React (line too in React 18 and earlier) and Vue in development, so agents open the right file without searching
-- [ ] Source hints for React 19 under Turbopack (its stack names chunks, not files), and lines for React 19
+- [x] Source hints under Turbopack and for Server Components, and lines for React 19: the CLI finds the component's declaration by name in the project, then the element's line in it
+- [x] Next.js App Router (Server Components, Turbopack): components from React's records of them, never the framework's own components
 - [ ] A history of the session's jobs (what changed, how it landed, files touched, a summary to copy), in place of the job list
 - [ ] Design the Send states and the job status (placeholder look now)
 - [ ] The bridge watches token files that only live in code (Tailwind v3 config, `tokens.json`, Style Dictionary) ([design-tokens.md](design-tokens.md))

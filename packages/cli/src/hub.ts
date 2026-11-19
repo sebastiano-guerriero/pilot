@@ -81,13 +81,21 @@ export class Hub {
     }
   }
 
-  /** The agent is gone (its process ended or it stopped pinging): its waits end. */
+  /**
+   * The agent is gone (its process ended or it stopped pinging): its waits
+   * end, and the jobs it was working on go back to the queue, for another
+   * chat (or this one, back), instead of staying "working" for nobody.
+   */
   unregister(agentId: string): void {
     const agent = this.agents.get(agentId);
     if (!agent) return;
     this.agents.delete(agentId);
     for (const w of this.waiters.filter((w) => w.agentId === agentId)) this.endWait(w, null);
+    for (const job of this.jobs.values()) {
+      if (job.status === "working" && job.agent?.id === agentId) this.update(job, { status: "queued", takenAt: undefined });
+    }
     this.notifyAgents(agent.origin);
+    this.dispatch(agent.origin);
   }
 
   /** Drops agents not heard from in AGENT_TTL (`keep`: the ones in this process, always alive). */

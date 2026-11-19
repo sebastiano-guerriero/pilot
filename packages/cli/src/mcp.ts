@@ -6,7 +6,7 @@ import { DEFAULT_BRIDGE_PORT, EDIT_GUIDELINES, formatPrompt, formatWidthCheck, M
 import { z } from "zod";
 import { Bridge } from "./agent.ts";
 import { attachmentBlocks } from "./attachments.ts";
-import { whereSection } from "./locate.ts";
+import { whereSection, withComponentFiles } from "./locate.ts";
 import { VERSION } from "./version.ts";
 
 /**
@@ -289,12 +289,16 @@ ${EDIT_GUIDELINES.join("\n")}`,
         // The other jobs already queued for this page come too (see takeQueued): one round trip for several Sends.
         const jobs = [job, ...(await takeQueued(job, () => bridge.wait(origin as string, 0, extra.signal)))];
         const parts = await Promise.all(
-          jobs.map(async (j) => ({
-            // Where its elements' code probably is: found here, in the project, so the agent can go straight to the edit.
-            text: jobPrompt(j, j.attempt === 2 ? "" : whereSection(j, cwd)),
-            // A comment's images and text files come with it, so the agent sees them without opening files.
-            blocks: await attachmentBlocks(j),
-          })),
+          jobs.map(async (taken) => {
+            // Its components' files, found here by name when the page couldn't tell (React 19 under Turbopack, Server Components).
+            const j = withComponentFiles(taken, cwd);
+            return {
+              // Where its elements' code probably is: found here, in the project, so the agent can go straight to the edit.
+              text: jobPrompt(j, j.attempt === 2 ? "" : whereSection(j, cwd)),
+              // A comment's images and text files come with it, so the agent sees them without opening files.
+              blocks: await attachmentBlocks(j),
+            };
+          }),
         );
         if (parts.length === 1) return { content: [{ type: "text" as const, text: parts[0]?.text ?? "" }, ...(parts[0]?.blocks ?? [])], isError: false };
         return {

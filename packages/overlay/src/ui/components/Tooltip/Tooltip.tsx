@@ -6,6 +6,8 @@ import { onSwitch, openDelay, switched, tooltipClosed, tooltipOpened } from "./d
 interface TooltipProps {
   /** What the tooltip says. */
   text: string;
+  /** A second line, dimmed, under `text`: what to do about it ("Run /pilot again in its chat"). */
+  detail?: string;
   /** Above the trigger (default), or below it when there's no room above. */
   side?: "top" | "bottom";
   /**
@@ -38,7 +40,7 @@ function focusVisible(el: Element): boolean {
  * (delay.ts). Keyboard focus opens it at once. Use it instead of `title` in
  * Pilot's own UI.
  */
-export function Tooltip({ text, side = "top", align = "center", gap, forceOpen = false, children }: TooltipProps) {
+export function Tooltip({ text, detail, side = "top", align = "center", gap, forceOpen = false, children }: TooltipProps) {
   const [open, setOpen] = useState(false);
   // No transition (Tooltip.css) while moving between triggers: opened
   // straight after another one closed, or left for one that opened so.
@@ -116,10 +118,18 @@ export function Tooltip({ text, side = "top", align = "center", gap, forceOpen =
         data-align={align === "center" ? undefined : align}
         data-open={open || forceOpen || undefined}
         data-instant={instant || undefined}
+        data-detail={detail ? "" : undefined}
         style={gap === undefined ? undefined : side === "top" ? { marginBottom: px(gap) } : { marginTop: px(gap) }}
         aria-hidden="true"
       >
-        {text}
+        {detail ? (
+          <>
+            <span class="title">{text}</span>
+            <span class="detail">{detail}</span>
+          </>
+        ) : (
+          text
+        )}
       </span>
     </span>
   );

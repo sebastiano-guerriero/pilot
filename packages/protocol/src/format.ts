@@ -366,7 +366,7 @@ function targetLines(target: ElementTarget): string[] {
   if (target.source?.component || target.source?.file) {
     const { component, file, line } = target.source;
     const where = [component && `\`${component}\``, file && `\`${file}${line ? `:${line}` : ""}\``].filter(Boolean).join(", in ");
-    out.push(`- Component: ${where} (from the framework's dev info)`);
+    out.push(`- Component: ${where}`);
   }
   if (target.lookAlikes) {
     const of = target.lookAlikesOf ? `other instances of \`${target.lookAlikesOf}\`, the same part of each` : "the same part of other copies";

@@ -10,7 +10,14 @@ import { actionName, isActionQuery, matchActions } from "./actions.ts";
 import { renderMarkdown } from "./markdown.tsx";
 
 /** How sending went: to the agent, or not at all. */
-export type CommentOutcome = "sent" | false;
+/** What sending did: sent; not sent, quietly (nothing to send); or not sent, and why (shown as a red reply). */
+export type CommentOutcome = "sent" | false | CommentError;
+
+/** Something went wrong, or is stuck, in the thread: shown as a red reply, in place of the reply to come. */
+export interface CommentError {
+  title: string;
+  detail: string;
+}
 
 interface CommentWidgetProps {
   element: Element;
@@ -29,6 +36,11 @@ interface CommentWidgetProps {
    * it isn't done: shown as the agent's reply to come, with a shimmer.
    */
   status?: string;
+  /**
+   * The latest comment's job is stuck (see PilotSession.stuck): a red reply
+   * says what's wrong and what to do, in place of `status`.
+   */
+  error?: CommentError;
   /** An agent is on the page: without one, the send button is disabled (comments go to an agent only). */
   agentOn?: boolean;
   /** Who replies ("Claude Code · app"), for the agent's messages. */
@@ -88,6 +100,7 @@ export function CommentWidget({
   placeBy,
   thread,
   status,
+  error,
   agentName,
   onSend,
   onResolve,
@@ -101,6 +114,9 @@ export function CommentWidget({
   const resolveRef = useRef<HTMLButtonElement>(null);
   const resolve = () => onResolve?.(resolveRef.current?.getBoundingClientRect());
   const [text, setText] = useState("");
+  // A send that failed (an attachment didn't upload): its red reply, until the next try.
+  const [failed, setFailed] = useState<CommentError | null>(null);
+  const shownError = failed ?? error;
   // Files attached to the comment being written (images, text files, PDFs), previewed above the field.
   const fileRef = useRef<HTMLInputElement>(null);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -249,7 +265,7 @@ export function CommentWidget({
     resize.observe(list);
     for (const child of list.children) resize.observe(child);
     return () => resize.disconnect();
-  }, [count, status]);
+  }, [count, status, !!shownError]);
 
   // The field grows with its text, up to FIELD_MAX.
   const fit = () => {
@@ -291,6 +307,9 @@ export function CommentWidget({
     );
     setSending(false);
     if (outcome === false) return;
+    // Not sent, and why: a red reply; the draft stays, to try again.
+    if (typeof outcome === "object") return setFailed(outcome);
+    setFailed(null);
     setText("");
     setAction(null);
     for (const a of attachments) if (a.url) URL.revokeObjectURL(a.url);
@@ -385,7 +404,7 @@ export function CommentWidget({
       >
         <Icon name="grip" />
       </div>
-      {(count > 0 || status) && (
+      {(count > 0 || status || shownError) && (
         // The thread scrolls inside its frame (up to 400px, less in a short
         // window), with fades at its edges and Pilot's scroll thumb.
         <div class="messages-frame">
@@ -433,10 +452,17 @@ export function CommentWidget({
               ),
             )}
             {/* Where the latest comment stands, as the reply to come, until the agent's real reply replaces it. */}
-            {status && (
-              <p class="message" data-from="agent" data-pending role="status">
-                {status}…
+            {/* What's wrong (stuck, or a send that failed) in a red reply; else where the latest comment stands. */}
+            {shownError ? (
+              <p class="message" data-from="agent" data-error role="alert">
+                {shownError.title}. {shownError.detail}.
               </p>
+            ) : (
+              status && (
+                <p class="message" data-from="agent" data-pending role="status">
+                  {status}…
+                </p>
+              )
             )}
           </div>
           <div class="fade" data-edge="top" data-on={more.above || undefined} aria-hidden="true" />
