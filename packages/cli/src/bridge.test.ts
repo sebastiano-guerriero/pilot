@@ -1,5 +1,10 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { ListRootsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import type { ChangeSet, PageEvent } from "@pilot/protocol";
 import { afterEach, describe, expect, it } from "vitest";
 import { Bridge } from "./agent.ts";
@@ -69,10 +74,12 @@ const until = async (check: () => boolean, ms = 2000) => {
   }
 };
 
-async function agentClient(port: number, waitMs = 2000) {
-  const { server, bridge } = createPilotServer({ port, cwd: "/work/app", waitMs });
+async function agentClient(port: number, waitMs = 2000, options: { cwd?: string; roots?: string[] } = {}) {
+  const { server, bridge } = createPilotServer({ port, cwd: options.cwd ?? "/work/app", waitMs });
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-  const client = new Client({ name: "claude-code", version: "1.0.0" });
+  const client = new Client({ name: "claude-code", version: "1.0.0" }, options.roots ? { capabilities: { roots: {} } } : {});
+  // A client that shares its workspace folders (MCP roots).
+  if (options.roots) client.setRequestHandler(ListRootsRequestSchema, () => ({ roots: (options.roots ?? []).map((p) => ({ uri: pathToFileURL(p).href })) }));
   await server.connect(serverSide);
   await client.connect(clientSide);
   cleanup.push(async () => {
@@ -188,6 +195,42 @@ describe("the loop, through MCP", () => {
     await agent.call("pilot_done", { jobId: "j1", notes: "kept pt-6 (24px): the scale's step" });
     // A second retry is refused: the page takes what the code gives.
     expect((await app.post("/jobs/j1/retry", { differences: [] })).status).toBe(409);
+  });
+
+  it("started outside the project (Cursor starts it in the home folder): the agent's folder, or the client's roots, is where Pilot searches", async () => {
+    const home = await mkdtemp(join(tmpdir(), "pilot-home-"));
+    const project = await mkdtemp(join(tmpdir(), "pilot-app-"));
+    cleanup.push(() => rm(home, { recursive: true, force: true }), () => rm(project, { recursive: true, force: true }));
+    await writeFile(join(project, "package.json"), "{}");
+    await mkdir(join(project, "src"));
+    await writeFile(join(project, "src/Hero.tsx"), 'export function Hero() {\n  return <a className="btn" href="#">Get started</a>;\n}\n');
+
+    // No folder: the agent is told to pass it.
+    const port = nextPort++;
+    const agent = await agentClient(port, 2000, { cwd: home });
+    expect(await agent.call("pilot_launch", { url: APP })).toContain("call pilot_launch again with `folder`");
+    // With it: labeled by the project, and jobs say where the code is.
+    expect(await agent.call("pilot_launch", { url: APP, folder: project })).not.toContain("folder");
+    const app = fakePage(port);
+    await app.ready;
+    await until(() => app.events.some((e) => e.type === "agents" && e.agents[0]?.label === `Claude Code · ${basename(project)}`));
+    const waiting = agent.call("pilot_wait_for_edits");
+    await until(() => app.events.some((e) => e.type === "agents" && e.waiting === 1));
+    await app.post("/jobs", { id: "j1", changeSet: changeSet("j1") });
+    expect(await waiting).toContain("→ `src/Hero.tsx:2`");
+
+    // The project has a newer Pilot than this server (a client that kept its server running after an update): how to restart it.
+    await mkdir(join(project, "node_modules/usepilot"), { recursive: true });
+    await writeFile(join(project, "node_modules/usepilot/package.json"), JSON.stringify({ version: "99.0.0" }));
+    const stale = await agent.call("pilot_launch", { url: APP, folder: project });
+    expect(stale).toContain("older than the project's 99.0.0");
+    expect(stale).toContain("In Claude Code, open a new chat");
+
+    // A client sharing its workspace (MCP roots): no folder needed.
+    const port2 = nextPort++;
+    const rooted = await agentClient(port2, 2000, { cwd: home, roots: [home, project] });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await rooted.call("pilot_launch", { url: APP })).not.toContain("folder");
   });
 
   it("launch opens Pilot in the pages already open", async () => {

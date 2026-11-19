@@ -63,8 +63,23 @@ describe("usepilot update", () => {
     expect(out).toContain(`# Pilot updated: 0.6.0 → ${VERSION}`);
     expect(out).toContain("~/.claude/skills/pilot");
     expect(out).toContain("1. Restart your app's dev server");
-    expect(out).toContain("2. Open a new chat");
+    // Claude Code has Pilot (its skill): a new chat is enough there.
+    expect(out).toContain("2. In Claude Code, open a new chat");
+    expect(out).toContain("3. Then, in a new chat, ask your agent to launch Pilot");
     expect(out).not.toContain("other projects");
+  });
+
+  it("an agent that keeps one server for all its chats (Cursor): says how to restart it", async () => {
+    await files(app("0.6.0"));
+    await files({ ".cursor/mcp.json": { mcpServers: { pilot: { command: "npx", args: ["-y", "usepilot", "mcp"] } } } }, home);
+    const out = await update({ cwd: dir, run: installer().run, home });
+    expect(out).toContain("In Cursor, restart Pilot's server: Cursor Settings, MCP section, switch `pilot` off and on.");
+    expect(out).not.toContain("In Claude Code");
+  });
+
+  it("no agent found with Pilot: the general way", async () => {
+    await files(app("0.6.0"));
+    expect(await update({ cwd: dir, run: installer().run, home })).toContain("Restart Pilot's server in your agent");
   });
 
   it("a new bridge: says to update the other projects too", async () => {

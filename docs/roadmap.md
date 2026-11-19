@@ -2,6 +2,10 @@
 
 One line per item. Tick it when it ships; the details go in the doc for its area.
 
+## Next
+
+- [ ] **One description of what Pilot is, everywhere** (from an outside review): the GitHub README's "Design in your running app. Your agents write the code." Today npm's README and `usepilot help` still say "Take the controls from your coding agent", [product.md](product.md) says "It isn't a design tool" (and, later, "an alternative to Figma"), and the loop diagram says "you take the controls / agent takes them back". Align product.md's opening and Principles, the diagram, npm's README and the CLI's help; the owner approves the new product.md opening first. Agents read these docs and repeat them in prompts, commits and copy.
+
 ## Foundation
 
 - [x] pnpm monorepo, TypeScript, Vite, Vitest
@@ -66,8 +70,9 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 Next (found testing in Cursor: jobs queued forever while the connected chat had stopped waiting for them):
 
 - [x] **Say when the agent isn't listening**, and when no agent is connected or the hub is gone (the owner's design: red pills, the corner's warning, a red reply); a job whose agent left goes back to the queue.
-- [ ] **Work from the project, not the agent's start folder.** Cursor starts machine-level MCP servers in the home folder, so Pilot can't search the project (and labels the agent "Cursor · sebastiano"). `pilot_launch` takes the project's folder from the agent (or the client's MCP roots), for the code search and the component files.
-- [ ] **Restarting the server, per client.** Cursor keeps one Pilot server for all its chats: a new chat doesn't load a new version. `update` and the README say how for Cursor (switch `pilot` off and on in its MCP settings). Part of a checklist of what each client does that Pilot relies on (long waits, background calls, servers off by default, start folder), with a smoke test per client before each release.
+- [x] **Work from the project, not the agent's start folder:** `pilot_launch` takes the project's `folder` (every agent is told to pass it), or the client's MCP roots; Cursor starts machine-level servers in the home folder.
+- [x] **Restarting the server, per client:** `update` says how for each agent Pilot is set up for (a new chat in Claude Code and Codex; restart the server in Cursor and VS Code), and `pilot_launch` notices a server older than the project's Pilot.
+- [x] **What each client does that Pilot relies on:** a checklist and a 5-minute smoke test per client in [development.md](development.md), run before each release; and `stdio.test.ts`, the built CLI driven over stdio by the official MCP client (launch, a batch, done, a wait that runs out).
 
 - [x] Copy prompt
 - [x] Launch shortcut (Option+P / Alt+P)

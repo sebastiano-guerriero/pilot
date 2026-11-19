@@ -3,7 +3,8 @@ import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { BRIDGE_VERSION } from "@pilot/protocol";
-import { installArgs, installedVersion, packageManager, projectRoot, skillFolders } from "./init.ts";
+import { RESTART } from "./clients.ts";
+import { agentsWithPilot, installArgs, installedVersion, packageManager, projectRoot, skillFolders } from "./init.ts";
 import { writeSkill } from "./setup.ts";
 import { olderThan, VERSION } from "./version.ts";
 
@@ -37,6 +38,8 @@ export interface UpdateOptions {
   run?: (command: string, args: string[], cwd: string) => boolean;
   /** The user's home folder, by default the real one. Injected by tests. */
   home?: string;
+  /** The OS, for where VS Code keeps its user config. Injected by tests. */
+  platform?: NodeJS.Platform;
 }
 
 export async function update(options: UpdateOptions = {}): Promise<string> {
@@ -82,9 +85,12 @@ ${pm} ${args.join(" ")}
   }
 
   const changed = !!before && !!after && olderThan(before, after);
+  // How each agent with Pilot loads the new one: some need their Pilot server restarted, a new chat isn't enough (clients.ts).
+  const agents = agentsWithPilot(root, home, options.platform);
   const steps = [
     "Restart your app's dev server, so the page loads the new Pilot.",
-    "Open a new chat in your agent, and ask it to launch Pilot (or run `/pilot`). A chat that was open keeps the old Pilot.",
+    ...(agents.length ? agents.map((a) => RESTART[a]) : [RESTART.other]),
+    "Then, in a new chat, ask your agent to launch Pilot (or run `/pilot`).",
   ];
   if (oldBridge !== null && oldBridge !== BRIDGE_VERSION) {
     steps.push(
