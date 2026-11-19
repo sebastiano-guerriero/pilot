@@ -10,8 +10,8 @@
  */
 import type { ChangeSet, PropSpec, PropValue } from "./types.ts";
 
-/** Bumped when the hub's HTTP API changes incompatibly. 2: width checks (`/agents/check`, `/checks/:id`). 3: comment images (`/attachments`). 4: the agent's questions (`question` on `/agents/done`, `/jobs/:id/answer`). */
-export const BRIDGE_VERSION = 4;
+/** Bumped when the hub's HTTP API changes incompatibly. 2: width checks (`/agents/check`, `/checks/:id`). 3: comment images (`/attachments`). 4: the agent's questions (`question` on `/agents/done`, `/jobs/:id/answer`). 5: the project's components (`/components`, the agent's `folder`) and `/props` (`props` on `/agents/done`). */
+export const BRIDGE_VERSION = 5;
 
 /**
  * The hub's port: one per bridge version (4747 + the version, so 4750 for

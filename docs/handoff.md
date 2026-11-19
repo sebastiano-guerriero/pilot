@@ -3,7 +3,7 @@
 The handoff is **jobs**. Edits, tasks (Make responsive) and comments each go to the agent as a job; the agent applies it and calls `pilot_done`; Pilot checks the result on the page. The page is the source of truth for its jobs.
 
 ```
-page (your app in dev, the overlay)          one hub per machine and version, 127.0.0.1:4751
+page (your app in dev, the overlay)          one hub per machine and version, 127.0.0.1:4752
   Send ──POST /jobs──────────────────────▶  ┌───────────────────────────────────┐
   job updates, launch ◀──SSE /events───────  │ jobs and agents, by page origin   │
   follow-up ──POST /jobs/:id/retry───────▶  └───────────────────────────────────┘
@@ -195,10 +195,10 @@ A job that isn't finished (waiting, an agent on it, being checked, its follow-up
 
 [packages/cli](../packages/cli): [hub.ts](../packages/cli/src/hub.ts), [server.ts](../packages/cli/src/server.ts), [agent.ts](../packages/cli/src/agent.ts), [mcp.ts](../packages/cli/src/mcp.ts).
 
-- **One per machine and bridge version**, on `127.0.0.1:` 4747 + `BRIDGE_VERSION` (4751 for version 4; `PILOT_PORT` overrides it). Projects on the same version share it; a project on another version runs its own, so two versions never block each other on one port (before 0.7.0, every version used 4747). It lives in the first `usepilot mcp` process; later ones get `EADDRINUSE`, check `/health`, and talk to it over HTTP (`/agents/*`). When the hub's process ends (its chat closed), the next call of another agent fails to connect and that process takes over the port.
+- **One per machine and bridge version**, on `127.0.0.1:` 4747 + `BRIDGE_VERSION` (4752 for version 5; `PILOT_PORT` overrides it). Projects on the same version share it; a project on another version runs its own, so two versions never block each other on one port (before 0.7.0, every version used 4747). It lives in the first `usepilot mcp` process; later ones get `EADDRINUSE`, check `/health`, and talk to it over HTTP (`/agents/*`). When the hub's process ends (its chat closed), the next call of another agent fails to connect and that process takes over the port.
 - **State is in memory only.** The page posts its unfinished jobs again on every connect, and the hub must accept a job posted again (idempotent by id), so a takeover loses nothing.
 - Remote agents ping regularly and are dropped after missing a few.
-- **Versions:** every process checks the hub's bridge version (`/health`, `BRIDGE_VERSION` in `@pilot/protocol`) and refuses to join one of another version (4 since the agent's questions). With a port per version, that only happens when `PILOT_PORT` puts two versions on one port; the message says so.
+- **Versions:** every process checks the hub's bridge version (`/health`, `BRIDGE_VERSION` in `@pilot/protocol`) and refuses to join one of another version (5 since the project's components and `/props`). With a port per version, that only happens when `PILOT_PORT` puts two versions on one port; the message says so.
 - **Follow-ups:** `POST /jobs/:id/retry` puts a done job back in the queue once (`attempt: 2`, with its `differences`), given first to the agent that did it if it's waiting (`Hub.retry()`).
 - **Routing:** jobs are filed by page origin (`localhost`, `127.0.0.1` and `[::1]` count as the same, `originKey()`): an agent only gets jobs from the page it launched for. Two repos open at once stay separate. Several chats launched for one page share its jobs, so the designer can run tasks in parallel: each job goes to the agent waiting longest (`dispatch()` in [hub.ts](../packages/cli/src/hub.ts)), a follow-up to the one that did it if it's waiting, and an element with a job on it holds the next one, so two chats never edit it at once.
 - **Security:** the page's origin comes from the `Origin` header, never from the request body; jobs are only accepted from an origin an agent registered, so another website can't hand prompts to the agent. Agent routes refuse any request with an `Origin` (browsers send one, Node doesn't). Keep both checks for every new route.
