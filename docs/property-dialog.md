@@ -28,7 +28,7 @@ The dialog **lists the editors for every property the element has a value for** 
 
 ## Searching
 
-Type a property (`opacity`, `padding`, `radius`…) and the matching editors replace the list; clearing the search brings it back. The search only finds properties: values are always set in the editor. (Typed values like `pt-4` + Enter are left out on purpose for now; see [roadmap.md](roadmap.md), *Open questions*.)
+Type a property (`opacity`, `padding`, `radius`…) and the matching editors replace the list; clearing the search brings it back. When nothing matches, the dialog says so under the search ("No property matches “layo”"), rather than showing nothing; not for the `/` modifiers, which have their own menu. The search only finds properties: values are always set in the editor. (Typed values like `pt-4` + Enter are left out on purpose for now; see [roadmap.md](roadmap.md), *Open questions*.)
 
 **The search carries over** from one selection to the next: set col-span on one card, click the next, and the col-span editor is already there. The carried-over query is selected, so Tab/Enter goes into its editor and typing replaces it. It starts empty again once nothing is selected (Esc, the tool turned off, the dialog closed).
 

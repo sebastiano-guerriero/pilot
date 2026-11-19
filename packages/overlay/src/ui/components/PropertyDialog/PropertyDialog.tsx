@@ -1,3 +1,4 @@
+import { isModifierQuery } from "../../../search/modifiers.ts";
 import type { ElementState, WidthRange } from "@pilot/protocol";
 import { type ComponentChildren, Fragment } from "preact";
 import { declaredValues, forcedDeclarations, isFromReset } from "../../../dom/declared.ts";
@@ -401,6 +402,14 @@ export function PropertyDialog({
             {editorHint ?? <Hint area={focusArea} />}
           </footer>
         </>
+      )}
+      {/* Something typed that no property matches (not the `/` modifiers, which have their own menu): say so, rather than nothing. */}
+      {!empty && !matches.length && !isModifierQuery(query) && (
+        <div class="properties-frame">
+          <p class="no-match" role="status">
+            No property matches “{query.trim()}”
+          </p>
+        </div>
       )}
     </div>
   );

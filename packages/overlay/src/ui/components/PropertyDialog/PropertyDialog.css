@@ -118,6 +118,16 @@
   /* The empty search's list is grouped (LIST_ORDER): a label starts each
      group (the group's name, contrast-low), and a dotted line, like the
      footer's, separates groups. */
+  /* A search no property matches, in the dim text: 40px tall on one line,
+     as the search box is (12px + a 16px line + 12px), wrapping below it. */
+  .no-match {
+    margin: 0;
+    padding: 12px 16px;
+    line-height: 16px;
+    color: var(--plt-color-contrast-low);
+    overflow-wrap: anywhere;
+  }
+
   .group-label {
     color: var(--plt-color-contrast-low);
     user-select: none;

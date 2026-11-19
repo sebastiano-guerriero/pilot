@@ -28,14 +28,13 @@
     letter-spacing: -0.02em;
   }
 
-  /* The color, 12px, 3px radius, with a 1px white ring at 30% drawn over it
+  /* The color, 12px, square, with a 1px white ring at 30% drawn over it
      (so a color close to the field's own still shows its edge). Placed by
      the field's icon slot: 6px from the left, 6px before the text. */
   .color-swatch {
     display: block;
     width: 12px;
     height: 12px;
-    border-radius: 3px;
     box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.3);
   }
 }

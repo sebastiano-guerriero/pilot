@@ -92,12 +92,17 @@ describe("PropertyDialog", () => {
     expect(editorIds()).toEqual(["padding"]);
   });
 
-  it("shows no editor for a blank or unmatched query", () => {
+  it("shows no editor for a blank or unmatched query; unmatched, it says so", () => {
     mount();
     type("   ");
     expect(editorIds()).toEqual([]);
+    expect(container.querySelector(".no-match")).toBeNull();
     type("zzz");
     expect(editorIds()).toEqual([]);
+    expect(container.querySelector(".no-match")?.textContent).toBe("No property matches “zzz”");
+    // The `/` modifiers have their own menu.
+    type("/");
+    expect(container.querySelector(".no-match")).toBeNull();
   });
 
   it("records changes in the shared history, so they can be undone", () => {

@@ -61,7 +61,10 @@ export function withoutQuery(text: string, at: { start: number; query: string })
 /** The actions for what's typed after `/`: by command or name, those that start with it first. */
 export function matchActions(typed: string, context: { component?: boolean } = {}): Action[] {
   const query = typed.toLowerCase();
-  const offered = ACTIONS.filter((a) => !a.forComponent || context.component);
+  // A component selected: its own actions (Props) first, then the rest.
+  const offered = context.component
+    ? [...ACTIONS.filter((a) => a.forComponent), ...ACTIONS.filter((a) => !a.forComponent)]
+    : ACTIONS.filter((a) => !a.forComponent);
   if (!query) return offered;
   const words = (a: Action) => [a.command, ...a.name.toLowerCase().split(/\s+/)];
   const starts = offered.filter((a) => words(a).some((w) => w.startsWith(query)));

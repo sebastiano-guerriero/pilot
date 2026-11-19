@@ -31,7 +31,8 @@ describe("the comment box's / actions", () => {
   it("Props only for a component's instance", () => {
     expect(matchActions("").map((a) => a.id)).not.toContain("props");
     expect(matchActions("prop").map((a) => a.id)).toEqual([]);
-    expect(matchActions("", { component: true }).map((a) => a.id)).toEqual(["responsive", "break-and-fix", "props"]);
+    // First when a component is selected.
+    expect(matchActions("", { component: true }).map((a) => a.id)).toEqual(["props", "responsive", "break-and-fix"]);
     expect(matchActions("prop", { component: true }).map((a) => a.id)).toEqual(["props"]);
   });
 });
