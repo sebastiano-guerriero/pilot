@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import type { Job, PageEvent } from "@pilot/protocol";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { uniqueSelector } from "../dom/target.ts";
 import { EditHistory } from "../edits/history.ts";
 import { inlinePreview } from "../test/inlinePreview.ts";
 import { PilotSession, timings } from "./session.ts";
@@ -322,7 +323,7 @@ describe("PilotSession", () => {
     expect(posted.changeSet.request.kind).toBe("comment");
     expect(posted.changeSet.edits.flatMap((e) => e.changes.map((c) => c.property))).toEqual(["padding-top"]);
     expect(s.unsent).toBe(1);
-    expect(s.threadFor(el)?.messages[0]?.edits).toBe(1);
+    expect(s.threadFor(el)?.messages[0]?.edits).toEqual({ styles: 1, texts: 0 });
     // Done, and the edit is in the page's CSS: it settles, and the notes are the reply.
     sheet.textContent = ".card { padding-top: 20px; }";
     hub().emit({ type: "job", job: job({ id: (sent as { id: string }).id, status: "done", agent, notes: "Done, and on mobile." }) });
@@ -339,6 +340,51 @@ describe("PilotSession", () => {
     const { thread } = s.comment(el, "Calmer", [], undefined, [], [], false);
     expect((posts.at(-1)?.body as { changeSet: { edits: unknown[] } }).changeSet.edits).toEqual([]);
     expect(s.unsent).toBe(1);
+    s.resolve(thread.id);
+  });
+
+  it("after a reload, a thread finds its element even when its classes changed (a variant picked), and keeps its new selector", () => {
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    const { thread } = s.comment(el, "Calmer");
+    el.className = "card--dark";
+    // A new page load: the session from what the tab saved.
+    const reloaded = session();
+    expect(reloaded.threadFor(el)?.id).toBe(thread.id);
+    expect(reloaded.threads.find((t) => t.id === thread.id)?.target.selector).toBe(uniqueSelector(el));
+  });
+
+  it("a thread whose selector now finds another element first (classes swapped between two) finds its own, by its text", () => {
+    const other = document.createElement("div");
+    other.className = "other";
+    other.textContent = "Two";
+    el.textContent = "One";
+    document.body.prepend(other);
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    const { thread } = s.comment(el, "Calmer");
+    [el.className, other.className] = ["other", "card"];
+    const reloaded = session();
+    expect(reloaded.threadElement(reloaded.threads.find((t) => t.id === thread.id) as never)).toBe(el);
+    other.remove();
+  });
+
+  it("stopped, a thread's job leaves a note where the reply would be: not a reply to read, and the agent reads it as not done", () => {
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    const { thread, job: sent } = s.comment(el, "Calmer");
+    s.cancel((sent as { id: string }).id);
+    const stopped = s.threadFor(el);
+    expect(stopped?.messages.at(-1)).toMatchObject({ from: "agent", text: "Stopped. Write again to pick it up.", stopped: true });
+    expect(s.attention).toEqual([]);
+    // Written again: the thread so far tells the agent the stopped one may not be done.
+    s.comment(el, "Calmer, please");
+    const posted = posts.at(-1)?.body as { changeSet: { request: { thread: Array<{ from: string; text: string }> } } };
+    expect(posted.changeSet.request.thread.map((m) => m.text)).toEqual([
+      "Calmer",
+      "(The designer stopped this job before you reported it done: it may not be done.)",
+      "Calmer, please",
+    ]);
     s.resolve(thread.id);
   });
 

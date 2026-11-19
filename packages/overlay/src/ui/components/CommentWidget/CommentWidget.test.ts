@@ -40,6 +40,17 @@ function draw(onSend = vi.fn(() => "sent" as const), mentions?: () => MentionOpt
 }
 
 describe("CommentWidget's send", () => {
+  it("while the thread's job can be taken back, a stop button beside send stops it; without one, none", () => {
+    const onStop = vi.fn();
+    act(() => render(h(CommentWidget, { element, anchor: new DOMRect(0, 0, 100, 40), thread: null, onSend: () => "sent" as const, onClose: () => {}, agentOn: true, onStop }), container));
+    const stop = container.querySelector(".send-group .stop") as HTMLButtonElement;
+    expect(stop.getAttribute("aria-label")).toBe("Stop the job");
+    act(() => stop.click());
+    expect(onStop).toHaveBeenCalledTimes(1);
+    act(() => render(h(CommentWidget, { element, anchor: new DOMRect(0, 0, 100, 40), thread: null, onSend: () => "sent" as const, onClose: () => {}, agentOn: true }), container));
+    expect(container.querySelector(".stop")).toBeNull();
+  });
+
   it("sent, the box closes; not sent (an upload failed), it stays with the draft and says why", async () => {
     const onClose = vi.fn();
     let outcome: "sent" | { title: string; detail: string } = { title: "The file couldn't be attached", detail: "Try again" };
@@ -115,7 +126,7 @@ describe("CommentWidget's / anywhere", () => {
 });
 
 describe("CommentWidget's edits chip", () => {
-  const drawWith = (edits: number, onSend = vi.fn(() => "sent" as const)) => {
+  const drawWith = (edits: { styles: number; texts: number }, onSend = vi.fn(() => "sent" as const)) => {
     act(() =>
       render(h(CommentWidget, { element, anchor: new DOMRect(0, 0, 100, 40), thread: null, onSend, onClose: () => {}, agentOn: true, edits }), container),
     );
@@ -124,23 +135,23 @@ describe("CommentWidget's edits chip", () => {
   const chip = () => container.querySelector('.composer .action-chip[data-kind="edits"]');
 
   it("the selection's unsent edits show as a chip and go with the comment", async () => {
-    const onSend = drawWith(3);
-    expect(chip()?.textContent).toBe("3 changes");
+    const onSend = drawWith({ styles: 3, texts: 0 });
+    expect(chip()?.textContent).toBe("3 style changes");
     await type("Like this, on mobile too");
     await press("Enter");
     expect(onSend).toHaveBeenCalledWith("Like this, on mobile too", [], undefined, [], true, []);
   });
 
   it("taken off, they stay for Send; with an action, the chip isn't there (a task goes apart)", async () => {
-    const onSend = drawWith(1);
-    expect(chip()?.textContent).toBe("1 change");
+    const onSend = drawWith({ styles: 1, texts: 1 });
+    expect(chip()?.textContent).toBe("1 style change and 1 text change");
     act(() => (chip()?.querySelector("button") as HTMLButtonElement).click());
     expect(chip()).toBeNull();
     await type("Calmer");
     await press("Enter");
     expect(onSend).toHaveBeenLastCalledWith("Calmer", [], undefined, [], false, []);
     render(null, container);
-    const withAction = drawWith(2);
+    const withAction = drawWith({ styles: 2, texts: 0 });
     await type("/resp");
     await press("Enter");
     expect(chip()).toBeNull();
@@ -149,7 +160,7 @@ describe("CommentWidget's edits chip", () => {
   });
 
   it("none: no chip", () => {
-    drawWith(0);
+    drawWith({ styles: 0, texts: 0 });
     expect(chip()).toBeNull();
   });
 });
@@ -283,7 +294,7 @@ describe("CommentWidget's @ mentions", () => {
       messages: [
         { from: "designer" as const, text: "Two columns on tablet", at: "1", action: "responsive" as const },
         { from: "designer" as const, text: "", at: "2", action: "props" as const },
-        { from: "designer" as const, text: "Like this", at: "3", edits: 2 },
+        { from: "designer" as const, text: "Like this", at: "3", edits: { styles: 2, texts: 0 } },
       ],
     };
     act(() =>
@@ -295,7 +306,7 @@ describe("CommentWidget's @ mentions", () => {
     expect([...container.querySelectorAll(".message p")].map((p) => p.innerHTML)).toEqual([
       '<span class="mention">/responsive</span> Two columns on tablet',
       '<span class="mention">/props</span>',
-      '<span class="mention">2 changes</span> Like this',
+      '<span class="mention">2 style changes</span> Like this',
     ]);
     expect(container.querySelector(".messages .action-chip")).toBeNull();
   });

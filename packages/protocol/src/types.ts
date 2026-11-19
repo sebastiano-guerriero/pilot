@@ -12,6 +12,13 @@
 export interface ElementTarget {
   /** A CSS selector that matched exactly this element at capture time. */
   selector: string;
+  /**
+   * Where the element is, by tags and positions only (no classes):
+   * `#react > main > div > article:nth-of-type(1)`. For Pilot to find it
+   * again when its classes changed since (a variant picked, a prop set);
+   * see the overlay's findTarget.
+   */
+  at?: string;
   /** Human-readable DOM path, e.g. `main > section.hero > h1`. */
   path: string;
   tag: string;

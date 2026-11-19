@@ -29,15 +29,20 @@ interface SelectionActionsProps {
   busy?: Busy;
   /**
    * The element has an unresolved comment thread: a comment icon on the
-   * corner (the far right, after the loader if there's one; the actions
-   * on its left), that opens the thread.
+   * corner (left of the loader if there's one, which stays on the far
+   * right; the actions on its left), that opens the thread.
    */
   onOpenThread?(): void;
 }
 
 /** A job on the element: where it stands, and how to take it back (none once the agent is done). */
 export interface Busy {
+  /** Where the job stands, with what it is ("Comment: Claude Code is working on it"): for screen readers. */
   text: string;
+  /** What the job is about, for the tooltip's first line ("“Make the price bigger”", "3 style changes"). */
+  about?: string;
+  /** Where it stands, for the tooltip's second line ("Claude Code is working on it"). */
+  status?: string;
   onCancel?(): void;
   /**
    * The job is stuck (see PilotSession.stuck): the loader gives way to a
@@ -78,8 +83,8 @@ export function actionsBox(
  * right-aligned with it, 20px squares 4px apart (4px above its line): on the selection (the same
  * with either tool), Select similar (when there's something similar), Show in DOM (opens the DOM tree on the selected
  * element). While a job is on the element (`busy`), its loader takes the
- * corner; with an unresolved comment thread, a comment icon takes the
- * corner and opens it. Tasks for the agent (Make responsive) aren't here:
+ * corner, always the far right; with an unresolved comment thread, a
+ * comment icon sits left of it (or takes the corner) and opens it. Tasks for the agent (Make responsive) aren't here:
  * they're the comment box's `/` actions. Elements that aren't selected get these
  * two alone, so they're found on the page. Inside
  * the corner when the element touches the top of the window (the tooltips
@@ -127,9 +132,22 @@ export function SelectionActions({
           </button>
         </Tooltip>
       )}
+      {onOpenThread && (
+        <Tooltip text="Open comment" side={side}>
+          <button type="button" class="action" aria-label="Open comment" onMouseDown={(e) => e.preventDefault()} onClick={onOpenThread}>
+            <Icon name="thread" />
+          </button>
+        </Tooltip>
+      )}
+      {/* The loader last, on the far right: where a job always shows. */}
       {busy &&
         (busy.onCancel ? (
-          <Tooltip text={busy.stuck?.title ?? "Cancel job"} detail={busy.stuck?.detail} side={side}>
+          <Tooltip
+            text={busy.stuck?.title ?? busy.about ?? "Cancel job"}
+            detail={busy.stuck?.detail ?? (busy.about ? `${busy.status ?? busy.text} · Click to cancel` : undefined)}
+            side={side}
+            align="end"
+          >
             <button
               type="button"
               class="action busy"
@@ -139,11 +157,11 @@ export function SelectionActions({
               onClick={busy.onCancel}
             >
               <Icon name={busy.stuck ? "warning" : "busy"} class="spinner" />
-              <Icon name="close" class="cancel" />
+              <Icon name="xmark" class="cancel" />
             </button>
           </Tooltip>
         ) : (
-          <Tooltip text={busy.stuck?.title ?? busy.text} detail={busy.stuck?.detail} side={side}>
+          <Tooltip text={busy.stuck?.title ?? busy.about ?? busy.text} detail={busy.stuck?.detail ?? (busy.about ? busy.status : undefined)} side={side} align="end">
             <span
               class="action busy"
               data-stuck={busy.stuck ? "" : undefined}
@@ -155,13 +173,6 @@ export function SelectionActions({
             </span>
           </Tooltip>
         ))}
-      {onOpenThread && (
-        <Tooltip text="Open comment" side={side}>
-          <button type="button" class="action" aria-label="Open comment" onMouseDown={(e) => e.preventDefault()} onClick={onOpenThread}>
-            <Icon name="thread" />
-          </button>
-        </Tooltip>
-      )}
     </div>
   );
 }

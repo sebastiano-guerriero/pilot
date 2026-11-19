@@ -13,6 +13,7 @@ import type { CommentThread } from "../../../bridge/session.ts";
 import { px } from "../../px.ts";
 import { Icon } from "../Icon/Icon.tsx";
 import { dialogPosition, dialogSpot, raisedSpot } from "../PropertyDialog/PropertyDialog.tsx";
+import { type ChangeCounts, changesLabel } from "../../changesLabel.ts";
 import { PropsList } from "../PropsList/PropsList.tsx";
 import { ScrollThumb } from "../ScrollThumb/ScrollThumb.tsx";
 import { Tooltip } from "../Tooltip/Tooltip.tsx";
@@ -58,6 +59,8 @@ interface CommentWidgetProps {
    * says what's wrong and what to do, in place of `status`.
    */
   error?: CommentError;
+  /** The thread's latest job is with the agent and can still be taken back: a stop button beside send cancels it. */
+  onStop?(): void;
   /** An agent is on the page: without one, the send button is disabled (comments go to an agent only). */
   agentOn?: boolean;
   /** Who replies ("Claude Code · app"), for the agent's messages. */
@@ -81,7 +84,7 @@ interface CommentWidgetProps {
    * the comment, shown as a chip the designer can take off (then they wait
    * for Send). Not with an action: a task goes apart from the changes.
    */
-  edits?: number;
+  edits?: ChangeCounts;
   /** The component the selection is an instance of (its top-level element), alone: `/props` is offered then. */
   component?: string;
   /** The instance's props now, from the page (see componentProps): the props list shows them. */
@@ -94,6 +97,10 @@ interface CommentWidgetProps {
   /** The designer is done with the thread: it goes. `from` is Mark as solved's box (for its confetti). */
   onResolve?(from?: DOMRect): void;
   onClose(): void;
+  /** What's already written, when it opens again after a reload (App keeps it: selectionKeep.ts). */
+  initialText?: string;
+  /** What's written, as it changes: App keeps it through a reload. */
+  onTextChange?(text: string): void;
   /** Take focus when it opens (not when the selection came from the DOM tree, which keeps it). */
   autoFocus?: boolean;
 }
@@ -127,11 +134,6 @@ function placeholder(withAction: boolean, reply: boolean, mentions: boolean): st
   return mentions ? `${lead}, / for actions, @ to mention` : `${lead}, or / for actions`;
 }
 
-/** The edits chip's words: how many of the editor's changes go with the comment. Placeholder wording, pending the design. */
-export function editsLabel(n: number): string {
-  return n === 1 ? "1 change" : `${n} changes`;
-}
-
 /** The longest the field grows to before it scrolls, in px. */
 const FIELD_MAX = 120;
 
@@ -162,16 +164,20 @@ export function CommentWidget({
   agentOn = true,
   mentions,
   projectComponents,
-  edits = 0,
+  edits = { styles: 0, texts: 0 },
   component,
   currentProps,
+  initialText,
+  onTextChange,
+  onStop,
 }: CommentWidgetProps) {
   const ref = useRef<HTMLDivElement>(null);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const resolveRef = useRef<HTMLButtonElement>(null);
   const resolve = () => onResolve?.(resolveRef.current?.getBoundingClientRect());
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText ?? "");
+  useEffect(() => onTextChange?.(text), [text]);
   // A send that failed (an attachment didn't upload): its red reply, until the next try.
   const [failed, setFailed] = useState<CommentError | null>(null);
   const shownError = failed ?? error;
@@ -425,7 +431,8 @@ export function CommentWidget({
 
   // The edits chip: on until the designer takes it off, for this message.
   const [withEdits, setWithEdits] = useState(true);
-  const editsGo = edits > 0 && withEdits && !action;
+  const editsCount = edits.styles + edits.texts;
+  const editsGo = editsCount > 0 && withEdits && !action;
 
   // Words, files, an action, or any of them together; files upload first, so sending can take a moment.
   const [sending, setSending] = useState(false);
@@ -619,7 +626,7 @@ export function CommentWidget({
                       {m.edits ? (
                         <span class="mention">
                           {m.action ? " " : ""}
-                          {editsLabel(m.edits)}
+                          {changesLabel(m.edits)}
                         </span>
                       ) : null}
                       {(m.action || m.edits) && m.text ? " " : null}
@@ -658,7 +665,9 @@ export function CommentWidget({
                     ) : null}
                   </div>
                   {/* The agent's reply to /props, in a box of its own under its words: a row per prop, its value on the page; a pick joins the comment being written. Answered, only the words stay. */}
-                  {liveProps(i) && m.propList ? <PropsList props={m.propList} current={pageProps} picked={written} onPick={pickProp} /> : null}
+                  {liveProps(i) && m.propList ? (
+                    <PropsList props={m.propList} current={pageProps} picked={written} onPick={pickProp} />
+                  ) : null}
                 </div>
               ),
             )}
@@ -682,16 +691,16 @@ export function CommentWidget({
         </div>
       )}
       <div class="composer">
-        {(action || (edits > 0 && withEdits)) && (
+        {(action || (editsCount > 0 && withEdits)) && (
           <div class="action-chip-row">
             {/* The editor's changes on the selection go with the comment (not with an action: they wait for Send). */}
-            {edits > 0 && withEdits && !action && (
+            {editsCount > 0 && withEdits && !action && (
               <span class="action-chip" data-kind="edits" title="Your edits on this element, not sent yet, go with the comment">
-                {editsLabel(edits)}
+                {changesLabel(edits)}
                 <button
                   type="button"
                   class="action-remove"
-                  aria-label={`Don't send the ${editsLabel(edits)} with the comment`}
+                  aria-label={`Don't send the ${changesLabel(edits)} with the comment`}
                   onClick={() => {
                     setWithEdits(false);
                     fieldRef.current?.focus();
@@ -830,13 +839,29 @@ export function CommentWidget({
               input.value = "";
             }}
           />
-          {agentOn ? (
-            sendButton
-          ) : (
-            <Tooltip text="No agent connected" align="end">
-              {sendButton}
-            </Tooltip>
-          )}
+          <div class="send-group">
+            {/* The thread's job, while it can be taken back: stop it (as the loader's × does). */}
+            {onStop && (
+              <Tooltip text="Stop the job" align="end">
+                <button
+                  type="button"
+                  class="attach stop"
+                  aria-label="Stop the job"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={onStop}
+                >
+                  <Icon name="stop" />
+                </button>
+              </Tooltip>
+            )}
+            {agentOn ? (
+              sendButton
+            ) : (
+              <Tooltip text="No agent connected" align="end">
+                {sendButton}
+              </Tooltip>
+            )}
+          </div>
         </div>
       </div>
       {thread && onResolve && (

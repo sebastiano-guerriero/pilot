@@ -132,11 +132,11 @@ describe("a text change in the history, the change set and the check", () => {
     expect(prompt).not.toContain("| Property |"); // no CSS changes, no table
   });
 
-  it("the job list counts it as a change", () => {
+  it("the job list counts it as a text change, apart from the style ones", () => {
     history.apply(button, TEXT_PROPERTY, "Start free trial");
     history.apply(button, "padding-top", "12px");
     const changeSet = buildChangeSet(history);
-    expect(whatText({ id: "j1", changeSet, status: "queued", createdAt: "" })).toBe("2 changes");
+    expect(whatText({ id: "j1", changeSet, status: "queued", createdAt: "" })).toBe("1 style change and 1 text change");
   });
 
   it("an element not on the page keeps the text it had when changed", () => {

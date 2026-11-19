@@ -1,4 +1,4 @@
-import type { CommentAction, CommentReference, ElementState, PropChange, WidthRange } from "@pilot/protocol";
+import type { CommentAction, CommentReference, ElementState, ElementTarget, PropChange, WidthRange } from "@pilot/protocol";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import { type BoxArea, hidesSelection } from "../dom/boxModel.ts";
 import { measuredBoxes } from "../dom/measure.ts";
@@ -6,7 +6,7 @@ import { revealInWindow } from "../dom/reveal.ts";
 import { componentName, componentProps } from "../dom/component.ts";
 import { mentionables } from "../dom/mentions.ts";
 import { findSimilar } from "../dom/similar.ts";
-import { describeElement, type EditableElement, isEditable } from "../dom/target.ts";
+import { describeElement, type EditableElement, findTarget, isEditable } from "../dom/target.ts";
 import { isTextOnly, normalizeText, textProperty, textRunAt } from "../dom/text.ts";
 import { formatPrompt } from "@pilot/protocol";
 import { buildChangeSet, copyText } from "../edits/changeSet.ts";
@@ -23,7 +23,7 @@ import { GridOverlay } from "./components/GridOverlay/GridOverlay.tsx";
 import { Highlight } from "./components/Highlight/Highlight.tsx";
 import { PropertyDialog, type WidthPick } from "./components/PropertyDialog/PropertyDialog.tsx";
 import { awaitsAnswer, type CommentThread, type JobRecord, needsYou, type PilotSession } from "../bridge/session.ts";
-import { statusText, whatText } from "./components/JobList/JobList.tsx";
+import { elapsed, jobAbout, statusText, whatText } from "./components/JobList/JobList.tsx";
 import { DomTree } from "./components/DomTree/DomTree.tsx";
 import { actionsBox, type Busy, SelectionActions } from "./components/SelectionActions/SelectionActions.tsx";
 import { type CommentOutcome, CommentWidget } from "./components/CommentWidget/CommentWidget.tsx";
@@ -32,6 +32,8 @@ import { Confetti } from "./components/Confetti/Confetti.tsx";
 import { thumbnail } from "../dom/thumbnail.ts";
 import { type Tool, Toolbar } from "./components/Toolbar/Toolbar.tsx";
 import { ViewportWidth } from "./components/ViewportWidth/ViewportWidth.tsx";
+import { countChanges } from "./changesLabel.ts";
+import { loadSelection, saveSelection } from "./selectionKeep.ts";
 import { loadSpot, saveSpot, type ToolbarSpot } from "./toolbarSpot.ts";
 import { useViewportWidth } from "./useViewportWidth.ts";
 
@@ -61,6 +63,11 @@ interface AppProps {
  *   another element re-selects; Esc clears the selection.
  * - Cursor off: the page behaves normally again and the selection is cleared.
  */
+/** Finding the selection again after the page re-rendered it: how often, and how many times (a reload: longer, the page loads first). */
+const REFIND_EVERY = 150;
+const REFIND_TRIES = 8;
+const RESTORE_TRIES = 20;
+
 export function App({ host, dev, nameAttributes, history, session, onReattach, onQuit }: AppProps) {
   // The tool that picks elements: Select (the property dialog) or Comment
   // (the comment widget); null: the page as it is.
@@ -82,6 +89,8 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   const [others, setOthers] = useState<EditableElement[]>([]);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
+  // How each selected element was, to find it again when it leaves the page (see findTarget).
+  const targets = useRef(new Map<Element, ElementTarget>());
   const othersRef = useRef(others);
   othersRef.current = others;
   // The element added to the selection last: the panel (dialog or comment box) sits beside it (`placeBy`).
@@ -239,6 +248,9 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   };
   const busyOf = (job: JobRecord): Busy => ({
     text: jobText(job),
+    about: jobAbout(job),
+    // The agent by its app's name, as in the comment box ("Claude Code is working on it").
+    status: job.status === "working" ? `${agentName(job.agent?.label) ?? "The agent"} is working on it${elapsed(job.takenAt)}` : statusText(job),
     onCancel: session?.canCancel(job) ? () => session.cancel(job.id) : undefined,
     ...(isStuck(job) ? { stuck: stuckAlert } : {}),
   });
@@ -255,6 +267,11 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     const element = session?.threadElement(thread);
     if (element) marks.set(element, { ...marks.get(element), thread });
   }
+  // The selected element's thread, whatever stands: on the page, a thread
+  // with the agent shows only its loader (the comment icon is for a reply to
+  // read); selected, its icon is the selection's own action, beside the
+  // loader, to open it and see what the job is about.
+  const selectedThread = selected && session ? session.threadFor(selected.element) : null;
   /** How many icons sit on `element`'s corner (the hover label stops before them). */
   const marksOn = (element: Element) => {
     const mark = marks.get(element);
@@ -367,7 +384,13 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
 
   const hovered = useElementPicker(selecting, host, onPick, { editing: editing?.host ?? null, onDoubleClick });
   const hoverRect = useElementRect(hovered !== selected?.element ? hovered : null);
-  const selectedRect = useElementRect(selected?.element ?? null);
+  // While the selected element is being found again (it left the page, see
+  // below), its last box: the panel stays mounted, with what's in it.
+  const measuredRect = useElementRect(selected?.element ?? null);
+  const lastRect = useRef<{ key: number; rect: DOMRect } | null>(null);
+  if (selected && measuredRect) lastRect.current = { key: selected.key, rect: measuredRect };
+  const selectedRect =
+    measuredRect ?? (selected && !selected.element.isConnected && lastRect.current?.key === selected.key ? lastRect.current.rect : null);
   // Alt held with an element selected (a tool on): Figma's redlines, the distances from the selection to the
   // element under the pointer, or to its parent when that's the selection itself (or nothing). The green
   // selection (outline, dots, actions, grid lines) and the hover highlight give way to them meanwhile.
@@ -377,10 +400,25 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   const measureRect = useElementRect(measureTo);
   const domHoverRect = useElementRect(domHover);
 
-  // The selected element disappeared (re-render, HMR): drop the selection.
+  // The selected element left the page (the agent's edit re-rendered it,
+  // hot reload remounted it): the same element is found again, as the
+  // page has it now (findTarget), and stays selected, with its panel and
+  // what's being written in it (same key). A few tries, as the framework
+  // may put it back a moment later; not found, the selection goes.
   useEffect(() => {
-    if (selected && !selected.element.isConnected) setSelected(null);
-  }, [selected, selectedRect]);
+    if (!selected || selected.element.isConnected) return;
+    const target = targets.current.get(selected.element);
+    let tries = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const look = () => {
+      const found = target ? findTarget(target) : null;
+      if (isEditable(found)) return setSelected((prev) => (prev?.key === selected.key ? { ...prev, element: found } : prev));
+      if (++tries < REFIND_TRIES) timer = setTimeout(look, REFIND_EVERY);
+      else setSelected((prev) => (prev?.key === selected.key ? null : prev));
+    };
+    look();
+    return () => clearTimeout(timer);
+  }, [selected, measuredRect]);
 
   // Esc that drops the selection (the dialog hides) closes the DOM tree too.
   const dismiss = () => {
@@ -388,10 +426,65 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     setOthers([]);
     setDomOpen(false);
   };
-  // Elements that left the page leave the selection.
+  // The others too: found again, else they leave the selection.
   useEffect(() => {
-    if (others.some((e) => !e.isConnected)) setOthers((list) => list.filter((e) => e.isConnected));
-  }, [others, selectedRect]);
+    if (!others.some((e) => !e.isConnected)) return;
+    setOthers((list) =>
+      list.flatMap((e) => {
+        if (e.isConnected) return [e];
+        const target = targets.current.get(e);
+        const found = target ? findTarget(target) : null;
+        return isEditable(found) ? [found] : [];
+      }),
+    );
+  }, [others, measuredRect]);
+
+  // Kept through a full reload the agent causes (see selectionKeep.ts):
+  // the tool, the selected elements, the comment being written; restored
+  // once they're on the page again (frameworks render a moment after load).
+  // Nothing is saved until the restore is done, so it isn't overwritten.
+  const [draft, setDraft] = useState("");
+  const [restoredDraft, setRestoredDraft] = useState<{ key: number; text: string } | null>(null);
+  const restoring = useRef(!dev);
+  useEffect(() => {
+    const kept = restoring.current ? loadSelection() : null;
+    if (!kept) {
+      restoring.current = false;
+      return;
+    }
+    let tries = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const look = () => {
+      const [first, ...rest] = kept.targets.map((t) => findTarget(t));
+      if (isEditable(first)) {
+        setTool(kept.tool);
+        setSelected({ element: first, key: 1 });
+        setOthers(rest.filter(isEditable));
+        if (kept.draft && kept.tool === "comment") setRestoredDraft({ key: 1, text: kept.draft });
+        restoring.current = false;
+        return;
+      }
+      if (++tries < RESTORE_TRIES) timer = setTimeout(look, REFIND_EVERY);
+      else restoring.current = false;
+    };
+    look();
+    return () => clearTimeout(timer);
+  }, []);
+  useEffect(() => {
+    if (restoring.current) return;
+    const elements = selected ? [selected.element, ...others] : [];
+    for (const e of elements) if (e.isConnected && !targets.current.has(e)) targets.current.set(e, describeElement(e));
+    for (const e of targets.current.keys()) if (!elements.includes(e as EditableElement)) targets.current.delete(e);
+    saveSelection(
+      tool && selected
+        ? {
+            tool,
+            targets: elements.flatMap((e) => targets.current.get(e) ?? []),
+            ...(tool === "comment" && draft.trim() ? { draft } : {}),
+          }
+        : null,
+    );
+  }, [tool, selected, others, draft]);
 
   // Esc, one level at a time:
   // - something selected: clear the selection and close the DOM tree (inside
@@ -486,9 +579,9 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     return "sent";
   };
   // How many of them there are, for the chip (changeCount re-renders this as the history changes).
-  const unsentOnSelection = selected
-    ? history.changes({ unsent: true }).filter((c) => c.element === selected.element || others.includes(c.element)).length
-    : 0;
+  const unsentOnSelection = countChanges(
+    selected ? history.changes({ unsent: true }).filter((c) => c.element === selected.element || others.includes(c.element)) : [],
+  );
 
   const hideSelection = !!inspect?.some(hidesSelection) || measuring;
   // Beside the latest one added, while it's still selected (taken out: back to the first).
@@ -517,7 +610,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     selected && selectedRect && (commenting || !hideSelection)
       ? actionsBox(
           selectedRect,
-          Number(!!similar) + Number(!others.length) + Number(!!marks.get(selected.element)?.thread) + Number(!!selectedJob),
+          Number(!!similar) + Number(!others.length) + Number(!!selectedThread) + Number(!!selectedJob),
           true,
         )
       : null;
@@ -582,18 +675,21 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
               onShowInDom={others.length ? undefined : () => setDomOpen((open) => !open)}
               busy={selectedBusy}
               // The thread is open already: its icon stays, as everywhere.
-              onOpenThread={marks.get(selected.element)?.thread ? () => setTool("comment") : undefined}
+              onOpenThread={selectedThread ? () => setTool("comment") : undefined}
             />
           )}
           <CommentWidget
             key={selected.key}
             element={selected.element}
+            initialText={restoredDraft?.key === selected.key ? restoredDraft.text : undefined}
+            onTextChange={setDraft}
             anchor={selectedRect}
             placeBy={placeBy}
             veiled={measuring}
             thread={thread}
             status={threadStatus}
             error={threadJob && isStuck(threadJob) ? stuckAlert : undefined}
+            onStop={threadJob && session?.canCancel(threadJob) ? () => session.cancel(threadJob.id) : undefined}
             agentName={agentName(threadJob?.agent?.label ?? session?.state.agents[0]?.label)}
             agentOn={sendToAgent}
             onSend={(text, files, action, mentions, withEdits, props) => sendComment(selected.element, text, files, action, mentions, withEdits, props)}
@@ -657,7 +753,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
               onShowInDom={others.length ? undefined : () => setDomOpen((open) => !open)}
               busy={selectedBusy}
               // A thread waiting for the designer: its icon switches to Comment, which opens it.
-              onOpenThread={marks.get(selected.element)?.thread ? () => setTool("comment") : undefined}
+              onOpenThread={selectedThread ? () => setTool("comment") : undefined}
             />
           )}
           <PropertyDialog

@@ -255,6 +255,26 @@ const ICONS = {
       />
     ),
   },
+  // Cancelling a job, on its loader's hover (Nucleo UI, xmark, outline, 12px). Not `close`: the thinner × stays where it is.
+  xmark: {
+    size: 12,
+    body: (
+      <g stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="2.25" y1="9.75" x2="9.75" y2="2.25" />
+        <line x1="9.75" y1="9.75" x2="2.25" y2="2.25" />
+      </g>
+    ),
+  },
+  // Stopping the thread's job, next to send (Nucleo UI, media-stop, filled, 12px).
+  stop: {
+    size: 12,
+    body: (
+      <path
+        d="M3.75 11C2.23122 11 1 9.76878 1 8.25V3.75C1 2.23122 2.23122 1 3.75 1L8.25 1C9.76878 1 11 2.23122 11 3.75V8.25C11 9.76878 9.76878 11 8.25 11H3.75Z"
+        fill="currentColor"
+      />
+    ),
+  },
   // The comment box (Nucleo UI, outline, 12px): attach (paperclip), send (arrow-up).
   attach: {
     size: 12,

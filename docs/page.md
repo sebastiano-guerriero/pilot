@@ -31,6 +31,13 @@ With the Select tool on ([select/](../packages/overlay/src/select)):
 - **Shift+click adds** an element to the selection, or takes it out (see *Several elements* below).
 - Select mode stays on, so you can click another element to switch to it. **Esc** clears the selection; with nothing selected, Esc turns the tool off. Clicking the tool again turns it off, clears the selection, and the page behaves normally again.
 
+### Through the agent's reloads
+
+The agent's edits reload the page under the designer: hot reload re-renders or remounts the selected element, or the framework reloads the whole page. What's open stays open:
+
+- **Hot reload:** a selected element that left the page is found again ([findTarget](handoff.md), *Finding elements again*), every 150ms for a moment, and stays selected with its panel as it was, the comment being written too (the same panel, kept mounted on the element's last box meanwhile). Not found, the selection goes.
+- **A full reload:** the tool, the selected elements and the comment being written are kept for the tab ([selectionKeep.ts](../packages/overlay/src/ui/selectionKeep.ts)), and restored once the elements are on the page again (frameworks render a moment after load). Nothing is saved until that's done, so the restore isn't overwritten; one from more than ten minutes ago isn't restored (the tab came back later). Closing the panel (Esc, sending a comment) clears it.
+
 ### Measuring distances (Alt)
 
 As in Figma with Option: with an element selected and a tool on, holding **Alt** shows the distances from the selection to the element under the pointer, or to its parent when the pointer is on the selection itself (or on nothing). Red, so they read apart from the selection's green: both boxes outlined, a line for each distance with its value in a pill, dashed guides where a line ends off the other box ([Measurements](../packages/overlay/src/ui/components/Measurements/Measurements.tsx), geometry in [dom/measure.ts](../packages/overlay/src/dom/measure.ts)). Meanwhile the green selection (outline, dots, corner actions, grid lines), the hover highlight and the panels (the property dialog or the comment box, and the DOM tree: faded out but still there, with their search, scroll and focus) are hidden; releasing Alt brings them back. A container is measured inside its border, so a card's 20px padding reads 20 (not 21 with a 1px border). Alt with another key (Alt+P, Alt+D) isn't measuring.

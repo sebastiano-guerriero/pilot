@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest";
-import { describeElement, domPath, shortName, uniqueSelector } from "./target.ts";
+import { describeElement, domPath, findTarget, shortName, structuralSelector, uniqueSelector } from "./target.ts";
 
 const $ = (s: string) => document.querySelector(s) as Element;
 
@@ -60,3 +60,48 @@ describe("labels", () => {
     expect(domPath($("main"))).toBe("main");
   });
 });
+
+describe("finding a saved element again", () => {
+  const cards = () => {
+    document.body.innerHTML = `
+      <div id="app"><main>
+        <div class="row">
+          <article class="card card--light"><h3>Desk lamp</h3></article>
+          <article class="card card--dark"><h3>Office chair</h3></article>
+        </div>
+      </main></div>`;
+    return [...document.querySelectorAll("article")];
+  };
+
+  it("where it is, by tags and positions only, from the nearest id", () => {
+    const [lamp] = cards();
+    expect(structuralSelector(lamp as Element)).toBe("#app > main > div > article:nth-of-type(1)");
+  });
+
+  it("by its selector; its classes changed (a variant), by where it is", () => {
+    const [lamp] = cards();
+    const target = describeElement(lamp as Element);
+    expect(findTarget(target)).toBe(lamp);
+    (lamp as Element).className = "card card--outline";
+    expect(findTarget(target)).toBe(lamp);
+  });
+
+  it("saved before `at`: by its path without classes and its text, when exactly one element is it", () => {
+    const [lamp, chair] = cards();
+    const { at: _, ...old } = describeElement(lamp as Element);
+    (lamp as Element).className = "card card--dark";
+    (chair as Element).className = "card card--light";
+    expect(findTarget(old)).toBe(lamp);
+    // Nothing matches its selector, and its path fits both (no text to tell them apart): none, rather than the wrong one.
+    expect(findTarget({ ...old, selector: "article.card--gone", text: undefined })).toBeNull();
+  });
+
+  it("moved elsewhere, its text changed too: none", () => {
+    const [lamp] = cards();
+    const target = describeElement(lamp as Element);
+    (lamp as Element).className = "card";
+    ((lamp as Element).querySelector("h3") as Element).textContent = "Floor lamp";
+    expect(findTarget(target)).toBeNull();
+  });
+});
+

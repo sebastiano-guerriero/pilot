@@ -2,7 +2,8 @@ import type { AgentInfo, AgentQuestion, AgentRequest, ChangeResult, ChangeSet, C
 import { attachmentType, requestTargets } from "@pilot/protocol";
 import { checkWidths, problemLines, snapshotAt, type StyleSnapshot, widthsToCheck } from "../checks/widths.ts";
 import { componentProps } from "../dom/component.ts";
-import { describeElement } from "../dom/target.ts";
+import { type ChangeCounts, countChanges } from "../ui/changesLabel.ts";
+import { describeElement, findTarget, structuralSelector, uniqueSelector } from "../dom/target.ts";
 import { buildChangeSet, buildRequest } from "../edits/changeSet.ts";
 import type { EditHistory, RecordedChange } from "../edits/history.ts";
 import { watchJob } from "../edits/verify.ts";
@@ -91,8 +92,14 @@ export type ThreadMessage = Omit<CommentMessage, "attachments"> & {
   attachments?: ThreadAttachment[];
   /** The designer's edits on the comment's elements, not sent yet, go with it (see PilotSession.comment): when it's posted. */
   takesEdits?: boolean;
-  /** How many of them went with it, for the thread. */
-  edits?: number;
+  /** How many of them went with it, for the thread (a number: saved before style and text were told apart). */
+  edits?: ChangeCounts | number;
+  /**
+   * Pilot's note in the agent's place: the designer stopped the job (see
+   * cancel). Not a reply to read (needsYou), and the agent reads it as
+   * "stopped, maybe not done" in the thread's history.
+   */
+  stopped?: boolean;
   /** The agent's reply to `/props`: the component's props, for the designer to set (see PilotSession.setProps). */
   propList?: PropSpec[];
 };
@@ -107,6 +114,9 @@ const HELD_KEY = "pilot:held";
 const APPLIED_LINGER = 8_000;
 /** How long after a task is done Pilot checks it: hot reload's time. */
 const TASK_SETTLE = 800;
+/** What the thread says when the designer stopped its job, in the agent's place; and how the agent reads it later. */
+const STOPPED_NOTE = "Stopped. Write again to pick it up.";
+const STOPPED_FOR_AGENT = "(The designer stopped this job before you reported it done: it may not be done.)";
 /** How long Pilot waits for set props to show on the page before it takes them back to the agent, and how often it looks meanwhile. */
 const PROPS_WAIT = 6000;
 const PROPS_RECHECK = 400;
@@ -329,8 +339,8 @@ export class PilotSession {
     const known = this.jobElements.get(job.id)?.filter((e) => e.isConnected);
     if (known?.length) return known;
     const { request, edits } = job.changeSet;
-    const selectors = (request ? requestTargets(request) : edits.map((e) => e.target)).map((t) => t.selector);
-    const found = selectors.map(find).filter((e): e is Element => !!e);
+    const targets = request ? requestTargets(request) : edits.map((e) => e.target);
+    const found = targets.map((t) => findTarget(t)).filter((e): e is Element => !!e);
     if (found.length) this.jobElements.set(job.id, found);
     return found;
   }
@@ -377,15 +387,18 @@ export class PilotSession {
 
   /** The other elements a thread is about (see CommentThread.others), the ones on the page. */
   threadOthers(thread: CommentThread): Element[] {
-    return (thread.others ?? []).map((t) => find(t.selector)).filter((e): e is Element => !!e);
+    return (thread.others ?? []).map((t) => findTarget(t)).filter((e): e is Element => !!e);
   }
 
   /** The element a thread is on, when it's on the page. */
   threadElement(thread: CommentThread): Element | null {
     const known = this.threadElements.get(thread.id);
     if (known?.isConnected) return known;
-    const found = find(thread.target.selector);
-    if (found) this.threadElements.set(thread.id, found);
+    const found = findTarget(thread.target);
+    if (!found) return null;
+    this.threadElements.set(thread.id, found);
+    // Found another way (its classes changed, or its selector now finds another element first): its selector as it is now, so the next look is direct.
+    if (find(thread.target.selector) !== found) this.patchThread(thread.id, { target: { ...thread.target, selector: uniqueSelector(found), at: structuralSelector(found) } });
     return found;
   }
 
@@ -452,9 +465,10 @@ export class PilotSession {
   /** A comment job's change set: the thread so far, as the agent reads it. */
   private commentSet(element: Element, messages: ThreadMessage[], others: Element[], id?: string): ChangeSet {
     // Attachments go by id (the hub adds where it saved them); their previews stay here.
-    const thread = messages.map(({ from, text, at, attachments, action, references, props }) => ({
+    const thread = messages.map(({ from, text, at, attachments, action, references, props, stopped }) => ({
       from,
-      text,
+      // Pilot's note, not the agent's words: what it means for the work.
+      text: stopped ? STOPPED_FOR_AGENT : text,
       at,
       ...(attachments?.length ? { attachments: attachments.map(({ id, name }) => ({ id, name })) } : {}),
       ...(action ? { action } : {}),
@@ -504,7 +518,7 @@ export class PilotSession {
     const action = unsent.find((m) => m.action)?.action;
     let job: JobRecord | null;
     let changeSet: ChangeSet;
-    let sentEdits = 0;
+    let sentEdits: ChangeCounts | null = null;
     if (action) {
       const note = unsent
         .map((m) => m.text)
@@ -523,14 +537,15 @@ export class PilotSession {
       // once the agent is done (see verify), the comment's reply in the thread.
       const elements = [element, ...others];
       const only = (change: RecordedChange) => elements.includes(change.element);
-      const edits = unsent.some((m) => m.takesEdits) ? this.history.changes({ unsent: true }).filter(only).length : 0;
+      const taken = unsent.some((m) => m.takesEdits) ? this.history.changes({ unsent: true }).filter(only) : [];
+      const edits = taken.length;
       if (edits) {
         changeSet = { ...changeSet, edits: buildChangeSet(this.history, { unsent: true, id, only }).edits };
         this.history.send(id, only);
         for (const e of elements) this.held.delete(e);
         this.saveHeld();
       }
-      sentEdits = edits;
+      if (edits) sentEdits = countChanges(taken);
       this.jobElements.set(id, elements);
       job = this.post(id, changeSet);
     }
@@ -622,6 +637,12 @@ export class PilotSession {
     this.history.unsend(jobId);
     this.patch(jobId, { status: "cancelled" });
     this.dismiss(jobId);
+    // A thread's job: a note where the reply would be, so the thread says what happened.
+    const thread = this.threads.find((t) => t.messages.some((m) => m.from === "designer" && m.jobId === jobId));
+    if (thread && !thread.messages.some((m) => m.replyTo === jobId)) {
+      const note: ThreadMessage = { from: "agent", text: STOPPED_NOTE, at: new Date().toISOString(), replyTo: jobId, stopped: true };
+      this.patchThread(thread.id, { messages: [...thread.messages, note] });
+    }
   }
 
   /** Removes a job from the list; any of its changes still previewed are unsent again. */
@@ -982,7 +1003,8 @@ export class PilotSession {
 
 /** The agent spoke last in the thread: it's the designer's turn (reply or resolve). */
 export function needsYou(thread: CommentThread): boolean {
-  return thread.messages.at(-1)?.from === "agent";
+  const last = thread.messages.at(-1);
+  return last?.from === "agent" && !last.stopped;
 }
 
 /** How long a stuck state lasts before the page says so (see the STUCK_ constants). */

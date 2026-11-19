@@ -1,5 +1,5 @@
 import type { ElementTarget } from "@pilot/protocol";
-import { type EditableElement, isEditable } from "../dom/target.ts";
+import { type EditableElement, findTarget, isEditable } from "../dom/target.ts";
 import { EditHistory, type SavedHistory } from "./history.ts";
 
 /**
@@ -26,12 +26,9 @@ const STORAGE_KEY = "pilot:edits";
 /** The live element for a saved change, or a detached stand-in. */
 export function resolveTarget(target: ElementTarget, path: string): EditableElement {
   if (path === location.pathname) {
-    try {
-      const element = document.querySelector(target.selector);
-      if (isEditable(element)) return element;
-    } catch {
-      // A selector this document can't parse: treat as not found.
-    }
+    // By its selector, else where it is (its classes changed since: see findTarget).
+    const element = findTarget(target);
+    if (isEditable(element)) return element;
   }
   return document.createElement(target.tag || "div");
 }

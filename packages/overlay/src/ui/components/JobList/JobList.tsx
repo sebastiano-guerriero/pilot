@@ -1,4 +1,5 @@
 import type { JobRecord } from "../../../bridge/session.ts";
+import { type ChangeCounts, changesLabel } from "../../changesLabel.ts";
 import { px } from "../../px.ts";
 import { TOOLBAR_HEIGHT, type ToolbarSpot } from "../../toolbarSpot.ts";
 
@@ -25,19 +26,44 @@ export function listPlacement(toolbar: ToolbarSpot, viewport: { width: number; h
     : { left: px(left), top: px(toolbar.y + TOOLBAR_HEIGHT + GAP), bottom: "auto" };
 }
 
-/** How many changes a job carries: its properties and its texts. */
-function changeCount(job: JobRecord): number {
-  return job.changeSet.edits.reduce((n, e) => n + e.changes.length + (e.texts?.length ?? 0), 0);
+/** The changes a job carries: its properties and its texts. */
+function changeCounts(job: JobRecord): ChangeCounts {
+  return job.changeSet.edits.reduce(
+    (n, e) => ({ styles: n.styles + e.changes.length, texts: n.texts + (e.texts?.length ?? 0) }),
+    { styles: 0, texts: 0 },
+  );
 }
 
-/** What a job is, in words: its changes, or the task it asks for. */
+/** What a job is, in words: its changes ("3 style changes"), or the task it asks for. */
 export function whatText(job: JobRecord): string {
   if (job.changeSet.request?.kind === "responsive") return "Make responsive";
   if (job.changeSet.request?.kind === "break-and-fix") return "Break and fix";
   if (job.changeSet.request?.kind === "comment") return "Comment";
   if (job.changeSet.request?.kind === "props") return "Props";
-  const n = changeCount(job);
-  return `${n} ${n === 1 ? "change" : "changes"}`;
+  return changesLabel(changeCounts(job));
+}
+
+/** The longest a comment's words go in a job's description, in characters. */
+const WORDS = 60;
+
+/**
+ * What a job is about, for its loader's tooltip: a comment's own words
+ * (its latest message, cut to a line), with the edits that went with it;
+ * a task by its name (the component's, for Props); edits by what they are.
+ */
+export function jobAbout(job: JobRecord): string {
+  const request = job.changeSet.request;
+  const edits = changeCounts(job);
+  const withEdits = edits.styles || edits.texts ? `, with ${changesLabel(edits)}` : "";
+  if (request?.kind === "comment") {
+    const latest = [...request.thread].reverse().find((m) => m.from === "designer");
+    const words = latest?.text.replace(/\s+/g, " ").trim() ?? "";
+    const said = words ? `“${words.length > WORDS ? `${words.slice(0, WORDS - 1)}…` : words}”` : "A comment";
+    return `${said}${withEdits}`;
+  }
+  if (request?.kind === "props") return `Props of ${request.component}`;
+  if (request) return whatText(job);
+  return changesLabel(edits);
 }
 
 /**
