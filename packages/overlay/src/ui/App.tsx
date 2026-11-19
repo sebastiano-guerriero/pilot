@@ -797,8 +797,8 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
           <GridOverlay element={hovered} part="lines" />
         </>
       )}
-      {/* The selection's corner dots, after the hover: on top of a hovered parent's lines. */}
-      {selected && selectedRect && (commenting || !hideSelection) && (
+      {/* The selection's corner dots, after the hover: on top of a hovered parent's lines. Measuring (Alt), none, with either tool. */}
+      {selected && selectedRect && !measuring && (commenting || !hideSelection) && (
         <Highlight element={selected.element} rect={selectedRect} variant="dots" label={false} />
       )}
       {!measuring && others.map((element) => <SelectedDots key={elementKey(element)} element={element} />)}
