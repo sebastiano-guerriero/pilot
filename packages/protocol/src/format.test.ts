@@ -227,6 +227,25 @@ describe("formatPrompt", () => {
     expect(formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, thread, breakpoints: [] } })).not.toContain("sent with the comment");
   });
 
+  it("/props: the instance's props now, what to list and how to return it, no code changes", () => {
+    const target = { ...(changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"]), source: { component: "ProductCard", file: "src/ProductCard.jsx", line: 5 } };
+    const text = formatPrompt({ ...changeSet, edits: [], note: undefined, request: { kind: "props", target, breakpoints: [], component: "ProductCard", current: { tone: "light", count: 3, featured: false }, usedIn: "src/App.jsx" } });
+    expect(text).toContain("# Pilot: props");
+    expect(text).toContain("**Don't change any code.**");
+    expect(text).toContain("- This instance is written in: `src/App.jsx`");
+    expect(text).toContain('- `tone`: `"light"`\n- `count`: `3`\n- `featured`: `false`');
+    expect(text).toContain("Call `pilot_done` with this job's id, the list in `props`");
+  });
+
+  it("a comment that sets props: what changed, set where the instance is written", () => {
+    const target = changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"];
+    const thread = [{ from: "designer" as const, text: "", at: "", props: { component: "ProductCard", usedIn: "src/App.jsx", set: [{ name: "tone", from: "light", to: "dark" }, { name: "featured", to: true }] } }];
+    const text = formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, thread, breakpoints: [] } });
+    expect(text).toContain("The designer set props on this instance (below), with no words.");
+    expect(text).toContain('- `tone`: `"light"` → `"dark"`\n- `featured`: *not set* → `true`');
+    expect(text).toContain("Set them where this instance is written (`src/App.jsx`, its `<ProductCard …>`), not in the component itself");
+  });
+
   it("a comment or task on several elements: each listed, the ask for all of them, the shared-component rule", () => {
     const target = changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"];
     const other = { ...target, selector: "section.cta > h2", path: "main > section.cta > h2", tag: "h2", text: "Start now" };

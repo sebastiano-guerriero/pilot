@@ -27,4 +27,11 @@ describe("the comment box's / actions", () => {
     expect(matchActions("zzz")).toEqual([]);
     expect(actionName("responsive")).toBe("Make responsive");
   });
+
+  it("Props only for a component's instance", () => {
+    expect(matchActions("").map((a) => a.id)).not.toContain("props");
+    expect(matchActions("prop").map((a) => a.id)).toEqual([]);
+    expect(matchActions("", { component: true }).map((a) => a.id)).toEqual(["responsive", "break-and-fix", "props"]);
+    expect(matchActions("prop", { component: true }).map((a) => a.id)).toEqual(["props"]);
+  });
 });

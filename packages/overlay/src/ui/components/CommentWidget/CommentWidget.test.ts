@@ -39,6 +39,24 @@ function draw(onSend = vi.fn(() => "sent" as const), mentions?: () => MentionOpt
   return onSend;
 }
 
+describe("CommentWidget's send", () => {
+  it("sent, the box closes; not sent (an upload failed), it stays with the draft and says why", async () => {
+    const onClose = vi.fn();
+    let outcome: "sent" | { title: string; detail: string } = { title: "The file couldn't be attached", detail: "Try again" };
+    const onSend = vi.fn(async () => outcome);
+    act(() => render(h(CommentWidget, { element, anchor: new DOMRect(0, 0, 100, 40), thread: null, onSend, onClose, agentOn: true }), container));
+    await type("Make it calmer");
+    await press("Enter");
+    await act(async () => {});
+    expect(onClose).not.toHaveBeenCalled();
+    expect(field().value).toBe("Make it calmer");
+    outcome = "sent";
+    await press("Enter");
+    await act(async () => {});
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("CommentWidget's / actions", () => {
   it("/ lists the actions; Enter picks one as a chip, and Send sends it with the words", async () => {
     const onSend = draw();
@@ -50,7 +68,7 @@ describe("CommentWidget's / actions", () => {
     expect(field().placeholder).toBe("Add details (optional)");
     await type("Two columns on tablet");
     await press("Enter");
-    expect(onSend).toHaveBeenCalledWith("Two columns on tablet", [], "responsive", [], false);
+    expect(onSend).toHaveBeenCalledWith("Two columns on tablet", [], "responsive", [], false, []);
   });
 
   it("an action can go alone; Backspace at the start removes it; Esc closes only the menu, the text stays", async () => {
@@ -68,7 +86,7 @@ describe("CommentWidget's / actions", () => {
     await type("/");
     await press("Enter");
     await press("Enter");
-    expect(onSend).toHaveBeenCalledWith("", [], "responsive", [], false);
+    expect(onSend).toHaveBeenCalledWith("", [], "responsive", [], false, []);
   });
 });
 
@@ -82,7 +100,7 @@ describe("CommentWidget's / anywhere", () => {
     expect(container.querySelector(".composer .action-chip")?.textContent).toBe("Make responsive");
     expect(field().value).toBe("Two columns on tablet ");
     await press("Enter");
-    expect(onSend).toHaveBeenCalledWith("Two columns on tablet", [], "responsive", [], false);
+    expect(onSend).toHaveBeenCalledWith("Two columns on tablet", [], "responsive", [], false, []);
   });
 
   it("not inside a word (and/or); a /word matching nothing is text, and Enter sends it", async () => {
@@ -92,7 +110,7 @@ describe("CommentWidget's / anywhere", () => {
     await type("link it to /about");
     expect(container.querySelector("#pilot-actions")).toBeNull();
     await press("Enter");
-    expect(onSend).toHaveBeenCalledWith("link it to /about", [], undefined, [], false);
+    expect(onSend).toHaveBeenCalledWith("link it to /about", [], undefined, [], false, []);
   });
 });
 
@@ -110,7 +128,7 @@ describe("CommentWidget's edits chip", () => {
     expect(chip()?.textContent).toBe("3 changes");
     await type("Like this, on mobile too");
     await press("Enter");
-    expect(onSend).toHaveBeenCalledWith("Like this, on mobile too", [], undefined, [], true);
+    expect(onSend).toHaveBeenCalledWith("Like this, on mobile too", [], undefined, [], true, []);
   });
 
   it("taken off, they stay for Send; with an action, the chip isn't there (a task goes apart)", async () => {
@@ -120,19 +138,88 @@ describe("CommentWidget's edits chip", () => {
     expect(chip()).toBeNull();
     await type("Calmer");
     await press("Enter");
-    expect(onSend).toHaveBeenLastCalledWith("Calmer", [], undefined, [], false);
+    expect(onSend).toHaveBeenLastCalledWith("Calmer", [], undefined, [], false, []);
     render(null, container);
     const withAction = drawWith(2);
     await type("/resp");
     await press("Enter");
     expect(chip()).toBeNull();
     await press("Enter");
-    expect(withAction).toHaveBeenCalledWith("", [], "responsive", [], false);
+    expect(withAction).toHaveBeenCalledWith("", [], "responsive", [], false, []);
   });
 
   it("none: no chip", () => {
     drawWith(0);
     expect(chip()).toBeNull();
+  });
+});
+
+describe("CommentWidget's props", () => {
+  const propList = [{ name: "tone", type: "options" as const, options: ["light", "dark", "outline"] }];
+  const thread = {
+    id: "t",
+    target: { selector: "article", path: "article", tag: "article", classes: [] },
+    messages: [{ from: "agent" as const, text: "ProductCard has 1 prop.", at: "1", propList }],
+  };
+  const drawThread = (onSend = vi.fn(() => "sent" as const)) => {
+    act(() =>
+      render(
+        h(CommentWidget, {
+          element,
+          anchor: new DOMRect(0, 0, 100, 40),
+          thread: thread as never,
+          onSend,
+          onClose: () => {},
+          agentOn: true,
+          component: "ProductCard",
+          currentProps: () => ({ tone: "light" }),
+        }),
+        container,
+      ),
+    );
+    return onSend;
+  };
+  const chooseTone = (value: string) => {
+    act(() => (container.querySelector(".props-list .trigger") as HTMLElement).click());
+    act(() => ([...container.querySelectorAll('[role="option"]')].find((o) => o.textContent?.includes(value)) as HTMLElement).click());
+  };
+
+  it("a pick sends nothing: it writes a name: value line in the comment, which goes, exact, when it's sent", async () => {
+    const onSend = drawThread();
+    await type("A calmer card");
+    chooseTone("dark");
+    expect(onSend).not.toHaveBeenCalled();
+    expect(field().value).toBe("A calmer card\ntone: dark");
+    expect(container.querySelector(".props-list .trigger")?.textContent).toContain("dark");
+    // Picked again: the same line, a new value.
+    chooseTone("outline");
+    expect(field().value).toBe("A calmer card\ntone: outline");
+    await press("Enter");
+    expect(onSend).toHaveBeenCalledWith("A calmer card\ntone: outline", [], undefined, [], false, [{ name: "tone", from: "light", to: "outline" }]);
+  });
+
+  it("answered (the designer wrote after it), the list's rows go; its words stay", () => {
+    const answered = { ...thread, messages: [...thread.messages, { from: "designer" as const, text: "tone: dark", at: "2" }] };
+    act(() =>
+      render(
+        h(CommentWidget, { element, anchor: new DOMRect(0, 0, 100, 40), thread: answered as never, onSend: () => "sent" as const, onClose: () => {}, agentOn: true }),
+        container,
+      ),
+    );
+    expect(container.querySelector(".props-list")).toBeNull();
+    expect(container.querySelector(".agent-reply")?.textContent).toContain("ProductCard has 1 prop.");
+  });
+
+  it("the page's value again takes the line out; a line typed by hand counts as a pick", async () => {
+    const onSend = drawThread();
+    chooseTone("dark");
+    chooseTone("light");
+    expect(field().value).toBe("");
+    await type("Tone: Dark,");
+    await type("tone: Dark,");
+    expect(container.querySelector(".props-list .trigger")?.textContent).toContain("dark");
+    await press("Enter");
+    expect(onSend).toHaveBeenCalledWith("tone: Dark,", [], undefined, [], false, [{ name: "tone", from: "light", to: "dark" }]);
   });
 });
 
@@ -160,7 +247,7 @@ describe("CommentWidget's @ mentions", () => {
     await press("Tab");
     expect(field().value).toBe("Make it --color-accent like @ProductCard ");
     await press("Enter");
-    expect(onSend).toHaveBeenCalledWith("Make it --color-accent like @ProductCard", [], undefined, [options[0], options[2]], false);
+    expect(onSend).toHaveBeenCalledWith("Make it --color-accent like @ProductCard", [], undefined, [options[0], options[2]], false, []);
   });
 
   it("Esc closes only the list, the text stays; a pick taken out of the text isn't sent", async () => {
@@ -175,7 +262,7 @@ describe("CommentWidget's @ mentions", () => {
     expect(field().value).toBe("--radius and @");
     await type("rounder");
     await press("Enter");
-    expect(onSend).toHaveBeenCalledWith("rounder", [], undefined, [], false);
+    expect(onSend).toHaveBeenCalledWith("rounder", [], undefined, [], false, []);
   });
 
   it("an email's @ isn't a mention; with nothing matching, Enter sends", async () => {
@@ -186,7 +273,31 @@ describe("CommentWidget's @ mentions", () => {
     expect(container.querySelector(".action-none")?.textContent).toBe("Nothing matches");
     await press("Enter");
     // Typed, found nowhere: sent for the agent to look for.
-    expect(onSend).toHaveBeenCalledWith("see @zzz", [], undefined, [{ group: "Unlisted", label: "zzz", insert: "@zzz" }], false);
+    expect(onSend).toHaveBeenCalledWith("see @zzz", [], undefined, [{ group: "Unlisted", label: "zzz", insert: "@zzz" }], false, []);
+  });
+
+  it("in the thread, an action reads as typed, /command in green, and the edits that went with it as words; no chips", () => {
+    const thread = {
+      id: "t",
+      target: { selector: "button", path: "button", tag: "button" },
+      messages: [
+        { from: "designer" as const, text: "Two columns on tablet", at: "1", action: "responsive" as const },
+        { from: "designer" as const, text: "", at: "2", action: "props" as const },
+        { from: "designer" as const, text: "Like this", at: "3", edits: 2 },
+      ],
+    };
+    act(() =>
+      render(
+        h(CommentWidget, { element, anchor: new DOMRect(0, 0, 100, 40), thread: thread as never, onSend: () => "sent" as const, onClose: () => {}, agentOn: true }),
+        container,
+      ),
+    );
+    expect([...container.querySelectorAll(".message p")].map((p) => p.innerHTML)).toEqual([
+      '<span class="mention">/responsive</span> Two columns on tablet',
+      '<span class="mention">/props</span>',
+      '<span class="mention">2 changes</span> Like this',
+    ]);
+    expect(container.querySelector(".messages .action-chip")).toBeNull();
   });
 
   it("in the thread, a sent message's mentions show apart from its words", () => {

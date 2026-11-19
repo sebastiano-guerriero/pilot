@@ -4,7 +4,7 @@ import { basename, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AgentInfo, Job } from "@pilot/protocol";
-import { DEFAULT_BRIDGE_PORT, EDIT_GUIDELINES, formatPrompt, formatWidthCheck, MAX_CHOICES, originOf, questionOf, SHARED_CHOICES, sharedChoiceMeaning } from "@pilot/protocol";
+import { DEFAULT_BRIDGE_PORT, EDIT_GUIDELINES, formatPrompt, formatWidthCheck, MAX_CHOICES, MAX_PROPS, originOf, propsOf, questionOf, SHARED_CHOICES, sharedChoiceMeaning } from "@pilot/protocol";
 import { z } from "zod";
 import { Bridge } from "./agent.ts";
 import { attachmentBlocks } from "./attachments.ts";
@@ -154,7 +154,7 @@ export const MAX_BATCH = 6;
  * behind it.
  */
 export async function takeQueued(first: Job, take: () => Promise<{ job: Job | null }>): Promise<Job[]> {
-  const advanced = (j: Job) => !!j.changeSet.request && j.changeSet.request.kind !== "comment";
+  const advanced = (j: Job) => !!j.changeSet.request && j.changeSet.request.kind !== "comment" && j.changeSet.request.kind !== "props";
   if (advanced(first)) return [];
   const more: Job[] = [];
   while (more.length < MAX_BATCH - 1) {
@@ -182,6 +182,8 @@ function notesFor(job: Job): string {
       return "what changed at which widths, anything left for the designer";
     case "break-and-fix":
       return "what broke and how you fixed it, anything for the designer to decide";
+    case "props":
+      return "one short sentence for the designer, like a chat message; the props go in `props`";
     default:
       return "values you approximated, anything you did differently";
   }
@@ -195,6 +197,21 @@ function notesFor(job: Job): string {
 export function taskFollowUp(job: Job): string {
   const request = job.changeSet.request;
   const target = `\`${request?.target.path ?? "the element"}\``;
+  // Props set from the thread: Pilot read the instance again, and these aren't what the designer picked.
+  if (request?.kind === "comment")
+    return [
+      "# Pilot: props, follow-up",
+      "",
+      `You set the props the designer picked on ${target}, but Pilot read the instance on the page after hot reload, and these aren't what they picked yet:`,
+      "",
+      ...(job.issues ?? []).map((i) => `- ${i}`),
+      "",
+      "Fix them where this instance is written: the usual causes are another instance's line, a value the parent passes from a variable or data, or a default the prop falls back to. If one can't be set there, say why in your notes. Pilot takes what the code gives after this.",
+      "",
+      "The comment, for reference:",
+      "",
+      formatPrompt(job.changeSet, { guidelines: false }),
+    ].join("\n");
   const breakFix = request?.kind === "break-and-fix";
   const lines = [
     breakFix ? "# Pilot: break and fix, follow-up" : "# Pilot: make responsive, follow-up",
@@ -384,7 +401,7 @@ ${EDIT_GUIDELINES.join("\n")}`,
     {
       title: "Report a job done",
       description:
-        "Tells Pilot you applied a job. Pilot then checks each change against the page's real CSS; a change that didn't land comes back to you once as a follow-up. Then call pilot_wait_for_edits again. When part of the job needs the designer's decision (they changed only some copies of shared code), apply the rest, leave that part, and ask with `question`: Pilot shows it in a comment on the element, with one-click `choices`, holds the job until they answer, and their answer comes back to you as this job again. You go on with other jobs meanwhile. A job asks once.",
+        "Tells Pilot you applied a job. Pilot then checks each change against the page's real CSS; a change that didn't land comes back to you once as a follow-up. Then call pilot_wait_for_edits again. When part of the job needs the designer's decision (they changed only some copies of shared code), apply the rest, leave that part, and ask with `question`: Pilot shows it in a comment on the element, with one-click `choices`, holds the job until they answer, and their answer comes back to you as this job again. You go on with other jobs meanwhile. A job asks once. For a props job (\`/props\`), pass the component's props in \`props\`: Pilot shows them to the designer to pick values from.",
       inputSchema: {
         jobId: z.string().describe("The job's id, from pilot_wait_for_edits."),
         notes: z
@@ -404,12 +421,25 @@ ${EDIT_GUIDELINES.join("\n")}`,
           })
           .optional()
           .describe("Only when part of the job needs the designer's decision: see the description."),
+        props: z
+          .array(
+            z.object({
+              name: z.string().describe("The prop's name, as the code has it (`variant`)."),
+              type: z.enum(["options", "boolean", "text", "number"]).describe("`options`: one of a set of values; `boolean`: on or off; `text` or `number`: typed."),
+              options: z.array(z.string()).optional().describe("For `options`: every value it accepts, in the code's order."),
+              default: z.union([z.string(), z.number(), z.boolean()]).optional().describe("Its default value, when it has one."),
+              description: z.string().optional().describe("What it does, in a few words, when the name doesn't say."),
+            }),
+          )
+          .max(MAX_PROPS)
+          .optional()
+          .describe("Only for a props job (`/props`): the component's props the designer can set, the most useful first."),
       },
     },
-    async ({ jobId, notes, question }) => {
+    async ({ jobId, notes, question, props }) => {
       try {
         const asked = questionOf(question);
-        const job = await bridge.done(jobId, notes, asked);
+        const job = await bridge.done(jobId, notes, asked, propsOf(props));
         if (!job) return text(`Pilot doesn't know job ${jobId} (or the designer cancelled it). Call pilot_wait_for_edits for the next one.`);
         if (asked && job.question)
           return text("Done. Pilot shows your question to the designer; their answer comes back as this job. Call pilot_wait_for_edits for the next job meanwhile.");

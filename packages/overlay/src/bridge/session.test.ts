@@ -5,6 +5,13 @@ import { EditHistory } from "../edits/history.ts";
 import { inlinePreview } from "../test/inlinePreview.ts";
 import { PilotSession, timings } from "./session.ts";
 
+// The instance's props, as the framework would give them (componentProps reads React's or Vue's internals).
+const instance = vi.hoisted(() => ({ props: null as Record<string, string | number | boolean> | null }));
+vi.mock("../dom/component.ts", async (actual) => {
+  const real = await actual<typeof import("../dom/component.ts")>();
+  return { ...real, componentProps: () => (instance.props ? { component: "ProductCard", props: instance.props, usedIn: "src/App.jsx" } : null) };
+});
+
 // The width checks load the page in frames: the test DOM has no layout, so they're stubbed.
 const widths = vi.hoisted(() => ({
   snapshots: 0,
@@ -333,6 +340,46 @@ describe("PilotSession", () => {
     expect((posts.at(-1)?.body as { changeSet: { edits: unknown[] } }).changeSet.edits).toEqual([]);
     expect(s.unsent).toBe(1);
     s.resolve(thread.id);
+  });
+
+  it("/props: a job with the instance's props now; the agent's list comes back in the thread", async () => {
+    vi.useFakeTimers();
+    instance.props = { tone: "light" };
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    const { thread, job: sent } = s.comment(el, "", [], "props");
+    const posted = posts.at(-1)?.body as { changeSet: { request: { kind: string; component: string; current: object; usedIn: string } } };
+    expect(posted.changeSet.request).toMatchObject({ kind: "props", component: "ProductCard", current: { tone: "light" }, usedIn: "src/App.jsx" });
+    const props = [{ name: "tone", type: "options" as const, options: ["light", "dark"] }];
+    hub().emit({ type: "job", job: job({ id: (sent as { id: string }).id, status: "done", agent, notes: "ProductCard has 1 prop.", props }) });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(s.threadFor(el)?.messages.at(-1)).toMatchObject({ from: "agent", text: "ProductCard has 1 prop.", propList: props });
+    s.resolve(thread.id);
+    instance.props = null;
+  });
+
+  it("a prop set from the list: the next message, checked on the page; not there yet, back to the agent once", async () => {
+    vi.useFakeTimers();
+    instance.props = { tone: "light" };
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    const set = { component: "ProductCard", usedIn: "src/App.jsx", set: [{ name: "tone", from: "light", to: "dark" }] };
+    const { thread, job: sent } = s.comment(el, "", [], undefined, [], [], false, set);
+    const id = (sent as { id: string }).id;
+    const posted = posts.at(-1)?.body as { changeSet: { request: { thread: Array<{ props?: unknown }> } } };
+    expect(posted.changeSet.request.thread.at(-1)?.props).toEqual(set);
+    // Done, but the page still says light after the wait: a follow-up.
+    hub().emit({ type: "job", job: job({ id, status: "done", agent, notes: "Set." }) });
+    await vi.advanceTimersByTimeAsync(7000);
+    const retry = posts.find((p) => p.url.endsWith(`/jobs/${id}/retry`))?.body as { issues: string[] };
+    expect(retry.issues).toEqual(['`tone` is `"light"`, the designer picked `"dark"`']);
+    // Done again, and hot reload brings it: accepted.
+    hub().emit({ type: "job", job: job({ id, status: "done", agent, notes: "Set.", attempt: 2 }) });
+    instance.props = { tone: "dark" };
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(s.jobs.find((j) => j.id === id)?.checked).toBe(true);
+    s.resolve(thread.id);
+    instance.props = null;
   });
 
   it("what a comment mentions with @ goes with it, to the agent and in the thread; with an action, in the task", () => {

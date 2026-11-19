@@ -179,11 +179,60 @@ export type TaskRequest = ResponsiveRequest | BreakFixRequest;
 export const TASK_KINDS: readonly TaskRequest["kind"][] = ["responsive", "break-and-fix"];
 
 /**
- * An action asked from the comment box (`/responsive`, `/break`): a task
- * about the element, sent as its own job, shown in the thread as the
- * designer's message. The words typed with it go as the task's note.
+ * An action asked from the comment box (`/responsive`, `/break`, `/props`):
+ * a job of its own about the element, shown in the thread as the
+ * designer's message. The words typed with it go as its note.
  */
-export type CommentAction = TaskRequest["kind"];
+export type CommentAction = TaskRequest["kind"] | "props";
+
+/** A prop's value as Pilot reads it from the page, or as the designer sets it. */
+export type PropValue = string | number | boolean;
+
+/**
+ * One prop of a component, as the agent reads it from the code (`/props`,
+ * returned with `pilot_done`'s `props`): what the designer can set from the
+ * thread. `options`: one of a set of values (a variant, a size); `boolean`:
+ * on or off; `text` or `number`: typed.
+ */
+export interface PropSpec {
+  name: string;
+  type: "options" | "boolean" | "text" | "number";
+  /** For `options`: every value it accepts, in the code's order. */
+  options?: string[];
+  default?: PropValue;
+  /** What it does, in a few words, when its name doesn't say. */
+  description?: string;
+}
+
+/** A prop the designer set on one instance, from what it was (on the page) to what they picked. */
+export interface PropChange {
+  name: string;
+  from?: PropValue;
+  to: PropValue;
+}
+
+/**
+ * `/props` on a component's instance: the agent reads the component's code
+ * and lists the props that change how it looks (see PropSpec), changing
+ * nothing. Pilot shows them in the thread; the designer's picks go back as
+ * a comment (`props` on the message).
+ */
+export interface PropsRequest {
+  kind: "props";
+  target: ElementTarget;
+  others?: ElementTarget[];
+  breakpoints: number[];
+  /** The component the element is the top of: its instance's props are the ones listed. */
+  component: string;
+  /** The instance's props now, read from the page (strings, numbers, on-off; not handlers, children or objects). */
+  current: Record<string, PropValue>;
+  /** The file where this instance is written (`<ProductCard …>`), when the framework says. */
+  usedIn?: string;
+  /** Files the designer attached when asking, as on a comment. */
+  attachments?: CommentAttachment[];
+  /** What the designer mentioned with `@` in its note, as on a comment. */
+  references?: CommentReference[];
+}
 
 /** One message of a comment thread: the designer's, or the agent's reply (its `pilot_done` notes). */
 export interface CommentMessage {
@@ -198,6 +247,8 @@ export interface CommentMessage {
   action?: CommentAction;
   /** What the designer mentioned with `@` (a token, a component, an element), picked from Pilot's list: exact, for the agent to use as is. */
   references?: CommentReference[];
+  /** The props the designer set on the instance, from the agent's `/props` list: where it's written, not in the component. */
+  props?: { component: string; usedIn?: string; set: PropChange[] };
 }
 
 /**
@@ -306,7 +357,7 @@ export interface CommentRequest {
   breakpoints: number[];
 }
 
-export type AgentRequest = TaskRequest | CommentRequest;
+export type AgentRequest = TaskRequest | CommentRequest | PropsRequest;
 
 /**
  * The elements a request is about: `target`, the first the designer

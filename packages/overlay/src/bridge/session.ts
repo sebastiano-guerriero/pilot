@@ -1,6 +1,7 @@
-import type { AgentInfo, AgentQuestion, AgentRequest, ChangeResult, ChangeSet, CommentAction, CommentAttachment, CommentMessage, CommentReference, ElementTarget, Job, JobStatus, ProjectComponent, WidthCheck } from "@pilot/protocol";
+import type { AgentInfo, AgentQuestion, AgentRequest, ChangeResult, ChangeSet, CommentAction, CommentAttachment, CommentMessage, CommentReference, ElementTarget, Job, JobStatus, ProjectComponent, PropChange, PropSpec, WidthCheck } from "@pilot/protocol";
 import { attachmentType, requestTargets } from "@pilot/protocol";
 import { checkWidths, problemLines, snapshotAt, type StyleSnapshot, widthsToCheck } from "../checks/widths.ts";
+import { componentProps } from "../dom/component.ts";
 import { describeElement } from "../dom/target.ts";
 import { buildChangeSet, buildRequest } from "../edits/changeSet.ts";
 import type { EditHistory, RecordedChange } from "../edits/history.ts";
@@ -51,6 +52,8 @@ export interface JobRecord {
   baseline?: StyleSnapshot;
   /** A task: Pilot's last width check of it (the agent's, or the one after done). */
   check?: WidthCheck;
+  /** A `/props` job's answer: the component's props (Job.props). */
+  props?: PropSpec[];
 }
 
 /**
@@ -90,6 +93,8 @@ export type ThreadMessage = Omit<CommentMessage, "attachments"> & {
   takesEdits?: boolean;
   /** How many of them went with it, for the thread. */
   edits?: number;
+  /** The agent's reply to `/props`: the component's props, for the designer to set (see PilotSession.setProps). */
+  propList?: PropSpec[];
 };
 
 /** A file on a designer's message: the hub's id for it, and for an image a small preview (a data URL) for the thread. */
@@ -102,6 +107,9 @@ const HELD_KEY = "pilot:held";
 const APPLIED_LINGER = 8_000;
 /** How long after a task is done Pilot checks it: hot reload's time. */
 const TASK_SETTLE = 800;
+/** How long Pilot waits for set props to show on the page before it takes them back to the agent, and how often it looks meanwhile. */
+const PROPS_WAIT = 6000;
+const PROPS_RECHECK = 400;
 /**
  * How long a stuck state lasts before the page says so: past a reconnect
  * (the hub's process restarting) and the moment between two waits of an
@@ -403,6 +411,7 @@ export class PilotSession {
     others: Element[] = [],
     references: CommentReference[] = [],
     takesEdits = false,
+    props?: CommentMessage["props"],
   ): { thread: CommentThread; job: JobRecord | null; changeSet: ChangeSet; waiting: boolean } {
     let thread = this.threadFor(element);
     // The agent asked something here: this message is the answer, and goes with its job.
@@ -430,6 +439,8 @@ export class PilotSession {
     if (references.length) message.references = references;
     // Not with an action: a task goes apart from the changes (see request), which wait for Send.
     if (takesEdits && !action) message.takesEdits = true;
+    // Not with an action either: props go with a comment.
+    if (props?.set.length && !action) message.props = props;
     const waiting = this.canSendToAgent && this.anyBusy([element, ...others]);
     if (waiting) message.waiting = true;
     const messages = [...thread.messages, message];
@@ -441,13 +452,14 @@ export class PilotSession {
   /** A comment job's change set: the thread so far, as the agent reads it. */
   private commentSet(element: Element, messages: ThreadMessage[], others: Element[], id?: string): ChangeSet {
     // Attachments go by id (the hub adds where it saved them); their previews stay here.
-    const thread = messages.map(({ from, text, at, attachments, action, references }) => ({
+    const thread = messages.map(({ from, text, at, attachments, action, references, props }) => ({
       from,
       text,
       at,
       ...(attachments?.length ? { attachments: attachments.map(({ id, name }) => ({ id, name })) } : {}),
       ...(action ? { action } : {}),
       ...(references?.length ? { references } : {}),
+      ...(props ? { props } : {}),
     }));
     return buildRequest(element, "comment", { id, thread, others });
   }
@@ -558,6 +570,7 @@ export class PilotSession {
     const thread = this.threads.find((t) => t.messages.some((m) => m.jobId === job.id));
     if (!thread || thread.messages.some((m) => m.replyTo === job.id)) return;
     const reply: ThreadMessage = { from: "agent", text: job.notes?.trim() || "Done.", at: new Date().toISOString(), replyTo: job.id };
+    if (job.props?.length) reply.propList = job.props;
     this.patchThread(thread.id, { messages: [...thread.messages, reply] });
   }
 
@@ -641,6 +654,7 @@ export class PilotSession {
       doneAt: job.doneAt,
       question: job.question ?? mine.question,
       answer: job.answer ?? mine.answer,
+      ...(job.props ? { props: job.props } : {}),
     });
     if (job.status === "cancelled") {
       this.unhold(mine);
@@ -751,6 +765,13 @@ export class PilotSession {
     // A comment: its notes are the agent's reply. The words are free text,
     // nothing to check; edits that went with it are checked as Send's are.
     const comment = job.changeSet.request?.kind === "comment";
+    // `/props`: the agent's list is its reply, with nothing to check (it changed no code).
+    if (job.changeSet.request?.kind === "props") {
+      this.reply(job);
+      return this.accept(job.id);
+    }
+    // Props the designer set from the thread: Pilot reads the instance again.
+    if (comment && !job.changeSet.edits.length && this.propsSet(job)) return this.verifyProps(job);
     if (comment && !job.changeSet.edits.length) {
       this.reply(job);
       return this.accept(job.id);
@@ -790,6 +811,51 @@ export class PilotSession {
       this.accept(job.id);
     }, TASK_SETTLE);
     this.timers.add(t);
+  }
+
+  /** The props a comment job set (the thread's message it went with), if it set any. */
+  private propsSet(job: JobRecord): PropChange[] | null {
+    const request = job.changeSet.request;
+    if (request?.kind !== "comment") return null;
+    return [...request.thread].reverse().find((m) => m.from === "designer" && m.props)?.props?.set ?? null;
+  }
+
+  /**
+   * Props set from the thread: Pilot reads the instance's props on the page
+   * again (compared as text: `3` is `"3"`) until they're what the designer
+   * picked, or PROPS_WAIT passed (hot reload takes a moment, longer in some
+   * frameworks). What isn't goes back to the agent once; after that Pilot
+   * takes what the code gives.
+   */
+  private verifyProps(job: JobRecord): void {
+    this.reply(job);
+    let stopped = false;
+    this.watching.set(job.id, () => {
+      stopped = true;
+    });
+    const until = Date.now() + PROPS_WAIT;
+    const check = () => {
+      if (stopped) return;
+      const current = this.jobs.find((j) => j.id === job.id);
+      const [element] = this.elementsOf(job);
+      const now = element ? componentProps(element)?.props : undefined;
+      const set = this.propsSet(job) ?? [];
+      const issues = now
+        ? set.filter((c) => String(now[c.name]) !== String(c.to)).map((c) => `\`${c.name}\` is ${now[c.name] === undefined ? "not set" : `\`${JSON.stringify(now[c.name])}\``}, the designer picked \`${JSON.stringify(c.to)}\``)
+        : [];
+      if (issues.length && Date.now() < until) return later(PROPS_RECHECK);
+      this.watching.delete(job.id);
+      if (current && issues.length && (current.attempt ?? 1) < 2) return this.followUp(job.id, [], issues);
+      this.accept(job.id);
+    };
+    const later = (ms: number) => {
+      const t = setTimeout(() => {
+        this.timers.delete(t);
+        check();
+      }, ms);
+      this.timers.add(t);
+    };
+    later(TASK_SETTLE);
   }
 
   /** Checked and accepted: it settles, and leaves the list after a moment. */

@@ -182,6 +182,31 @@
     border-radius: 6px 6px 2px 6px;
     background: hsl(from var(--plt-color-accent) h s l / 0.15);
     box-shadow: inset 0 0 0 1px hsl(from var(--plt-color-accent) h s l / 0.05);
+    /* Lines of even length, no word left alone on the last one. */
+    text-wrap: pretty;
+  }
+
+  /* The agent's reply, and what comes with it in a box of its own (the
+     /props list, PropsList): on the right, as wide as its content allows. */
+  .agent-reply {
+    display: flex;
+    flex-direction: column;
+    align-self: flex-end;
+    max-width: 90%;
+
+    & > .message[data-from="agent"] {
+      align-self: stretch;
+      max-width: none;
+    }
+
+    /* Split in two: the words on top, square at the bottom, the box under them; wide enough for the rows' fields. */
+    &[data-split] {
+      width: 90%;
+
+      & > .message[data-from="agent"] {
+        border-radius: 6px 6px 0 0;
+      }
+    }
   }
 
   /* The agent's question's one-click answers, 6px apart. The first, the
@@ -454,15 +479,9 @@
      pending the design. */
   .action-chip-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 4px;
     padding-top: 12px;
-  }
-
-  /* On a sent message: its action and how many edits went with it. */
-  .message-chips {
-    display: flex;
-    gap: 4px;
-    align-self: flex-start;
   }
 
   .action-chip {
@@ -481,13 +500,6 @@
 
     &:has(.action-remove) {
       padding-inline: 4px 1px;
-    }
-
-    /* The editor's changes going with the comment: not an action, so not
-       the accent. Placeholder look, pending the design. */
-    &[data-kind="edits"] {
-      background: hsl(from var(--plt-color-contrast-high) h s l / 15%);
-      color: var(--plt-color-contrast-high);
     }
   }
 

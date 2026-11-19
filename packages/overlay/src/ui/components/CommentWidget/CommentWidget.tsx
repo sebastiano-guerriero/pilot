@@ -1,14 +1,24 @@
-import { ATTACHMENT_ACCEPT, attachmentKind, attachmentType, type CommentAction, type ProjectComponent } from "@pilot/protocol";
+import {
+  ATTACHMENT_ACCEPT,
+  attachmentKind,
+  attachmentType,
+  type CommentAction,
+  type ProjectComponent,
+  type PropChange,
+  type PropValue,
+} from "@pilot/protocol";
 import { Fragment } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { CommentThread } from "../../../bridge/session.ts";
 import { px } from "../../px.ts";
 import { Icon } from "../Icon/Icon.tsx";
 import { dialogPosition, dialogSpot, raisedSpot } from "../PropertyDialog/PropertyDialog.tsx";
+import { PropsList } from "../PropsList/PropsList.tsx";
 import { ScrollThumb } from "../ScrollThumb/ScrollThumb.tsx";
 import { Tooltip } from "../Tooltip/Tooltip.tsx";
-import { actionAt, actionName, matchActions, withoutQuery } from "./actions.ts";
+import { actionAt, actionCommand, actionName, matchActions, withoutQuery } from "./actions.ts";
 import { renderMarkdown } from "./markdown.tsx";
+import { propsInText, withPropLine } from "./propLines.ts";
 import { insertMention, matchMentions, type MentionOption, mentionAt, mentionsIn, projectOptions, splitMentions } from "./mentions.ts";
 
 /** How sending went: to the agent, or not at all. */
@@ -64,6 +74,7 @@ interface CommentWidgetProps {
     action?: CommentAction,
     mentions?: MentionOption[],
     withEdits?: boolean,
+    props?: PropChange[],
   ): Promise<CommentOutcome> | CommentOutcome;
   /**
    * The selected elements' edits not sent yet (the editor's): they go with
@@ -71,6 +82,11 @@ interface CommentWidgetProps {
    * for Send). Not with an action: a task goes apart from the changes.
    */
   edits?: number;
+  /** The component the selection is an instance of (its top-level element), alone: `/props` is offered then. */
+  component?: string;
+  /** The instance's props now, from the page (see componentProps): the props list shows them. */
+  currentProps?(): Record<string, PropValue>;
+
   /** What `@` can mention, read from the page each time the list opens (App: tokens, components, elements). */
   mentions?(): MentionOption[];
   /** The project's components, from Pilot's server (with an agent on the page), asked for each time the list opens: listed after the page's. */
@@ -147,6 +163,8 @@ export function CommentWidget({
   mentions,
   projectComponents,
   edits = 0,
+  component,
+  currentProps,
 }: CommentWidgetProps) {
   const ref = useRef<HTMLDivElement>(null);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
@@ -341,7 +359,7 @@ export function CommentWidget({
   useEffect(() => {
     if (!slash) setSlashDismissed(null);
   }, [slash?.start]);
-  const options = slash && slashDismissed !== slash.start ? matchActions(slash.query) : [];
+  const options = slash && slashDismissed !== slash.start ? matchActions(slash.query, { component: !!component }) : [];
   const menuOpen = options.length > 0;
   const [active, setActive] = useState(0);
   useEffect(() => setActive(0), [text]);
@@ -411,6 +429,29 @@ export function CommentWidget({
 
   // Words, files, an action, or any of them together; files upload first, so sending can take a moment.
   const [sending, setSending] = useState(false);
+  // Props picked from the agent's `/props` list (see propLines.ts): a pick
+  // writes its `name: value` line into the comment, nothing else (nothing
+  // changes on the page, nothing goes yet); picking the page's value again
+  // takes the line out. Sent, the comment's lines for the listed props go
+  // with it, exact, typed or picked. A row shows its line's value.
+  const propList = [...(thread?.messages ?? [])].reverse().find((m) => m.propList?.length)?.propList ?? [];
+  const pageProps = currentProps?.() ?? {};
+  // A props list is for the comment that answers it: once the designer wrote after it, its rows go (`/props` again for a new one).
+  const liveProps = (index: number) =>
+    !!thread?.messages[index]?.propList?.length && !thread.messages.slice(index + 1).some((m) => m.from === "designer");
+  const written = propList.length ? propsInText(text, propList) : {};
+  const pickProp = (name: string, value: PropValue) => {
+    const next = withPropLine(text, name, String(value) === String(pageProps[name]) ? null : value);
+    nextCaret.current = next.length;
+    setText(next);
+    fieldRef.current?.focus();
+  };
+  const pendingProps: PropChange[] = action
+    ? []
+    : Object.entries(written)
+        .filter(([name, to]) => String(to) !== String(pageProps[name]))
+        .map(([name, to]) => ({ name, ...(name in pageProps ? { from: pageProps[name] } : {}), to }));
+
   const canSend = agentOn && !sending && (!!text.trim() || attachments.length > 0 || !!action);
   const send = async () => {
     if (!canSend) return;
@@ -422,6 +463,7 @@ export function CommentWidget({
       // Read only when the text could mention something (reading the page takes a moment).
       /@|--/.test(text) ? mentionsIn(text, picked, pool ?? withProject(mentions?.() ?? [])) : [],
       editsGo,
+      pendingProps,
     );
     setSending(false);
     if (outcome === false) return;
@@ -434,14 +476,19 @@ export function CommentWidget({
     setWithEdits(true);
     for (const a of attachments) if (a.url) URL.revokeObjectURL(a.url);
     setAttachments([]);
+    // Sent: the box closes; the element's loader says it's with the agent, and its reply comes back to the thread.
+    onClose();
   };
 
-  // A one-click answer to the agent's question: sent as the designer's message (the draft stays).
+  // A one-click answer to the agent's question: sent as the designer's
+  // message. The box closes then, as for a send, unless a draft is being
+  // written (it stays, to finish).
   const answer = async (choice: string) => {
     if (!agentOn || sending) return;
     setSending(true);
-    await onSend(choice, []);
+    const outcome = await onSend(choice, []);
     setSending(false);
+    if (outcome === "sent" && !text.trim() && !attachments.length && !action) onClose();
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -552,16 +599,6 @@ export function CommentWidget({
             {thread?.messages.map((m, i) =>
               m.from === "designer" ? (
                 <div key={m.at + m.from} class="message">
-                  {(m.action || m.edits) && (
-                    <span class="message-chips">
-                      {m.action && <span class="action-chip">{actionName(m.action)}</span>}
-                      {m.edits ? (
-                        <span class="action-chip" data-kind="edits">
-                          {editsLabel(m.edits)}
-                        </span>
-                      ) : null}
-                    </span>
-                  )}
                   {m.attachments?.length ? (
                     <ul class="sent-images" aria-label="Attachments">
                       {m.attachments.map((file) => (
@@ -575,8 +612,17 @@ export function CommentWidget({
                       ))}
                     </ul>
                   ) : null}
-                  {m.text && (
+                  {/* Chips are for writing: sent, an action reads as typed (`/responsive`), and the edits that went with it as words, in green. */}
+                  {(m.text || m.action || m.edits) && (
                     <p>
+                      {m.action && <span class="mention">/{actionCommand(m.action)}</span>}
+                      {m.edits ? (
+                        <span class="mention">
+                          {m.action ? " " : ""}
+                          {editsLabel(m.edits)}
+                        </span>
+                      ) : null}
+                      {(m.action || m.edits) && m.text ? " " : null}
                       {splitMentions(m.text, m.references).map((part, j) =>
                         part.mention ? (
                           <span key={j} class="mention">
@@ -590,25 +636,29 @@ export function CommentWidget({
                   )}
                 </div>
               ) : (
-                <div key={m.at + m.from} class="message" data-from="agent" aria-label={`${agentName ?? "Agent"}: ${m.text}`}>
-                  {renderMarkdown(m.text)}
-                  {/* The agent's question, not answered yet: its one-click answers (or write one), the agent's suggestion first. */}
-                  {m.choices?.length && i === count - 1 ? (
-                    <div class="choices" role="group" aria-label="Answers">
-                      {m.choices.map((choice) => (
-                        <button
-                          key={choice}
-                          type="button"
-                          class="choice"
-                          disabled={!agentOn || sending}
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => void answer(choice)}
-                        >
-                          {choice}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
+                <div key={m.at + m.from} class="agent-reply" data-split={liveProps(i) ? "" : undefined}>
+                  <div class="message" data-from="agent" aria-label={`${agentName ?? "Agent"}: ${m.text}`}>
+                    {renderMarkdown(m.text)}
+                    {/* The agent's question, not answered yet: its one-click answers (or write one), the agent's suggestion first. */}
+                    {m.choices?.length && i === count - 1 ? (
+                      <div class="choices" role="group" aria-label="Answers">
+                        {m.choices.map((choice) => (
+                          <button
+                            key={choice}
+                            type="button"
+                            class="choice"
+                            disabled={!agentOn || sending}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => void answer(choice)}
+                          >
+                            {choice}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  {/* The agent's reply to /props, in a box of its own under its words: a row per prop, its value on the page; a pick joins the comment being written. Answered, only the words stay. */}
+                  {liveProps(i) && m.propList ? <PropsList props={m.propList} current={pageProps} picked={written} onPick={pickProp} /> : null}
                 </div>
               ),
             )}

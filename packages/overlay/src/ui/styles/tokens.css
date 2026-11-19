@@ -11,6 +11,7 @@
  */
 
 .root {
+  --plt-color-background-dark: #000000;
   --plt-color-background: #171717;
   --plt-color-background-light: #303030;
   --plt-color-contrast-low: #737373;

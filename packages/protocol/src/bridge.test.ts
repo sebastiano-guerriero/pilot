@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { originKey, originOf, sameOrigin } from "./bridge.ts";
+import { originKey, originOf, propsOf, sameOrigin } from "./bridge.ts";
 
 describe("origins", () => {
   it("takes the origin of a URL, with or without a scheme", () => {
@@ -23,5 +23,24 @@ describe("the hub's port", () => {
     const { BRIDGE_VERSION, DEFAULT_BRIDGE_PORT } = await import("./bridge.ts");
     expect(DEFAULT_BRIDGE_PORT).toBe(4747 + BRIDGE_VERSION);
     expect(DEFAULT_BRIDGE_PORT).not.toBe(4747);
+  });
+});
+
+describe("propsOf", () => {
+  it("keeps well-formed props, capped and trimmed; an options prop needs its options", () => {
+    expect(
+      propsOf([
+        { name: " tone ", type: "options", options: ["light", "dark", "light", 3], default: "light", description: "Its colors" },
+        { name: "featured", type: "boolean" },
+        { name: "size", type: "options" },
+        { name: "", type: "text" },
+        { name: "onClick", type: "function" },
+      ]),
+    ).toEqual([
+      { name: "tone", type: "options", options: ["light", "dark", "3"], default: "light", description: "Its colors" },
+      { name: "featured", type: "boolean" },
+    ]);
+    expect(propsOf("no")).toBeUndefined();
+    expect(propsOf([])).toBeUndefined();
   });
 });

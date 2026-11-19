@@ -31,6 +31,7 @@
 @import "../components/ScrollThumb/ScrollThumb.css" layer(components);
 @import "../components/Tooltip/Tooltip.css" layer(components);
 @import "../components/CommentWidget/CommentWidget.css" layer(components);
+@import "../components/PropsList/PropsList.css" layer(components);
 @import "../components/Confetti/Confetti.css" layer(components);
 @import "../components/ViewportWidth/ViewportWidth.css" layer(components);
 

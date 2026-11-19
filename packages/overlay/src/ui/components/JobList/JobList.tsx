@@ -35,6 +35,7 @@ export function whatText(job: JobRecord): string {
   if (job.changeSet.request?.kind === "responsive") return "Make responsive";
   if (job.changeSet.request?.kind === "break-and-fix") return "Break and fix";
   if (job.changeSet.request?.kind === "comment") return "Comment";
+  if (job.changeSet.request?.kind === "props") return "Props";
   const n = changeCount(job);
   return `${n} ${n === 1 ? "change" : "changes"}`;
 }
@@ -54,7 +55,7 @@ export function statusText(job: JobRecord): string {
   if (job.status === "queued") return "Waiting for an agent";
   if (job.status === "working") return `${job.agent?.label ?? "The agent"} is ${job.changeSet.request ? "working" : "applying"}${elapsed(job.takenAt)}`;
   if (job.status === "cancelled") return "Cancelled";
-  if (job.changeSet.request?.kind === "comment") return "Done";
+  if (job.changeSet.request?.kind === "comment" || job.changeSet.request?.kind === "props") return "Done";
   if (job.changeSet.request) return job.checked ? "Done" : "Checking widths";
   return job.checked ? "Applied" : "Checking the page";
 }

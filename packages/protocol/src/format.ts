@@ -12,6 +12,8 @@ import type {
   ElementState,
   ElementTarget,
   AgentRequest,
+  PropsRequest,
+  PropValue,
   ResponsiveRequest,
   StyleChange,
   WidthRange,
@@ -26,6 +28,7 @@ export function formatPrompt(changeSet: ChangeSet, options: { guidelines?: boole
   if (changeSet.request?.kind === "responsive") return formatResponsive(changeSet, changeSet.request);
   if (changeSet.request?.kind === "break-and-fix") return formatBreakFix(changeSet, changeSet.request);
   if (changeSet.request?.kind === "comment") return formatComment(changeSet, changeSet.request, options);
+  if (changeSet.request?.kind === "props") return formatProps(changeSet, changeSet.request);
   const { page, edits, note } = changeSet;
   const lines: string[] = [
     "# Pilot design edits",
@@ -133,7 +136,49 @@ const PROJECT_CODE = `**Write production code in the project's own styling syste
 const ACTION_ASKED: Record<CommentAction, string> = {
   responsive: "asked you to make it responsive",
   "break-and-fix": "asked you to break and fix it",
+  props: "asked for the component's props",
 };
+
+/** A prop's value as code reads it: a string quoted, a number or a boolean as is. */
+function propValue(value: PropValue | undefined): string {
+  return value === undefined ? "*not set*" : `\`${typeof value === "string" ? JSON.stringify(value) : String(value)}\``;
+}
+
+/**
+ * `/props`: the agent reads the component's code and lists the props the
+ * designer can set on this instance (pilot_done's `props`), changing
+ * nothing. A simple job: any model can read a component's props.
+ */
+function formatProps(changeSet: ChangeSet, request: PropsRequest): string {
+  const { page, note } = changeSet;
+  const current = Object.entries(request.current);
+  const lines = [
+    "# Pilot: props",
+    "",
+    `A designer selected an instance of the \`${request.component}\` component in the browser with Pilot, to change it through its props from a list. Read the component's code and list its props for them. **Don't change any code.**`,
+    "",
+    `Page: ${page.url} (${page.title || "untitled"}), seen at ${page.viewport.width}x${page.viewport.height}`,
+    "",
+    ...elementsSection(request),
+    ...(request.usedIn ? [`- This instance is written in: \`${request.usedIn}\``] : []),
+    "",
+    "## Its props now (read from the page)",
+    "",
+    ...(current.length ? current.map(([name, value]) => `- \`${name}\`: ${propValue(value)}`) : ["None that Pilot could read (it reads strings, numbers and on-off values)."]),
+    ...(note?.trim() ? ["", `Designer note: ${note.trim()}`] : []),
+    ...(request.attachments?.length ? ["", ...attachmentLines(request.attachments, `The designer attached ${countFiles(request.attachments.length)}:`)] : []),
+    ...(request.references?.length ? ["", ...referenceLines(request.references)] : []),
+    "",
+    "## What to list",
+    "",
+    "- **The props that change how it looks or what it shows:** variants, sizes, tones, on-off flags (`disabled`, `loading`), short texts (a label, a title), numbers (a count). Not event handlers, refs, children, class names or styles.",
+    "- **For each:** `name`; `type`: `options` (one of a set of values), `boolean`, `text` or `number`; for `options`, every value it accepts, from its types (a union like `\"primary\" | \"ghost\"`), its variants config (cva, tailwind-variants, a variants object), its prop validation (a Vue `validator`, `PropTypes.oneOf`), or how the component uses it; `default` when it has one; `description` in a few words when the name doesn't say.",
+    "- The most useful first (the main variant, then the size, then the rest); 12 at most.",
+    "",
+    "Call `pilot_done` with this job's id, the list in `props`, and notes: one short sentence for the designer, like a chat message (\"Button has 3 props you can change\"). Pilot shows the props in the designer's thread, each with its value on this instance; what they pick comes back to you as a comment, a `name: value` line per prop (`tone: dark`), to set where this instance is written. If none is worth listing, say so in the notes and leave `props` out.",
+  ];
+  return `${lines.join("\n")}\n`;
+}
 
 /**
  * Break and fix: the designer asks the agent to stress-test one element with
@@ -272,8 +317,23 @@ function formatComment(changeSet: ChangeSet, request: CommentRequest, options: {
     "",
     "## The comment",
     "",
-    ...commentLines(latest),
+    // Props set from the thread, with no words: the props are the comment.
+    ...(latest?.props && !latest.text.trim() && !latest.attachments?.length ? ["The designer set props on this instance (below), with no words."] : commentLines(latest)),
   ];
+  // Props the designer picked from the agent's `/props` list: set where this instance is written.
+  if (latest?.props?.set.length) {
+    const { component, usedIn, set } = latest.props;
+    lines.push(
+      "",
+      "## Props to set",
+      "",
+      `The designer picked new values for this \`${component}\` instance's props from the list you gave (the \`name: value\` lines in their comment):`,
+      "",
+      ...set.map((c) => `- \`${c.name}\`: ${propValue(c.from)} → ${propValue(c.to)}`),
+      "",
+      `Set them where this instance is written${usedIn ? ` (\`${usedIn}\`, its \`<${component} …>\`)` : ` (its \`<${component} …>\`)`}, not in the component itself: only this instance changes. If that line renders several instances (a loop over data) or the value comes from data or a variable, ask with \`pilot_done\`'s question and choices before changing it for all of them. Pilot reads the instance's props on the page when you're done.`,
+    );
+  }
   // The designer's edits on these elements, sent with the comment: exact values, applied as Send's are (and checked by Pilot after).
   if (edits.length) {
     lines.push(

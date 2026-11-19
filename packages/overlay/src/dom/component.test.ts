@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
-import { componentName, componentSource, fileFromStack, ownersOf } from "./component.ts";
+import { componentName, componentProps, componentSource, fileFromStack, ownersOf } from "./component.ts";
 import { elementName } from "./name.ts";
 import { similarOf } from "./similar.ts";
 
@@ -21,6 +21,8 @@ interface Fiber {
   _debugStack?: { stack: string };
   _debugOwner?: Fiber | object;
   _debugInfo?: object[];
+  memoizedProps?: Record<string, unknown>;
+  alternate?: Fiber;
 }
 
 const fiber = (tag: number, type: unknown, stateNode: unknown = null): Fiber => ({
@@ -276,5 +278,63 @@ describe("components: Vue", () => {
     const prices = [...document.querySelectorAll("h4")] as HTMLElement[];
     expect(similarOf(prices[1] as HTMLElement)).toEqual({ component: "PriceCard", elements: [prices[0], prices[2]] });
     expect(componentSource(prices[1] as HTMLElement)).toEqual({ component: "PriceCard", file: "/app/src/components/PriceCard.vue" });
+  });
+});
+
+describe("an instance's props", () => {
+  it("React: the instance's own props as the page has them (strings, numbers, on-off), and the file it's written in", () => {
+    const card = component(ProductCard, host("article", { class: "card" }));
+    card.memoizedProps = {
+      tone: "light",
+      name: "Desk lamp",
+      count: 3,
+      featured: false,
+      onClick: () => {},
+      children: "x",
+      className: "card",
+      style: {},
+    };
+    card._debugSource = { fileName: "src/App.jsx", lineNumber: 7 };
+    mountReact(host("main", {}, card));
+    const article = document.querySelector("article") as Element;
+    expect(componentProps(article)).toEqual({
+      component: "ProductCard",
+      props: { tone: "light", name: "Desk lamp", count: 3, featured: false },
+      usedIn: "src/App.jsx",
+    });
+    // An element inside it isn't the instance's.
+    expect(componentProps(document.querySelector("main") as Element)).toBeNull();
+  });
+
+  it("React: after a render, from the copy on screen, not the stale one the DOM node points at", () => {
+    const stale = component(ProductCard, host("article"));
+    stale.memoizedProps = { tone: "light" };
+    mountReact(host("main", {}, stale));
+    const article = document.querySelector("article") as Element;
+    const node = (article as unknown as Record<string, Fiber>)["__reactFiber$abc123"] as Fiber;
+    // React rendered again: the other copies are on screen, with the new props.
+    const fresh = { ...stale, memoizedProps: { tone: "dark" } };
+    node.alternate = { ...node, return: fresh };
+    let root = node;
+    while (root.return) root = root.return;
+    (root.stateNode as { current: unknown }).current = {};
+    expect(componentProps(article)?.props).toEqual({ tone: "dark" });
+  });
+
+  it("Vue: the instance's props, and its parent's file", () => {
+    const node = document.createElement("div");
+    const instance = {
+      type: { __name: "PriceCard" },
+      parent: { type: { __file: "/app/src/Pricing.vue" }, parent: null, subTree: null },
+      subTree: { type: "div", el: node, component: null, children: [] },
+      props: { plan: "Starter", featured: false, onSelect: () => {} },
+    };
+    Object.defineProperty(node, "__vueParentComponent", { value: instance, enumerable: false });
+    document.body.append(node);
+    expect(componentProps(node)).toEqual({
+      component: "PriceCard",
+      props: { plan: "Starter", featured: false },
+      usedIn: "/app/src/Pricing.vue",
+    });
   });
 });

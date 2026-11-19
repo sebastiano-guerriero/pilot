@@ -54,6 +54,8 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [ ] Designer note field
 - [x] `@` in the comment box: the page's tokens (its CSS variables), components and named elements, sent as exact references ([handoff.md](handoff.md), *Mentions*)
 - [x] `@` lists the project's components too (read by the agents' server, kept current), and typed `@names` count; each mention tells the agent where it is
+- [x] `/props`: the agent lists a component's props, the designer picks values in the thread, the agent sets them on that instance, Pilot checks them on the page
+- [ ] Props: remember each component's list (no wait the second time), several instances at once, and the owner's design for the rows
 - [ ] Design tokens: the page's custom properties offered in fields, steps along the scale, token names for the agent ([design-tokens.md](design-tokens.md))
 
 ### Property editors

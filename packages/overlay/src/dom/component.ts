@@ -1,3 +1,4 @@
+import type { PropValue } from "@pilot/protocol";
 /**
  * The page's components, from what the framework leaves on the DOM in
  * development (Pilot only runs there): which component instance renders an
@@ -93,6 +94,71 @@ export function componentName(element: Element): string | null {
   return null;
 }
 
+/** An instance's props as Pilot can show and set them: strings, numbers and on-off values; and where it's written. */
+export interface InstanceProps {
+  component: string;
+  props: Record<string, PropValue>;
+  /** The file where the instance is written (its parent's code: `<ProductCard …>`), when the framework says. */
+  usedIn?: string;
+}
+
+/** Props never listed: the framework's own, and what a designer doesn't set from a list. */
+const NOT_PROPS = new Set(["children", "key", "ref", "className", "class", "style", "id"]);
+const MAX_PROPS = 30;
+
+function scalarProps(all: Record<string, unknown> | null | undefined): Record<string, PropValue> {
+  const out: Record<string, PropValue> = {};
+  for (const [name, value] of Object.entries(all ?? {})) {
+    if (Object.keys(out).length >= MAX_PROPS) break;
+    if (NOT_PROPS.has(name) || name.startsWith("__")) continue;
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") out[name] = value;
+  }
+  return out;
+}
+
+/**
+ * The props of the component an element is the top of (see componentName),
+ * as this instance has them now, read from the framework in development:
+ * React's fiber (`memoizedProps`), Vue's instance (`props`). Null for an
+ * element inside a component, a Server Component (its props stay on the
+ * server), or a framework Pilot doesn't read.
+ */
+export function componentProps(element: Element): InstanceProps | null {
+  try {
+    const name = componentName(element);
+    if (!name) return null;
+    const found = reactFiberOf(element);
+    const fiber = found && currentFiber(found);
+    if (fiber) {
+      for (let f = fiber.return; f && !isHost(f); f = f.return) {
+        if (!isComponent(f) || reactName(f.type) !== name) continue;
+        const usedIn = f._debugSource?.fileName ?? fileFromStack(f._debugStack?.stack) ?? undefined;
+        return { component: name, props: scalarProps(f.memoizedProps), ...(usedIn ? { usedIn } : {}) };
+      }
+      return null;
+    }
+    const owner = vueOwnerOf(element);
+    if (!owner) return null;
+    const usedIn = owner.parent?.type?.__file;
+    return { component: name, props: scalarProps(owner.props), ...(usedIn ? { usedIn } : {}) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The fiber as the page shows it now: React keeps two of each (the one on
+ * screen and the one it works on) and the one a DOM node points at may be
+ * the other, with the props from before the last render. The root knows
+ * which is on screen (as React DevTools tells them apart).
+ */
+function currentFiber(fiber: Fiber): Fiber {
+  let root: Fiber = fiber;
+  while (root.return) root = root.return;
+  const onScreen = (root.stateNode as { current?: Fiber } | null)?.current;
+  return root.tag === ROOT && onScreen && onScreen !== root && fiber.alternate ? fiber.alternate : fiber;
+}
+
 function reactRootName(fiber: Fiber): string | null {
   // A Server Component whose output starts here.
   const server = serversAt(fiber)[0];
@@ -143,6 +209,8 @@ interface Fiber {
   _debugStack?: { stack?: string };
   _debugOwner?: Fiber | ServerComponent | null;
   _debugInfo?: unknown[] | null;
+  memoizedProps?: Record<string, unknown> | null;
+  alternate?: Fiber | null;
 }
 
 /** A Server Component as React records it in development (ReactComponentInfo). */
@@ -339,6 +407,7 @@ interface VueInstance {
   type: { name?: string; __name?: string; __file?: string } | null;
   parent: VueInstance | null;
   subTree: VNode | null;
+  props?: Record<string, unknown>;
 }
 
 interface VNode {

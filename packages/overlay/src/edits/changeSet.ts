@@ -1,5 +1,6 @@
 import type { AgentRequest, ChangeSet, CommentAttachment, CommentMessage, CommentReference, ElementEdit, ElementTarget, StyleChange } from "@pilot/protocol";
 import { pageBreakpoints } from "../dom/breakpoints.ts";
+import { componentProps } from "../dom/component.ts";
 import { declaredValue } from "../dom/declared.ts";
 import { similarOf } from "../dom/similar.ts";
 import { describeElement } from "../dom/target.ts";
@@ -88,17 +89,27 @@ export function buildRequest(
   ];
   const several = others.length ? { others } : {};
   const breakpoints = pageBreakpoints();
+  const extras = {
+    ...(options.attachments?.length ? { attachments: options.attachments } : {}),
+    ...(options.references?.length ? { references: options.references } : {}),
+  };
+  // `/props`: the instance's props as the page has them now, and where it's written.
+  const instance = kind === "props" ? componentProps(element) : null;
   const request: AgentRequest =
     kind === "comment"
       ? { kind, target, ...several, breakpoints, thread: options.thread ?? [] }
-      : {
-          kind,
-          target,
-          ...several,
-          breakpoints,
-          ...(options.attachments?.length ? { attachments: options.attachments } : {}),
-          ...(options.references?.length ? { references: options.references } : {}),
-        };
+      : kind === "props"
+        ? {
+            kind,
+            target,
+            ...several,
+            breakpoints,
+            component: instance?.component ?? target.source?.component ?? target.tag,
+            current: instance?.props ?? {},
+            ...(instance?.usedIn ? { usedIn: instance.usedIn } : {}),
+            ...extras,
+          }
+        : { kind, target, ...several, breakpoints, ...extras };
   return {
     id: options.id ?? `cs_${Date.now().toString(36)}`,
     createdAt: new Date().toISOString(),

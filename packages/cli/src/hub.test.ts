@@ -19,6 +19,18 @@ function page(hub: Hub, origin = APP) {
 }
 
 describe("Hub", () => {
+  it("a /props job's answer keeps its props for the page; other jobs' are dropped", async () => {
+    const hub = new Hub();
+    const props = [{ name: "tone", type: "options" as const, options: ["light", "dark"] }];
+    const request = { kind: "props" as const, target: { selector: "a", path: "a", tag: "a", classes: [] }, breakpoints: [], component: "Card", current: {} };
+    hub.postJob(APP, { id: "p", changeSet: { ...changeSet("p"), request } });
+    hub.postJob(APP, { id: "e", changeSet: changeSet("e") });
+    await hub.wait(a, APP, 100);
+    await hub.wait(a, APP, 100);
+    expect(hub.done("a", "p", "Card has 1 prop.", undefined, props)?.props).toEqual(props);
+    expect(hub.done("a", "e", "Done.", undefined, props)?.props).toBeUndefined();
+  });
+
   it("a waiting agent gets the next job from its page; it's then working, by that agent", async () => {
     let t = 0;
     const hub = new Hub(() => ++t);

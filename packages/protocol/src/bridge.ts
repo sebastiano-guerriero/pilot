@@ -8,7 +8,7 @@
  * them done (`pilot_done`). Jobs are routed by the page's origin: an agent
  * gets jobs only from the page it launched Pilot in.
  */
-import type { ChangeSet } from "./types.ts";
+import type { ChangeSet, PropSpec, PropValue } from "./types.ts";
 
 /** Bumped when the hub's HTTP API changes incompatibly. 2: width checks (`/agents/check`, `/checks/:id`). 3: comment images (`/attachments`). 4: the agent's questions (`question` on `/agents/done`, `/jobs/:id/answer`). */
 export const BRIDGE_VERSION = 4;
@@ -92,6 +92,8 @@ export interface Job {
   question?: AgentQuestion;
   /** The designer's answer to `question`: the job went back to the agent with it (once). */
   answer?: string;
+  /** A `/props` job's answer: the component's props, as the agent read them (see PropSpec). */
+  props?: PropSpec[];
 }
 
 /**
@@ -120,6 +122,34 @@ export function questionOf(value: unknown): AgentQuestion | undefined {
     .filter(Boolean)
     .slice(0, MAX_CHOICES);
   return { text: q.text.trim().slice(0, 500), ...(choices.length ? { choices } : {}) };
+}
+
+/** Props at most, from one `/props` answer. */
+export const MAX_PROPS = 20;
+
+/** The props an agent returned (see PropSpec), checked and capped; undefined when there are none. */
+export function propsOf(value: unknown): PropSpec[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const scalar = (v: unknown): v is PropValue => typeof v === "string" || typeof v === "number" || typeof v === "boolean";
+  const props = value.flatMap((p): PropSpec[] => {
+    const name = typeof p?.name === "string" ? p.name.trim().slice(0, 60) : "";
+    const type = ["options", "boolean", "text", "number"].includes(p?.type) ? (p.type as PropSpec["type"]) : null;
+    if (!name || !type) return [];
+    const options: string[] = Array.isArray(p.options)
+      ? [...new Set<string>((p.options as unknown[]).filter(scalar).map(String))].slice(0, 30)
+      : [];
+    if (type === "options" && !options.length) return [];
+    return [
+      {
+        name,
+        type,
+        ...(type === "options" ? { options } : {}),
+        ...(scalar(p.default) ? { default: p.default } : {}),
+        ...(typeof p.description === "string" && p.description.trim() ? { description: p.description.trim().slice(0, 120) } : {}),
+      },
+    ];
+  });
+  return props.length ? props.slice(0, MAX_PROPS) : undefined;
 }
 
 /**

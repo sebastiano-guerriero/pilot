@@ -14,6 +14,8 @@ export interface Action {
   command: string;
   name: string;
   description: string;
+  /** Offered only when the selection is a component's instance (its top-level element). */
+  forComponent?: boolean;
 }
 
 export const ACTIONS: Action[] = [
@@ -28,6 +30,13 @@ export const ACTIONS: Action[] = [
     command: "break",
     name: "Break and fix",
     description: "Try odd content and fix what breaks",
+  },
+  {
+    id: "props",
+    command: "props",
+    name: "Props",
+    description: "Change the component's props from a list",
+    forComponent: true,
   },
 ];
 
@@ -50,13 +59,19 @@ export function withoutQuery(text: string, at: { start: number; query: string })
 }
 
 /** The actions for what's typed after `/`: by command or name, those that start with it first. */
-export function matchActions(typed: string): Action[] {
+export function matchActions(typed: string, context: { component?: boolean } = {}): Action[] {
   const query = typed.toLowerCase();
-  if (!query) return ACTIONS;
+  const offered = ACTIONS.filter((a) => !a.forComponent || context.component);
+  if (!query) return offered;
   const words = (a: Action) => [a.command, ...a.name.toLowerCase().split(/\s+/)];
-  const starts = ACTIONS.filter((a) => words(a).some((w) => w.startsWith(query)));
-  const contains = ACTIONS.filter((a) => !starts.includes(a) && (a.command.includes(query) || a.name.toLowerCase().includes(query)));
+  const starts = offered.filter((a) => words(a).some((w) => w.startsWith(query)));
+  const contains = offered.filter((a) => !starts.includes(a) && (a.command.includes(query) || a.name.toLowerCase().includes(query)));
   return [...starts, ...contains];
+}
+
+/** What's typed for an action (`responsive`, `break`): a sent message shows it as `/responsive`. */
+export function actionCommand(id: CommentAction): string {
+  return ACTIONS.find((a) => a.id === id)?.command ?? id;
 }
 
 /** An action's name, for its chip ("Make responsive"). */

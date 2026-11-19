@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AgentInfo, AgentQuestion, ChangeResult, ChangeSet, Job, PageEvent, WidthCheck } from "@pilot/protocol";
+import type { AgentInfo, AgentQuestion, ChangeResult, ChangeSet, Job, PageEvent, PropSpec, WidthCheck } from "@pilot/protocol";
 import { originKey } from "@pilot/protocol";
 
 /**
@@ -160,12 +160,21 @@ export class Hub {
    * the answer, see answer). A job asks once: a question on an answered job
    * is dropped. Null for a job the hub doesn't know.
    */
-  done(agentId: string, jobId: string, notes?: string, question?: AgentQuestion): Job | null {
+  done(agentId: string, jobId: string, notes?: string, question?: AgentQuestion, props?: PropSpec[]): Job | null {
     const job = this.jobs.get(jobId);
     if (!job || job.status === "cancelled") return null;
     const agent = this.agents.get(agentId)?.info ?? job.agent;
     const asks = question && !job.answer ? { question } : {};
-    this.update(job, { status: "done", agent, notes: notes?.trim() || undefined, doneAt: new Date(this.now()).toISOString(), ...asks });
+    // A `/props` job's answer: the component's props, for the page to show.
+    const listed = props?.length && job.changeSet.request?.kind === "props" ? { props } : {};
+    this.update(job, {
+      status: "done",
+      agent,
+      notes: notes?.trim() || undefined,
+      doneAt: new Date(this.now()).toISOString(),
+      ...asks,
+      ...listed,
+    });
     return job;
   }
 

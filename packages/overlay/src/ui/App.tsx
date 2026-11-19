@@ -1,8 +1,9 @@
-import type { CommentAction, CommentReference, ElementState, WidthRange } from "@pilot/protocol";
+import type { CommentAction, CommentReference, ElementState, PropChange, WidthRange } from "@pilot/protocol";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import { type BoxArea, hidesSelection } from "../dom/boxModel.ts";
 import { measuredBoxes } from "../dom/measure.ts";
 import { revealInWindow } from "../dom/reveal.ts";
+import { componentName, componentProps } from "../dom/component.ts";
 import { mentionables } from "../dom/mentions.ts";
 import { findSimilar } from "../dom/similar.ts";
 import { describeElement, type EditableElement, isEditable } from "../dom/target.ts";
@@ -473,11 +474,15 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     action?: CommentAction,
     mentions: MentionOption[] = [],
     withEdits = false,
+    props: PropChange[] = [],
   ): Promise<CommentOutcome> => {
     if (!session || !sendToAgent) return false;
     const attachments = files.length ? await session.uploadFiles(files, thumbnail) : [];
     if (!attachments) return { title: "The file couldn't be attached", detail: "Try again, or send it without the file" };
-    session.comment(element, text, attachments, action, othersRef.current, mentions.flatMap(toReference), withEdits);
+    // Props picked from the agent's `/props` list: set on this instance, where it's written.
+    const instance = props.length ? componentProps(element) : null;
+    const setting = instance ? { component: instance.component, ...(instance.usedIn ? { usedIn: instance.usedIn } : {}), set: props } : undefined;
+    session.comment(element, text, attachments, action, othersRef.current, mentions.flatMap(toReference), withEdits, setting);
     return "sent";
   };
   // How many of them there are, for the chip (changeCount re-renders this as the history changes).
@@ -591,8 +596,11 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
             error={threadJob && isStuck(threadJob) ? stuckAlert : undefined}
             agentName={agentName(threadJob?.agent?.label ?? session?.state.agents[0]?.label)}
             agentOn={sendToAgent}
-            onSend={(text, files, action, mentions, withEdits) => sendComment(selected.element, text, files, action, mentions, withEdits)}
+            onSend={(text, files, action, mentions, withEdits, props) => sendComment(selected.element, text, files, action, mentions, withEdits, props)}
             edits={unsentOnSelection}
+            // `/props` for one component instance, alone (a list for several would mix their props).
+            component={others.length ? undefined : (componentName(selected.element) ?? undefined)}
+            currentProps={() => componentProps(selected.element)?.props ?? {}}
             mentions={() => mentionOptions(mentionables(nameAttributes))}
             projectComponents={session ? () => session.projectComponents() : undefined}
             // Resolved: the thread goes, and the widget closes (the next one is the Comment button's click away).
@@ -766,7 +774,7 @@ function threadJobStatus(job: JobRecord): string | undefined {
   if (job.status === "working") return `${agentName(job.agent?.label) ?? "The agent"} is working on it`;
   // A task (Make responsive, Break and fix) is done, and Pilot checks it before taking it.
   const kind = job.changeSet.request?.kind;
-  if (job.status === "done" && !job.checked && kind && kind !== "comment") return "Checking every width";
+  if (job.status === "done" && !job.checked && (kind === "responsive" || kind === "break-and-fix")) return "Checking every width";
   return undefined;
 }
 

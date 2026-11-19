@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AgentInfo, ChangeResult, PageEvent, WidthCheck } from "@pilot/protocol";
-import { BRIDGE_VERSION, originKey, questionOf } from "@pilot/protocol";
+import { BRIDGE_VERSION, originKey, propsOf, questionOf } from "@pilot/protocol";
 import { attachmentsDir, extensionOf, MAX_ATTACHMENT_BYTES, saveAttachment, sweepAttachments, withAttachmentPaths } from "./attachments.ts";
 import { projectComponents } from "./components.ts";
 import { Hub, type JobPost } from "./hub.ts";
@@ -168,7 +168,7 @@ function events(hub: Hub, origin: string, req: IncomingMessage, res: ServerRespo
 }
 
 async function handleAgent(hub: Hub, action: string, data: unknown, req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const d = data as { agent: AgentInfo; origin?: string; jobId?: string; notes?: string; question?: unknown; timeoutMs?: number };
+  const d = data as { agent: AgentInfo; origin?: string; jobId?: string; notes?: string; question?: unknown; props?: unknown; timeoutMs?: number };
   if (!d?.agent?.id) return json(res, 400, { error: "agent needed" });
   switch (action) {
     case "register":
@@ -189,7 +189,7 @@ async function handleAgent(hub: Hub, action: string, data: unknown, req: Incomin
     }
     case "done":
       if (!d.jobId) return json(res, 400, { error: "jobId needed" });
-      return json(res, 200, { job: hub.done(d.agent.id, d.jobId, d.notes, questionOf(d.question)) });
+      return json(res, 200, { job: hub.done(d.agent.id, d.jobId, d.notes, questionOf(d.question), propsOf(d.props)) });
     case "check": {
       if (!d.jobId) return json(res, 400, { error: "jobId needed" });
       const check = await hub.check(d.jobId, Math.min(d.timeoutMs ?? CHECK_TIMEOUT, 2 * 60_000));
