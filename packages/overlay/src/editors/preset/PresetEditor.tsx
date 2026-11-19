@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { parseValue } from "../../css/values.ts";
 import { PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
+import { tokensFor } from "../../ui/components/TokenMenu/tokens.ts";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { PropertySelect } from "../../ui/components/PropertySelect/PropertySelect.tsx";
 import { declaredOf, isMixed, MIXED } from "../declared.ts";
@@ -100,6 +101,8 @@ export function PresetEditor({ config, ...props }: PropertyEditorProps & { confi
           placeholder={isMixed(props, property) ? MIXED : config.placeholder}
           label={config.customLabel}
           inputRef={fieldRef}
+          tokens={tokensFor(property)}
+          computed={props.values?.[property]}
           onCommit={(text) => {
             if (!text.trim()) return onChange(property, "");
             const next = parseValue(property, text);

@@ -150,6 +150,10 @@ To add a component, create `components/<Name>/<Name>.tsx` and `<Name>.css`, then
 - **Typography is set once on `.root`** (family, size, line height, OpenType features); components only change what differs.
 - **No Tailwind**, for now. If revisited: Tailwind v4's `@property` rules are ignored inside a Shadow DOM, so shadow, ring and transform utilities need a workaround.
 
+### Scrolling
+
+Everything in Pilot that scrolls draws Pilot's own thumb, never the browser's scrollbar ([ScrollThumb](../packages/overlay/src/ui/components/ScrollThumb/ScrollThumb.tsx)): the property list, the comment thread and its field, the DOM tree, the select menus, the variables list. A native scrollbar takes room on Windows and Linux and looks different in every browser. The pattern: the scrolling element hides its scrollbar (`scrollbar-width: none`, and `::-webkit-scrollbar { display: none }`), and sits at the top of a positioned box that doesn't scroll, which holds the `<ScrollThumb target={…} />` over its right edge.
+
 ### Fonts
 
 Pilot's font is **Geist** (variable). It replaced Geist Mono, which made the UI read like code; Geist reads as UI text and fits more of a label in a row. **Geist Mono** (`--plt-font-mono`) is for code only: inline code and code blocks in the agent's replies.

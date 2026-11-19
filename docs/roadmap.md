@@ -55,8 +55,12 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [x] `@` in the comment box: the page's tokens (its CSS variables), components and named elements, sent as exact references ([handoff.md](handoff.md), *Mentions*)
 - [x] `@` lists the project's components too (read by the agents' server, kept current), and typed `@names` count; each mention tells the agent where it is
 - [x] `/props`: the agent lists a component's props, the designer picks values in the thread, the agent sets them on that instance, Pilot checks them on the page
-- [ ] Props: remember each component's list (no wait the second time), several instances at once, and the owner's design for the rows
-- [ ] Design tokens: the page's custom properties offered in fields, steps along the scale, token names for the agent ([design-tokens.md](design-tokens.md))
+- [x] Props: each component's list remembered (shown at once, refreshed by the agent behind)
+- [ ] Props: several instances at once, and the owner's design for the rows
+- [x] Variables in the property fields: the page's tokens that fit, by `--` at the caret or the variable button ([property-dialog.md](property-dialog.md), *Variables*)
+- [x] Design tokens: a token-bound field steps along its scale (↑/↓, the wheel), else from the computed value; the list and the button approved
+- [x] The wheel steps a field being edited, like ↑/↓
+- [ ] Design tokens: a plain number stepping to the scale's values, scrubbing along it ([design-tokens.md](design-tokens.md))
 
 ### Property editors
 
@@ -114,7 +118,8 @@ Next (found testing in Cursor: jobs queued forever while the connected chat had 
 - [x] Next.js App Router (Server Components, Turbopack): components from React's records of them, never the framework's own components
 - [ ] A history of the session's jobs (what changed, how it landed, files touched, a summary to copy), in place of the job list
 - [ ] Design the Send states and the job status (placeholder look now)
-- [ ] The bridge watches token files that only live in code (`tokens.json` and Style Dictionary first, then Sass variables, Tailwind v3 configs last), listed in `@` too, with a files list in the comment box ([design-tokens.md](design-tokens.md))
+- [x] Token files that only live in code (`tokens.json`, Style Dictionary, Sass variables), read by Pilot's server, in the fields' variables and `@` ([property-dialog.md](property-dialog.md), *Variables*)
+- [ ] Tailwind v3 configs' tokens (JavaScript: they'd have to run)
 - [x] `/pilot` in any agent with skills: `init` writes the skill for Codex and Cursor (`.agents/skills`), Claude Code and Copilot
 
 ## Distribution

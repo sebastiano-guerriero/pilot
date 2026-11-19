@@ -404,6 +404,32 @@ describe("PilotSession", () => {
     instance.props = null;
   });
 
+  it("/props again on a component listed before: its list at once, then the agent's reply updates it (new props show)", async () => {
+    vi.useFakeTimers();
+    instance.props = { tone: "light" };
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    const first = s.comment(el, "", [], "props");
+    const before = [{ name: "tone", type: "options" as const, options: ["light", "dark"] }];
+    hub().emit({ type: "job", job: job({ id: (first.job as { id: string }).id, status: "done", agent, notes: "1 prop.", props: before }) });
+    await vi.advanceTimersByTimeAsync(0);
+    // Again: the list from before shows right away, while the agent checks.
+    const again = s.comment(el, "", [], "props");
+    const early = s.threadFor(el)?.messages.at(-1);
+    expect(early).toMatchObject({ from: "agent", early: true, propList: before });
+    expect(s.attention).toEqual([]); // not a reply to read: the agent is still on it
+    const after = [...before, { name: "badge", type: "text" as const }];
+    hub().emit({ type: "job", job: job({ id: (again.job as { id: string }).id, status: "done", agent, notes: "2 props.", props: after }) });
+    await vi.advanceTimersByTimeAsync(0);
+    const replies = s.threadFor(el)?.messages.filter((m) => m.from === "agent") ?? [];
+    expect(replies.map((m) => [m.text, m.propList?.length, !!m.early])).toEqual([
+      ["1 prop.", 1, false],
+      ["2 props.", 2, false],
+    ]);
+    s.resolve(first.thread.id);
+    instance.props = null;
+  });
+
   it("a prop set from the list: the next message, checked on the page; not there yet, back to the agent once", async () => {
     vi.useFakeTimers();
     instance.props = { tone: "light" };

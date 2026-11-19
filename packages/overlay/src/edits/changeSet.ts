@@ -1,6 +1,7 @@
-import type { AgentRequest, ChangeSet, CommentAttachment, CommentMessage, CommentReference, ElementEdit, ElementTarget, StyleChange } from "@pilot/protocol";
+import type { AgentRequest, ChangeSet, CommentAttachment, CommentMessage, CommentReference, ElementEdit, FileTokenUse, ElementTarget, StyleChange } from "@pilot/protocol";
 import { pageBreakpoints } from "../dom/breakpoints.ts";
 import { componentProps } from "../dom/component.ts";
+import { fileTokensNow } from "../dom/tokens.ts";
 import { declaredValue } from "../dom/declared.ts";
 import { similarOf } from "../dom/similar.ts";
 import { describeElement } from "../dom/target.ts";
@@ -61,7 +62,21 @@ export function buildChangeSet(
       viewport: { width: window.innerWidth, height: window.innerHeight },
     },
     edits: [...edits.values()],
+    ...fileTokensOf([...edits.values()]),
   };
+}
+
+/**
+ * The file tokens (Pilot's variables for the project's token files, see
+ * setFileTokens) the edits' values use, as `fileTokens` for the prompt;
+ * nothing when they use none.
+ */
+export function fileTokensOf(edits: readonly ElementEdit[]): { fileTokens?: FileTokenUse[] } {
+  const used = new Set(edits.flatMap((e) => e.changes.flatMap((c) => [...c.to.matchAll(/var\(\s*(--[\w-]+)/g)].map((m) => m[1] as string))));
+  const fileTokens = fileTokensNow()
+    .filter((t) => t.source && used.has(t.name))
+    .map((t) => ({ variable: t.name, name: t.source?.name as string, value: t.value, file: t.source?.file as string, ...(t.source?.line ? { line: t.source.line } : {}) }));
+  return fileTokens.length ? { fileTokens } : {};
 }
 
 /**

@@ -26,6 +26,7 @@
 @import "../components/PropertyInputText/PropertyInputText.css" layer(components);
 @import "../components/PropertyRow/PropertyRow.css" layer(components);
 @import "../components/PropertySelect/PropertySelect.css" layer(components);
+@import "../components/TokenMenu/TokenMenu.css" layer(components);
 @import "../components/Icon/Icon.css" layer(components);
 @import "../components/ScrubHandle/ScrubHandle.css" layer(components);
 @import "../components/ScrollThumb/ScrollThumb.css" layer(components);

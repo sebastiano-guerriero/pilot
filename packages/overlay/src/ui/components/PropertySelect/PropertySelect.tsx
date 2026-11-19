@@ -2,6 +2,7 @@ import type { ComponentChildren, RefObject } from "preact";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { px } from "../../px.ts";
 import { Icon } from "../Icon/Icon.tsx";
+import { ScrollThumb } from "../ScrollThumb/ScrollThumb.tsx";
 import { scrollWithin } from "../../../dom/reveal.ts";
 
 interface PropertySelectProps {
@@ -208,12 +209,9 @@ export function PropertySelect({
         <Icon name="chevron-down" class="chevron" />
       </button>
       {open && (
+        // The menu's box (placed, not scrolling), the list that scrolls inside it, and Pilot's scroll thumb over its edge.
         <div
-          ref={menu}
-          id={`${id}-menu`}
           class="menu"
-          role="listbox"
-          aria-label={label}
           style={
             position
               ? { left: px(position.left), top: px(position.top), minWidth: px(position.minWidth) }
@@ -222,6 +220,7 @@ export function PropertySelect({
           // Clicking an option mustn't take focus from the trigger (that would close the menu first).
           onMouseDown={(e) => e.preventDefault()}
         >
+        <div ref={menu} id={`${id}-menu`} class="menu-list" role="listbox" aria-label={label}>
           {list.map((option, index) => (
             <div
               key={option || "\u0000"}
@@ -241,6 +240,8 @@ export function PropertySelect({
               </span>
             </div>
           ))}
+        </div>
+        <ScrollThumb target={menu} />
         </div>
       )}
     </div>

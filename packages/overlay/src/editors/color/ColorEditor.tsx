@@ -2,6 +2,9 @@ import { useLayoutEffect, useRef } from "preact/hooks";
 import { joinColor, parseColor, parseOpacity, splitColor } from "../../css/colors.ts";
 import { Icon } from "../../ui/components/Icon/Icon.tsx";
 import { PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
+import { allTokens } from "../../dom/tokens.ts";
+import { stepToken, tokensFor } from "../../ui/components/TokenMenu/tokens.ts";
+
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { declaredOf, isMixed, MIXED } from "../declared.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
@@ -79,6 +82,7 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
           placeholder={isMixed(props, property) ? MIXED : undefined}
           icon={swatch}
           inputRef={colorRef}
+          tokens={tokensFor(property)}
           onCommit={(text) => {
             if (!text.trim()) return write("");
             const word = text.trim().toLowerCase();
@@ -87,6 +91,11 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
             if (!typed) return;
             const parts = splitColor(typed);
             write(joinColor(parts.color, hasAlpha(typed) ? parts.opacity : (opacity ?? 100)));
+          }}
+          // A token with a scale moves along it (`--gray-100` → `--gray-200`), the opacity kept; nothing else steps.
+          onStep={(delta, text, gesture) => {
+            const next = stepToken(text, delta, allTokens(), ["color"]);
+            if (next && next !== text) write(joinColor(next, opacity ?? 100), gesture);
           }}
           onSubmit={onReturnToSearch}
           onTab={(direction) => (direction > 0 ? focus(opacityRef) : tabOut(-1))}
@@ -100,7 +109,7 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
             const o = parseOpacity(text);
             if (o !== null) setOpacity(o);
           }}
-          onStep={(delta, text) => setOpacity((parseOpacity(text) ?? opacity ?? 100) + delta)}
+          onStep={(delta, text, gesture) => setOpacity((parseOpacity(text) ?? opacity ?? 100) + delta, gesture)}
           onScrub={(steps, startText, gesture) => {
             const start = parseOpacity(startText) ?? opacity ?? 100;
             const next = Math.min(100, Math.max(0, start + steps));

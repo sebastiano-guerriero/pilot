@@ -48,8 +48,22 @@ export function formatPrompt(changeSet: ChangeSet, options: { guidelines?: boole
   edits.forEach((edit, index) => {
     lines.push("", ...formatEdit(edit, index + 1));
   });
+  lines.push(...fileTokenLines(changeSet.fileTokens));
 
   return `${lines.join("\n")}\n`;
+}
+
+/** What the changes' file-token variables stand for (ChangeSet.fileTokens), as a section; none without any. */
+function fileTokenLines(tokens: ChangeSet["fileTokens"]): string[] {
+  if (!tokens?.length) return [];
+  return [
+    "",
+    "## The project's tokens in these values",
+    "",
+    "Some values use tokens from the project's files, which Pilot previewed as CSS variables of its own: they're not in the code. Write each the way the project uses that token (its utility, its variable, its theme), never the `var(--…)` itself:",
+    "",
+    ...tokens.map((t) => `- \`var(${t.variable})\` is \`${t.name}\` in \`${t.file}${t.line ? `:${t.line}` : ""}\` (\`${t.value}\`)`),
+  ];
 }
 
 /**
@@ -345,6 +359,7 @@ function formatComment(changeSet: ChangeSet, request: CommentRequest, options: {
       ...(options.guidelines === false ? [EDIT_GUIDELINES_REMINDER] : ["Guidelines:", ...EDIT_GUIDELINES]),
     );
     edits.forEach((edit, index) => lines.push("", ...formatEdit(edit, index + 1).map((l) => (l.startsWith("## ") ? `#${l}` : l))));
+    lines.push(...fileTokenLines(changeSet.fileTokens));
   }
   if (earlier.length) {
     lines.push("", "## The thread so far (you already did what it asked)", "");
@@ -415,6 +430,8 @@ function referenceLines(references: CommentReference[]): string[] {
  */
 function referenceLine(reference: CommentReference): string {
   const as = `- \`${mentionText(reference)}\`:`;
+  if (reference.kind === "token" && reference.source)
+    return `${as} a design token from the project's files (\`${reference.source.file}${reference.source.line ? `:${reference.source.line}` : ""}\`), now \`${reference.value}\`. Use this token the way the project does (its utility, its variable, its theme); it isn't a CSS variable on the page.`;
   if (reference.kind === "token")
     return `${as} a design token (a CSS variable on the page), now \`${reference.value}\`. Use this token (\`var(${reference.name})\`, or the project's form of it).`;
   if (reference.kind === "unlisted")

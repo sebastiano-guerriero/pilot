@@ -1,0 +1,74 @@
+/* A field's variables (TokenMenu.tsx): the select's menu look, a row per
+   token, its value dimmed on the right. Placeholder, pending the design. */
+@scope (.token-menu) {
+  :scope {
+    position: fixed;
+    z-index: 2;
+    width: max-content;
+    max-width: 280px;
+    overflow: hidden;
+    border-radius: 10px;
+    background: var(--plt-color-background-light);
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 7%),
+      inset 0 0 0 1px hsl(0 0% 100% / 5%),
+      var(--plt-shadow-lg);
+    color: var(--plt-color-contrast-high);
+  }
+
+  /* The rows scroll here, with Pilot's scroll thumb over the edge instead of the native scrollbar. */
+  .token-list {
+    max-height: 240px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    padding: 4px;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .token-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 24px;
+    padding-inline: 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &[data-active] {
+      background: hsl(from var(--plt-color-contrast-high) h s l / 10%);
+    }
+  }
+
+  .token-swatch {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 15%);
+  }
+
+  .token-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .token-value {
+    flex: none;
+    max-width: 45%;
+    margin-left: auto;
+    padding-left: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--plt-color-contrast-low);
+  }
+
+  .token-none {
+    padding: 6px 8px;
+    color: var(--plt-color-contrast-low);
+  }
+}

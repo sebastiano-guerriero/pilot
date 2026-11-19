@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentQuestion, AgentRequest, ChangeResult, ChangeSet, CommentAction, CommentAttachment, CommentMessage, CommentReference, ElementTarget, Job, JobStatus, ProjectComponent, PropChange, PropSpec, WidthCheck } from "@pilot/protocol";
+import type { AgentInfo, AgentQuestion, AgentRequest, ChangeResult, ChangeSet, CommentAction, CommentAttachment, CommentMessage, CommentReference, ElementTarget, FileToken, Job, JobStatus, ProjectComponent, PropChange, PropSpec, WidthCheck } from "@pilot/protocol";
 import { attachmentType, requestTargets } from "@pilot/protocol";
 import { checkWidths, problemLines, snapshotAt, type StyleSnapshot, widthsToCheck } from "../checks/widths.ts";
 import { componentProps } from "../dom/component.ts";
@@ -100,6 +100,8 @@ export type ThreadMessage = Omit<CommentMessage, "attachments"> & {
    * "stopped, maybe not done" in the thread's history.
    */
   stopped?: boolean;
+  /** A `/props` list shown before the agent's reply, from the last time (see postComment): its reply replaces it. */
+  early?: boolean;
   /** The agent's reply to `/props`: the component's props, for the designer to set (see PilotSession.setProps). */
   propList?: PropSpec[];
 };
@@ -489,6 +491,11 @@ export class PilotSession {
     return this.bridge && this.canSendToAgent ? this.bridge.components() : Promise.resolve([]);
   }
 
+  /** The project's file tokens (see BridgeClient.tokens); none without an agent on the page. */
+  projectTokens(): Promise<FileToken[]> {
+    return this.bridge && this.canSendToAgent ? this.bridge.tokens() : Promise.resolve([]);
+  }
+
   async uploadFiles(files: File[], preview: (file: File) => Promise<string | undefined>): Promise<ThreadAttachment[] | null> {
     if (!this.bridge) return null;
     const bridge = this.bridge;
@@ -540,7 +547,8 @@ export class PilotSession {
       const taken = unsent.some((m) => m.takesEdits) ? this.history.changes({ unsent: true }).filter(only) : [];
       const edits = taken.length;
       if (edits) {
-        changeSet = { ...changeSet, edits: buildChangeSet(this.history, { unsent: true, id, only }).edits };
+        const taken = buildChangeSet(this.history, { unsent: true, id, only });
+        changeSet = { ...changeSet, edits: taken.edits, ...(taken.fileTokens ? { fileTokens: taken.fileTokens } : {}) };
         this.history.send(id, only);
         for (const e of elements) this.held.delete(e);
         this.saveHeld();
@@ -555,6 +563,23 @@ export class PilotSession {
         : m,
     );
     this.patchThread(threadId, { messages });
+    // `/props` for a component listed before: its list at once, in the reply's
+    // place, while the agent reads the code again; its reply updates it (new
+    // props show, gone ones go).
+    const props = job?.changeSet.request?.kind === "props" ? job.changeSet.request : null;
+    const known = props && knownProps(props.component, props.target.source?.file);
+    if (job && props && known) {
+      const thread = this.threads.find((t) => t.id === threadId) as CommentThread;
+      const early: ThreadMessage = {
+        from: "agent",
+        text: `${props.component}'s props, from the last list. Checking the code for changes…`,
+        at: new Date().toISOString(),
+        replyTo: job.id,
+        propList: known,
+        early: true,
+      };
+      this.patchThread(threadId, { messages: [...thread.messages, early] });
+    }
     return { job, changeSet };
   }
 
@@ -583,9 +608,19 @@ export class PilotSession {
   /** A comment's (or a task asked from the comment box) job is done: the agent's notes are its reply in the thread (once). */
   private reply(job: JobRecord): void {
     const thread = this.threads.find((t) => t.messages.some((m) => m.jobId === job.id));
-    if (!thread || thread.messages.some((m) => m.replyTo === job.id)) return;
+    if (!thread) return;
+    const request = job.changeSet.request;
+    // A `/props` list: remembered for this component, for the next `/props`.
+    if (request?.kind === "props" && job.props?.length) rememberProps(request.component, request.target.source?.file, job.props);
     const reply: ThreadMessage = { from: "agent", text: job.notes?.trim() || "Done.", at: new Date().toISOString(), replyTo: job.id };
     if (job.props?.length) reply.propList = job.props;
+    // The list shown early (see postComment): the agent's reply takes its place.
+    const early = thread.messages.find((m) => m.replyTo === job.id && m.early);
+    if (early) {
+      const { early: _, ...updated } = { ...early, ...reply, propList: reply.propList ?? early.propList };
+      return this.patchThread(thread.id, { messages: thread.messages.map((m) => (m === early ? updated : m)) });
+    }
+    if (thread.messages.some((m) => m.replyTo === job.id)) return;
     this.patchThread(thread.id, { messages: [...thread.messages, reply] });
   }
 
@@ -639,9 +674,13 @@ export class PilotSession {
     this.dismiss(jobId);
     // A thread's job: a note where the reply would be, so the thread says what happened.
     const thread = this.threads.find((t) => t.messages.some((m) => m.from === "designer" && m.jobId === jobId));
-    if (thread && !thread.messages.some((m) => m.replyTo === jobId)) {
+    if (thread && !thread.messages.some((m) => m.replyTo === jobId && !m.early)) {
+      // A props list shown early stays, as the last list (no agent is checking it now).
+      const messages = thread.messages.map((m) =>
+        m.replyTo === jobId && m.early ? { ...m, early: undefined, replyTo: undefined, text: m.text.replace(/ Checking the code for changes…$/, "") } : m,
+      );
       const note: ThreadMessage = { from: "agent", text: STOPPED_NOTE, at: new Date().toISOString(), replyTo: jobId, stopped: true };
-      this.patchThread(thread.id, { messages: [...thread.messages, note] });
+      this.patchThread(thread.id, { messages: [...messages, note] });
     }
   }
 
@@ -1004,7 +1043,7 @@ export class PilotSession {
 /** The agent spoke last in the thread: it's the designer's turn (reply or resolve). */
 export function needsYou(thread: CommentThread): boolean {
   const last = thread.messages.at(-1);
-  return last?.from === "agent" && !last.stopped;
+  return last?.from === "agent" && !last.stopped && !last.early;
 }
 
 /** How long a stuck state lasts before the page says so (see the STUCK_ constants). */
@@ -1099,3 +1138,35 @@ function logTimings(job: JobRecord): void {
   const attempt = (job.attempt ?? 1) > 1 ? " (with a follow-up)" : "";
   console.info(`[Pilot] Job done in ${t.total}s${attempt}: ${parts.join(", ")}.`);
 }
+
+/**
+ * Each component's props, as the agent last listed them (`/props`), for the
+ * tab: the next `/props` on it shows them at once, while the agent reads the
+ * code again (see postComment). By name and file, so two components that
+ * share a name stay apart.
+ */
+const PROPS_KEY = "pilot:props";
+
+function propsKey(component: string, file: string | undefined): string {
+  return `${component} ${file ?? ""}`;
+}
+
+function knownProps(component: string, file: string | undefined): PropSpec[] | null {
+  try {
+    const all = JSON.parse(sessionStorage.getItem(PROPS_KEY) ?? "{}") as Record<string, PropSpec[]>;
+    return all[propsKey(component, file)] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberProps(component: string, file: string | undefined, props: PropSpec[]): void {
+  try {
+    const all = JSON.parse(sessionStorage.getItem(PROPS_KEY) ?? "{}") as Record<string, PropSpec[]>;
+    all[propsKey(component, file)] = props;
+    sessionStorage.setItem(PROPS_KEY, JSON.stringify(all));
+  } catch {
+    // Not remembered: the next `/props` waits for the agent's list.
+  }
+}
+

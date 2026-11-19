@@ -7,6 +7,7 @@ import { autoCloseParens, PropertyInputText } from "./PropertyInputText.tsx";
 
 let commits: string[];
 let steps: Array<[number, string]>;
+let gestures: Array<object | undefined>;
 let submits: number;
 let tabs: number[];
 let setValue: (v: string) => void;
@@ -21,7 +22,10 @@ function Harness() {
       commits.push(t);
       set(t);
     },
-    onStep: (d: number, t: string) => steps.push([d, t]),
+    onStep: (d: number, t: string, g?: object) => {
+      steps.push([d, t]);
+      gestures.push(g);
+    },
     onSubmit: () => submits++,
     onTab: (dir: 1 | -1) => tabs.push(dir),
   });
@@ -35,6 +39,7 @@ let container: HTMLElement;
 beforeEach(() => {
   commits = [];
   steps = [];
+  gestures = [];
   submits = 0;
   tabs = [];
   container = document.createElement("div");
@@ -124,6 +129,31 @@ describe("PropertyInputText", () => {
       [1, "100%"],
       [-10, "100%"],
     ]);
+  });
+
+  it("the wheel steps like the arrows while editing, a burst as one gesture; otherwise it scrolls", () => {
+    const wheel = (deltaY: number, at: number, shiftKey = false) => {
+      const e = new WheelEvent("wheel", { deltaY, bubbles: true, cancelable: true });
+      Object.defineProperty(e, "timeStamp", { value: at });
+      Object.defineProperty(e, "shiftKey", { value: shiftKey });
+      act(() => void input().dispatchEvent(e));
+      return e.defaultPrevented;
+    };
+    expect(wheel(-100, 0)).toBe(false); // not being edited: the dialog scrolls
+    expect(steps).toEqual([]);
+    act(() => input().focus());
+    expect(wheel(-100, 1000)).toBe(true);
+    wheel(-100, 1050);
+    wheel(100, 1100, true);
+    // A trackpad's small deltas add up: a step per 24px.
+    wheel(-10, 2000);
+    wheel(-10, 2020);
+    wheel(-10, 2040);
+    wheel(-10, 2060);
+    expect(steps.map(([d]) => d)).toEqual([1, 1, -10, 1, 1]);
+    expect(gestures[0]).toBe(gestures[2]);
+    expect(gestures[3]).not.toBe(gestures[2]); // after a pause: a new undo step
+    expect(gestures[4]).toBe(gestures[3]);
   });
 
   it("Tab and Shift+Tab are handed to the editor", () => {
@@ -216,3 +246,63 @@ describe("icon variant", () => {
     expect(input().hasAttribute("data-icon")).toBe(false);
   });
 });
+
+describe("PropertyInputText's variables", () => {
+  let style: HTMLStyleElement;
+  let committed: string[];
+  beforeEach(() => {
+    style = document.createElement("style");
+    style.textContent = ":root { --space-2: 8px; --space-4: 16px; --color-accent: #1cf69e; }";
+    document.head.append(style);
+    committed = [];
+    act(() =>
+      render(
+        h(PropertyInputText, { value: "16px", label: "padding-top", tokens: { kinds: ["length"], property: "padding-top" }, onCommit: (t: string) => committed.push(t) }),
+        container,
+      ),
+    );
+  });
+  afterEach(() => style.remove());
+  const input = () => container.querySelector("input") as HTMLInputElement;
+  const names = () => [...container.querySelectorAll(".token-option .token-name")].map((e) => e.textContent);
+  const typeIn = (text: string) =>
+    act(() => {
+      input().value = text;
+      input().setSelectionRange(text.length, text.length);
+      input().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  const press = (key: string) =>
+    act(() => {
+      input().dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    });
+
+  it("`--` lists the page's tokens that fit the field (no colors in a length), and Enter puts var(--name) at the caret", () => {
+    act(() => input().focus());
+    typeIn("calc(--");
+    expect(names()).toEqual(["--space-2", "--space-4"]);
+    typeIn("calc(--sp4");
+    expect(names()).toEqual([]);
+    typeIn("calc(--space-4");
+    press("Enter");
+    expect(input().value).toBe("calc(var(--space-4)");
+    expect(committed).toEqual([]); // picked, not committed yet: the value goes on
+    expect(container.querySelector(".token-menu")).toBeNull();
+  });
+
+  it("Esc closes only the list; the button opens it, and a pick takes the whole value when the field wasn't being edited", () => {
+    act(() => input().focus());
+    typeIn("--");
+    const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    act(() => {
+      input().dispatchEvent(escape);
+    });
+    expect(container.querySelector(".token-menu")).toBeNull();
+    expect(escape.defaultPrevented).toBe(true);
+    act(() => input().blur());
+    act(() => (container.querySelector(".token-button") as HTMLButtonElement).click());
+    expect(names()).toEqual(["--space-2", "--space-4"]);
+    act(() => (container.querySelectorAll(".token-option")[0] as HTMLElement).click());
+    expect(input().value).toBe("var(--space-2)");
+  });
+});
+

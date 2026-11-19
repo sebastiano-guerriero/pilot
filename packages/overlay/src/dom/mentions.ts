@@ -1,7 +1,7 @@
 import { componentName } from "./component.ts";
 import { elementName } from "./name.ts";
 import { isEditable } from "./target.ts";
-import { pageTokens, type Token } from "./tokens.ts";
+import { allTokens, type Token } from "./tokens.ts";
 
 /**
  * What `@` in the comment box can mention, from the page as it is now:
@@ -35,7 +35,7 @@ export function mentionables(nameAttributes: readonly string[] = [], doc: Docume
     if ((name.includes("#") || name.includes("[")) && !elements.has(name)) elements.set(name, el);
   }
   return {
-    tokens: pageTokens(doc),
+    tokens: allTokens(doc),
     components: [...components].map(([name, element]) => ({ name, element })),
     elements: [...elements].map(([name, element]) => ({ name, element })),
   };

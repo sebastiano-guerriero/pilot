@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
+import { fileTokensOf } from "../edits/changeSet.ts";
 import { mentionables } from "./mentions.ts";
-import { kindOf, pageTokens } from "./tokens.ts";
+import { allTokens, FILE_TOKENS_ATTRIBUTE, fileTokenVariable, kindOf, pageTokens, setFileTokens } from "./tokens.ts";
 
 const style = (css: string, attrs: Record<string, string> = {}) => {
   const el = document.createElement("style");
@@ -59,3 +60,34 @@ describe("mentionables", () => {
     expect(components).toEqual([]);
   });
 });
+
+describe("the project's file tokens", () => {
+  it("become CSS variables of Pilot's own, defined in a sheet of its own, listed after the page's; one the page has stays the page's", () => {
+    style(":root { --brand: #000; }");
+    setFileTokens([
+      { name: "color.brand.primary", value: "#1cf69e", file: "tokens/colors.json", line: 3 },
+      { name: "$brand", value: "#ff0000", file: "_variables.scss", line: 1 },
+      { name: "space.4", value: "16px", file: "tokens/space.json" },
+    ]);
+    expect(fileTokenVariable("color.brand.primary")).toBe("--color-brand-primary");
+    expect(fileTokenVariable("$brand-500")).toBe("--brand-500");
+    const sheet = document.querySelector(`style[${FILE_TOKENS_ATTRIBUTE}]`);
+    expect(sheet?.textContent).toBe(":root { --color-brand-primary: #1cf69e; --space-4: 16px; }");
+    expect(allTokens().map((t) => [t.name, t.source?.name])).toEqual([
+      ["--brand", undefined],
+      ["--color-brand-primary", "color.brand.primary"],
+      ["--space-4", "space.4"],
+    ]);
+    // Pilot's own sheet isn't the page's: not read as its tokens.
+    expect(pageTokens().map((t) => t.name)).toEqual(["--brand"]);
+    // A change set says which of them its values use, for the agent.
+    const target = { selector: "a", path: "a", tag: "a", classes: [] };
+    expect(fileTokensOf([{ target, changes: [{ property: "color", from: "", to: "var(--color-brand-primary)" }] }])).toEqual({
+      fileTokens: [{ variable: "--color-brand-primary", name: "color.brand.primary", value: "#1cf69e", file: "tokens/colors.json", line: 3 }],
+    });
+    expect(fileTokensOf([{ target, changes: [{ property: "color", from: "", to: "var(--brand)" }] }])).toEqual({});
+    setFileTokens([]);
+    expect(document.querySelector(`style[${FILE_TOKENS_ATTRIBUTE}]`)).toBeNull();
+  });
+});
+

@@ -627,6 +627,14 @@
     color: var(--plt-color-accent);
   }
 
+  /* Out to the box's sides (the composer's 16px), so the field's scroll
+     thumb sits at the box's edge, as the thread's does; the field where it was. */
+  .field-frame {
+    position: relative;
+    margin-inline: -16px;
+    padding-inline: 16px;
+  }
+
   .field {
     all: unset;
     box-sizing: border-box;
@@ -638,7 +646,13 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     overflow-y: auto;
+    /* No native scrollbar: ScrollThumb draws one. */
+    scrollbar-width: none;
     resize: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
 
     &::placeholder {
       color: var(--plt-color-contrast-low);

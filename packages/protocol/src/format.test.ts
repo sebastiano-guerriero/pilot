@@ -227,6 +227,22 @@ describe("formatPrompt", () => {
     expect(formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, thread, breakpoints: [] } })).not.toContain("sent with the comment");
   });
 
+  it("edits using the project's file tokens: what each variable stands for, written the project's way", () => {
+    const edits = [{ target: changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"], changes: [{ property: "color", from: "", to: "var(--color-brand-primary)" }] }];
+    const fileTokens = [{ variable: "--color-brand-primary", name: "color.brand.primary", value: "#1cf69e", file: "tokens/colors.json", line: 3 }];
+    const text = formatPrompt({ ...changeSet, edits, fileTokens });
+    expect(text).toContain("## The project's tokens in these values");
+    expect(text).toContain("- `var(--color-brand-primary)` is `color.brand.primary` in `tokens/colors.json:3` (`#1cf69e`)");
+    expect(text).toContain("never the `var(--…)` itself");
+    expect(formatPrompt({ ...changeSet, edits })).not.toContain("tokens in these values");
+    // A file token mentioned with @, in a comment.
+    const target = edits[0]?.target as ChangeSet["edits"][number]["target"];
+    const thread = [{ from: "designer" as const, text: "Use $brand", at: "", references: [{ kind: "token" as const, name: "$brand", value: "#ff0000", source: { file: "_variables.scss", line: 1 } }] }];
+    expect(formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, thread, breakpoints: [] } })).toContain(
+      "- `$brand`: a design token from the project's files (`_variables.scss:1`), now `#ff0000`. Use this token the way the project does",
+    );
+  });
+
   it("/props: the instance's props now, what to list and how to return it, no code changes", () => {
     const target = { ...(changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"]), source: { component: "ProductCard", file: "src/ProductCard.jsx", line: 5 } };
     const text = formatPrompt({ ...changeSet, edits: [], note: undefined, request: { kind: "props", target, breakpoints: [], component: "ProductCard", current: { tone: "light", count: 3, featured: false }, usedIn: "src/App.jsx" } });

@@ -1,8 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { cssProperty } from "../../css/properties.ts";
-import { displayValue, parseValue, stepValue } from "../../css/values.ts";
+import { displayValue, parseValue } from "../../css/values.ts";
+import { stepField } from "../step.ts";
 import type { BoxArea } from "../../dom/boxModel.ts";
 import { type InputDraft, PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
+import { tokensFor } from "../../ui/components/TokenMenu/tokens.ts";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { declaredOf, isMixed, MIXED } from "../declared.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
@@ -107,6 +109,8 @@ export function LengthEditor({
         label={name}
         placeholder={isMixed({ mixed }, property) ? MIXED : undefined}
         inputRef={inputRef}
+        tokens={tokensFor(property)}
+        computed={computed}
         onCommit={(text) => {
           // Cleared: remove the value (back to the page's CSS, or the default).
           const next = text.trim() ? parseValue(property, text) : "";
@@ -119,9 +123,9 @@ export function LengthEditor({
         }}
         onDraft={link?.onDraft}
         mirror={link?.mirror}
-        onStep={(delta, text) => {
-          const next = stepValue(property, text, delta, stepBase());
-          if (next && next !== current) onChange(property, next);
+        onStep={(delta, text, gesture) => {
+          const next = stepField(property, text, delta, stepBase());
+          if (next && next !== current) onChange(property, next, gesture && { gesture });
         }}
         // Drag the handle: steps from the value the drag started at, in the
         // same unit, as one undo step. Back at the start, the exact earlier

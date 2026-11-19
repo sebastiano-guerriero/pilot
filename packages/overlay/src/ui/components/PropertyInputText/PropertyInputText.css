@@ -91,3 +91,52 @@
     pointer-events: none;
   }
 }
+
+/* The variables button (the page's tokens, TokenMenu): an 8px icon in a
+   16px target, its middle 12px from the field's right edge (28px, left of a
+   scrub handle), showing while the field is hovered or edited; the field's
+   text stops 4px before the icon then, cut with an ellipsis. Placeholder,
+   pending the design. */
+@scope (.input-wrap[data-tokens]) {
+  .token-button {
+    all: unset;
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    display: grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    translate: 0 -50%;
+    color: var(--plt-color-contrast-low);
+    cursor: pointer;
+    opacity: 0;
+
+    &:hover {
+      color: var(--plt-color-contrast-high);
+    }
+  }
+
+  :scope.scrub-field .token-button {
+    right: 20px;
+  }
+
+  :scope:is(:hover, :focus-within, [data-tokens-open]) {
+    .token-button {
+      opacity: 1;
+    }
+
+    .property-input-text {
+      padding-right: 20px;
+    }
+
+    &.scrub-field .property-input-text {
+      padding-right: 36px;
+    }
+  }
+
+  :scope[data-tokens-open] .token-button {
+    color: var(--plt-color-accent);
+  }
+}
+

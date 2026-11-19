@@ -22,7 +22,7 @@ const UNIT = [...LENGTH_UNITS]
 const NUMBER = String.raw`\d*\.?\d+`;
 const lengthPattern = (negative: boolean) => new RegExp(`^${negative ? "-?" : ""}${NUMBER}(?:${UNIT})$`);
 const FUNCTION = /^(?:min|max|clamp|var|env|fit-content)\(.+\)$/;
-const MATH_CHARS = /^[\d.%a-z()+\-*/\s,]+$/;
+const MATH_CHARS = /^[\d.%a-zA-Z_()+\-*/\s,]+$/;
 // A binary + or - sits between an operand's end (a number with its unit, or
 // a closing parenthesis) and an operand's start (a number, "(" or a function).
 const BINARY_PLUS_MINUS = new RegExp(String.raw`(?<=(?:\d|\))(?:${UNIT})?)\s*([+-])\s*(?=[\d.(]|[a-z-]+\()`, "g");
@@ -80,7 +80,7 @@ function spanCount(value: string): string | null {
  * `CSS.supports` is real.
  */
 export function parseValue(property: string, text: string): string | null {
-  let t = text.trim().toLowerCase().replace(/\s+/g, " ");
+  let t = lowerExceptNames(text.trim().replace(/\s+/g, " "));
   if (!t) return null;
   const info = cssProperty(property);
   if (info.kind === "font-family") return supported(property, parseFontFamily(text, t));
@@ -96,6 +96,14 @@ export function parseValue(property: string, text: string): string | null {
     else if (isMath(t)) candidate = `calc(${normalizeMath(t)})`;
   }
   return supported(property, candidate);
+}
+
+/** `text` lowercased, but for custom property names (`var(--colorPrimary)`): those are case-sensitive, and a token is named as the project wrote it. */
+function lowerExceptNames(text: string): string {
+  return text
+    .split(/(--[A-Za-z0-9_-]+)/)
+    .map((part, i) => (i % 2 ? part : part.toLowerCase()))
+    .join("");
 }
 
 /** The candidate, if the browser accepts it for `property` (where `CSS.supports` is real). */
@@ -208,9 +216,11 @@ export function normalizeRatio(text: string): string | null {
 
 /**
  * ↑/↓ on a value: step its number and keep the unit ("100%" → "101%").
- * An empty field or a keyword (auto, fit-content…) steps from `computed` (px).
- * Math and functions aren't stepped (null). Never below 0 unless the property
- * allows negative values.
+ * An empty field, a keyword (auto, fit-content…), a token or math
+ * (`var(--gap)`, `100% - 20px`) steps from `computed` (px): the number the
+ * element ends up with replaces it. (A token in a scale steps along the scale
+ * before this: stepToken in TokenMenu/tokens.ts.) Never below 0 unless the
+ * property allows negative values.
  */
 export function stepValue(property: string, text: string, delta: number, computed: string | undefined): string | null {
   const info = cssProperty(property);
@@ -230,7 +240,7 @@ export function stepValue(property: string, text: string, delta: number, compute
     n = Number(match[1]);
     unit = match[2] || "px";
     if (!(LENGTH_UNITS as readonly string[]).includes(unit)) return null;
-  } else if (t === "" || info.keywords.includes(t)) {
+  } else if (t === "" || info.keywords.includes(t) || isExpression(t)) {
     n = Number.parseFloat(computed ?? "");
     unit = "px";
   } else {
@@ -259,7 +269,8 @@ function stepOther(
   delta: number,
   computed: string | undefined,
 ): string | null {
-  const blank = t === "" || info.keywords.includes(t);
+  // A token or math steps from the computed value too, where that's a number (not a grid line or span).
+  const blank = t === "" || info.keywords.includes(t) || (kind !== "grid-line" && kind !== "grid-span" && isExpression(t));
   const integer = /^-?\d+$/.test(t) ? Number(t) : null;
   switch (kind) {
     case "integer": {
@@ -330,6 +341,24 @@ function unwrapCalc(value: string): string | null {
     else if (ch === ")" && --depth < 0) return null;
   }
   return depth === 0 ? inner.trim() : null;
+}
+
+/**
+ * What a field holding math shows on hover: the value it comes to, `computed`
+ * (`100% - 20px` → `180px`), its numbers to 2 decimals. Null for anything
+ * else, a lone token included (its list shows its value), and when it comes
+ * to nothing else (`computed` the same as the text).
+ */
+export function mathResult(text: string, computed: string | undefined): string | null {
+  const t = text.trim();
+  if (!computed || !(/\b(calc|min|max|clamp)\(/i.test(t) || isMath(t))) return null;
+  const shown = computed.trim().replace(/-?\d*\.\d+/g, (n) => String(Math.round(Number(n) * 100) / 100));
+  return shown && shown !== t ? shown : null;
+}
+
+/** A function (`var(--gap)`, `min(…)`) or math (`100% - 20px`, a calc() shown without it): what the field holds isn't a number of its own. */
+function isExpression(t: string): boolean {
+  return /[()]/.test(t) || isMath(t);
 }
 
 function isMath(t: string): boolean {

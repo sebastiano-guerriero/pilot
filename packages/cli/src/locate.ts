@@ -276,7 +276,13 @@ export function withComponentFiles(job: Job, root: string): Job {
     const found = componentFile(name, workspace, deadline);
     return found ? { file: relative(root, join(workspace, found.file)), line: found.line } : null;
   };
+  // A file in the workspace (a token's, sent relative to its root) as this project sees it.
+  const local = (file: string) => {
+    const path = join(workspace, file);
+    return existsSync(path) ? relative(root, path) : file;
+  };
   const mention = (r: CommentReference): CommentReference => {
+    if (r.kind === "token") return r.source ? { ...r, source: { ...r.source, file: local(r.source.file) } } : r;
     if (r.kind === "element") return { ...r, target: fill(r.target) };
     if (r.kind === "unlisted") {
       const source = declared(r.name);
@@ -299,6 +305,7 @@ export function withComponentFiles(job: Job, root: string): Job {
     changeSet: {
       ...changeSet,
       edits: changeSet.edits.map((e) => ({ ...e, target: fill(e.target) })),
+      ...(changeSet.fileTokens ? { fileTokens: changeSet.fileTokens.map((t) => ({ ...t, file: local(t.file) })) } : {}),
       ...(request
         ? {
             request: {

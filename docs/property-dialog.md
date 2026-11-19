@@ -57,6 +57,23 @@ The dialog shows:
 
 Padding shows how far this goes without extra logic: its four sides each carry the Tailwind aliases that include them, so `p` shows all four, `px` right and left, `pt` one. Equal matches show together.
 
+## Variables
+
+A field can take the page's tokens (its CSS variables, [dom/tokens.ts](../packages/overlay/src/dom/tokens.ts)) where a value goes, the ones that fit it: lengths in a padding or a radius, colors in a color, fonts in font-family, numbers in opacity ([TokenMenu/tokens.ts](../packages/overlay/src/ui/components/TokenMenu/tokens.ts)). Two ways to the same list ([TokenMenu](../packages/overlay/src/ui/components/TokenMenu/TokenMenu.tsx)), under the field:
+
+- **Typing `--`** at the start of a field or after a space, `(` or `,`: the list at the caret, filtered as you type, by name or by value (`inter` finds `--font-sans`). The way for anyone who knows the names, and inside a value: `calc(--sp` → `calc(var(--space-4)`, and the typing goes on.
+- **The variable button** on the field's right edge (Nucleo's nut-2, filled, drawn at 8px in a 16px target, while the field is hovered or edited; the text then ends 4px before it, with an ellipsis when it's cut, except while being edited, when it scrolls): the same list, to browse without knowing a name. Picked, the token goes where the caret is, in place of the selection: the whole value when the field wasn't being edited.
+
+**In order:** the ones meant for the property first, by their names (`tokenHint()`: the spacing scale for a padding, the radii for a radius, `bg`/`surface` for a background), then the rest in the page's order; what's typed still leads (the names starting with it).
+
+**Tokens in files too:** a project's tokens that never reach the page as CSS variables (a `tokens.json` in the W3C or Style Dictionary format, aliases followed; Sass `$variables`), read by Pilot's server ([tokenFiles.ts](../packages/cli/src/tokenFiles.ts), `POST /tokens`, kept current like the components) with an agent on the page. Listed after the page's, by their own names. Pilot defines each as a CSS variable of its own in a sheet of its own (`--color-brand-primary` for `color.brand.primary`, `setFileTokens()` in [dom/tokens.ts](../packages/overlay/src/dom/tokens.ts)), so a pick previews and is checked like any change; the agent's prompt says what each such variable stands for (`fileTokens` on the change set) and to write the token the project's way, never the `var(--…)`. Tailwind v3 configs are JavaScript, which would have to run: not read yet.
+
+Picked, `var(--name)` goes in (just the name inside a `var(` already); ↑/↓ and Enter or Tab pick, Esc closes the list only. The change records `var(--name)` as written (names keep their case), the preview resolves it on the page, and the agent writes the project's form of the token. Rejected: a button that replaces the whole value, alone, since tokens sit inside values too (`calc()`, `padding: var(--a) var(--b)`). The list and the button are approved by the owner. Not yet: Tailwind v3 configs.
+
+**Stepping a token:** ↑/↓ (and the wheel) on a field holding one token move it along its scale: `var(--space-3)` → `var(--space-4)`, `--radius-sm` → `--radius-md`, `--gray-100` → `--gray-200` in a color ([`stepToken()`](../packages/overlay/src/ui/components/TokenMenu/tokens.ts)). The scale is the tokens of the same kind named like it but for the last part, in order of their values when they can all be compared (lengths, numbers), else of that last part (numbers, t-shirt sizes). One token per step, Shift too, and it stays at either end: stepping never trades the token for a number on its own. A token with no scale (`--gutter`), or math (`calc(var(--space-2) + 4px)`), steps from the computed value instead, and the number replaces it (`stepValue()` in [css/values.ts](../packages/overlay/src/css/values.ts)), as the owner asked: the wheel and the arrows always do something. Rejected for math: stepping the number inside it (`+ 4px` → `+ 5px`), less predictable than the value you see.
+
+**What math comes to:** hovering a field that holds math (`100% - 20px`, `var(--space-2) * 3`, `clamp(…)`) shows its computed value in a tooltip, `= 180px` (`mathResult()` in [css/values.ts](../packages/overlay/src/css/values.ts)), from the moment it's applied, with the pointer still on it. Not while it's being edited (what's typed hasn't been computed yet), and not for a lone token: its list shows its value. Fields show declared values, never computed ones; this is the one place a computed value is shown, beside the declared one, never in its place.
+
 ## Modifiers: widths and states
 
 Typed at the start of the search, shown as **pills** in a row above the field. More modifiers will sit there side by side later.
@@ -98,7 +115,8 @@ Changes are for **every width** unless you set the **width chip** ([edits/widths
 | --- | --- | --- |
 | type | search | Finds the property. Tailwind aliases work: `p`, `pt`, `px`… |
 | **Tab** or **Enter** | search | Jumps into the matched editor. What you typed decides the focus: `pt` → top, `pl` → left |
-| type a number | editor | `12` or `12px`. ↑/↓ change it by 1, by 10 with Shift |
+| type a number | editor | `12` or `12px`. ↑/↓ change it by 1, by 10 with Shift; a token, along its scale (*Variables*) |
+| wheel | editor, being edited | Like ↑/↓: up is ↑, one step per notch (or per 24px of a trackpad's scroll). A burst of steps is one undo step. A field not being edited lets the dialog scroll |
 | **Enter** | editor | Applies the value and returns to the search, text selected, ready for the next property |
 | **Tab / Shift+Tab** | editor | Next/previous field (padding: top → right → bottom → left), on into the next/previous editor. Past the first or last, back to the search |
 | **Esc** | anywhere in the dialog | One level back: editor → search (discards typed text) → clears the search → closes the dialog |

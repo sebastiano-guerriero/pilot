@@ -1,4 +1,4 @@
-import type { AgentInfo, ChangeResult, Job, PageEvent, ProjectComponent, WidthCheck } from "@pilot/protocol";
+import type { AgentInfo, ChangeResult, FileToken, Job, PageEvent, ProjectComponent, WidthCheck } from "@pilot/protocol";
 import { DEFAULT_BRIDGE_PORT } from "@pilot/protocol";
 
 /** Where the hub listens (see packages/cli: `pilot mcp`). */
@@ -101,6 +101,20 @@ export class BridgeClient {
       const { components } = (await res.json()) as { components?: unknown };
       return Array.isArray(components)
         ? components.filter((c): c is ProjectComponent => typeof c?.name === "string" && typeof c?.file === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** The project's tokens that only live in files (Pilot's server reads them); none when the hub can't say (as for components). */
+  async tokens(): Promise<FileToken[]> {
+    try {
+      const res = await fetch(`${this.url}/tokens`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      if (!res.ok) return [];
+      const { tokens } = (await res.json()) as { tokens?: unknown };
+      return Array.isArray(tokens)
+        ? tokens.filter((t): t is FileToken => typeof t?.name === "string" && typeof t?.value === "string" && typeof t?.file === "string")
         : [];
     } catch {
       return [];

@@ -1,3 +1,4 @@
+import type { FileToken } from "@pilot/protocol";
 import { PREVIEW_ATTRIBUTE } from "./preview.ts";
 
 /**
@@ -15,12 +16,17 @@ import { PREVIEW_ATTRIBUTE } from "./preview.ts";
 export type TokenKind = "color" | "length" | "font" | "number" | "other";
 
 export interface Token {
-  /** As written: `--color-accent`. */
+  /** As written: `--color-accent`. A file's token: the CSS variable Pilot gives it (see fileTokenVariable). */
   name: string;
   /** What it resolves to now, on the root (`#1cf69e`, `0.5rem`). */
   value: string;
   kind: TokenKind;
+  /** A token from a file in the project (`color.brand.primary` in `tokens.json`), not a CSS variable on the page. */
+  source?: { name: string; file: string; line?: number };
 }
+
+/** Pilot's own sheet defining the project's file tokens as CSS variables, for its previews (see setFileTokens). */
+export const FILE_TOKENS_ATTRIBUTE = "data-pilot-tokens";
 
 /** Selectors whose variables are the page's tokens (each part of a selector list). */
 const ROOT = /^(?::root|html|:host)$/;
@@ -36,7 +42,7 @@ export function pageTokens(doc: Document = document): Token[] {
   ];
   // Pilot's own preview sheet holds the designer's edits, not the page's tokens.
   const seen = new Set<CSSStyleSheet>(
-    Array.from(doc.querySelectorAll(`style[${PREVIEW_ATTRIBUTE}]`)).flatMap((el) =>
+    Array.from(doc.querySelectorAll(`style[${PREVIEW_ATTRIBUTE}], style[${FILE_TOKENS_ATTRIBUTE}]`)).flatMap((el) =>
       (el as HTMLStyleElement).sheet ? [(el as HTMLStyleElement).sheet as CSSStyleSheet] : [],
     ),
   );
@@ -101,3 +107,53 @@ function isNamedColor(value: string): boolean {
     return false;
   }
 }
+
+/**
+ * The project's tokens that only live in files (Pilot's server reads them:
+ * a `tokens.json`, Sass variables), as the page can use them: each a CSS
+ * variable of Pilot's own, defined on the root in a sheet of its own
+ * (FILE_TOKENS_ATTRIBUTE), so a picked one previews as `var(--…)` and is
+ * checked like any change. The code never has them: the agent's prompt
+ * says what each stands for (ChangeSet.fileTokens). One the page already
+ * defines by that name is left to the page's.
+ */
+let fileTokenList: Token[] = [];
+
+/** `color.brand.primary` → `--color-brand-primary`; `$brand-500` → `--brand-500`. */
+export function fileTokenVariable(name: string): string {
+  return `--${name.replace(/^\$/, "").replace(/[^\w-]+/g, "-").replace(/^-+|-+$/g, "")}`;
+}
+
+/** Takes the server's list (setting the sheet that defines them); none clears it. */
+export function setFileTokens(tokens: readonly FileToken[], doc: Document = document): void {
+  const onPage = new Set(pageTokens(doc).map((t) => t.name));
+  const seen = new Set<string>();
+  fileTokenList = tokens.flatMap((t): Token[] => {
+    const name = fileTokenVariable(t.name);
+    if (name === "--" || onPage.has(name) || seen.has(name)) return [];
+    seen.add(name);
+    return [{ name, value: t.value, kind: kindOf(t.name, t.value), source: { name: t.name, file: t.file, ...(t.line ? { line: t.line } : {}) } }];
+  });
+  let sheet = doc.querySelector<HTMLStyleElement>(`style[${FILE_TOKENS_ATTRIBUTE}]`);
+  if (!fileTokenList.length) return sheet?.remove();
+  if (!sheet) {
+    sheet = doc.createElement("style");
+    sheet.setAttribute(FILE_TOKENS_ATTRIBUTE, "");
+    doc.head.append(sheet);
+  }
+  const text = `:root { ${fileTokenList.map((t) => `${t.name}: ${t.value};`).join(" ")} }`;
+  if (sheet.textContent !== text) sheet.textContent = text;
+}
+
+/** The file tokens Pilot has, as page tokens with their source. */
+export function fileTokensNow(): readonly Token[] {
+  return fileTokenList;
+}
+
+/** Every token the page can use: its own CSS variables, then the project's file tokens. */
+export function allTokens(doc: Document = document): Token[] {
+  const page = pageTokens(doc);
+  const names = new Set(page.map((t) => t.name));
+  return [...page, ...fileTokenList.filter((t) => !names.has(t.name))];
+}
+

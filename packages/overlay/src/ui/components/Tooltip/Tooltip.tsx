@@ -4,7 +4,7 @@ import { px } from "../../px.ts";
 import { onSwitch, openDelay, switched, tooltipClosed, tooltipOpened } from "./delay.ts";
 
 interface TooltipProps {
-  /** What the tooltip says. */
+  /** What the tooltip says. Empty: it doesn't open (a trigger that only sometimes has one keeps its place in the tree). */
   text: string;
   /** A second line, dimmed, under `text`: what to do about it ("Run /pilot again in its chat"). */
   detail?: string;
@@ -19,6 +19,8 @@ interface TooltipProps {
   gap?: number;
   /** Show it now, whatever the pointer does (a moment of feedback: "Sent"). */
   forceOpen?: boolean;
+  /** Fill the width it's given (a field), instead of hugging the trigger. */
+  block?: boolean;
   /** The trigger: a button, usually. Give it an `aria-label` of its own: the tooltip is visual only. */
   children: ComponentChildren;
 }
@@ -40,7 +42,7 @@ function focusVisible(el: Element): boolean {
  * (delay.ts). Keyboard focus opens it at once. Use it instead of `title` in
  * Pilot's own UI.
  */
-export function Tooltip({ text, detail, side = "top", align = "center", gap, forceOpen = false, children }: TooltipProps) {
+export function Tooltip({ text, detail, side = "top", align = "center", gap, forceOpen = false, block = false, children }: TooltipProps) {
   const [open, setOpen] = useState(false);
   // No transition (Tooltip.css) while moving between triggers: opened
   // straight after another one closed, or left for one that opened so.
@@ -52,7 +54,7 @@ export function Tooltip({ text, detail, side = "top", align = "center", gap, for
 
   const show = (delay: number, warm = false) => {
     clearTimeout(timer.current);
-    if (isOpen.current) return;
+    if (isOpen.current || !text) return;
     const go = () => {
       isOpen.current = true;
       tooltipOpened();
@@ -79,6 +81,12 @@ export function Tooltip({ text, detail, side = "top", align = "center", gap, for
   });
   useEffect(() => onSwitch(dropFade.current), []);
 
+  // Something to say now, with the pointer already on the trigger (a field's
+  // value just turned into math): it opens as if the pointer had just come.
+  useEffect(() => {
+    if (text && hovered.current) show(openDelay());
+  }, [!text]);
+
   // Going away while open (the selection changed): it counts as closed.
   useEffect(
     () => () => {
@@ -91,6 +99,7 @@ export function Tooltip({ text, detail, side = "top", align = "center", gap, for
   return (
     <span
       class="tooltip-anchor"
+      data-block={block || undefined}
       onPointerEnter={(e) => {
         if (e.pointerType === "touch") return;
         hovered.current = true;
@@ -116,7 +125,7 @@ export function Tooltip({ text, detail, side = "top", align = "center", gap, for
         class="tooltip"
         data-side={side}
         data-align={align === "center" ? undefined : align}
-        data-open={open || forceOpen || undefined}
+        data-open={((open || forceOpen) && !!text) || undefined}
         data-instant={instant || undefined}
         data-detail={detail ? "" : undefined}
         style={gap === undefined ? undefined : side === "top" ? { marginBottom: px(gap) } : { marginTop: px(gap) }}

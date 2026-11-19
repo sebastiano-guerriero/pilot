@@ -5,6 +5,7 @@ import { measuredBoxes } from "../dom/measure.ts";
 import { revealInWindow } from "../dom/reveal.ts";
 import { componentName, componentProps } from "../dom/component.ts";
 import { mentionables } from "../dom/mentions.ts";
+import { setFileTokens } from "../dom/tokens.ts";
 import { findSimilar } from "../dom/similar.ts";
 import { describeElement, type EditableElement, findTarget, isEditable } from "../dom/target.ts";
 import { isTextOnly, normalizeText, textProperty, textRunAt } from "../dom/text.ts";
@@ -33,6 +34,7 @@ import { thumbnail } from "../dom/thumbnail.ts";
 import { type Tool, Toolbar } from "./components/Toolbar/Toolbar.tsx";
 import { ViewportWidth } from "./components/ViewportWidth/ViewportWidth.tsx";
 import { countChanges } from "./changesLabel.ts";
+import { draftFor, keepDraft } from "./drafts.ts";
 import { loadSelection, saveSelection } from "./selectionKeep.ts";
 import { loadSpot, saveSpot, type ToolbarSpot } from "./toolbarSpot.ts";
 import { useViewportWidth } from "./useViewportWidth.ts";
@@ -443,8 +445,20 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // the tool, the selected elements, the comment being written; restored
   // once they're on the page again (frameworks render a moment after load).
   // Nothing is saved until the restore is done, so it isn't overwritten.
-  const [draft, setDraft] = useState("");
-  const [restoredDraft, setRestoredDraft] = useState<{ key: number; text: string } | null>(null);
+  // The project's tokens that only live in files (Pilot's server reads them):
+  // asked for whenever the selection changes (the server reads only what
+  // changed since), so a token added to a file shows the next time.
+  useEffect(() => {
+    if (!session || !sendToAgent) return;
+    let current = true;
+    void session.projectTokens().then((tokens) => current && setFileTokens(tokens));
+    return () => {
+      current = false;
+    };
+  }, [selected?.key, sendToAgent]);
+
+  // What's being written comes back with the element (drafts.ts), looked up once per selection.
+  const selectedDraft = useMemo(() => (selected ? draftFor(selected.element) : undefined), [selected?.key]);
   const restoring = useRef(!dev);
   useEffect(() => {
     const kept = restoring.current ? loadSelection() : null;
@@ -460,7 +474,6 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
         setTool(kept.tool);
         setSelected({ element: first, key: 1 });
         setOthers(rest.filter(isEditable));
-        if (kept.draft && kept.tool === "comment") setRestoredDraft({ key: 1, text: kept.draft });
         restoring.current = false;
         return;
       }
@@ -480,11 +493,10 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
         ? {
             tool,
             targets: elements.flatMap((e) => targets.current.get(e) ?? []),
-            ...(tool === "comment" && draft.trim() ? { draft } : {}),
           }
         : null,
     );
-  }, [tool, selected, others, draft]);
+  }, [tool, selected, others]);
 
   // Esc, one level at a time:
   // - something selected: clear the selection and close the DOM tree (inside
@@ -681,8 +693,8 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
           <CommentWidget
             key={selected.key}
             element={selected.element}
-            initialText={restoredDraft?.key === selected.key ? restoredDraft.text : undefined}
-            onTextChange={setDraft}
+            initialText={selectedDraft}
+            onTextChange={(text) => keepDraft(selected.element, text)}
             anchor={selectedRect}
             placeBy={placeBy}
             veiled={measuring}
@@ -938,7 +950,7 @@ function isTextField(el: Element | null): boolean {
 
 /** What the comment mentions as the references it carries (see CommentReference); an element gone from the page since, none. */
 function toReference(o: MentionOption): CommentReference[] {
-  if (o.group === "Tokens") return [{ kind: "token", name: o.label, value: o.detail ?? "" }];
+  if (o.group === "Tokens") return [{ kind: "token", name: o.label, value: o.detail ?? "", ...(o.tokenFile ? { source: o.tokenFile } : {}) }];
   if (o.group === "Unlisted") return [{ kind: "unlisted", name: o.label }];
   const target = o.element?.isConnected ? describeElement(o.element) : undefined;
   if (o.group === "Components") return [{ kind: "component", name: o.label, ...(target ? { target } : {}), ...(o.source ? { source: o.source } : {}) }];

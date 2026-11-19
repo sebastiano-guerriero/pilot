@@ -740,32 +740,36 @@ export function CommentWidget({
             ))}
           </ul>
         )}
-        <textarea
-          ref={fieldRef}
-          class="field"
-          data-reply={count > 0 || undefined}
-          rows={1}
-          value={text}
-          placeholder={placeholder(!!action, count > 0, !!mentions)}
-          aria-label="Comment"
-          onInput={(e) => {
-            const field = e.currentTarget as HTMLTextAreaElement;
-            setText(field.value);
-            setCaret(field.selectionStart ?? field.value.length);
-          }}
-          onKeyUp={(e) => {
-            if (e.key.startsWith("Arrow") || e.key === "Home" || e.key === "End") readCaret();
-          }}
-          onClick={readCaret}
-          aria-controls={menuOpen ? "pilot-actions" : mentionOpen ? "pilot-mentions" : undefined}
-          aria-activedescendant={
-            menuOpen && options[active]
-              ? `pilot-action-${options[active].id}`
-              : mentionOpen && mentionMatches[active]
-                ? `pilot-mention-${active}`
-                : undefined
-          }
-        />
+        {/* The field and Pilot's scroll thumb over the box's edge, once it's past its 120px. */}
+        <div class="field-frame">
+          <textarea
+            ref={fieldRef}
+            class="field"
+            data-reply={count > 0 || undefined}
+            rows={1}
+            value={text}
+            placeholder={placeholder(!!action, count > 0, !!mentions)}
+            aria-label="Comment"
+            onInput={(e) => {
+              const field = e.currentTarget as HTMLTextAreaElement;
+              setText(field.value);
+              setCaret(field.selectionStart ?? field.value.length);
+            }}
+            onKeyUp={(e) => {
+              if (e.key.startsWith("Arrow") || e.key === "Home" || e.key === "End") readCaret();
+            }}
+            onClick={readCaret}
+            aria-controls={menuOpen ? "pilot-actions" : mentionOpen ? "pilot-mentions" : undefined}
+            aria-activedescendant={
+              menuOpen && options[active]
+                ? `pilot-action-${options[active].id}`
+                : mentionOpen && mentionMatches[active]
+                  ? `pilot-mention-${active}`
+                  : undefined
+            }
+          />
+          <ScrollThumb target={fieldRef} />
+        </div>
         {mentionOpen && pool && (
           <div class="actions-menu" id="pilot-mentions" role="listbox" aria-label="Mention">
             {mentionMatches.length ? (

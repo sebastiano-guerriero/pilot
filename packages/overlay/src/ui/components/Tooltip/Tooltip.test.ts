@@ -93,4 +93,18 @@ describe("Tooltip", () => {
     wait(OPEN_DELAY);
     expect(isOpen(1)).toBe(true);
   });
+
+  it("with no text it doesn't open; given some while hovered, it opens as if just hovered", () => {
+    const show = (text: string) =>
+      act(() => render(h("div", null, [h(Tooltip, { text, children: h("button", null, "1") })]), container));
+    show("");
+    pointer(0, "pointerenter");
+    wait(OPEN_DELAY * 2);
+    expect(isOpen(0)).toBe(false);
+    show("= 180px");
+    wait(OPEN_DELAY);
+    expect(isOpen(0)).toBe(true);
+    show("");
+    expect(isOpen(0)).toBe(false);
+  });
 });

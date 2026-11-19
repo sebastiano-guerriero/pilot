@@ -7,9 +7,9 @@ const target = { selector: "article", path: "main > article", tag: "article", cl
 describe("the selection kept through a reload", () => {
   beforeEach(() => sessionStorage.clear());
 
-  it("the tool, the elements and the comment being written, for this tab", () => {
-    saveSelection({ tool: "comment", targets: [target], draft: "Calmer" });
-    expect(loadSelection()).toMatchObject({ tool: "comment", targets: [target], draft: "Calmer" });
+  it("the tool and the elements, for this tab", () => {
+    saveSelection({ tool: "comment", targets: [target] });
+    expect(loadSelection()).toMatchObject({ tool: "comment", targets: [target] });
   });
 
   it("nothing selected: nothing kept; an old one (the tab came back much later) isn't restored", () => {

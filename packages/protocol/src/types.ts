@@ -267,7 +267,7 @@ export interface CommentMessage {
  * (a token as is, the others after `@`).
  */
 export type CommentReference =
-  | { kind: "token"; name: string; value: string }
+  | { kind: "token"; name: string; value: string; source?: ComponentFile }
   | { kind: "component"; name: string; target?: ElementTarget; source?: ComponentFile }
   | { kind: "element"; name: string; target: ElementTarget }
   | { kind: "unlisted"; name: string };
@@ -390,4 +390,20 @@ export interface ChangeSet {
   request?: AgentRequest;
   /** Free-form note from the designer ("make this feel lighter", etc.). */
   note?: string;
+  /**
+   * The project's file tokens its changes use (`var(--color-brand-primary)`):
+   * CSS variables of Pilot's own, for the preview, that stand for tokens in
+   * the project's files (`color.brand.primary` in `tokens/colors.json`). The
+   * agent writes the token the project's way, never the `var(--…)`.
+   */
+  fileTokens?: FileTokenUse[];
+}
+
+/** A file token a change uses: its variable in Pilot's preview, and the token it stands for. */
+export interface FileTokenUse {
+  variable: string;
+  name: string;
+  value: string;
+  file: string;
+  line?: number;
 }

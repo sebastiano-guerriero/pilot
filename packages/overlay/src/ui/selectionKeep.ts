@@ -3,8 +3,9 @@ import type { Tool } from "./components/Toolbar/Toolbar.tsx";
 
 /**
  * What the designer had open, kept through a reload the agent causes (a
- * full page reload after its edit): the tool, the selected elements (as
- * targets, found again with findTarget), and the comment being written.
+ * full page reload after its edit): the tool and the selected elements (as
+ * targets, found again with findTarget). The comment being written comes
+ * back with its element (drafts.ts).
  * Per tab (sessionStorage), like the history; storage can throw (privacy
  * modes): then nothing is kept, and a reload starts with nothing open.
  */
@@ -12,8 +13,6 @@ export interface KeptSelection {
   tool: Exclude<Tool, null>;
   /** The selected elements, the first one first. */
   targets: ElementTarget[];
-  /** The comment being written, with the Comment tool. */
-  draft?: string;
   /** When it was saved: an old one (the tab came back much later) isn't restored. */
   at: number;
 }

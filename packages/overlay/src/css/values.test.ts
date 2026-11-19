@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 import { cssProperty, LENGTH_UNITS } from "./properties.ts";
-import { displayValue, parseValue, scrubIncrement, stepSize, stepValue } from "./values.ts";
+import { displayValue, mathResult, parseValue, scrubIncrement, stepSize, stepValue } from "./values.ts";
 
 describe("parseValue", () => {
   it("idents (will-change): names, comma-separated, joined with a comma and a space", () => {
@@ -76,9 +76,16 @@ describe("stepValue", () => {
     expect(stepValue("width", "auto", -10, "122px")).toBe("112px");
   });
 
-  it("doesn't go below 0 where negatives aren't valid, and leaves math alone", () => {
+  it("doesn't go below 0 where negatives aren't valid", () => {
     expect(stepValue("width", "2px", -10, "2px")).toBe("0px");
-    expect(stepValue("width", "100% - 20px", 1, "300px")).toBeNull();
+  });
+
+  it("a token or math steps from the computed value, a number in its place", () => {
+    expect(stepValue("width", "100% - 20px", 1, "300px")).toBe("301px");
+    expect(stepValue("padding-top", "var(--gutter)", -1, "20px")).toBe("19px");
+    expect(stepValue("padding-top", "min(var(--a), 2vw)", 10, "12px")).toBe("22px");
+    expect(stepValue("opacity", "var(--muted)", 1, "0.6")).toBe("61%");
+    expect(stepValue("z-index", "var(--z-modal)", 1, "50")).toBe("51");
   });
 });
 
@@ -277,5 +284,16 @@ describe("percent (opacity)", () => {
     expect(stepValue("opacity", "100%", 1, "1")).toBe("100%");
     expect(stepValue("opacity", "0%", -1, "0")).toBe("0%");
     expect(stepValue("opacity", "", -1, "1")).toBe("99%");
+  });
+});
+
+describe("what math comes to", () => {
+  it("a field holding math shows its computed value, rounded; anything else nothing", () => {
+    expect(mathResult("100% - 20px", "180px")).toBe("180px");
+    expect(mathResult("var(--space-2) * 3", "24px")).toBe("24px");
+    expect(mathResult("clamp(1rem, 2vw, 2rem)", "21.3333px")).toBe("21.33px");
+    expect(mathResult("var(--space-2)", "8px")).toBeNull();
+    expect(mathResult("12px", "12px")).toBeNull();
+    expect(mathResult("100% - 20px", undefined)).toBeNull();
   });
 });

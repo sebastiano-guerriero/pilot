@@ -1,8 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
-import { displayValue, parseValue, stepValue } from "../../css/values.ts";
+import { displayValue, parseValue } from "../../css/values.ts";
+import { stepField } from "../step.ts";
 import type { BoxArea } from "../../dom/boxModel.ts";
 import { Icon, type IconName } from "../../ui/components/Icon/Icon.tsx";
 import { type InputDraft, PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
+import { tokensFor } from "../../ui/components/TokenMenu/tokens.ts";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { declaredOf, isMixed, MIXED } from "../declared.ts";
 import { useScrub } from "../length/useScrub.ts";
@@ -267,10 +269,12 @@ export function SplitEditor({
               placeholder={mixed ? MIXED : undefined}
               label={title}
               inputRef={refs.current.all}
+              tokens={tokensFor(first.property)}
+              computed={same ? values[first.property] : undefined}
               onCommit={commitAll}
-              onStep={(delta, text) => {
-                const next = stepValue(first.property, text, delta, baseOf(first)());
-                if (next) onChange(config.shorthand, next);
+              onStep={(delta, text, gesture) => {
+                const next = stepField(first.property, text, delta, baseOf(first)());
+                if (next && next !== text) onChange(config.shorthand, next, gesture && { gesture });
               }}
               onScrub={(steps, text, gesture) =>
                 scrub({ property: first.property, writes: config.shorthand, base: baseOf(first) }, steps, text, gesture)
@@ -290,10 +294,12 @@ export function SplitEditor({
                   label={part.label}
                   placeholder={partMixed(part) ? MIXED : undefined}
                   inputRef={refs.current[part.key]}
+                  tokens={tokensFor(part.property)}
+                  computed={values[part.property]}
                   onCommit={(text) => commitPart(part.key, text)}
-                  onStep={(delta, text) => {
-                    const next = stepValue(part.property, text, delta, baseOf(part)());
-                    if (next && next !== value[part.key]) onChange(part.property, next);
+                  onStep={(delta, text, gesture) => {
+                    const next = stepField(part.property, text, delta, baseOf(part)());
+                    if (next && next !== value[part.key]) onChange(part.property, next, gesture && { gesture });
                   }}
                   onScrub={(steps, text, gesture) =>
                     scrub({ property: part.property, base: baseOf(part) }, steps, text, gesture)

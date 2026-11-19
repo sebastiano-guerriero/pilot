@@ -249,6 +249,11 @@ describe("the loop, through MCP", () => {
     expect(await res.json()).toEqual({ components: [{ name: "PricingTable", file: "src/Pricing.tsx", line: 1 }] });
     // Another site gets nothing.
     expect((await fakePage(port, "https://evil.example").post("/components", {})).status).toBe(403);
+    // The tokens in its files too (tokenFiles.ts).
+    await mkdir(join(project, "tokens"));
+    await writeFile(join(project, "tokens/colors.json"), JSON.stringify({ brand: { $value: "#1cf69e" } }));
+    const tokens = await (await app.post("/tokens", {})).json();
+    expect(tokens).toEqual({ tokens: [{ name: "brand", value: "#1cf69e", file: "tokens/colors.json", line: 1 }] });
     // The folder stays in the hub: the page's events (agents, launch) never carry it.
     await until(() => app.events.some((e) => e.type === "agents" && e.agents.length > 0));
     expect(JSON.stringify(app.events)).not.toContain(project);

@@ -43,6 +43,20 @@ export interface ProjectComponent {
   line?: number;
 }
 
+/**
+ * A design token from a file in the agent's project (`POST /tokens`): one
+ * that never reaches the page as a CSS variable (a `tokens.json`, a Sass
+ * variable). `name` as the file has it (`color.brand.primary`, `$brand`),
+ * `value` resolved (aliases followed), `file` relative to the workspace's
+ * root (see ProjectComponent).
+ */
+export interface FileToken {
+  name: string;
+  value: string;
+  file: string;
+  line?: number;
+}
+
 export interface AgentInfo {
   id: string;
   /** "Claude Code · pilot": the agent's client name and its project folder. */

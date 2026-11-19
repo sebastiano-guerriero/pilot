@@ -20,7 +20,7 @@ import type { ProjectComponent } from "@pilot/protocol";
  */
 
 /** Folders never scanned: dependencies, builds, caches, VCS, test and story folders. */
-const SKIP = new Set([
+export const SKIP = new Set([
   "node_modules",
   "dist",
   "build",

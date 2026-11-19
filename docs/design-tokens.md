@@ -1,6 +1,6 @@
 # Design tokens in Pilot (in part planned)
 
-> Status: **reading the page's tokens is built**, for the comment box's `@` mentions ([handoff.md](handoff.md), *Mentions*): `pageTokens()` in [dom/tokens.ts](../packages/overlay/src/dom/tokens.ts) collects the root's CSS variables, live, with their values and kinds. The rest is planned: fields offering tokens, steps along the scale, and tokens that only live in code (read by the hub, then listed in `@` too). When a part is built, move it into the docs for its area (see [README.md](README.md)) and trim this note to what's still open.
+> Status: **reading the page's tokens is built**, and so are the project's token files (JSON, Sass: read by Pilot's server, Tailwind v3 configs still to come); they're offered in the property fields (`--` typed, or the variable button: [property-dialog.md](property-dialog.md), *Variables*) and in the comment box's `@` mentions ([handoff.md](handoff.md), *Mentions*): `pageTokens()` in [dom/tokens.ts](../packages/overlay/src/dom/tokens.ts) collects the root's CSS variables, live, with their values and kinds. A field holding a token steps along its scale (↑/↓, the wheel: *Variables* there too). Still planned: a plain number stepping to the scale's values, and scrubbing along it. When a part is built, move it into the docs for its area (see [README.md](README.md)) and trim this note to what's still open.
 
 ## Goal
 

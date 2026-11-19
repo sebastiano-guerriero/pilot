@@ -45,14 +45,14 @@
   /* As wide as its longest option, up to a limit (longer ones end with an
      ellipsis). Fixed, so the dialog's overflow doesn't clip it; positioned by
      PropertySelect.tsx. */
+  /* The menu's box: placed and drawn here; the list inside it scrolls
+     (.menu-list), with Pilot's scroll thumb over its right edge. */
   .menu {
     position: fixed;
     z-index: 1;
     width: max-content;
     max-width: 240px;
-    max-height: 320px;
-    overflow-y: auto;
-    padding: 4px;
+    overflow: hidden;
     border-radius: 10px;
     background: var(--plt-color-background-light);
     box-shadow:
@@ -60,6 +60,19 @@
       inset 0 0 0 1px hsl(0 0% 100% / 5%),
       var(--plt-shadow-lg);
     color: var(--plt-color-contrast-high);
+  }
+
+  .menu-list {
+    max-height: 320px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    /* No native scrollbar: ScrollThumb draws one, as in the dialog. */
+    scrollbar-width: none;
+    padding: 4px;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
   }
 
   .option {

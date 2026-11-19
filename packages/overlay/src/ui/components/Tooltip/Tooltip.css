@@ -5,6 +5,12 @@
   :scope {
     position: relative;
     display: inline-flex;
+
+    /* Around a field: as wide as the field's slot, and as narrow. */
+    &[data-block] {
+      display: block;
+      min-width: 0;
+    }
   }
 
   .tooltip {

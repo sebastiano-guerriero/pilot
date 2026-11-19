@@ -26,6 +26,8 @@ export interface MentionOption {
   element?: Element;
   /** A component of the project's (not on the page): where it's declared, from Pilot's server. */
   source?: ComponentFile;
+  /** A token from a file in the project (not a CSS variable on the page): where it's defined. */
+  tokenFile?: ComponentFile;
 }
 
 /** At most this many per group: the list narrows as you type. */
@@ -36,10 +38,12 @@ export function mentionOptions({ tokens, components, elements }: Mentionables): 
   return [
     ...tokens.map((t): MentionOption => ({
       group: "Tokens",
-      label: t.name,
-      insert: t.name,
+      // A file's token as the file names it (`color.brand.primary`, `$brand`).
+      label: t.source?.name ?? t.name,
+      insert: t.source?.name ?? t.name,
       detail: t.value,
       swatch: t.kind === "color" ? t.value : undefined,
+      ...(t.source ? { tokenFile: { file: t.source.file, ...(t.source.line ? { line: t.source.line } : {}) } } : {}),
     })),
     ...components.map((c): MentionOption => ({ group: "Components", label: c.name, insert: `@${c.name}`, element: c.element })),
     ...elements.map((e): MentionOption => ({ group: "Elements", label: e.name, insert: `@${e.name}`, element: e.element })),
