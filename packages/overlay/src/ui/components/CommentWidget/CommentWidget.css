@@ -374,6 +374,13 @@
     flex-direction: column;
     padding: 0 16px 12px;
   }
+  /* A list open (`/`, `@`), the buttons hidden: its rows' highlight 8px from
+     the box's bottom edge, as from its sides (the rows sit 8px into the
+     composer's 16px). */
+  .composer:has(.actions-menu) {
+    padding-bottom: 8px;
+  }
+
 
   /* Attached files, above the field (images as themselves, others as a
      tile): 42px previews with a 6px radius, five to a row (spread across
@@ -540,10 +547,9 @@
     font-size: var(--plt-text-base);
     line-height: 1;
     margin: 0 -8px;
-    /* The buttons hide while it's open: 22px from the last row's text to the
-       box's edge (its 6px, these 4px, the composer's 12px), as from the
-       field's text to the first row. */
-    padding-bottom: 4px;
+    /* The buttons hide while it's open: the composer's bottom padding then
+       makes the space under the last row (see .composer:has(.actions-menu)). */
+    padding-bottom: 0;
   }
 
   .action-option {
