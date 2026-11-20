@@ -64,7 +64,7 @@ export interface JobRecord {
 /**
  * A comment thread on one element (the toolbar's Comment tool): the
  * designer's messages, each sent to the agent as a job carrying the thread
- * so far, and the agent's replies (its `pilot_done` notes). It stays (with
+ * so far, and the agent's replies (its notes). It stays (with
  * its pin) until the designer resolves it.
  */
 export interface CommentThread {
@@ -154,10 +154,10 @@ export interface SessionOptions {
   onLaunch(agent: AgentInfo): void;
   /**
    * The page found an agent working on it (opened, or reloaded, after the
-   * agent ran /pilot): launch Pilot, unless the designer quit it in this tab.
+   * `npx usepilot` started for the site): launch Pilot, unless the designer closed it in this tab.
    */
   onAgentsArrived?(): void;
-  /** The designer quit Pilot on this site, in another tab (or this one): close it here. */
+  /** The designer closed Pilot on this site, in another tab (or this one): close it here. */
   onQuit?(): void;
 }
 

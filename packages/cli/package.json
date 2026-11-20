@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "license": "FSL-1.1-MIT",
-  "description": "The `pilot` command: project setup, the local bridge the overlay talks to, and the MCP server agents connect to.",
+  "description": "The `usepilot` command: Pilot for a project (it runs the agent for each job), project setup, and the local bridge the overlay talks to.",
   "type": "module",
   "bin": {
     "pilot": "./dist/index.js"
@@ -18,8 +18,6 @@
     "tsup": "^9.0.0"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.2",
-    "@pilot/protocol": "workspace:^",
-    "zod": "^4.6.7"
+    "@pilot/protocol": "workspace:^"
   }
 }

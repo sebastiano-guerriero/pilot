@@ -5,9 +5,9 @@ import type { Hub, WaitResult } from "./hub.ts";
 import { CHECK_TIMEOUT, localAgents, startHub, type HubServer } from "./server.ts";
 
 /**
- * An agent's way to the hub (one per `pilot mcp` process). The first process
+ * A process's way to the hub (one per `npx usepilot`). The first process
  * on the machine runs the hub itself; the others reach it over HTTP. When the
- * hub's process ends (its chat was closed), the next call fails to connect,
+ * hub's process ends (its terminal was closed), the next call fails to connect,
  * and this process takes over: it starts the hub on the same port (or joins
  * whoever got there first). Pages reconnect by themselves and post their
  * unfinished jobs again, so nothing is lost.
@@ -58,7 +58,7 @@ class LocalApi implements HubApi {
   }
 }
 
-/** The hub in another `pilot mcp` process, over HTTP. */
+/** The hub in another `npx usepilot` process, over HTTP. */
 class RemoteApi implements HubApi {
   constructor(private port: number) {}
   private async post<T>(action: string, data: object, signal?: AbortSignal): Promise<T> {

@@ -11,7 +11,7 @@ Each doc covers one area. Read the one for the area you're changing before you c
 | [property-dialog.md](property-dialog.md) | The dialog next to the selection: where it sits, the empty-search list, finding properties, the width chip and state pills, keys |
 | [editors.md](editors.md) | Property editors: the contract, the shared pieces, value grammar, the property database, and each editor |
 | [edits.md](edits.md) | How a change is recorded, shown and handed off: the history and undo, the preview stylesheet, declared values, removals, widths, states, text changes, the change set, reloads |
-| [handoff.md](handoff.md) | Agent handoff: `/pilot`, jobs, the check after done, Make responsive and the width check, comments, elements being worked on, the hub |
+| [handoff.md](handoff.md) | Agent handoff: agent runs (`npx usepilot`), jobs, the check after done, Make responsive and the width check, comments, elements being worked on, the hub |
 | [development.md](development.md) | Working on Pilot: scripts, the playground, trying it in other projects, the responsive lab, releasing, styling, fonts |
 | [roadmap.md](roadmap.md) | What's built, what's next, open questions |
 | [design-tokens.md](design-tokens.md) | Design tokens (in part planned) |

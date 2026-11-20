@@ -5,7 +5,7 @@
  *
  * What's edited is a **text run**: the text between an element's child
  * elements, one or more text nodes in a row (comments between them don't
- * break it). `<p>A sample page, <code>/pilot</code> launches it.</p>` has
+ * break it). `<p>A sample page, <code>npx usepilot</code> launches it.</p>` has
  * two runs, "A sample page, " (0) and " launches it." (1); a text-only
  * element has one, its whole text. Each run is a change of its own: the
  * property is `text` for run 0 and `text:N` for run N.

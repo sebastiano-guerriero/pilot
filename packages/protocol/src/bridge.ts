@@ -2,11 +2,11 @@
  * The bridge: how the page (Pilot's overlay) and coding agents meet.
  *
  * One hub per machine and bridge version listens on 127.0.0.1 (DEFAULT_BRIDGE_PORT). It lives
- * in the first `pilot mcp` process an agent starts; later ones talk to it over
- * HTTP and take over if it goes away. The page sends jobs and listens to
- * Server-Sent Events; agents take jobs (`pilot_wait_for_edits`) and report
- * them done (`pilot_done`). Jobs are routed by the page's origin: an agent
- * gets jobs only from the page it launched Pilot in.
+ * in the first `npx usepilot` process; later ones talk to it over HTTP and
+ * take over if it goes away. The page sends jobs and listens to Server-Sent
+ * Events; each project's process takes its site's jobs, runs the agent for
+ * each, and reports them done. Jobs are routed by the page's origin: a
+ * process gets jobs only from the site it runs for.
  */
 import type { AgentSession, ChangeSet, PropSpec, PropValue } from "./types.ts";
 
@@ -257,7 +257,7 @@ export interface WidthReport {
 export type PageEvent =
   /** On connect and whenever agents come or go for this page's origin. */
   | { type: "agents"; agents: AgentInfo[]; waiting: number }
-  /** An agent ran /pilot for this page: launch Pilot. */
+  /** Pilot started for this page's site (`npx usepilot`): launch it. */
   | { type: "launch"; agent: AgentInfo }
   /** A job changed (taken, done…). */
   | { type: "job"; job: Job }
@@ -282,8 +282,8 @@ export function originOf(url: string): string | null {
  * (*.local, *.test, *.internal, *.lan, *.home.arpa, or one with no dot,
  * like MAMP's `nucleo`), or a private network (10.x, 172.16–31.x, 192.168.x,
  * 169.254.x, IPv6 fc00::/7 and fe80::/10, a phone on the Wi-Fi). Pilot only
- * runs on these (mountPilot), and an agent only takes a site from these
- * without being told (pilot_launch): it must never run in production.
+ * runs on these (mountPilot), and `npx usepilot` only takes a site from these
+ * without being told (`--url`): it must never run in production.
  */
 export function isLocalHost(hostname: string): boolean {
   const h = hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");

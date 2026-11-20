@@ -3,9 +3,9 @@ import { formatPrompt, sharedChoiceMeaning } from "@pilot/protocol";
 
 /**
  * What the agent reads for a job, in two forms:
- * - `tools: true` (default): for an agent chat connected to Pilot's MCP
- *   server (`pilot_wait_for_edits`, `pilot_done`): the guidelines it read
- *   once are only reminded, and the job ends with "call `pilot_done`".
+ * - `tools: true` (default): for an agent with Pilot's MCP tools
+ *   (`pilot_wait_for_edits`, `pilot_done`), as the chat loop had until agent
+ *   runs: kept for now, unused (the roadmap's *After agent runs*).
  * - `tools: false`: for a run Pilot started itself (run.ts): the guidelines
  *   in full (a fresh session hasn't read them), and the reply is the notes,
  *   with a question or a props list in a `pilot` block at its end (see

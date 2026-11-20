@@ -9,7 +9,9 @@
     "css",
     "tailwind",
     "agent",
-    "mcp",
+    "claude-code",
+    "codex",
+    "cursor",
     "devtools"
   ],
   "type": "module",

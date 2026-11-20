@@ -113,7 +113,7 @@ export function withAttachmentPaths<T extends { changeSet: Job["changeSet"] }>(j
   return { ...job, changeSet: { ...job.changeSet, request: { ...request, thread } } };
 }
 
-/** An MCP content block shown to the agent with a job. */
+/** What a job shows the agent of an attachment: an image, or a text file's contents (a run takes the text in its prompt). */
 /**
  * The files the designer attached to what this job asks now (a task's, or
  * the comment's messages since the agent's last reply), each one of Pilot's

@@ -49,62 +49,35 @@ function installer(ok = true) {
 }
 
 describe("usepilot update", () => {
-  it("installs the latest with the project's package manager, updates the skill where init put it, and says what's next", async () => {
+  it("installs the latest with the project's package manager, removes Pilot's old chat setup, and says what's next", async () => {
     await files(app("0.6.0"));
-    await files({ ".claude/skills/pilot/SKILL.md": "old skill" }, home);
-    await files({ ".agents/skills/pilot/SKILL.md": "old project skill" });
-    const { calls, run } = installer();
-    const out = await update({ cwd: dir, run, home });
-    expect(calls).toEqual(["npm install -D usepilot@latest"]);
-    expect(await readFile(join(home, ".claude/skills/pilot/SKILL.md"), "utf8")).not.toBe("old skill");
-    expect(await readFile(join(dir, ".agents/skills/pilot/SKILL.md"), "utf8")).not.toBe("old project skill");
-    // No skill where there was none: update doesn't set up new agents.
-    expect(existsSync(join(home, ".cursor/skills/pilot"))).toBe(false);
-    expect(out).toContain(`# Pilot updated: 0.6.0 → ${VERSION}`);
-    expect(out).toContain("~/.claude/skills/pilot");
-    expect(out).toContain("1. Restart your app's dev server");
-    // Claude Code has Pilot (its skill): a new chat is enough there.
-    expect(out).toContain("2. In Claude Code, open a new chat");
-    expect(out).toContain("3. Then, in a new chat, ask your agent to launch Pilot");
-    expect(out).not.toContain("other projects");
-  });
-
-  it("an agent that keeps one server for all its chats (Cursor): says how to restart it", async () => {
-    await files(app("0.6.0"));
-    await files({ ".cursor/mcp.json": { mcpServers: { pilot: { command: "npx", args: ["-y", "usepilot", "mcp"] } } } }, home);
-    const out = await update({ cwd: dir, run: installer().run, home });
-    expect(out).toContain("In Cursor, restart Pilot's server: Cursor Settings, MCP section, switch `pilot` off and on.");
-    expect(out).not.toContain("In Claude Code");
-  });
-
-  it("an old server command (a bare npx usepilot keeps its first download): moved to @latest, others left", async () => {
-    await files(app(VERSION));
     await files(
       {
-        ".cursor/mcp.json": { mcpServers: { figma: { url: "http://x" }, pilot: { command: "npx", args: ["-y", "usepilot", "mcp"] } } },
-        ".claude.json": { mcpServers: { pilot: { type: "stdio", command: "npx", args: ["-y", "usepilot", "mcp"] } } },
+        ".claude/skills/pilot/SKILL.md": "---\nname: pilot\n---\n",
+        ".cursor/mcp.json": { mcpServers: { figma: { url: "http://x" }, pilot: { command: "npx", args: ["-y", "usepilot@latest", "mcp"] } } },
       },
       home,
     );
-    // A link to a Pilot checkout (pnpm link-experiment) stays as it is.
-    await files({ ".mcp.json": { mcpServers: { pilot: { command: "node", args: ["/pilot/packages/cli/dist/index.js", "mcp"] } } } });
     const { calls, run } = installer();
     const out = await update({ cwd: dir, run, home });
-    expect(JSON.parse(await readFile(join(home, ".cursor/mcp.json"), "utf8")).mcpServers).toEqual({
-      figma: { url: "http://x" },
-      pilot: { command: "npx", args: ["-y", "usepilot@latest", "mcp"] },
-    });
-    expect(calls).toContain("claude mcp remove --scope user pilot");
-    expect(calls).toContain("claude mcp add --scope user pilot -- npx -y usepilot@latest mcp");
-    expect(JSON.parse(await readFile(join(dir, ".mcp.json"), "utf8")).mcpServers.pilot.command).toBe("node");
-    expect(out).toContain("its server is fixed");
-    expect(out).toContain("Pilot's server now always starts the latest version (`~/.cursor/mcp.json`, `Claude Code`)");
-    expect(out).toContain("In Cursor, restart Pilot's server");
+    expect(calls).toEqual(["npm install -D usepilot@latest"]);
+    expect(existsSync(join(home, ".claude/skills/pilot"))).toBe(false);
+    expect(JSON.parse(await readFile(join(home, ".cursor/mcp.json"), "utf8")).mcpServers).toEqual({ figma: { url: "http://x" } });
+    expect(out).toContain(`# Pilot updated: 0.6.0 → ${VERSION}`);
+    expect(out).toContain("Pilot's old chat setup is removed (`~/.cursor/mcp.json`, `~/.claude/skills/pilot`)");
+    expect(out).toContain("1. Restart your app's dev server");
+    expect(out).toContain("2. Restart `npx usepilot`");
+    expect(out).not.toContain("other projects");
   });
 
-  it("no agent found with Pilot: the general way", async () => {
+  it("a skill that's a link (a Pilot checkout, while developing it): unlinked, its checkout kept", async () => {
     await files(app("0.6.0"));
-    expect(await update({ cwd: dir, run: installer().run, home })).toContain("Restart Pilot's server in your agent");
+    await files({ "checkout/SKILL.md": "---\nname: pilot\n---\n" }, home);
+    await mkdir(join(home, ".claude/skills"), { recursive: true });
+    await symlink(join(home, "checkout"), join(home, ".claude/skills/pilot"));
+    await update({ cwd: dir, run: installer().run, home });
+    expect(existsSync(join(home, ".claude/skills/pilot"))).toBe(false);
+    expect(await readFile(join(home, "checkout/SKILL.md"), "utf8")).toContain("name: pilot");
   });
 
   it("a new bridge: says to update the other projects too", async () => {
@@ -118,15 +91,6 @@ describe("usepilot update", () => {
     const out = await update({ cwd: dir, run: installer().run, home });
     expect(out).toContain(`# Pilot is up to date (${VERSION})`);
     expect(out).toContain("Nothing else to do.");
-  });
-
-  it("a skill that's a link (a Pilot checkout, while developing it) is left as it is", async () => {
-    await files(app("0.6.0"));
-    await files({ "checkout/SKILL.md": "dev skill" }, home);
-    await mkdir(join(home, ".claude/skills"), { recursive: true });
-    await symlink(join(home, "checkout"), join(home, ".claude/skills/pilot"));
-    await update({ cwd: dir, run: installer().run, home });
-    expect(await readFile(join(home, "checkout/SKILL.md"), "utf8")).toBe("dev skill");
   });
 
   it("the install fails: says what to run", async () => {
@@ -144,7 +108,7 @@ describe("usepilot update", () => {
   it("init on a project with an older Pilot leaves its version alone, and says update updates it", async () => {
     await files(app("0.6.0"));
     const { calls, run } = installer();
-    const out = await init({ env: {}, home, cwd: dir, run, agent: "other" });
+    const out = await init({ detect: async () => [], home, cwd: dir, run });
     expect(calls).toEqual([]);
     expect(out).toContain(`Pilot 0.6.0 is installed here, and ${VERSION} is out: \`npx usepilot@latest update\``);
   });

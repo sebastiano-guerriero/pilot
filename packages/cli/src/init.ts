@@ -1,22 +1,21 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, relative } from "node:path";
-import { MCP_SERVER, writeSkill } from "./setup.ts";
+import { AGENTS as AGENT_CLIS, type AgentKind, detectAgents, type FoundAgent, isAgentKind } from "./agents.ts";
+import { saveAgent } from "./config.ts";
+import { removeOldSetup } from "./legacy.ts";
 import { olderThan, VERSION } from "./version.ts";
 
 /**
- * `usepilot init`: sets Pilot up in a project, for whatever agent runs it.
- * The user pastes one prompt into their agent ("run `npx usepilot@latest
- * init` and follow what it prints"); this does the mechanical part and
- * prints the rest for the agent:
+ * `usepilot init`: sets Pilot up in a project. The user pastes one prompt
+ * into their agent ("run `npx usepilot@latest init` and follow what it
+ * prints"); this does the mechanical part and prints the rest for the agent:
  * - installs `usepilot` as a dev dependency, with the project's package manager;
- * - connects the agent that runs it (`--agent`, or told from its shell),
- *   once per machine by default: Pilot's MCP server and the `pilot` skill
- *   in the agent's own config (see MACHINE), nothing in the repo; with
- *   `--project`, in the repo for a team to commit (see AGENTS). Any agent
- *   also launches Pilot when asked, from the MCP server's own instructions;
+ * - checks the agents' command-line tools Pilot runs for each job (`npx
+ *   usepilot`, run.ts): installed, signed in, and says what's missing;
+ * - removes Pilot's old setup (its MCP server and `/pilot` skill, from
+ *   before agent runs: legacy.ts);
  * - detects the framework and prints where and how to load Pilot in the
  *   app, in development only: the agent writes it, in the project's way.
  * Run again, it changes nothing that's already there.
@@ -29,44 +28,16 @@ export interface InitOptions {
   install?: boolean;
   /** Runs a command in a folder; true when it succeeded. Injected by tests. */
   run?: (command: string, args: string[], cwd: string) => boolean;
-  /** The agent running it (`--agent`): only its files are written, plus those of agents the project already uses. */
-  agent?: AgentId;
-  /** The environment, to tell the agent when `agent` isn't given. Injected by tests. */
-  env?: Record<string, string | undefined>;
-  /**
-   * Where the agent is connected: `machine` (default), its own user config,
-   * once for every project, nothing in the repo; `project` (`--project`),
-   * files in the repo to commit, for a team (some agents then ask each
-   * person to switch the project's server on).
-   */
-  scope?: "machine" | "project";
+  /** The agent Pilot should run for this project (`--agent`): saved when it's ready. */
+  agent?: string;
   /** The user's home folder, by default the real one. Injected by tests. */
   home?: string;
-  /** The OS, for where VS Code keeps its user config. Injected by tests. */
+  /** The OS, for where VS Code keeps its user config (the old setup). Injected by tests. */
   platform?: NodeJS.Platform;
-}
-
-export type AgentId = "claude-code" | "cursor" | "codex" | "vscode" | "other";
-export const AGENT_IDS: readonly AgentId[] = ["claude-code", "cursor", "codex", "vscode", "other"];
-
-/**
- * What each agent needs in a project, and nothing more, so a project gets
- * one agent's files, not every agent's: where it reads MCP servers (none
- * for Codex, whose config is per user: it's told the command), where it
- * reads skills, how a skill is run, and the paths that show a project
- * already uses it (a teammate's agent keeps its files on a new run).
- */
-interface AgentSetup {
-  id: AgentId;
-  name: string;
-  mcp?: { file: string; key: string; entry: object };
-  /** How it registers the server itself, when it reads no project file for it. */
-  register?: string;
-  /** What the user has to do before a new chat has Pilot, if anything (a client that keeps new project servers off). */
-  enable?: string;
-  skills: string;
-  invoke: string;
-  signals: string[];
+  /** The agents found on this machine. Injected by tests. */
+  detect?: () => Promise<FoundAgent[]>;
+  /** Where the agent picked is saved. Injected by tests. */
+  configFile?: string;
 }
 
 type PackageJson = {
@@ -75,182 +46,17 @@ type PackageJson = {
   workspaces?: unknown;
 };
 
-const COMMAND = `${MCP_SERVER.command} ${MCP_SERVER.args.join(" ")}`;
-
-const AGENTS: AgentSetup[] = [
-  {
-    id: "claude-code",
-    name: "Claude Code",
-    mcp: { file: ".mcp.json", key: "mcpServers", entry: MCP_SERVER },
-    skills: join(".claude", "skills"),
-    invoke: "`/pilot`",
-    signals: [".mcp.json", ".claude"],
-  },
-  {
-    id: "cursor",
-    name: "Cursor",
-    mcp: { file: join(".cursor", "mcp.json"), key: "mcpServers", entry: MCP_SERVER },
-    skills: join(".cursor", "skills"),
-    invoke: "`/pilot`",
-    signals: [".cursor"],
-    // Cursor sees a project's new MCP server but leaves it off: it never starts until the user turns it on.
-    enable:
-      "**turn Pilot on first**: Cursor keeps a project's new MCP servers off. In Cursor Settings, in the MCP section, switch on `pilot` (once per project)",
-  },
-  {
-    id: "vscode",
-    name: "VS Code",
-    mcp: { file: join(".vscode", "mcp.json"), key: "servers", entry: { type: "stdio", ...MCP_SERVER } },
-    skills: join(".github", "skills"),
-    invoke: "`/pilot`",
-    signals: [join(".vscode", "mcp.json"), join(".github", "skills"), join(".github", "copilot-instructions.md")],
-  },
-  {
-    id: "codex",
-    name: "Codex",
-    register: `\`codex mcp add pilot -- ${COMMAND}\``,
-    skills: join(".agents", "skills"),
-    invoke: "`$pilot`",
-    signals: [".codex"],
-  },
-  {
-    id: "other",
-    name: "your agent",
-    register: `in your MCP settings: a server named \`pilot\`, running \`${COMMAND}\``,
-    // The open skills folder, read by many agents.
-    skills: join(".agents", "skills"),
-    invoke: "the `pilot` skill",
-    signals: [],
-  },
-];
-
-/**
- * Where each agent keeps its own config, for every project on the machine:
- * Pilot's MCP server (a JSON file Pilot merges into, or the agent's own CLI
- * command, when it manages the file itself) and its user skills folder.
- */
-interface MachineSetup {
-  mcp?: { file: (home: string, platform: NodeJS.Platform) => string; key: string; entry: object };
-  command?: { cmd: string; args: string[]; has: (home: string) => boolean };
-  skills: (home: string) => string;
+/** `--agent`'s value as an agent Pilot runs: `claude-code` (init's old name for it) is `claude`. */
+export function agentKindOf(value: string | undefined): AgentKind | undefined {
+  const v = value?.toLowerCase().replace(/^claude-code$/, "claude");
+  return isAgentKind(v) ? v : undefined;
 }
 
-/** The MCP server's command line, as an argv. */
-const MCP_SERVER_ARGV = [MCP_SERVER.command, ...MCP_SERVER.args];
-
-const MACHINE: Record<AgentId, MachineSetup> = {
-  "claude-code": {
-    command: {
-      cmd: "claude",
-      args: ["mcp", "add", "--scope", "user", "pilot", "--", ...MCP_SERVER_ARGV],
-      has: (home) => !!readJson<{ mcpServers?: Record<string, unknown> }>(join(home, ".claude.json"))?.mcpServers?.pilot,
-    },
-    skills: (home) => join(home, ".claude", "skills"),
-  },
-  cursor: {
-    mcp: { file: (home) => join(home, ".cursor", "mcp.json"), key: "mcpServers", entry: MCP_SERVER },
-    skills: (home) => join(home, ".cursor", "skills"),
-  },
-  vscode: {
-    mcp: {
-      file: (home, platform) => join(vscodeUserDir(home, platform), "mcp.json"),
-      key: "servers",
-      entry: { type: "stdio", ...MCP_SERVER },
-    },
-    skills: (home) => join(home, ".copilot", "skills"),
-  },
-  codex: {
-    command: {
-      cmd: "codex",
-      args: ["mcp", "add", "pilot", "--", ...MCP_SERVER_ARGV],
-      has: (home) => /\[mcp_servers\.pilot\]/.test(readText(join(home, ".codex", "config.toml"))),
-    },
-    skills: (home) => join(home, ".agents", "skills"),
-  },
-  other: { skills: (home) => join(home, ".agents", "skills") },
-};
-
-/**
- * Every folder Pilot's skill can be in, where `init` puts it: each agent's
- * own, once per machine, and each agent's in the repo (`--project`).
- */
-export function skillFolders(root: string, home: string): string[] {
-  const machine = AGENT_IDS.map((id) => join(MACHINE[id].skills(home), "pilot"));
-  const project = AGENTS.map((a) => join(root, a.skills, "pilot"));
-  return [...new Set([...machine, ...project])];
-}
-
-/**
- * The agents Pilot is set up for, on this machine or in the repo at
- * `root`: its MCP server in the agent's config, or its skill in the agent's
- * folder. For `update`, to say how each loads the new version.
- */
-export function agentsWithPilot(root: string, home: string, platform: NodeJS.Platform = process.platform): AgentId[] {
-  const hasServer = (file: string, key: string) => !!(readJson<Record<string, Record<string, unknown>>>(file)?.[key] ?? {}).pilot;
-  return AGENTS.filter((a) => {
-    if (a.id === "other") return false;
-    const machine = MACHINE[a.id];
-    if (machine.mcp && hasServer(machine.mcp.file(home, platform), machine.mcp.key)) return true;
-    if (machine.command?.has(home)) return true;
-    if (a.mcp && hasServer(join(root, a.mcp.file), a.mcp.key)) return true;
-    // A skill folder of its own (Codex shares `~/.agents/skills` with others: its server says it).
-    return a.id !== "codex" && existsSync(join(machine.skills(home), "pilot"));
-  }).map((a) => a.id);
-}
-
-/** A registration from before `@latest` (MCP_SERVER): npx with a bare `usepilot`, which keeps its first download forever. */
-export function isStaleServer(entry: unknown): boolean {
-  const e = entry as { command?: unknown; args?: unknown } | null;
-  return !!e && e.command === "npx" && Array.isArray(e.args) && e.args.includes("usepilot");
-}
-
-/**
- * Moves the agents' old registrations of Pilot's server (`npx -y usepilot
- * mcp`) to the current one (`usepilot@latest`), on this machine and in the
- * repo at `root`: JSON configs in place (only Pilot's entry, the rest kept),
- * Claude Code and Codex through their own CLI. Others (a link to a Pilot
- * checkout, a pinned version) are left as they are. What it moved, for the
- * user to read.
- */
-export async function freshenServers(
-  root: string,
-  home: string,
-  platform: NodeJS.Platform,
-  run: (command: string, args: string[], cwd: string) => boolean,
-): Promise<string[]> {
-  const moved: string[] = [];
-  const files = [
-    ...AGENT_IDS.flatMap((id) => {
-      const m = MACHINE[id].mcp;
-      return m ? [{ file: m.file(home, platform), key: m.key }] : [];
-    }),
-    ...AGENTS.flatMap((a) => (a.mcp ? [{ file: join(root, a.mcp.file), key: a.mcp.key }] : [])),
-  ];
-  for (const { file, key } of files) {
-    const config = readJson<Record<string, Record<string, { args: string[] }>>>(file);
-    const entry = config?.[key]?.pilot;
-    if (!config || !entry || !isStaleServer(entry)) continue;
-    entry.args = entry.args.map((a) => (a === "usepilot" ? "usepilot@latest" : a));
-    await writeFile(file, `${JSON.stringify(config, null, 2)}\n`);
-    moved.push(tilde(file, home));
-  }
-  // Claude Code's user config and Codex's: their CLI rewrites them (remove, then add the current command).
-  const claude = readJson<{ mcpServers?: Record<string, unknown> }>(join(home, ".claude.json"))?.mcpServers?.pilot;
-  const codex = /\[mcp_servers\.pilot\][^[]*"usepilot"/.test(readText(join(home, ".codex", "config.toml")));
-  for (const [id, stale, remove] of [
-    ["claude-code", isStaleServer(claude), ["mcp", "remove", "--scope", "user", "pilot"]],
-    ["codex", codex, ["mcp", "remove", "pilot"]],
-  ] as const) {
-    const command = MACHINE[id].command;
-    if (!stale || !command) continue;
-    if (run(command.cmd, [...remove], home) && run(command.cmd, command.args, home)) moved.push(id === "codex" ? "Codex" : "Claude Code");
-  }
-  return moved;
-}
-
-/** The command that adds `spec` as a dev dependency with `pm`. */
-export function installArgs(pm: "npm" | "pnpm" | "yarn" | "bun", spec = "usepilot"): string[] {
-  return pm === "npm" ? ["install", "-D", spec] : pm === "bun" ? ["add", "-d", spec] : ["add", "-D", spec];
+/** Each agent Pilot runs, with how to install it and sign in, for the designer. */
+export function agentsToInstall(): string {
+  return Object.values(AGENT_CLIS)
+    .map((cli) => `${cli.label}: \`${cli.install}\`, then \`${cli.signIn}\``)
+    .join("; ");
 }
 
 /** The version of `usepilot` installed for the app in `cwd` (its node_modules, or a monorepo's up to `root`), when there's one. */
@@ -262,24 +68,43 @@ export function installedVersion(cwd: string, root: string): string | null {
   }
 }
 
-/** VS Code's user settings folder, per OS. */
-function vscodeUserDir(home: string, platform: NodeJS.Platform): string {
-  if (platform === "darwin") return join(home, "Library", "Application Support", "Code", "User");
-  if (platform === "win32") return join(process.env.APPDATA ?? join(home, "AppData", "Roaming"), "Code", "User");
-  return join(home, ".config", "Code", "User");
+/** The command that adds `spec` as a dev dependency with `pm`. */
+export function installArgs(pm: "npm" | "pnpm" | "yarn" | "bun", spec = "usepilot"): string[] {
+  return pm === "npm" ? ["install", "-D", spec] : pm === "bun" ? ["add", "-d", spec] : ["add", "-D", spec];
 }
 
-/** A path for the user to read: the home folder as `~`. */
-function tilde(path: string, home: string): string {
-  return path.startsWith(home) ? `~${path.slice(home.length)}` : path;
-}
-
-/** The agent running init, from what it sets in its shell; null when it can't be told (it's then asked to say). */
-export function detectAgent(env: Record<string, string | undefined>): AgentId | null {
-  if (env.CLAUDECODE) return "claude-code";
-  if (env.CURSOR_AGENT || env.CURSOR_TRACE_ID) return "cursor";
-  if (env.CODEX_SANDBOX || env.CODEX_SANDBOX_NETWORK_DISABLED || env.CODEX_MANAGED_BY_NPM) return "codex";
-  return null;
+/**
+ * The agents' state, for the designer: which one Pilot will run, or what
+ * to install or sign in to. `done` and `todo` lines, as init prints them.
+ */
+export function agentLines(found: FoundAgent[], wanted: AgentKind | undefined): { done: string[]; todo: string[] } {
+  const ready = found.filter((a) => a.signedIn);
+  const label = (kind: AgentKind) => AGENT_CLIS[kind].label;
+  if (wanted) {
+    const it = found.find((a) => a.kind === wanted);
+    const cli = AGENT_CLIS[wanted];
+    if (it?.signedIn) return { done: [`Pilot will run ${cli.label} for this project (signed in).`], todo: [] };
+    return {
+      done: [],
+      todo: [
+        it
+          ? `**Tell the user** to sign in to ${cli.label}'s command-line tool: \`${cli.signIn}\` in a terminal.`
+          : `**Tell the user** to install ${cli.label}'s command-line tool and sign in: \`${cli.install}\`, then \`${cli.signIn}\`.`,
+      ],
+    };
+  }
+  if (ready.length === 1) return { done: [`Pilot will run ${label((ready[0] as FoundAgent).kind)}, signed in here, for each job.`], todo: [] };
+  if (ready.length > 1)
+    return { done: [`Found ${ready.map((a) => label(a.kind)).join(" and ")} signed in: \`npx usepilot\` asks which to run, the first time.`], todo: [] };
+  const installed = found.map((a) => `${label(a.kind)} (\`${AGENT_CLIS[a.kind].signIn}\`)`);
+  return {
+    done: [],
+    todo: [
+      installed.length
+        ? `**Tell the user** Pilot runs their coding agent's command-line tool for each job, and it isn't signed in: sign in to ${installed.join(" or ")} in a terminal.`
+        : `**Tell the user** Pilot runs their coding agent's command-line tool for each job, and none is installed here. One of: ${agentsToInstall()}.`,
+    ],
+  };
 }
 
 export async function init(options: InitOptions = {}): Promise<string> {
@@ -326,86 +151,25 @@ ${cwd} is a monorepo's root, not an app. Run \`npx usepilot@latest init\` again 
     done.push(`Installed \`usepilot\` as a dev dependency (\`${install}\`).`);
   else todo.push(`Install Pilot as a dev dependency: run \`${install}\` in ${cwd}.`);
 
-  // 2. The agent: its MCP server and the `pilot` skill. By default in the
-  // agent's own config, once per machine (nothing in the repo, nothing to
-  // switch on per project); with `project`, files in the repo for a team.
-  const named = options.agent ?? detectAgent(options.env ?? process.env);
-  const project = options.scope === "project";
+  // 2. The agent Pilot runs for each job: its command-line tool, installed and signed in.
+  const wanted = agentKindOf(options.agent);
+  const found = await (options.detect ?? detectAgents)();
+  const agents = agentLines(found, wanted);
+  done.push(...agents.done);
+  todo.push(...agents.todo);
+  if (wanted && found.some((a) => a.kind === wanted && a.signedIn)) saveAgent(cwd, wanted, options.configFile);
+
+  // 3. Pilot's old setup (an agent's chat running it): removed, so no chat starts an old Pilot.
   const home = options.home ?? homedir();
-  const written: string[] = [];
-  if (named && !project) {
-    const agent = AGENTS.find((a) => a.id === named) as AgentSetup;
-    const machine = MACHINE[named];
-    const parts: string[] = [];
-    if (machine.mcp) {
-      const file = machine.mcp.file(home, options.platform ?? process.platform);
-      if ((await addServer(file, machine.mcp.key, machine.mcp.entry)) === "invalid") {
-        todo.push(
-          `\`${tilde(file, home)}\` isn't valid JSON, so Pilot wasn't added to it: fix it, and add the \`pilot\` server (\`${COMMAND}\`).`,
-        );
-      } else parts.push(`its MCP server (\`${tilde(file, home)}\`)`);
-    } else if (machine.command) {
-      const display = `${machine.command.cmd} ${machine.command.args.join(" ")}`;
-      if (machine.command.has(home)) parts.push("its MCP server (registered already)");
-      else if (run(machine.command.cmd, machine.command.args, cwd)) parts.push(`its MCP server (\`${display}\`)`);
-      else todo.push(`**Register Pilot's MCP server with yourself**: run \`${display}\`.`);
-    } else if (agent.register) {
-      todo.push(`**Register Pilot's MCP server with yourself**, for every project: ${agent.register}.`);
-    }
-    const skill = join(machine.skills(home), "pilot");
-    await writeSkill(skill);
-    parts.push(`the \`pilot\` skill (\`${tilde(skill, home)}/\`)`);
-    done.push(`Connected ${agent.name} to Pilot, once for every project on this machine: ${list(parts)}. Nothing was added to the repo.`);
-  } else if (named) {
-    // In the repo, for the agent running init and those the project already uses.
-    const present = AGENTS.filter((a) => a.id !== named && a.signals.some((p) => existsSync(join(root, p))));
-    for (const agent of [...AGENTS.filter((a) => a.id === named), ...present]) {
-      const parts: string[] = [];
-      if (agent.mcp) {
-        const file = join(root, agent.mcp.file);
-        if ((await addServer(file, agent.mcp.key, agent.mcp.entry)) === "invalid") {
-          todo.push(
-            `\`${agent.mcp.file}\` isn't valid JSON, so Pilot wasn't added to it: fix it, and add the \`pilot\` server (\`${COMMAND}\`).`,
-          );
-        } else {
-          parts.push(`its MCP server (\`${agent.mcp.file}\`)`);
-          written.push(`\`${agent.mcp.file}\``);
-        }
-      }
-      const skill = join(agent.skills, "pilot");
-      await writeSkill(join(root, skill));
-      parts.push(`the \`pilot\` skill (\`${skill}/\`)`);
-      if (!written.includes(`\`${skill}/\``)) written.push(`\`${skill}/\``);
-      done.push(`Set Pilot up for ${agent.name} in this project: ${list(parts)}.`);
-      if (agent.register && agent.id === named) todo.push(`**Register Pilot's MCP server with yourself**: ${agent.register}.`);
-    }
-  } else {
-    todo.push(
-      `**Connect yourself:** run \`npx usepilot@latest init --agent <you>\` in ${cwd}, with \`<you>\` the agent you are: ${AGENT_IDS.map((a) => `\`${a}\``).join(", ")}.`,
-    );
-  }
+  const removed = await removeOldSetup(root, home, options.platform ?? process.platform, run);
+  if (removed.length) done.push(`Removed Pilot's old chat setup (its MCP server and \`/pilot\` skill): ${removed.map((r) => `\`${r}\``).join(", ")}. Pilot runs the agent itself now.`);
 
-  // Registrations from before @latest, in any agent (a server registered already is kept as it was above).
-  const moved = await freshenServers(root, home, options.platform ?? process.platform, run);
-  if (moved.length) done.push(`Pilot's server now always starts the latest version (${moved.map((m) => `\`${m}\``).join(", ")}): it used to keep the one it downloaded first.`);
-
-  // 3. Loading Pilot in the app: written by the agent.
+  // 4. Loading Pilot in the app: written by the agent.
   if (framework.loads) done.push(`The app already loads Pilot (\`${relative(cwd, framework.loads)}\`).`);
   else todo.push(loadStep(framework, cwd));
 
-  const me = AGENTS.find((a) => a.id === named);
-  // Only a server in the repo waits to be switched on (Cursor); one in the agent's own config doesn't.
-  const enable = project && me?.enable ? `Before that, ${me.enable}. ` : "";
   todo.push(
-    `**Tell the user**, in a few lines: Pilot is set up, and works from a **new chat**, not this one: agents load MCP servers when a chat starts (some ask once to approve the project's server). ${enable}In the new chat, ask to launch Pilot${
-      me && me.id !== "other" ? `, or run ${me.invoke}` : ""
-    }.${
-      written.length
-        ? ` The files it added (${list(written)}) can be committed, so everyone on the project using the same agent gets it.`
-        : project
-          ? ""
-          : " It's connected for every project on this machine; a teammate pastes the same install prompt in their own agent."
-    } Without an agent, Option+P (Alt+P) in the app opens Pilot, and Copy prompt hands the changes over.`,
+    `**Tell the user**, in a few lines: Pilot is set up. To use it, run \`npx usepilot\` in ${cwd}, in a terminal beside the app's dev server, and open the app: Pilot opens on every page. They design and press Send (or comment on an element), Pilot runs their agent for each job, and the terminal shows what it does. No chat needs to stay open. Without it, Option+P (Alt+P) in the app opens Pilot, and Copy prompt hands the changes to any chat.`,
   );
 
   return `# Pilot: set up
@@ -650,29 +414,6 @@ export function Pilot() {
 }
 
 // ── Files ────────────────────────────────────────────────────────────────
-
-/**
- * Adds Pilot under `key` in a client's MCP config, keeping everything else
- * in it. "invalid": the file isn't JSON, and is left as it was.
- */
-async function addServer(file: string, key: string, entry: object): Promise<"added" | "updated" | "invalid"> {
-  let config: Record<string, unknown> = {};
-  if (existsSync(file)) {
-    const text = await readFile(file, "utf8");
-    try {
-      config = text.trim() ? JSON.parse(text) : {};
-    } catch {
-      return "invalid";
-    }
-    if (typeof config !== "object" || config === null || Array.isArray(config)) return "invalid";
-  }
-  const servers = (config[key] ?? {}) as Record<string, unknown>;
-  const result = "pilot" in servers ? "updated" : "added";
-  config[key] = { ...servers, pilot: entry };
-  await mkdir(dirname(file), { recursive: true });
-  await writeFile(file, `${JSON.stringify(config, null, 2)}\n`);
-  return result;
-}
 
 function readJson<T>(file: string): T | null {
   try {

@@ -141,13 +141,13 @@ export class Hub {
 
   /**
    * The sites with Pilot open in a browser now (the origins of the connected
-   * pages, each once): where /pilot can launch without being told a URL.
+   * pages, each once): where `npx usepilot` can launch without being told a URL.
    */
   pageOrigins(): string[] {
     return [...new Set([...this.pages].map((p) => p.origin))];
   }
 
-  /** An agent ran /pilot: registers it and tells the open pages of `origin` to launch Pilot. Returns how many pages got it. */
+  /** Pilot started for a site (`npx usepilot`): registers it and tells the open pages of `origin` to launch Pilot. Returns how many pages got it. */
   launch(info: AgentInfo, origin: string): number {
     this.register(info, origin);
     return this.sendTo(originKey(origin), { type: "launch", agent: this.shown(info) });

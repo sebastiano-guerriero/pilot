@@ -1,6 +1,6 @@
 /**
  * This Pilot's version: the `usepilot` package's (version.test.ts checks
- * they match). The MCP server reports it, and `update` and `init` compare
+ * they match). `update` and `init` compare
  * a project's installed Pilot with it.
  */
 export const VERSION = "0.13.0";

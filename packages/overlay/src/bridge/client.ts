@@ -1,7 +1,7 @@
 import type { AgentInfo, ChangeResult, FileToken, Job, PageEvent, ProjectComponent, WidthCheck } from "@pilot/protocol";
 import { BRIDGE_VERSION, DEFAULT_BRIDGE_PORT } from "@pilot/protocol";
 
-/** Where the hub listens (see packages/cli: `pilot mcp`). */
+/** Where the hub listens (see packages/cli: `npx usepilot`). */
 export const DEFAULT_BRIDGE_URL = `http://127.0.0.1:${DEFAULT_BRIDGE_PORT}`;
 
 /** What the page knows of the bridge. */
@@ -10,12 +10,13 @@ export interface BridgeState {
   connected: boolean;
   /** Pilot running for this page's site (`npx usepilot` registers it as its agent). */
   agents: AgentInfo[];
-  /** How many of them are waiting for a job right now. */
+  /** How many of them are waiting for a job right now (no longer read: a runner always takes jobs when it has a free slot). */
   waiting: number;
   /**
    * Not connected, but an older Pilot's hub answers on its port (each bridge
-   * version has its own): the bridge version found. An agent runs an older
-   * Pilot, and /pilot there can't reach this page (see olderHub).
+   * version has its own): the bridge version found. An older Pilot runs
+   * (an agent's chat on the old MCP loop, an older `npx usepilot`), and
+   * can't reach this page (see olderHub).
    */
   older?: number;
 }
@@ -26,9 +27,9 @@ const OLDER_PROBE_MS = 10_000;
 /**
  * The bridge version of an older Pilot's hub listening on this machine
  * (newest first), or null. Each version's hub has its port (4747 +
- * version), so a page and an agent on different versions never meet: an
- * agent's server kept at an old version (a bare `npx usepilot` keeps its
- * first download) left /pilot doing nothing, with no clue why. A request
+ * version), so a page and Pilot's process on different versions never meet:
+ * an old one still running (an agent's chat on the MCP loop, an older
+ * `npx usepilot`) would otherwise leave Send doing nothing, with no clue why. A request
  * that can't be read (no-cors): it only says something answers there.
  */
 export async function olderHub(fetchImpl: typeof fetch = globalThis.fetch): Promise<number | null> {
@@ -56,13 +57,13 @@ export interface BridgeHandlers {
   onAgentsArrived?(): void;
   /** An agent asks for a width check of a job's element (answered with postCheck). */
   onCheck?(requestId: string, jobId: string): void;
-  /** The designer quit Pilot on this site, here or in another tab: close it. */
+  /** The designer closed Pilot on this site, here or in another tab: close it. */
   onQuit?(): void;
 }
 
 /**
  * Waits between reconnect attempts while the hub isn't there: from 2s, up to
- * 5s. Short, because /pilot in the agent should open Pilot right away; each
+ * 5s. Short, because `npx usepilot` starting should open Pilot right away; each
  * attempt is one refused request on localhost.
  */
 const BACKOFF = [2_000, 3_000, 5_000];
@@ -70,7 +71,7 @@ const BACKOFF = [2_000, 3_000, 5_000];
 /**
  * The page's connection to the hub: Server-Sent Events in (agents, launch,
  * job updates), HTTP posts out (jobs, cancels, results). The hub runs only
- * while an agent's `pilot mcp` does, so the page keeps trying to reach it,
+ * while `npx usepilot` does (in some project), so the page keeps trying to reach it,
  * every few seconds.
  */
 export class BridgeClient {

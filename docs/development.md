@@ -28,18 +28,17 @@ Before finishing a change, run `pnpm typecheck` and `pnpm test`.
 
 | Package | Path | Role |
 | --- | --- | --- |
-| `@pilot/overlay` | [packages/overlay](../packages/overlay) | The in-page editor: Shadow DOM mount, launch/quit, toolbar, property search, editors, the bridge client. Builds `pilot.js` (API) and `pilot-auto.js` (self-mounting). |
+| `@pilot/overlay` | [packages/overlay](../packages/overlay) | The in-page editor: Shadow DOM mount, launch/close, toolbar, property search, editors, the bridge client. Builds `pilot.js` (API) and `pilot-auto.js` (self-mounting). |
 | `@pilot/protocol` | [packages/protocol](../packages/protocol) | Shared `ChangeSet` types, `formatPrompt()`, `BRIDGE_VERSION`. |
-| `@pilot/cli` | [packages/cli](../packages/cli) | The `usepilot` command: with no command, Pilot for the project in its folder, running the agent's command-line tool for each job (`--agent`, `--url`: [run.ts](../packages/cli/src/run.ts), [agents.ts](../packages/cli/src/agents.ts); [handoff.md](handoff.md), *Agent runs*), `init` (sets Pilot up in a project for any agent: [init.ts](../packages/cli/src/init.ts)), `update` (brings it up to date: [update.ts](../packages/cli/src/update.ts)), `mcp` (the MCP server agents start, and the hub the page talks to) and `setup` (the `/pilot` skill and MCP server for Claude Code, for this machine or, with `--project`, for the repo: [setup.ts](../packages/cli/src/setup.ts)). Bundled into one file by tsup, dependencies included. |
+| `@pilot/cli` | [packages/cli](../packages/cli) | The `usepilot` command: with no command, Pilot for the project in its folder, running the agent's command-line tool for each job (`--agent`, `--url`: [run.ts](../packages/cli/src/run.ts), [agents.ts](../packages/cli/src/agents.ts); [handoff.md](handoff.md), *Agent runs*), `init` (sets Pilot up in a project, checks the agent's tool, removes the old chat setup: [init.ts](../packages/cli/src/init.ts), [legacy.ts](../packages/cli/src/legacy.ts)) and `update` (brings it up to date: [update.ts](../packages/cli/src/update.ts)); `mcp` only tells an old chat setup what to do instead. Bundled into one file by tsup, dependencies included. |
 | `usepilot` | [packages/usepilot](../packages/usepilot) | The one published package: the overlay's build (`dist/`) and the CLI's (`cli/`), copied in by its `build` script (which `prepack` runs), hand-written types (`types/`), and npm's README. Exports `usepilot` (`mountPilot`) and `usepilot/auto` (mounts with defaults). |
 | `playground` | [apps/playground](../apps/playground) | A plain Vite page for developing Pilot. |
-| `/pilot` skill | [skills/pilot](../skills/pilot) | What the agent follows to launch Pilot and apply jobs (`/pilot`; `$pilot` in Codex), in the open SKILL.md format. `init` writes it where each agent reads skills; `setup` for Claude Code alone. Agents without skills get the same loop from the MCP server's instructions. |
 
 The workspace packages (`@pilot/overlay`, `@pilot/protocol`, `@pilot/cli`) are internal and never published under those names: `usepilot` bundles them.
 
 ## The playground
 
-`pnpm dev` starts it at http://localhost:5180 (not Vite's default 5173, which other projects may use). Launch Pilot with Option+P or the dashed **Simulate /pilot** button.
+`pnpm dev` starts it at http://localhost:5180 (not Vite's default 5173, which other projects may use). Launch Pilot with Option+P or the dashed **Launch Pilot** button (it opens Pilot as `npx usepilot` starting for the site does). To send jobs, run Pilot for it: `node packages/cli/dist/index.js --url http://localhost:5180` in `apps/playground`, after `pnpm --filter @pilot/cli build` (the agent edits the playground's files: put them back with git after).
 
 **Designing the dialog.** Saving a CSS file reloads the page, which normally closes everything. To keep the dialog on screen while styling it, the playground mounts Pilot with a `dev` option ([apps/playground/src/main.ts](../apps/playground/src/main.ts)):
 
@@ -47,13 +46,13 @@ The workspace packages (`@pilot/overlay`, `@pilot/protocol`, `@pilot/cli`) are i
 mountPilot({ dev: { select: ".button--primary" } });
 ```
 
-On every load this launches Pilot (even after a Quit), turns on select mode, and selects the first element matching `select`. Add `query: "padding"` to pre-fill the search and open that editor. Remove `dev` for the real flow. In the playground, `?select=<selector>` in the URL selects another element instead (`/?select=.review-props`), and stays across reloads.
+On every load this launches Pilot (even after a Close), turns on select mode, and selects the first element matching `select`. Add `query: "padding"` to pre-fill the search and open that editor. Remove `dev` for the real flow. In the playground, `?select=<selector>` in the URL selects another element instead (`/?select=.review-props`), and stays across reloads.
 
 ## Trying Pilot in your own projects, unreleased
 
 To use the Pilot you're working on in another project without publishing a version:
 
-1. **Link the project, once:** `pnpm link-experiment <project folder>` ([scripts/link-experiment.mjs](../scripts/link-experiment.mjs)). Its `.mcp.json` then starts Pilot's MCP server from this repo's build (`node packages/cli/dist/index.js mcp`, other servers kept), and its `/pilot` skill becomes a link to [skills/pilot](../skills/pilot). It prints the loader line for the app:
+1. **Link the project, once:** `pnpm link-experiment <project folder>` ([scripts/link-experiment.mjs](../scripts/link-experiment.mjs)). It prints the loader line for the app, and the command that runs Pilot for the project from this repo's build (`node <this repo>/packages/cli/dist/index.js`, in place of `npx usepilot`). It also removes the project's links to the old chat setup, if any.
 
    ```js
    if (import.meta.env.DEV) {
@@ -64,49 +63,44 @@ To use the Pilot you're working on in another project without publishing a versi
    The app loads the overlay from this repo when its dev server runs, the npm package when it doesn't, so the line can stay. Keep a single Pilot loader in the app: two would mount whichever loads first.
 2. **While you work:** `pnpm dev:experiments` here. It serves the overlay's source on port 5199 (the overlay's own Vite config, with CORS) and rebuilds the CLI on every change (`tsup --watch`).
    - Page changes (toolbar, editors, dialog) show in the project on save, with hot reload.
-   - Server changes (hub, tools) need the agent to reconnect the `pilot` MCP server, or a new chat. The watcher only sees the CLI's own files: after a change in `packages/protocol` (the prompts), run `pnpm --filter @pilot/cli build`.
-   - Skill changes apply from the next chat. A user-wide skill (`~/.claude/skills/pilot`, from `usepilot setup`) is loaded instead of the project's, so while you develop, make it a link too: `ln -s <this repo>/skills/pilot ~/.claude/skills/pilot`. `usepilot setup` later replaces the link with a copy of the published skill (it never writes through a link into this repo).
-3. **Back to the published package:** `pnpm link-experiment <project folder> --unlink` (`npx -y usepilot@latest mcp`, and a copy of the skill), and drop the `5199` import from the loader.
+   - Changes to Pilot's process (the runner, the hub, the prompts) need that command restarted. The watcher only sees the CLI's own files: after a change in `packages/protocol` (the prompts), run `pnpm --filter @pilot/cli build`.
+3. **Back to the published package:** `pnpm link-experiment <project folder> --unlink`, drop the `5199` import from the loader, and run `npx usepilot`.
 
-**The responsive lab.** `../pilot-lab-responsive`, next to this repo (its own git repository, linked as above): a small Vite + Tailwind marketing page designed for a 1280px desktop only, to try **Make responsive**. Only its Features grid is responsive (`sm:` / `lg:`), the pattern an agent should find and follow; the header, hero, stats, pricing, dashboard (fixed sidebar, wide table), team, call to action and footer break below desktop widths. Start it with the `lab-responsive` entry in `.claude/launch.json` (port 5183) or `npm run dev` there; `npm run reset` there puts the page back after a test. Run `/pilot` in a chat opened in that folder.
+**The responsive lab.** `../pilot-lab-responsive`, next to this repo (its own git repository, linked as above): a small Vite + Tailwind marketing page designed for a 1280px desktop only, to try **Make responsive**. Only its Features grid is responsive (`sm:` / `lg:`), the pattern an agent should find and follow; the header, hero, stats, pricing, dashboard (fixed sidebar, wide table), team, call to action and footer break below desktop widths. Start it with the `lab-responsive` entry in `.claude/launch.json` (port 5183) or `npm run dev` there; `npm run reset` there puts the page back after a test. Run Pilot for it from that folder (`npx usepilot`, or this repo's build as above).
 
-**The React lab.** `../pilot-lab-react`, next to this repo (its own git repository, linked as above): a studio dashboard made of reusable React 19 components with props, most used several times (`ProjectCard`, `PlanCard`, `StatCard`, `Button`, `Badge`, `NavItem`…). Use it to try what depends on components: the component label, Select similar, `/props`, look-alikes and source hints in jobs. It also has design tokens as CSS variables on scales (spacing, radii, type, colors) and a W3C token file (`tokens/brand.tokens.json`), grid and flex layouts, hover states and text to edit. Pilot's toolbar shows as soon as the page loads (`mountPilot({ launch: true })`), so you can start designing before `/pilot`. Start it with the `lab-react` entry in `.claude/launch.json` (port 5187) or `npm run dev` there. `npm run reset` there puts the app back after a test. Run `/pilot` in a chat opened in that folder.
+**The React lab.** `../pilot-lab-react`, next to this repo (its own git repository, linked as above): a studio dashboard made of reusable React 19 components with props, most used several times (`ProjectCard`, `PlanCard`, `StatCard`, `Button`, `Badge`, `NavItem`…). Use it to try what depends on components: the component label, Select similar, `/props`, look-alikes and source hints in jobs. It also has design tokens as CSS variables on scales (spacing, radii, type, colors) and a W3C token file (`tokens/brand.tokens.json`), grid and flex layouts, hover states and text to edit. Pilot's toolbar shows as soon as the page loads (`mountPilot({ launch: true })`), so you can start designing before Pilot runs for it. Start it with the `lab-react` entry in `.claude/launch.json` (port 5187) or `npm run dev` there. `npm run reset` there puts the app back after a test. Run Pilot for it from that folder (`npx usepilot`, or this repo's build as above).
 
 ## What each agent does that Pilot relies on
 
-Pilot's loop runs inside other people's software, and a client's update can change how it behaves. Two checks keep that in view:
+Pilot runs other people's command-line tools, and an update of one can change how it behaves. Two checks keep that in view:
 
-- **Pilot's side, automatically:** [stdio.test.ts](../packages/cli/src/stdio.test.ts) (part of `pnpm test`) builds the CLI, starts the bundle the way an agent does (`node dist/index.js mcp`, over stdio) and drives the loop with the official MCP client against a page on the hub: the tools and instructions, `pilot_launch` with a folder, a batch of two jobs in one wait with where their code is, `pilot_done` for each, a wait that runs out.
-- **The clients' side, by hand:** the list below, and the smoke test after it, in each client you can, before each release. A client that behaves differently gets its row (and the code) changed.
+- **Pilot's side, automatically:** [run.test.ts](../packages/cli/src/run.test.ts) (part of `pnpm test`) drives the runner with a stand-in agent through a real hub and a page: a job and its reply, a thread's session resumed, a question from the `pilot` block, a retry, a sign-in error, Stop, two jobs at once. [agents.test.ts](../packages/cli/src/agents.test.ts) reads output recorded from the real tools.
+- **The agents' side, on every platform:** `node scripts/agent-runs-check.mjs` here, and the **Agent runs** workflow on Windows and Linux: a job, a resumed follow-up, nothing written outside the project, no internet. A tool that behaves differently gets its entry in `AGENTS` ([agents.ts](../packages/cli/src/agents.ts)) changed.
 
-| What the client does | Clients | What depends on it |
+| What the tool does | Agent | What depends on it |
 | --- | --- | --- |
-| A tool call can run for minutes; past about 2, it moves to the background and the job arrives as its result | Claude Code | 25-minute waits (`waitMsFor` in [mcp.ts](../packages/cli/src/mcp.ts)); the skill's "end your turn with a short Waiting…" |
-| A stdio server that sends nothing for about 30 minutes is dropped | Claude Code | progress notifications while a wait runs (`PROGRESS_MS`) |
-| A request times out after about 60 seconds (the MCP default) | Cursor, VS Code, Codex, most others | 50-second waits that end in "No edits yet: call again" |
-| The chat may end its turn instead of calling the wait again | Cursor (seen) | the instructions' "keep looping"; the page's stuck alerts (`PilotSession.stuck`, [handoff.md](handoff.md), *When something's stuck*) |
-| One server for all chats while the app runs: a new chat keeps the old version | Cursor, VS Code | the restart steps (`RESTART` in [clients.ts](../packages/cli/src/clients.ts)); `pilot_launch` noticing an outdated server |
-| A server set up for the machine starts in the home folder, not the project | Cursor | `pilot_launch`'s `folder`, the client's MCP roots (`projectFolder`) |
-| A repo's new servers stay off until switched on | Cursor | `init`'s note with `--project`; the README's troubleshooting; the skill's step 0 |
-| Where its MCP config and skills live, how a server is registered | Claude Code: `claude mcp add --scope user`, `~/.claude/skills`. Cursor: `~/.cursor/mcp.json`, `~/.cursor/skills`. VS Code: its user `mcp.json` (per OS), `~/.copilot/skills`. Codex: `codex mcp add`, `~/.agents/skills` | `MACHINE` and `AGENTS` in [init.ts](../packages/cli/src/init.ts); `agentsWithPilot()` for `update` |
-| How the skill is run | `/pilot`; `$pilot` in Codex | the skill; the stuck alerts' command |
-| Its name in `clientInfo` | `claude-code`, `cursor`…, VS Code's, Codex's: confirm in the smoke test (step 2 shows it) | the agent's label (`agentLabel`), the waits (`waitMsFor`), the restart steps (`clientOf`) |
+| One task and exit, the prompt on stdin, JSON lines out | `claude -p --output-format stream-json --verbose`; `codex exec --json -`; `cursor-agent -p --output-format stream-json` | `args` and `parse` per agent |
+| A session id in its output, resumed by id | `session_id`; `thread.started`'s `thread_id`, `codex exec resume <id>`; `session_id` | thread sessions (`sessionToResume`) |
+| Limits: no writes outside the project, no internet | `--restricted --tools Read,Edit,Write,Glob,Grep`; `-s workspace-write`, `web_search="disabled"`, on Windows `windows.sandbox="unelevated"`; `--sandbox enabled` | the README's promise |
+| Its sign-in check | `claude auth status` (`loggedIn`); `codex login status` (exit code); `cursor-agent status` | `detectAgents`, `init` |
+| Runs outside a git repository | yes; only with `--skip-git-repo-check`; yes | Codex's flags |
+| Its last message is the reply | the last `assistant` message; the last `agent_message`; the last `assistant` message (its `result` joins them all) | the notes |
 
-**The smoke test, about 5 minutes per client,** in a project with Pilot (the playground, or a lab), with the version about to be released (`pnpm link-experiment`, or the packed tarball):
+**The smoke test, about 5 minutes per agent,** in a project with Pilot (the playground, or a lab), with the version about to be released (`pnpm link-experiment`, or the packed tarball):
 
-1. Set up or update: `npx usepilot init --agent <client>` (or `update`), then do what it prints, the client's restart included.
-2. In a new chat, `/pilot`: Pilot opens in the page, and the page's agent reads `<Client> · <the project's folder>` (the job list's agent name): not the home folder, not "Agent".
-3. Select, edit, Send: the job arrives, the agent applies it, and the change's preview goes once the code has it.
-4. Two Sends while the agent works on the first: the next wait brings the rest together.
-5. Leave it waiting longer than the client's timeout (a minute; in Claude Code, past 2 minutes: the call moves to the background), then Send: the job still arrives.
-6. Interrupt the chat's loop: within about 10 seconds the toolbar says "<Client> isn't listening"; `/pilot` again clears it and the jobs go.
-7. A comment with an image: the agent sees it, and its reply comes back in the thread.
+1. Set up or update: `npx usepilot init` (or `update`), then do what it prints.
+2. Run Pilot for the project (`npx usepilot --agent <agent>`): the toolbar opens in the page.
+3. Select, edit, Send: the terminal shows the job, the agent applies it, and the change's preview goes once the code has it.
+4. Two Sends on different elements: both run at once.
+5. A comment, then "a bit more" in its thread: the second resumes the first's session (same id), and the agent knows what "more" means.
+6. Stop a job from its loader: the terminal says it stopped.
+7. Sign the agent out (or pass an agent that isn't installed): the toolbar says what to run.
 
 ## Releasing `usepilot`
 
 The published package is [packages/usepilot](../packages/usepilot). Publishing builds it first (`prepack` runs the build and copies `dist/`, `cli/` and the license in).
 
-1. Bump the version in [packages/usepilot/package.json](../packages/usepilot/package.json) (0.x for now: a patch for fixes, a minor for new features and for a new bridge version, which older Pilots can't join), or run `npm version patch --no-git-tag-version` there. Set the same version in [version.ts](../packages/cli/src/version.ts) (`VERSION`: the MCP server reports it, `update` and `init` compare with it); `version.test.ts` fails until both match.
+1. Bump the version in [packages/usepilot/package.json](../packages/usepilot/package.json) (0.x for now: a patch for fixes, a minor for new features and for a new bridge version, which older Pilots can't join), or run `npm version patch --no-git-tag-version` there. Set the same version in [version.ts](../packages/cli/src/version.ts) (`VERSION`: `update` and `init` compare with it); `version.test.ts` fails until both match.
 2. Run the smoke test ([What each agent does that Pilot relies on](#what-each-agent-does-that-pilot-relies-on)) in the clients you can, with this version; fix what breaks first.
 3. Publish, from that folder (it asks for your npm security key):
 

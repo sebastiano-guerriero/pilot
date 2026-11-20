@@ -1,30 +1,24 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, lstatSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { BRIDGE_VERSION } from "@pilot/protocol";
-import { RESTART } from "./clients.ts";
-import { agentsWithPilot, freshenServers, installArgs, installedVersion, packageManager, projectRoot, skillFolders } from "./init.ts";
-import { writeSkill } from "./setup.ts";
+import { installArgs, installedVersion, packageManager, projectRoot } from "./init.ts";
+import { removeOldSetup } from "./legacy.ts";
 import { olderThan, VERSION } from "./version.ts";
 
 /**
  * `npx usepilot@latest update`: brings Pilot up to date in a project that
  * has it. What `init` set up stays; what changes with a version is updated:
  * - the `usepilot` package, to the latest, with the project's package manager;
- * - the `pilot` skill, wherever `init` put it (the agent's own folder, or
- *   the repo's), since installing the package doesn't touch those copies.
- *   A skill that's a link (to a Pilot checkout, while developing Pilot) is
- *   left as it is.
- * - the agents' registrations of its MCP server, when they're from before
- *   `@latest` (freshenServers): a bare `npx usepilot` kept its first
- *   download forever, so the agent never got a new Pilot.
+ * - Pilot's old setup (its MCP server and `/pilot` skill, from before agent
+ *   runs) removed, wherever it is (legacy.ts).
  *
  * It prints what changed and the next steps, plain enough for a designer
  * running it in a terminal, and for an agent to pass on: restart the app
- * (its bundler may keep the old Pilot), open a new chat (an open one keeps
- * the old MCP server), and, when the bridge changed, update Pilot in the
- * other projects too (their Pilots can't join this one).
+ * (its bundler may keep the old Pilot) and `npx usepilot`, and, when the
+ * bridge changed, update Pilot in the other projects too (their Pilots
+ * can't join this one).
  *
  * Why a command of its own, not `init` again: `init` is setup, safe to run
  * any time, and never changes a version you have (the convention of
@@ -66,16 +60,8 @@ Run this in your app's folder, the one where Pilot was set up. To set Pilot up i
   const installed = run(pm, args, cwd);
   const after = installed ? (installedVersion(cwd, root) ?? VERSION) : before;
 
-  // 2. The skill, wherever init put it.
-  const skills: string[] = [];
-  for (const folder of skillFolders(root, home)) {
-    if (!existsSync(folder) || isLink(folder)) continue;
-    await writeSkill(folder);
-    skills.push(folder.startsWith(home) ? `~${folder.slice(home.length)}` : folder);
-  }
-
-  // 3. The agents' server commands, from before @latest.
-  const servers = installed ? await freshenServers(root, home, options.platform ?? process.platform, run) : [];
+  // 2. Pilot's old setup (an agent's chat running it).
+  const removed = installed ? await removeOldSetup(root, home, options.platform ?? process.platform, run) : [];
 
   if (!installed) {
     return `# Pilot: not updated
@@ -88,32 +74,23 @@ ${pm} ${args.join(" ")}
 `;
   }
 
-  // A server moved to @latest is a change too: the agent starts the new one at its next start.
-  const changed = (!!before && !!after && olderThan(before, after)) || servers.length > 0;
-  // How each agent with Pilot loads the new one: some need their Pilot server restarted, a new chat isn't enough (clients.ts).
-  const agents = agentsWithPilot(root, home, options.platform);
+  const bumped = !!before && !!after && olderThan(before, after);
+  const changed = bumped || removed.length > 0;
   const steps = [
     "Restart your app's dev server, so the page loads the new Pilot.",
-    ...(agents.length ? agents.map((a) => RESTART[a]) : [RESTART.other]),
-    "Then, in a new chat, ask your agent to launch Pilot (or run `/pilot`).",
+    "Restart `npx usepilot` in the app's folder (Ctrl+C, then run it again), so Pilot runs the new version.",
   ];
   if (oldBridge !== null && oldBridge !== BRIDGE_VERSION) {
     steps.push(
       "Update Pilot in your other projects too (`npx usepilot@latest update` in each): this version can't share its connection with older ones.",
     );
   }
-  const bumped = !!before && !!after && olderThan(before, after);
-  const headline = bumped
-    ? `# Pilot updated: ${before} → ${after}`
-    : servers.length
-      ? `# Pilot is up to date (${after ?? VERSION}); its server is fixed`
-      : `# Pilot is up to date (${after ?? VERSION})`;
-  const skillLine = skills.length ? `\nThe \`pilot\` skill is updated too (${skills.map((s) => `\`${s}\``).join(", ")}).\n` : "";
-  const serverLine = servers.length
-    ? `\nPilot's server now always starts the latest version (${servers.map((s) => `\`${s}\``).join(", ")}): it used to keep the one it downloaded first.\n`
+  const headline = bumped ? `# Pilot updated: ${before} → ${after}` : `# Pilot is up to date (${after ?? VERSION})`;
+  const removedLine = removed.length
+    ? `\nPilot's old chat setup is removed (${removed.map((r) => `\`${r}\``).join(", ")}): Pilot runs your agent itself now. Run \`npx usepilot\` in your app's folder, beside its dev server, instead of \`/pilot\` in a chat.\n`
     : "";
   return `${headline}
-${skillLine}${serverLine}
+${removedLine}
 ${changed ? `Next:\n${steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n` : "Nothing else to do.\n"}`;
 }
 
@@ -126,14 +103,6 @@ function bridgeOf(cwd: string, root: string): number | null {
       return match ? Number(match[1]) : null;
     }
     if (dir === root || dirname(dir) === dir) return null;
-  }
-}
-
-function isLink(path: string): boolean {
-  try {
-    return lstatSync(path).isSymbolicLink();
-  } catch {
-    return false;
   }
 }
 

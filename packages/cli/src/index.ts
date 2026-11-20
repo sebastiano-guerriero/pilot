@@ -2,16 +2,12 @@
 /**
  * `usepilot` CLI entry: with no command, Pilot for this project (run.ts: it
  * runs your agent for each job); `init` sets Pilot up in a project, `update`
- * brings it up to date, `mcp` runs the MCP server and the bridge, `setup`
- * installs /pilot for Claude Code.
+ * brings it up to date.
  */
 import { createInterface } from "node:readline/promises";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { type AgentKind, AGENTS, isAgentKind } from "./agents.ts";
+import { init } from "./init.ts";
 import { RunnerError, startRunner } from "./run.ts";
-import { createPilotServer } from "./mcp.ts";
-import { AGENT_IDS, type AgentId, init } from "./init.ts";
-import { setup } from "./setup.ts";
 import { update } from "./update.ts";
 
 const HELP = `usepilot: design in your running app, your agents write the code
@@ -24,36 +20,24 @@ Usage: npx usepilot [command]
           in), and shows the jobs here. Ctrl+C stops it.
           --agent <claude|codex|cursor>: which agent (saved for the project)
           --url <address>: your app's address, when Pilot can't tell
-  init    Set Pilot up in this project for your agent: installs it, connects
-          the agent (its MCP server and the pilot skill, nothing for other
-          agents), and prints what's left for it (loading Pilot in the app).
-          Ask your agent to run it.
-          --agent <claude-code|cursor|codex|vscode|other>: the agent running it
-          --project: connect the agent in this repo (files to commit, for a
-                     team) instead of once for every project on this machine
+  init    Set Pilot up in this project: installs it, checks your agent's
+          command-line tool, removes Pilot's old chat setup, and prints
+          what's left (loading Pilot in the app). Ask your agent to run it.
+          --agent <claude|codex|cursor>: the agent Pilot runs here
           --no-install: print the install command instead of running it
-  update  Update Pilot in this project: the latest usepilot, and the pilot
-          skill wherever init put it. Prints what's left (restart the app,
-          open a new chat). Run it in the app's folder.
-  setup   Set up /pilot in Claude Code, for every project on this machine
-          (--project: for this repo, to commit, so everyone gets it)
-  mcp     Run the MCP server (stdio) agents connect to, and the bridge the
-          page talks to. Agents start it: register it with your agent.
+  update  Update Pilot in this project to the latest, and remove its old
+          chat setup. Prints what's left (restart the app and npx usepilot).
+          Run it in the app's folder.
   help    Show this message
 `;
 
-/** `pilot mcp`: the MCP server on stdio, until the agent closes it. */
-async function runMcp(): Promise<void> {
-  const { server, bridge } = createPilotServer();
-  const close = async () => {
-    await bridge.close();
-    process.exit(0);
-  };
-  process.stdin.on("close", close);
-  process.on("SIGINT", close);
-  process.on("SIGTERM", close);
-  await server.connect(new StdioServerTransport());
-}
+/**
+ * What an agent's chat gets when it still starts Pilot's old MCP server
+ * (`usepilot mcp`, set up before 0.14): Pilot runs the agent itself now.
+ */
+const MCP_GONE = `Pilot no longer runs inside your agent's chat: it runs your agent itself.
+Run \`npx usepilot@latest update\` in your app's folder (it removes this old setup), then \`npx usepilot\` there, beside the dev server.
+`;
 
 const [command = "run"] = process.argv.slice(2).filter((a, i, all) => !a.startsWith("--") && !all[i - 1]?.match(/^--(agent|url)$/));
 
@@ -103,15 +87,6 @@ async function run(): Promise<void> {
   process.on("SIGTERM", close);
 }
 
-/** `--agent <id>` or `--agent=<id>`; an unknown one fails, listing the known ones. */
-function agentArg(): AgentId | undefined {
-  const args = process.argv.slice(3);
-  const i = args.findIndex((a) => a === "--agent" || a.startsWith("--agent="));
-  if (i < 0) return undefined;
-  const value = (args[i]?.includes("=") ? args[i].split("=")[1] : args[i + 1])?.toLowerCase();
-  if (value && (AGENT_IDS as readonly string[]).includes(value)) return value as AgentId;
-  throw new Error(`--agent takes one of: ${AGENT_IDS.join(", ")}.`);
-}
 
 switch (command) {
   case "run":
@@ -128,23 +103,15 @@ switch (command) {
     process.stdout.write(HELP);
     break;
   case "mcp":
-    await runMcp();
-    break;
-  case "setup":
-    try {
-      process.stdout.write(await setup({ project: process.argv.includes("--project") }));
-    } catch (error) {
-      process.stderr.write(`usepilot setup: ${(error as Error).message}\n`);
-      process.exitCode = 1;
-    }
+    process.stderr.write(MCP_GONE);
+    process.exitCode = 1;
     break;
   case "init":
     try {
       process.stdout.write(
         await init({
           install: !process.argv.includes("--no-install"),
-          agent: agentArg(),
-          scope: process.argv.includes("--project") ? "project" : "machine",
+          agent: flag("agent"),
         }),
       );
     } catch (error) {

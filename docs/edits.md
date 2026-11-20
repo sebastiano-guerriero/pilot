@@ -91,7 +91,7 @@ Changes record the state pills' `states` the same way, through `history.apply(â€
 - a readable path like `main > section.hero > h1` (classes help the agent find it);
 - a trimmed text snippet the agent can grep for.
 
-**The prompt.** `formatPrompt()` ([protocol/src/format.ts](../packages/protocol/src/format.ts)) turns it into a Markdown brief that tells the agent to map the values to the project's conventions (no inline styles), prefer existing tokens and utilities and report any value it had to approximate, and ask before changing a shared component everywhere. **Copy prompt and the MCP path produce identical text**: both go through `formatPrompt()`, fed by `buildChangeSet()`.
+**The prompt.** `formatPrompt()` ([protocol/src/format.ts](../packages/protocol/src/format.ts)) turns it into a Markdown brief that tells the agent to map the values to the project's conventions (no inline styles), prefer existing tokens and utilities and report any value it had to approximate, and ask before changing a shared component everywhere. **Copy prompt and a run Pilot starts produce the same text**: both go through `formatPrompt()`, fed by `buildChangeSet()` (a run's in its no-tools form: [handoff.md](handoff.md), *Agent runs*).
 
 ## Edits survive reloads
 

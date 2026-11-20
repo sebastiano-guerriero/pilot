@@ -10,16 +10,23 @@ One line per item. Tick it when it ships; the details go in the doc for its area
   - [x] Codex on Windows and Linux (Windows needs `windows.sandbox="unelevated"`)
   - [ ] Claude Code and Cursor on Windows and Linux (their API keys as repo secrets)
   - [x] `npx usepilot`: the runner (agent picked and saved per project, up to 3 jobs at once, Stop kills the run, errors said on the page); threads keep their agent session; Close only closes
-  - [ ] `init` and `update` for it (check the agent's tool, no MCP or skill), both READMEs, then remove the MCP loop and the `/pilot` skill
+  - [x] `init` and `update` for it (check the agent's tool, remove the old chat setup), both READMEs; the MCP loop, `setup` and the `/pilot` skill removed (`usepilot mcp` only says what to do instead)
+- [ ] **After agent runs, before the release:**
+  - [ ] Copy prompt without Pilot's tools: its text still says "Pilot's `pilot_done` takes a question" and "check every width with `pilot_check_widths`" (the prompt's `tools: true` form, made for the MCP chat): a pasted prompt needs a form of its own
+  - [ ] Width checks during a run: a run has none of Pilot's tools, so Make responsive and Break and fix work widths out from the code and Pilot measures after (one follow-up); giving runs Pilot's check (an MCP server per run, or a command) would bring back the check mid-job. The hub's check route (`/agents/check`, `/checks/:id`) waits unused until then
+  - [ ] Choosing the agent: in the terminal now (asked once, `--agent` changes it); a place in the toolbar is the owner's call
+  - [ ] Starting Pilot with the dev server (a Vite plugin, the dev script), so there's no second terminal; sites without an npm dev server keep `npx usepilot`
+  - [ ] More agents with the same three abilities (one task and exit, a session id, resume by id): Gemini (`gemini -p`), Copilot (`copilot -p`), opencode (`opencode run`)
+  - [ ] Release it (a minor version: bridge 7), with the README's update notes
 - [ ] **Speed, after agent runs:** a comment took 15–17s with the right code location and 21–34s with Pilot's real prompt on nucleo-2, where the search found the wrong file (`app/modules/modal-pro.php`, part of whose text matched "Web app"; the heading is in `web-3/routes/home.php`). To do: exact text matches first, and the site folder that serves the page; send the look-alikes' locations, where a value comes from (inherited from a parent's class), and the project's scale for that property (14–18s in a test). Each agent step costs 3–4s, so about 15s is the floor for a comment; faster models gave wrong answers.
 
 ## Foundation
 
 - [x] pnpm monorepo, TypeScript, Vite, Vitest
 - [x] Overlay mounts in Shadow DOM, dormant until launched
-- [x] Launch / Quit, running state kept per tab
-- [x] Quit for the whole site: the agents stop listening (their chats end the loop), queued jobs come back as changes, work in progress finishes; Option+P hides without quitting
-- [x] Toolbar: comment, select, Send with its count, jobs with their count, quit (designed)
+- [x] Launch / Close, running state kept per tab
+- [x] Close for the whole site: every tab of it closes, jobs go on; Option+P hides in this tab. (Until agent runs it was Quit, which also made the agents' chats stop listening.)
+- [x] Toolbar: comment, select, Send with its count, jobs with their count, close (designed)
 - [x] `ChangeSet` model and `formatPrompt()`
 - [x] Property search ranking
 - [ ] Visual design: property search, selection highlight
@@ -61,7 +68,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [ ] Change list in the panel (review and undo before handoff)
 - [ ] Designer note field
 - [x] `@` in the comment box: the page's tokens (its CSS variables), components and named elements, sent as exact references ([handoff.md](handoff.md), *Mentions*)
-- [x] `@` lists the project's components too (read by the agents' server, kept current), and typed `@names` count; each mention tells the agent where it is
+- [x] `@` lists the project's components too (read by Pilot's process in the project, kept current), and typed `@names` count; each mention tells the agent where it is
 - [x] `/props`: the agent lists a component's props, the designer picks values in the thread, the agent sets them on that instance, Pilot checks them on the page
 - [x] Props: each component's list remembered (shown at once, refreshed by the agent behind)
 - [ ] Props: several instances at once, and the owner's design for the rows
@@ -89,18 +96,18 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 
 ## Handoff
 
-Next (found testing in Cursor: jobs queued forever while the connected chat had stopped waiting for them):
+Items marked *(chat loop)* were for an agent's chat running Pilot over MCP, up to 0.13; agent runs replaced it ([handoff.md](handoff.md), *Agent runs*).
 
-- [x] **Say when the agent isn't listening**, and when no agent is connected or the hub is gone (the owner's design: red pills, the corner's warning, a red reply); a job whose agent left goes back to the queue.
-- [x] **Work from the project, not the agent's start folder:** `pilot_launch` takes the project's `folder` (every agent is told to pass it), or the client's MCP roots; Cursor starts machine-level servers in the home folder.
-- [x] **Restarting the server, per client:** `update` says how for each agent Pilot is set up for (a new chat in Claude Code and Codex; restart the server in Cursor and VS Code), and `pilot_launch` notices a server older than the project's Pilot.
-- [x] **What each client does that Pilot relies on:** a checklist and a 5-minute smoke test per client in [development.md](development.md), run before each release; and `stdio.test.ts`, the built CLI driven over stdio by the official MCP client (launch, a batch, done, a wait that runs out).
+- [x] **Say when something's stuck** (the owner's design: red pills, the corner's warning, a red reply): now Pilot not running for the site, a run that failed (with what to do), an older Pilot in the way; until agent runs, also the agent not listening. A job whose runner left goes back to the queue.
+- [x] *(chat loop)* Work from the project, not the agent's start folder (`pilot_launch`'s `folder`, MCP roots): a run now starts in the project's folder.
+- [x] *(chat loop)* Restarting the server, per client, after an update: now `update` says to restart `npx usepilot`.
+- [x] **What each agent does that Pilot relies on:** a checklist and a smoke test per agent in [development.md](development.md), run before each release, `run.test.ts` with a stand-in agent, and `scripts/agent-runs-check.mjs` on every platform. (Until agent runs, per MCP client, with `stdio.test.ts`.)
 
 - [x] Copy prompt
 - [x] Launch shortcut (Option+P / Alt+P)
-- [x] `usepilot mcp`: MCP server and localhost hub in one process; several agents share one hub, with takeover
-- [x] Agents always start the latest Pilot (`npx -y usepilot@latest mcp`; `update` and `init` move old registrations), and versions that can't meet say so: `pilot_launch` (the server against the project's Pilot) and the page (an older Pilot's hub answering)
-- [x] `pilot_launch`, `pilot_wait_for_edits`, `pilot_done` and the `/pilot` skill
+- [x] The localhost hub, one per machine and version, shared by every project's process, with takeover (in `npx usepilot` now; `usepilot mcp` until agent runs)
+- [x] Versions that can't meet say so: the page, when an older Pilot's hub answers on its port. *(chat loop)* Agents always started the latest Pilot (`npx -y usepilot@latest mcp`), and `pilot_launch` compared the server with the project's Pilot
+- [x] *(chat loop)* `pilot_launch`, `pilot_wait_for_edits`, `pilot_done` and the `/pilot` skill, replaced by agent runs (`npx usepilot`)
 - [x] Send as jobs: queued while the agent works, routed by page origin
 - [x] The check after done: what landed settles, what didn't goes back once, then Pilot accepts the code
 - [x] Make responsive: a task job with its own prompt
@@ -108,7 +115,7 @@ Next (found testing in Cursor: jobs queued forever while the connected chat had 
 - [x] Break and fix: the agent stress-tests an element with odd content and fixes what breaks
 - [ ] Break and fix checked by Pilot itself: the width check with long text put in its copy of the page, ellipses counted as fixes
 - [ ] More `/` actions, and the menu's design (placeholder look now)
-- [x] Pilot's width check (`pilot_check_widths`): a copy of the page in one hidden frame, the designer's width compared before and after, one follow-up after done
+- [x] Pilot's width check: a copy of the page in one hidden frame, the designer's width compared before and after, one follow-up after done (during the job too, with `pilot_check_widths`, in the chat loop: see *After agent runs*)
 - [x] Basic and advanced jobs: edits go fast, advanced tasks to a more capable model where the agent can
 - [x] Comments, phase 1: the Comment tool and widget, a thread per element, the agent's notes as replies, unresolved threads marked on their elements
 - [x] Design the comment widget
@@ -123,24 +130,26 @@ Next (found testing in Cursor: jobs queued forever while the connected chat had 
 - [ ] Design the file tile for attachments that aren't images (placeholder now)
 - [ ] `/` actions listed as previews, to build: Fit its container (container queries), Check accessibility, Explore variations, Use design tokens, Add states, Support dark mode, Add motion ([handoff.md](handoff.md), *Actions*)
 - [ ] Element markers for unsent changes
-- [x] Comments, phase 2: the agent asks the designer a question in a thread, without waiting (`pilot_done`'s `question`), and the answer sends the job back
-- [x] Faster jobs: Pilot finds each element's code in the project for the agent, the edit guidelines read once, each job's step times recorded
-- [x] Jobs queued for a page come in one wait, so several Sends cost one round trip (each still its own job)
+- [x] Comments, phase 2: the agent asks the designer a question in a thread, without waiting (in its reply's `pilot` block; `pilot_done`'s `question` in the chat loop), and the answer sends the job back to the same session
+- [x] Faster jobs: Pilot finds each element's code in the project for the agent, each job's step times recorded (*(chat loop)*: the edit guidelines read once)
+- [x] *(chat loop)* Jobs queued for a page came in one wait, so several Sends cost one round trip; with agent runs, up to three jobs run at once instead
 - [x] Source hints (`target.source`): the component and its file from React (line too in React 18 and earlier) and Vue in development, so agents open the right file without searching
 - [x] Source hints under Turbopack and for Server Components, and lines for React 19: the CLI finds the component's declaration by name in the project, then the element's line in it
 - [x] Next.js App Router (Server Components, Turbopack): components from React's records of them, never the framework's own components
 - [ ] A history of the session's jobs (what changed, how it landed, files touched, a summary to copy), in place of the job list
 - [ ] Design the Send states and the job status (placeholder look now)
-- [x] Token files that only live in code (`tokens.json`, Style Dictionary, Sass variables), read by Pilot's server, in the fields' variables and `@` ([property-dialog.md](property-dialog.md), *Variables*)
+- [x] Token files that only live in code (`tokens.json`, Style Dictionary, Sass variables), read by Pilot's process in the project, in the fields' variables and `@` ([property-dialog.md](property-dialog.md), *Variables*)
 - [ ] Tailwind v3 configs' tokens (JavaScript: they'd have to run)
-- [x] `/pilot` in any agent with skills: `init` writes the skill for Codex and Cursor (`.agents/skills`), Claude Code and Copilot
+- [x] *(chat loop)* `/pilot` in any agent with skills: `init` wrote the skill for Codex and Cursor (`.agents/skills`), Claude Code and Copilot
+- [x] Comment threads keep the agent's session: each reply resumes it, so the agent remembers the thread (agent runs)
 
 ## Distribution
 
 - [x] The name: `usepilot` on npm (package and organization), `usepilot.design` for the site
-- [x] `usepilot` published, installable in Vite and Next.js apps, with the CLI (`mcp`, `setup`)
-- [x] `npx usepilot init`: one prompt for any agent; installs, registers the MCP server for Claude Code, Cursor and VS Code (Codex by `codex mcp add`)
-- [x] `npx usepilot update`: the latest package and skill, and what to restart, adds the skill, and tells the agent where to load Pilot
+- [x] `usepilot` published, installable in Vite and Next.js apps, with the CLI
+- [x] `npx usepilot init`: one prompt for any agent; installs Pilot, checks the agent's command-line tool, removes the old chat setup, and tells the agent where to load Pilot (until agent runs: registered the MCP server and the skill per agent)
+- [x] `npx usepilot update`: the latest package, the old chat setup removed, and what to restart
+- [x] `npx usepilot`: Pilot for the project, running the agent for each job (Claude Code, Codex, Cursor)
 
 ## Open questions
 

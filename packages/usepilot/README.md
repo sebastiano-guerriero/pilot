@@ -2,53 +2,65 @@
 
 **Design in your running app. Your agents write the code.**
 
-Pilot turns the page you're building into a design surface for your agents. It runs inside your app in development, so you work on the real page with real data, not on a separate canvas:
+Pilot turns the page you're building into a design surface for your agents. You edit, ask for changes or run tasks, they write the code while you keep going, and Pilot checks the real page to show you what landed, not what the agent says it did.
 
-- **Edit.** Select an element, type a property the way you'd type a Tailwind class (`pt`, `w`, `gap-x`), and set it with a visual control. You see the change live.
+- **Edit.** Select an element, type a property the way you'd type a Tailwind class (`pt`, `w`, `gap-x`), and set it with a visual control.
 - **Ask for a change.** Click an element with the comment tool and say what you want, in your own words, with a screenshot or a file if it helps. The agent makes the change and tells you in a line what it did.
 - **Run a task.** Type `/` in the comment box and pick one: **Make responsive** makes the element work at every screen width, and **Break and fix** tries it with odd content (very long text, missing or odd-shaped images) and fixes what breaks.
-
-Then press **Send**. Your agent writes the changes into your code using your project's own conventions (Tailwind classes, CSS modules, design tokens). Pilot never edits your files itself. It checks the result on the page: what landed stops being previewed, and what didn't goes back to the agent. You see what the code does, not what the agent says it did.
 
 > **Early preview (0.x).** It works, and things will change between versions.
 
 ## Install
 
-Works with any agent that supports MCP: Claude Code, Codex, Cursor, VS Code and others.
+Pilot runs your coding agent for each change you send: **Claude Code**, **Codex** or **Cursor**. It needs the agent's command-line tool, installed and signed in (once per machine; skip it if you already use it in a terminal):
 
-1. **Paste this into your agent**, in your project. It installs Pilot and loads it in your app, in development only.
+| Agent | Install | Sign in |
+| --- | --- | --- |
+| Claude Code | `curl -fsSL https://claude.ai/install.sh \| bash` | `claude auth login` |
+| Codex | `npm install -g @openai/codex` | `codex login` |
+| Cursor | `curl https://cursor.com/install -fsS \| bash` | `cursor-agent login` |
+
+It uses your agent's plan, as when you use it yourself.
+
+1. **Add Pilot to your project.** Paste this into your agent, in the project:
 
    ```
-   Set up Pilot in this project: run `npx usepilot@latest init --agent <you>`, where <you> is the agent you are (claude-code, cursor, codex, vscode or other), and follow what it prints.
+   Set up Pilot in this project: run `npx usepilot@latest init` and follow what it prints.
    ```
 
-2. **Open a new chat.** Pilot doesn't work in the chat that installed it. In the new one, ask the agent to **launch Pilot**, or run `/pilot` (`$pilot` in Codex).
+   It installs Pilot, loads it in your app in development only, and checks your agent's command-line tool.
 
-   To work on several things at once, launch Pilot in more chats on the same project: each Send or comment goes to a chat that's free, and two chats never work on the same element at once.
+2. **Run Pilot**, in the project's folder, in a terminal beside your dev server:
 
-Your agent is connected once for this machine, with nothing added to the repo. In another project, the same prompt only adds Pilot to that app. Teammates paste it in their own agent. To keep the setup in the repo instead, for a team to commit, the agent adds `--project`.
+   ```bash
+   npx usepilot
+   ```
 
-**No agent?** Run `npx usepilot@latest init --agent other` yourself and do the step it prints for loading Pilot. Then press **Option+P** (Alt+P on Windows and Linux) in your app, and **Copy prompt** hands your changes to any chat.
+   Open your app: Pilot opens on every page. Design and press Send, or comment on an element: Pilot runs your agent for each job, and the terminal shows what it does. No chat needs to stay open. The first time, if several agents are signed in, it asks which to use; `npx usepilot --agent codex` changes it.
 
-### Updating Pilot
+**What the agent may do:** edit your project's files. Nothing else on your machine, and no internet: each agent runs in its own restricted mode or sandbox.
 
-Ask your agent to **update Pilot**, or run this in your project's folder:
+**No agent?** Press **Option+P** (Alt+P on Windows and Linux) in your app, and **Copy prompt** hands your changes to any chat.
+
+### Updating
+
+Run this in your project's folder:
 
 ```bash
 npx usepilot@latest update
 ```
 
-Then restart your app and open a new chat. In Cursor, also switch `pilot` off and on in Cursor Settings → MCP.
+Then restart your app's dev server and `npx usepilot`. Updating from 0.13 or earlier also removes Pilot's old setup in your agents (its MCP server and the `/pilot` skill): Pilot no longer runs inside a chat.
 
 ### If something doesn't work
 
 - **The toolbar doesn't appear.** Pilot only loads in development, in the browser. Ask your agent to check where `usepilot/auto` is imported. The shortcut is ignored while you're typing in a text field.
-- **The agent doesn't know Pilot.** Start a new chat: agents load their MCP servers when a chat starts. Some ask once to approve the project's server: say yes. In Cursor, if `pilot` shows switched off in Cursor Settings (MCP section), switch it on: Cursor keeps servers set up in a repo off until you do.
-- **Pilot doesn't open, and another project's chat runs an older Pilot.** Pilots before 0.7.0 all used one port, so two projects on different versions blocked each other. Update Pilot in the older project (`npx usepilot@latest update` there), or close that chat. From 0.7.0, each version has its own port, and projects on different versions run side by side.
+- **The toolbar says "Pilot isn't running for this site".** Run `npx usepilot` in your project's folder, and keep it running.
+- **The toolbar says your agent isn't signed in**, or couldn't do a job. Sign in with the command above; the terminal running `npx usepilot` shows what the agent said.
 
 ## Using Pilot
 
-1. **Launch:** ask your agent to launch Pilot, or run `/pilot`. Pilot opens in your app, connected to the agent: everything you send goes to it, and it writes the code while you keep designing. Closed Pilot, or moved to another page? **Option+P** (Alt+P) opens it again, still connected while the agent's chat runs Pilot.
+1. **Open your app** with `npx usepilot` running. Closed Pilot, or moved to another page? **Option+P** (Alt+P) opens it again.
 2. **Select** with the cursor button in the toolbar, then click any element. Its property dialog opens next to it. Shift+click selects several, to edit them together.
 3. **Search and edit.** Type a property (`p`, `pt`, `w`, `gap`, `display`, `aspect`…), press Tab to go into its editor, then type or drag a value. Cmd/Ctrl+Z undoes.
    - Type `from-768 ` first to make the change only for some screen widths.
@@ -58,7 +70,7 @@ Then restart your app and open a new chat. In Cursor, also switch `pilot` off an
 5. **Ask for a change** with the speech-bubble tool: click an element (Shift+click for several) and tell the agent what to change. Type `/` there for tasks like Make responsive and Break and fix.
 6. **Edit text** in place: with the cursor tool on, double-click it.
 
-Your changes survive reloads in the same browser tab. Quit with the toolbar's last button.
+Your changes survive reloads in the same browser tab. Close Pilot with the toolbar's last button.
 
 ### Options
 
@@ -72,8 +84,18 @@ mountPilot({
 });
 ```
 
+## Working on Pilot
+
+```bash
+pnpm install
+```
+
+```bash
+pnpm dev
+```
+
+The playground opens at http://localhost:5180. Everything else is in [docs/](docs/README.md): how each part works and why, development and releasing, and the [roadmap](docs/roadmap.md).
+
 ## License
 
-[FSL-1.1-MIT](./LICENSE.md): free to use, modify and share, including at work,
-for anything except a competing commercial product. Each version becomes MIT
-two years after its release.
+[FSL-1.1-MIT](LICENSE.md) (Functional Source License, MIT Future License). The code is public and free to use, modify and share, including at work, for anything except a competing commercial product or service built from it. Each version becomes MIT two years after it's released.

@@ -1,6 +1,6 @@
 # Design tokens in Pilot (in part planned)
 
-> Status: **reading the page's tokens is built**, and so are the project's token files (JSON, Sass: read by Pilot's server, Tailwind v3 configs still to come); they're offered in the property fields (`--` typed, or the variable button: [property-dialog.md](property-dialog.md), *Variables*) and in the comment box's `@` mentions ([handoff.md](handoff.md), *Mentions*): `pageTokens()` in [dom/tokens.ts](../packages/overlay/src/dom/tokens.ts) collects the root's CSS variables, live, with their values and kinds. A field holding a token steps along its scale (↑/↓, the wheel: *Variables* there too). Still planned: a plain number stepping to the scale's values, and scrubbing along it. When a part is built, move it into the docs for its area (see [README.md](README.md)) and trim this note to what's still open.
+> Status: **reading the page's tokens is built**, and so are the project's token files (JSON, Sass: read by Pilot's process in the project, `npx usepilot`, Tailwind v3 configs still to come); they're offered in the property fields (`--` typed, or the variable button: [property-dialog.md](property-dialog.md), *Variables*) and in the comment box's `@` mentions ([handoff.md](handoff.md), *Mentions*): `pageTokens()` in [dom/tokens.ts](../packages/overlay/src/dom/tokens.ts) collects the root's CSS variables, live, with their values and kinds. A field holding a token steps along its scale (↑/↓, the wheel: *Variables* there too). Still planned: a plain number stepping to the scale's values, and scrubbing along it. When a part is built, move it into the docs for its area (see [README.md](README.md)) and trim this note to what's still open.
 
 ## Goal
 
@@ -36,8 +36,8 @@ Things to handle:
 
 Tailwind v3's `tailwind.config.js`, a `tokens.json`, Style Dictionary sources, a TypeScript theme. These never reach the browser in a readable form.
 
-- **Not a snapshot from the agent.** If the agent read the files and sent a list, it would be a snapshot, and while it's waiting for edits (`pilot_wait_for_edits`) it can't re-read anything.
-- **Instead, the bridge watches the files.** `pilot mcp` is a Node process on the developer's machine: it watches the token files, parses them, and pushes updates to the overlay over its localhost connection, live.
+- **Not a snapshot from the agent.** If the agent read the files and sent a list, it would be a snapshot, and between jobs it doesn't run at all.
+- **Instead, the bridge watches the files.** `npx usepilot` is a Node process on the developer's machine, in the project's folder: it watches the token files, parses them, and pushes updates to the overlay over its localhost connection, live.
 - **The agent's part is a one-time setup:** during `npx pilot init`, it finds where the tokens live and their format, and writes that into Pilot's config.
 - **Formats:** JSON-based (the W3C design-tokens format, Style Dictionary sources, a plain `tokens.json`) is easy to parse. JS/TS configs (Tailwind v3) need executing, which is riskier (they can import anything) but workable, as Tailwind's own tooling does.
 - **Often not needed:** many of these systems also compile to CSS variables (Style Dictionary usually does, Tailwind v3 can). Then source 1 covers them.

@@ -78,7 +78,7 @@ code {
   font-size: 0.85em;
 }
 
-/* Playground-only stand-in for running /pilot in the agent. */
+/* Playground-only: opens Pilot, as `npx usepilot` starting for the site does. */
 .dev-launch {
   position: fixed;
   top: 16px;

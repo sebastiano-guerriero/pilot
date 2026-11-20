@@ -24,13 +24,13 @@ import { Hub, type JobPost } from "./hub.ts";
  * agent for (`npx usepilot` in its project, which registers it), so another
  * website can't hand prompts to the agent.
  *
- * Agents (`npx usepilot` processes that aren't the hub, and `pilot mcp` ones, see agent.ts):
+ * Pilot's processes (`npx usepilot` ones that aren't the hub, see agent.ts):
  * - POST /agents/register | /agents/launch | /agents/wait | /agents/done | /agents/check | /agents/leave
  * - POST /agents/job            a job as the hub has it (a run polls it, to stop when it's cancelled)
  * - POST /agents/pages          the sites with Pilot open (the connected pages' origins)
  * Refused for any request with an `Origin` (browsers send one; Node doesn't).
  *
- * GET /health tells a `pilot mcp` that the port is Pilot's.
+ * GET /health tells an `npx usepilot` that the port is Pilot's.
  */
 
 export interface HubServer {
@@ -167,7 +167,7 @@ function events(hub: Hub, origin: string, req: IncomingMessage, res: ServerRespo
     Connection: "keep-alive",
   });
   // EventSource reconnects by itself after a drop: every 2s, quickly enough
-  // for a takeover by another `pilot mcp`.
+  // for a takeover by another `npx usepilot`.
   res.write("retry: 2000\n\n");
   const send = (event: PageEvent) => res.write(`data: ${JSON.stringify(event)}\n\n`);
   const remove = hub.addPage({ origin, send });

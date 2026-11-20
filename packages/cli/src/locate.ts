@@ -6,8 +6,8 @@ import { workspaceRoot } from "./components.ts";
 
 /**
  * Where an element's code probably is, found by Pilot before the agent gets
- * the job, so it can go straight to the edit instead of searching: the MCP
- * server runs in the project's folder, and a plain text search there takes
+ * the job, so it can go straight to the edit instead of searching: Pilot's
+ * process (`npx usepilot`) runs in the project's folder, and a plain text search there takes
  * milliseconds, with no model involved.
  *
  * Each line of the project's source files is scored by what it shares with

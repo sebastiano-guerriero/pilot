@@ -1,12 +1,10 @@
 import { mkdtemp, rm, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { ChangeSet, CommentMessage, Job } from "@pilot/protocol";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { attachmentBlocks, saveAttachment, sweepAttachments, withAttachmentPaths } from "./attachments.ts";
-import { createPilotServer } from "./mcp.ts";
+import { Bridge } from "./agent.ts";
+import { attachmentBlocks, newAttachments, saveAttachment, sweepAttachments, withAttachmentPaths } from "./attachments.ts";
 import { startHub } from "./server.ts";
 
 const APP = "http://localhost:5173";
@@ -128,19 +126,12 @@ describe("comment attachments", () => {
     });
   });
 
-  it("end to end: the page uploads an image, sends it alone, and the agent sees it", async () => {
+  it("end to end: the page uploads an image, sends it alone, and the run gets it", async () => {
     const hub = await startHub(0, undefined, { attachments: dir });
     cleanup.push(() => hub.close());
-    const { server, bridge } = createPilotServer({ port: hub.port, cwd: "/work/app", waitMs: 2000 });
-    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-    const client = new Client({ name: "claude-code", version: "1.0.0" });
-    await server.connect(serverSide);
-    await client.connect(clientSide);
-    cleanup.push(async () => {
-      await client.close();
-      await bridge.close();
-    });
-    await client.callTool({ name: "pilot_launch", arguments: { url: APP } });
+    const bridge = new Bridge({ id: "runner", label: "Claude Code · app" }, hub.port);
+    cleanup.push(() => bridge.close());
+    await bridge.launch(APP);
 
     const page = (path: string, body: string | Buffer, type: string) =>
       fetch(`http://127.0.0.1:${hub.port}${path}`, { method: "POST", headers: { origin: APP, "content-type": type }, body });
@@ -161,10 +152,9 @@ describe("comment attachments", () => {
     const set = commentSet("c1", [{ from: "designer", text: "", at: new Date().toISOString(), attachments: [{ id, name: "sketch.png" }] }]);
     expect((await page("/jobs", JSON.stringify({ id: "c1", changeSet: set, status: "queued" }), "application/json")).status).toBe(202);
 
-    const result = await client.callTool({ name: "pilot_wait_for_edits", arguments: {} });
-    const content = result.content as Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
-    expect(content[0]?.text).toContain("The comment is a file, with no words");
-    expect(content[0]?.text).toContain(join(dir, id));
-    expect(content[1]).toEqual({ type: "image", data: PNG.toString("base64"), mimeType: "image/png" });
+    const { job: taken } = await bridge.wait(APP, 2000);
+    // The hub gave it the file's path (never the page): the run reads it from there.
+    expect(newAttachments(taken as Job).map((f) => f.path)).toEqual([join(dir, id)]);
+    expect(await attachmentBlocks(taken as Job)).toEqual([{ type: "image", data: PNG.toString("base64"), mimeType: "image/png" }]);
   });
 });
