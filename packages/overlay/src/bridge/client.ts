@@ -56,6 +56,8 @@ export interface BridgeHandlers {
   onAgentsArrived?(): void;
   /** An agent asks for a width check of a job's element (answered with postCheck). */
   onCheck?(requestId: string, jobId: string): void;
+  /** The designer quit Pilot on this site, here or in another tab: close it. */
+  onQuit?(): void;
 }
 
 /**
@@ -180,6 +182,11 @@ export class BridgeClient {
     return this.post(`/jobs/${encodeURIComponent(jobId)}/answer`, { answer });
   }
 
+  /** The designer quit Pilot on this site: its agents stop waiting, its other pages close (false: no hub to tell). */
+  quit(): Promise<boolean> {
+    return this.post("/quit", {});
+  }
+
   private async post(path: string, body: object): Promise<boolean> {
     try {
       const res = await fetch(`${this.url}${path}`, {
@@ -251,6 +258,9 @@ export class BridgeClient {
         break;
       case "check":
         this.handlers.onCheck?.(event.requestId, event.jobId);
+        break;
+      case "quit":
+        this.handlers.onQuit?.();
         break;
     }
   }

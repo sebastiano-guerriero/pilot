@@ -39,6 +39,8 @@ export interface JobPost {
 /** What `wait` returns: the job taken, or none (timed out). */
 export interface WaitResult {
   job: Job | null;
+  /** The designer quit Pilot on the site: stop the loop (no more waits) until /pilot again. */
+  quit?: boolean;
 }
 
 interface Agent {
@@ -52,7 +54,7 @@ interface Agent {
 interface Waiter {
   agentId: string;
   origin: string;
-  resolve(job: Job | null): void;
+  resolve(job: Job | null, quit?: boolean): void;
 }
 
 /** A width check an agent asked for, waiting for the page's answer. */
@@ -64,6 +66,8 @@ interface PendingCheck {
 export class Hub {
   private agents = new Map<string, Agent>();
   private pages = new Set<PageConnection>();
+  /** Sites the designer quit Pilot on: their agents' waits end at once, until one runs /pilot there again. */
+  private quitOrigins = new Set<string>();
   private jobs = new Map<string, Job>();
   private waiters: Waiter[] = [];
   private checks = new Map<string, PendingCheck>();
@@ -120,8 +124,35 @@ export class Hub {
     }
   }
 
+  /**
+   * The designer quit Pilot on `origin` (the whole site): its agents' waits
+   * end with `quit`, so their chats stop the loop and are theirs again, and
+   * so do their next waits (an agent on a job finishes it first) until one
+   * runs /pilot there again; its open pages close Pilot. Jobs aren't touched
+   * here: the page takes back the ones still queued.
+   */
+  quit(origin: string): void {
+    const key = originKey(origin);
+    this.quitOrigins.add(key);
+    for (const waiter of this.waiters.filter((w) => w.origin === key)) {
+      this.waiters = this.waiters.filter((w) => w !== waiter);
+      waiter.resolve(null, true);
+    }
+    this.sendTo(key, { type: "quit" });
+    this.notifyAgents(key);
+  }
+
+  /**
+   * The sites with Pilot open in a browser now (the origins of the connected
+   * pages, each once): where /pilot can launch without being told a URL.
+   */
+  pageOrigins(): string[] {
+    return [...new Set([...this.pages].map((p) => p.origin))];
+  }
+
   /** An agent ran /pilot: registers it and tells the open pages of `origin` to launch Pilot. Returns how many pages got it. */
   launch(info: AgentInfo, origin: string): number {
+    this.quitOrigins.delete(originKey(origin));
     this.register(info, origin);
     return this.sendTo(originKey(origin), { type: "launch", agent: this.shown(info) });
   }
@@ -134,16 +165,18 @@ export class Hub {
   wait(info: AgentInfo, origin: string, timeoutMs: number, signal?: AbortSignal): Promise<WaitResult> {
     this.register(info, origin);
     const key = originKey(origin);
+    // Quit there: the agent stops (it finished what it was on).
+    if (this.quitOrigins.has(key)) return Promise.resolve({ job: null, quit: true });
     const queued = this.oldestQueued(key);
     if (queued) return Promise.resolve({ job: this.take(queued, this.shown(info)) });
     return new Promise((resolve) => {
       const waiter: Waiter = {
         agentId: info.id,
         origin: key,
-        resolve: (job) => {
+        resolve: (job, quit) => {
           clearTimeout(timer);
           signal?.removeEventListener("abort", onAbort);
-          resolve({ job });
+          resolve(quit ? { job: null, quit: true } : { job });
         },
       };
       const timer = setTimeout(() => this.endWait(waiter, null), timeoutMs);

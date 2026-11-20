@@ -16,6 +16,7 @@ import { Hub, type JobPost } from "./hub.ts";
  * - POST /jobs/:id/retry        a done job's changes that didn't come out right (or a task's problems): one follow-up
  * - POST /jobs/:id/answer       the designer's answer to the agent's question about a done job: back to the agent with it
  * - POST /checks/:requestId     the answer to a width check an agent asked for (`check` event)
+ * - POST /quit                  the designer quit Pilot on the page's site: its agents stop waiting, its pages close
  * - POST /attachments           a file for a comment: an image, text file or PDF (the raw bytes, its type as Content-Type): saved in
  *                               the OS temp folder (attachments.ts), answers its id. Jobs name files by id only.
  * The page's origin comes from the `Origin` header the browser always sends,
@@ -25,6 +26,7 @@ import { Hub, type JobPost } from "./hub.ts";
  *
  * Agents (`pilot mcp` processes that aren't the hub, see agent.ts):
  * - POST /agents/register | /agents/launch | /agents/wait | /agents/done | /agents/check | /agents/leave
+ * - POST /agents/pages          the sites with Pilot open (the connected pages' origins)
  * Refused for any request with an `Origin` (browsers send one; Node doesn't).
  *
  * GET /health tells a `pilot mcp` that the port is Pilot's.
@@ -99,6 +101,11 @@ async function handle(hub: Hub, req: IncomingMessage, res: ServerResponse, attac
   }
 
   if (path === "/events" && req.method === "GET") return events(hub, origin, req, res);
+  // Quitting reaches only the page's own site (its Origin): no agent needed, nothing taken from it.
+  if (path === "/quit" && req.method === "POST") {
+    hub.quit(origin);
+    return json(res, 200, { ok: true });
+  }
 
   if (req.method !== "POST") return json(res, 405, { error: "POST only" });
   if (!hub.hasAgents(origin)) return json(res, 403, { error: "no agent works on this page: run /pilot in your agent" });
@@ -178,6 +185,8 @@ async function handleAgent(hub: Hub, action: string, data: unknown, req: Incomin
       if (!d.origin) return json(res, 400, { error: "origin needed" });
       hub.register(d.agent, d.origin);
       return json(res, 200, { ok: true });
+    case "pages":
+      return json(res, 200, { origins: hub.pageOrigins() });
     case "launch":
       if (!d.origin) return json(res, 400, { error: "origin needed" });
       return json(res, 200, { pages: hub.launch(d.agent, d.origin) });

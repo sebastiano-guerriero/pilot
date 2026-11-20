@@ -273,6 +273,10 @@ export function PropertyInputText({
     typed.current = true;
     setMenu(null);
     report();
+    // Applied at once when the pick makes the value (picked from the
+    // variables button, or a variable alone), so the page shows it now; while
+    // typing math (`calc(--`), the value goes on, applied on Enter or leaving.
+    if (!menu.typed || /^var\(\s*--[\w-]+\s*\)$/.test(next.text.trim())) onCommit(next.text);
   };
 
   // The wheel steps like ↑/↓, only while the field is being edited (elsewhere

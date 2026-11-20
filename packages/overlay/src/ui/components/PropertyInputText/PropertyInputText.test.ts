@@ -360,6 +360,18 @@ describe("PropertyInputText's variables", () => {
     expect(names()).toEqual(["--space-2", "--space-4"]);
     act(() => (container.querySelectorAll(".token-option")[0] as HTMLElement).click());
     expect(input().value).toBe("var(--space-2)");
+    // Applied at once: the page shows it without leaving the field.
+    expect(committed.at(-1)).toBe("var(--space-2)");
+  });
+
+  it("typed: a variable alone is applied at once; inside math, the value goes on", () => {
+    act(() => input().focus());
+    typeIn("--space-4");
+    press("Enter");
+    expect(committed).toEqual(["var(--space-4)"]);
+    typeIn("calc(--space-2");
+    press("Enter");
+    expect(committed).toEqual(["var(--space-4)"]); // not yet: still typing the calc
   });
 });
 

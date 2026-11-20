@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { originKey, originOf, propsOf, sameOrigin } from "./bridge.ts";
+import { isLocalHost, originKey, originOf, propsOf, sameOrigin } from "./bridge.ts";
 
 describe("origins", () => {
   it("takes the origin of a URL, with or without a scheme", () => {
@@ -42,5 +42,19 @@ describe("propsOf", () => {
     ]);
     expect(propsOf("no")).toBeUndefined();
     expect(propsOf([])).toBeUndefined();
+  });
+});
+
+describe("isLocalHost: development addresses, never a server's", () => {
+  it("this machine, local names, private networks", () => {
+    for (const h of ["localhost", "app.localhost", "127.0.0.1", "127.1.2.3", "[::1]", "0.0.0.0", "nucleo", "myapp.local", "shop.test", "api.internal", "10.0.0.5", "172.20.1.1", "192.168.1.55", "fd12:3456::1", "fe80::1"]) {
+      expect(isLocalHost(h), h).toBe(true);
+    }
+  });
+
+  it("anything public isn't", () => {
+    for (const h of ["nucleoapp.com", "www.example.org", "staging.example.com", "8.8.8.8", "172.32.0.1", "11.0.0.1", "2001:db8::1", "localhost.evil.com", ""]) {
+      expect(isLocalHost(h), h).toBe(false);
+    }
   });
 });

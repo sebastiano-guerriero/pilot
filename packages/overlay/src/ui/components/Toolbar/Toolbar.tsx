@@ -44,7 +44,9 @@ interface ToolbarProps {
   pending: number;
   /** The jobs button: scroll to the next job's elements (see App's nextJob). */
   onNextJob(): void;
+  /** Quit: closes Pilot on the site and stops its agents listening. What it stops, under its tooltip ("Stops Claude Code listening"). */
   onQuit(): void;
+  quitDetail?: string;
   /**
    * Jobs stuck (nothing will move them by itself, see PilotSession.stuck),
    * on the button they belong to: `comment` for comments and tasks asked in
@@ -91,6 +93,7 @@ export function Toolbar({
   pending,
   onNextJob,
   onQuit,
+  quitDetail,
   alerts = {},
   spot = null,
   onMove,
@@ -282,8 +285,8 @@ export function Toolbar({
         </span>
       )}
       <span class="divider" aria-hidden="true" />
-      <Tooltip text="Quit Pilot" gap={TIP_GAP}>
-        <button type="button" class="button" aria-label="Quit Pilot" onClick={onQuit}>
+      <Tooltip text="Quit Pilot" detail={quitDetail} gap={TIP_GAP}>
+        <button type="button" class="button" aria-label={quitDetail ? `Quit Pilot. ${quitDetail}` : "Quit Pilot"} onClick={onQuit}>
           <Icon name="power" />
         </button>
       </Tooltip>

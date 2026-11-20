@@ -4,7 +4,7 @@ import { basename, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AgentInfo, Job } from "@pilot/protocol";
-import { DEFAULT_BRIDGE_PORT, EDIT_GUIDELINES, formatPrompt, formatWidthCheck, MAX_CHOICES, MAX_PROPS, originOf, propsOf, questionOf, SHARED_CHOICES, sharedChoiceMeaning } from "@pilot/protocol";
+import { DEFAULT_BRIDGE_PORT, EDIT_GUIDELINES, formatPrompt, formatWidthCheck, isLocalHost, MAX_CHOICES, MAX_PROPS, originKey, originOf, propsOf, questionOf, SHARED_CHOICES, sharedChoiceMeaning } from "@pilot/protocol";
 import { z } from "zod";
 import { Bridge } from "./agent.ts";
 import { attachmentBlocks } from "./attachments.ts";
@@ -41,8 +41,8 @@ const PROGRESS_MS = 20_000;
 export const INSTRUCTIONS = `Pilot lets the designer edit the running app in the browser and send the edits back to you as jobs.
 
 The loop, when the user asks to launch or start Pilot, runs /pilot, or asks to hand the design over:
-1. Find the page: the URL of the app's dev server, from the dev script and its config (vite.config → server.port, Next.js → 3000, a --port flag…) or a server already running. If it isn't running, start it in the background; if you can't tell the URL, ask. Call pilot_launch with that URL and \`folder\`, the project's folder as an absolute path (your working directory: Pilot searches the code there for each job, and some clients start its server in another folder): Pilot opens in that page (if the page isn't open, tell the user to open it), then tell the user in one line that Pilot is ready: select an element, edit, press Send.
-2. Call pilot_wait_for_edits. It returns a job when the designer presses Send, or "no edits yet" after a while: then call it again. (In Claude Code a long wait moves to the background: the job arrives as its result.)
+1. Launch: call pilot_launch with \`folder\`, the project's folder as an absolute path (your working directory: Pilot searches the code there for each job, and some clients start its server in another folder). Pilot works on the whole site, every page, not one page: leave \`url\` out and it launches on the site where Pilot is open in the browser; pass the site's address (any page; only the scheme, host and port count) only when it asks, or when several are open. Don't pick a page from the file you have open, and don't open one for the user. If no page has Pilot open, make sure the dev server runs (start it in the background), and ask the user to open the app. Then tell the user in one line that Pilot is ready on every page: select an element, edit, press Send.
+2. Call pilot_wait_for_edits. It returns a job when the designer presses Send, or "no edits yet" after a while: then call it again. When the designer quits Pilot it says so: stop the loop, tell the user in one line that Pilot is closed (/pilot starts it again), and end your turn. (In Claude Code a long wait moves to the background: the job arrives as its result.)
 3. Apply the job's edits to the source: they're design instructions, not code, so write production code the way the project already styles things, whatever it uses (see the job's guidelines). Edits are basic: every value is given, so be fast (no screenshots or browser checks: Pilot checks the page). A "make responsive" job is an advanced task: make one element work at every viewport width. A "break and fix" job is one too: stress-test one element with odd but realistic content, fix what breaks, and put the real content back. Their prompts list the steps; check the result with pilot_check_widths (numbers for every width, instead of screenshots). If you can hand advanced tasks to a more capable model than the one you run on (a subagent, or another model your agent offers), do. A "comment" job is the designer's own words about one element: do what it asks (simple asks right away, open-ended ones as advanced tasks), and your pilot_done notes are your reply in their thread: one short sentence, like a chat message, not a report.
 4. Call pilot_done with the job id and short notes (values you approximated, anything you did differently). When part of a job needs the designer's decision (they changed only some copies of shared code: each element's "Look-alikes" line counts the others; the jobs' guidelines say when, and what each answer means), do the rest, leave that part, and ask with pilot_done's question and choices ("${SHARED_CHOICES.all.label}", "${SHARED_CHOICES.one.label}", "${SHARED_CHOICES.variant.label}", your suggestion first); go on with other jobs, and their answer comes back as that job. Then call pilot_wait_for_edits again. When several jobs were queued, one wait returns them all: do them all, then call pilot_done once per job, each with its own id and notes.
 
@@ -250,6 +250,10 @@ export function projectFolder(candidate: string | undefined): string | null {
   return existsSync(path) && searchable(path) ? path : null;
 }
 
+/** What a wait says when the designer quit Pilot on the site (Hub.quit): the chat stops the loop and is the user's again. */
+export const QUIT_NOTE =
+  "The designer quit Pilot. Stop here: don't call pilot_wait_for_edits again. Tell the user in one short line that Pilot is closed and that /pilot starts it again, then end your turn.";
+
 export function createPilotServer(options: { port?: number; cwd?: string; waitMs?: number } = {}) {
   const port = options.port ?? (Number(process.env.PILOT_PORT) || DEFAULT_BRIDGE_PORT);
   // The project's folder: where Pilot searches the code (the elements' lines, the components' files) and what the
@@ -294,11 +298,14 @@ export function createPilotServer(options: { port?: number; cwd?: string; waitMs
     {
       title: "Launch Pilot",
       description:
-        "Opens Pilot in the page the designer works on, and routes that page's edits to you. Call it first when the user asks to launch or start Pilot (or runs /pilot). Then call pilot_wait_for_edits.",
+        "Opens Pilot on the site the designer works on, every page of it (the ones open and those opened next), and routes its edits to you. Call it first when the user asks to launch or start Pilot (or runs /pilot). Then call pilot_wait_for_edits.",
       inputSchema: {
         url: z
           .string()
-          .describe("The page's URL on the app's dev server, e.g. http://localhost:5173 (find it in the dev server's config or output)."),
+          .optional()
+          .describe(
+            "The site's address on its dev server, e.g. http://localhost:5173: any page of it, Pilot works on every page (only the scheme, host and port count). Leave it out to launch on the site where Pilot is open in the browser.",
+          ),
         folder: z
           .string()
           .optional()
@@ -308,9 +315,8 @@ export function createPilotServer(options: { port?: number; cwd?: string; waitMs
       },
     },
     async ({ url, folder }) => {
-      const o = originOf(url);
-      if (!o) return text(`"${url}" isn't a page URL. Pass the dev server's URL, e.g. http://localhost:5173.`, true);
-      origin = o;
+      let o = url ? originOf(url) : null;
+      if (url && !o) return text(`"${url}" isn't a page URL. Pass the dev server's URL, e.g. http://localhost:5173.`, true);
       const given = projectFolder(folder);
       if (given) useProject(given);
       // Started outside the project, and no folder to go by: say so, so the agent passes it.
@@ -319,11 +325,30 @@ export function createPilotServer(options: { port?: number; cwd?: string; waitMs
           ? ` Pilot can't search the project's code from ${project}${folder ? ` (nor from ${folder}: it needs a package.json or a .git)` : ""}: call pilot_launch again with \`folder\` set to the project's folder (absolute).`
           : "";
       try {
+        // The sites with Pilot open in the browser: local ones only (a public site's page never gets an agent by itself).
+        const open = (await bridge.pages()).filter((p) => isLocalHost(new URL(p).hostname));
+        if (!o) {
+          if (open.length > 1) {
+            return text(
+              `Pilot is open on several sites: ${open.join(", ")}. Call pilot_launch again with the one the designer works on as \`url\` (ask if you can't tell).${lost}`,
+            );
+          }
+          if (!open.length) {
+            return text(
+              `No page has Pilot open yet. Ask the designer to open the app in the browser (any page: Pilot works on every page of the site), with its dev server running (start it if it isn't), then call pilot_launch again. Don't open a page for them.${lost}`,
+            );
+          }
+          o = open[0] as string;
+        }
+        origin = o;
         const pages = await bridge.launch(o);
+        const others = open.filter((p) => p !== originKey(o as string));
         const where =
           pages > 0
-            ? `Pilot is open in ${pages === 1 ? "the page" : `${pages} pages`} at ${o}.`
-            : `No page at ${o} is connected yet. Ask the designer to open ${url} (with the dev server running): Pilot opens there.`;
+            ? `Pilot is open on ${o}, on every page: the ${pages === 1 ? "one" : pages} open now, and the ones the designer opens next.`
+            : others.length
+              ? `No page at ${o} has Pilot open, but ${others.join(", ")} does: a different host or port is another site to Pilot (a proxy's, say). If that's the one the designer uses, call pilot_launch again with it.`
+              : `No page at ${o} is connected yet. Ask the designer to open the site (any page: Pilot works on every page), with the dev server running: Pilot opens there. Don't open a page for them, and don't pick one.`;
         // This server and the project's Pilot on different versions: they may not meet (each version's hub has its port).
         // Older here: a client that keeps its server running (Cursor), or an old `npx usepilot` registration, which
         // keeps its first download (update moves it to @latest). Older there: the project wasn't updated.
@@ -346,7 +371,7 @@ export function createPilotServer(options: { port?: number; cwd?: string; waitMs
     {
       title: "Wait for design edits",
       // The edit guidelines live here, read once with the tool, not repeated in every job (they're the most frequent).
-      description: `Waits for the designer to press Send in Pilot, and returns the job to apply (or several, when they were queued: do them all, and report each done). Returns "no edits yet" after a few minutes: call it again to keep waiting. Call pilot_launch first.
+      description: `Waits for the designer to press Send in Pilot, and returns the job to apply (or several, when they were queued: do them all, and report each done). Returns "no edits yet" after a few minutes: call it again to keep waiting. Returns that the designer quit Pilot when they did: then stop, don't wait again. Call pilot_launch first.
 
 Guidelines for every design-edits job (the job doesn't repeat them):
 ${EDIT_GUIDELINES.join("\n")}`,
@@ -368,7 +393,8 @@ ${EDIT_GUIDELINES.join("\n")}`,
             }, PROGRESS_MS)
           : null;
       try {
-        const { job } = await bridge.wait(origin, waitMs, extra.signal);
+        const { job, quit } = await bridge.wait(origin, waitMs, extra.signal);
+        if (quit) return text(QUIT_NOTE);
         if (!job) return text("No edits yet. Call pilot_wait_for_edits again to keep waiting (the designer can keep editing meanwhile).");
         // The other jobs already queued for this page come too (see takeQueued): one round trip for several Sends.
         const jobs = [job, ...(await takeQueued(job, () => bridge.wait(origin as string, 0, extra.signal)))];

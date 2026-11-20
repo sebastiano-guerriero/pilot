@@ -853,6 +853,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
         onSend={sendToAgent ? sendChanges : copyPrompt}
         pending={running}
         alerts={toolbarAlerts}
+        quitDetail={quitDetail(session?.state.agents ?? [])}
         onNextJob={nextJob}
         onQuit={onQuit}
         spot={toolbarSpot}
@@ -884,6 +885,14 @@ function jobText(job: JobRecord): string {
 }
 
 /** The agent's name from its label ("Claude Code · app" → "Claude Code"). */
+/** What Quit stops, for its tooltip: the agents on this site, by name ("Stops Claude Code and Cursor"); none: nothing to say. */
+export function quitDetail(agents: ReadonlyArray<{ label?: string }>): string | undefined {
+  const names = [...new Set(agents.map((a) => agentName(a.label) ?? "your agent"))];
+  if (!names.length) return undefined;
+  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+  return `Stops ${list} listening`;
+}
+
 export function agentName(label: string | undefined): string | undefined {
   return label?.split(" · ")[0] || undefined;
 }

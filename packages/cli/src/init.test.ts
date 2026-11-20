@@ -35,6 +35,15 @@ function recorder(ok = true) {
 }
 
 describe("usepilot init", () => {
+  it("a site with no bundler (PHP): one tag in the shared layout, printed only when Pilot's file is there and the project says it's local, never from the request", async () => {
+    await files({ ".git/HEAD": "ref: refs/heads/main", "package.json": { devDependencies: { gulp: "^4" } }, "composer.json": "{}" });
+    const out = await init({ env: {}, home, cwd: dir, install: false, agent: "cursor" });
+    expect(out).toContain("It must never be output on a server, whatever a request says.");
+    expect(out).toContain("is_file(__DIR__ . '/node_modules/usepilot/dist/pilot-auto.js') && getenv('APP_ENV') === 'local'");
+    expect(out).toContain("Never decide from the request (the Host header, the client's IP)");
+    expect(out).toContain("Pilot works on every page");
+  });
+
   it("--project, a Vite app in Cursor: installs, connects only Cursor, keeps an agent the project already uses, says where to load Pilot", async () => {
     await files({
       ".git/HEAD": "ref: refs/heads/main",

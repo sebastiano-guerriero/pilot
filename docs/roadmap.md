@@ -11,6 +11,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [x] pnpm monorepo, TypeScript, Vite, Vitest
 - [x] Overlay mounts in Shadow DOM, dormant until launched
 - [x] Launch / Quit, running state kept per tab
+- [x] Quit for the whole site: the agents stop listening (their chats end the loop), queued jobs come back as changes, work in progress finishes; Option+P hides without quitting
 - [x] Toolbar: comment, select, Send with its count, jobs with their count, quit (designed)
 - [x] `ChangeSet` model and `formatPrompt()`
 - [x] Property search ranking

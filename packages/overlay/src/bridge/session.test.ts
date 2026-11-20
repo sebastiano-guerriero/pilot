@@ -830,3 +830,35 @@ describe("an agent on an older Pilot", () => {
     expect(await olderHub(async () => Promise.reject(new TypeError("refused")))).toBeNull();
   });
 });
+
+describe("quitting Pilot", () => {
+  it("takes back the jobs no agent took (unsent changes again), lets the one being applied finish, and tells the hub", () => {
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    history.apply(el, "padding-top", "20px");
+    const taken = s.send() as { id: string };
+    hub().emit({ type: "job", job: job({ id: taken.id, status: "working", agent }) });
+    const other = document.createElement("p");
+    other.className = "other";
+    document.body.append(other);
+    history.apply(other, "margin-top", "8px");
+    const queued = s.send() as { id: string };
+    s.quit();
+    expect(s.jobs.map((j) => j.id)).toEqual([taken.id]);
+    expect(history.changes({ unsent: true }).map((c) => c.property)).toEqual(["margin-top"]);
+    expect(posts.map((p) => p.url)).toContain("http://hub/quit");
+    expect(posts.some((p) => p.url.endsWith(`/jobs/${queued.id}/cancel`))).toBe(true);
+    other.remove();
+    s.destroy();
+  });
+
+  it("quit in another tab of the site: this one closes too", () => {
+    let quits = 0;
+    const s = new PilotSession(history, { bridge: "http://hub", onLaunch: () => {}, onQuit: () => quits++ });
+    (s.bridge as unknown as { EventSourceImpl: unknown }).EventSourceImpl = FakeEventSource;
+    s.start();
+    hub().emit({ type: "quit" });
+    expect(quits).toBe(1);
+    s.destroy();
+  });
+});

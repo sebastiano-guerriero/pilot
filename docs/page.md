@@ -4,9 +4,9 @@ What Pilot draws on the page and how you work with it, apart from the property d
 
 ## Launching and quitting
 
-- **Option+P** (Alt+P) launches Pilot on any page of the app. `mountPilot({ shortcut })` changes the key, and `false` turns it off. It's ignored while typing in the page's own fields. `/pilot` in the agent launches it too ([handoff.md](handoff.md)).
+- **Option+P** (Alt+P) launches Pilot on any page of the app; pressed while it's open, it **hides** it (a look at the bare page), and again shows it: the agents keep listening, unlike Quit. `mountPilot({ shortcut })` changes the key, and `false` turns it off. It's ignored while typing in the page's own fields. `/pilot` in the agent launches it too ([handoff.md](handoff.md)).
 - Pilot is loaded in dev but invisible until launched.
-- The toolbar's **Quit** button quits it.
+- The toolbar's **Quit** button quits Pilot **for the whole site**, as `/pilot` opens it on the whole site (the owner's call): every tab of it closes, and the site's agents stop listening, so their chats end the loop and are the designer's again (`PilotSession.quit()`, `Hub.quit()`: the hub ends their waits with "the designer quit Pilot", and their next ones, until `/pilot` there again). Work isn't lost: jobs no agent took yet are unsent changes again (still previewed, for the next Send), and a job an agent is applying finishes quietly and is checked as usual (no confirmation, for now). Its tooltip says what it stops ("Stops Claude Code listening"). Before, Quit only hid the toolbar, and the chats kept waiting with no sign of it. An agent's server that doesn't know quit (older) just waits again.
 - Pilot remembers whether it's running **per browser tab**, so the reloads a dev session triggers all the time (the agent editing files, HMR) don't open or close it by themselves. A launch or quit in the tab wins over `mountPilot({ launch })`.
 
 ## The toolbar

@@ -138,6 +138,53 @@ describe("the hub's HTTP server", () => {
 });
 
 describe("the loop, through MCP", () => {
+  it("the designer quits Pilot: the waiting chat stops, so do its next waits, the site's pages close; /pilot starts it again", async () => {
+    const port = nextPort++;
+    const agent = await agentClient(port);
+    await agent.call("pilot_launch", { url: APP, folder: "/work/app" }); // starts the hub
+    const app = fakePage(port);
+    await app.ready;
+    const waiting = agent.call("pilot_wait_for_edits");
+    await until(() => app.events.some((e) => e.type === "agents" && e.waiting === 1));
+    const other = fakePage(port); // another tab of the site
+    await other.ready;
+    await app.post("/quit", {});
+    expect(await waiting).toContain("The designer quit Pilot. Stop here");
+    await until(() => other.events.some((e) => e.type === "quit"));
+    // Its next wait (after a job it was on) stops at once.
+    expect(await agent.call("pilot_wait_for_edits")).toContain("The designer quit Pilot");
+    // /pilot again: waiting works again.
+    await agent.call("pilot_launch", { folder: "/work/app" });
+    const again = agent.call("pilot_wait_for_edits");
+    await until(() => app.events.filter((e) => e.type === "agents" && e.waiting === 1).length >= 2);
+    await app.post("/jobs", { id: "q1", changeSet: changeSet("q1") });
+    expect(await again).toContain("q1");
+  });
+
+  it("launches on the whole site where Pilot is open, without a URL; a public page never gets an agent by itself", async () => {
+    const port = nextPort++;
+    const agent = await agentClient(port);
+    // Nothing open yet: ask the designer to open the app, any page.
+    expect(await agent.call("pilot_launch", { folder: "/work/app" })).toContain("No page has Pilot open yet");
+    // A public site loading Pilot is ignored; the local one is the one.
+    const outside = fakePage(port, "https://example.com");
+    await outside.ready;
+    const app = fakePage(port);
+    await app.ready;
+    const launched = await agent.call("pilot_launch", { folder: "/work/app" });
+    expect(launched).toContain(`Pilot is open on ${APP}, on every page`);
+    await until(() => app.events.some((e) => e.type === "launch"));
+    expect(outside.events.some((e) => e.type === "launch")).toBe(false);
+    // Another port of the same machine (a proxy's): another site, and the one that's open is named.
+    expect(await agent.call("pilot_launch", { url: "http://localhost:3003/icons", folder: "/work/app" })).toContain(
+      `No page at http://localhost:3003 has Pilot open, but ${APP} does`,
+    );
+    // Two local sites open: the agent is asked to pick.
+    const other = fakePage(port, "http://localhost:8888");
+    await other.ready;
+    expect(await agent.call("pilot_launch", { folder: "/work/app" })).toContain("Pilot is open on several sites");
+  });
+
   it("jobs queued while the agent worked come in one wait, each to report done by its id", async () => {
     const port = nextPort++;
     const agent = await agentClient(port);

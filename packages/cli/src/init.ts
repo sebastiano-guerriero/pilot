@@ -639,7 +639,13 @@ export function Pilot() {
     case "webpack":
       return `${intro} In the app's entry file, ${at(framework.file, "the one its bundler config starts from")}, add:${code("js", 'if (process.env.NODE_ENV === "development") import("usepilot/auto");')}`;
     default:
-      return `${intro} Import \`usepilot/auto\` from code that runs in the browser, only in development (\`import.meta.env.DEV\` with Vite, \`process.env.NODE_ENV === "development"\` with webpack). It shows the toolbar when the page loads.`;
+      return `${intro} With no bundler Pilot knows (a server-rendered site: PHP, Rails, Django, plain HTML), add it to the layout every page shares (Pilot works on every page), as one tag pointing at Pilot's file where the dev server serves it: \`<script type="module" src="…/node_modules/usepilot/dist/pilot-auto.js"></script>\`. **It must never be output on a server, whatever a request says.** Print it only when both hold: Pilot's own file is on disk (\`node_modules/usepilot/dist/pilot-auto.js\`: a dev dependency, never on a server, as long as the deploy leaves \`node_modules\` out or installs without dev dependencies: check the project's deploy rules, and ask the user if you can't tell), and the project's own development setting says so (an environment variable like \`APP_ENV=local\`, or the local config file that isn't deployed; ask the user if there's none). Never decide from the request (the Host header, the client's IP): a proxy or a client can make them say anything. For example, in PHP:${code(
+        "php",
+        `<?php if (is_file(__DIR__ . '/node_modules/usepilot/dist/pilot-auto.js') && getenv('APP_ENV') === 'local') { ?>
+  <script type="module" src="/node_modules/usepilot/dist/pilot-auto.js"></script>
+<?php } ?>`,
+      )}
+   With a bundler, import \`usepilot/auto\` from the browser code, only in development (\`import.meta.env.DEV\` with Vite, \`process.env.NODE_ENV === "development"\` with webpack). Either way Pilot itself won't run on a public address.`;
   }
 }
 

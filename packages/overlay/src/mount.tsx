@@ -1,3 +1,4 @@
+import { isLocalHost } from "@pilot/protocol";
 import { render } from "preact";
 import { isProbeFrame } from "./checks/widths.ts";
 import { DEFAULT_BRIDGE_URL } from "./bridge/client.ts";
@@ -50,7 +51,13 @@ export interface PilotDevOptions {
 export interface PilotInstance {
   /** Show the toolbar. No-op if already running. Called by `/pilot` (via the bridge). */
   launch(): void;
-  /** Hide everything. Same as the toolbar's Quit button. */
+  /**
+   * Quit, the toolbar's Quit button: closes Pilot on the whole site (every
+   * tab of it) and tells its agents to stop listening, so their chats end the
+   * loop. Jobs no agent took yet are unsent changes again; the ones being
+   * applied finish. `/pilot` in a chat starts it again. (Hiding without
+   * quitting: the launch shortcut, pressed while Pilot is open.)
+   */
   quit(): void;
   readonly running: boolean;
   /** Unmount completely and remove listeners. */
@@ -63,7 +70,8 @@ const STORAGE_KEY = "pilot:running";
 /**
  * Mount the Pilot overlay into the current page. Mounting is invisible:
  * Pilot stays dormant until launched (the shortcut, Alt+P by default, or
- * `launch()`). On the server it does nothing.
+ * `launch()`). On the server it does nothing, and on a page that isn't on a
+ * development address (isLocalHost: production) it does nothing either.
  *
  * The UI lives in a Shadow DOM so the host app's CSS can't leak in and
  * Pilot's CSS can't leak out. Calling it twice returns the same instance.
@@ -73,6 +81,13 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
   if (typeof window === "undefined" || typeof document === "undefined") return INERT;
   // One of Pilot's own frames, measuring the page at another width (checks/widths.ts).
   if (isProbeFrame()) return INERT;
+  // Never on a server's page: only on a development address (this machine, a
+  // local name, a private network). If the loader ever slipped into
+  // production, Pilot stays out of it: no toolbar, no shortcut, no connection.
+  if (!isLocalHost(window.location.hostname)) {
+    console.warn(`Pilot only runs on a development address (localhost, *.test, a private network), not ${window.location.hostname}.`);
+    return INERT;
+  }
   const existing = (window as WindowWithPilot).__pilot;
   if (existing) return existing;
 
@@ -100,6 +115,8 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
     onAgentsArrived: () => {
       if (readStoredRunning() !== false) instance.launch();
     },
+    // Quit on this site, in another tab: closed here too.
+    onQuit: () => setRunning(false),
   });
 
   const setRunning = (next: boolean) => {
@@ -128,11 +145,14 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
 
   // The launch shortcut, from anywhere on the page (not while typing in the
   // page's own fields). Matched on the physical key, since Option+P types π.
+  // Pressed while Pilot is open, it hides it (a look at the bare page): the
+  // agents keep listening, unlike Quit. Again, it's back.
   const shortcut = options.shortcut === false ? null : parseShortcut(options.shortcut ?? "alt+p");
   const onKeyDown = (e: KeyboardEvent) => {
     if (!shortcut || !matchesShortcut(e, shortcut) || isTyping(e)) return;
     e.preventDefault();
-    instance.launch();
+    if (running) setRunning(false);
+    else instance.launch();
   };
   window.addEventListener("keydown", onKeyDown, true);
   // Single-page apps: other pages' changes find their elements again on arrival.
@@ -140,7 +160,11 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
 
   const instance: PilotInstance = {
     launch: () => setRunning(true),
-    quit: () => setRunning(false),
+    // Quit, as the toolbar's button: for the whole site, the agents stop listening (PilotSession.quit).
+    quit: () => {
+      session.quit();
+      setRunning(false);
+    },
     get running() {
       return running;
     },

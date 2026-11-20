@@ -233,7 +233,9 @@ export type PageEvent =
   /** A job changed (taken, done…). */
   | { type: "job"; job: Job }
   /** An agent asks for a width check of a job's element: the page that has the job posts it to `/checks/:requestId`. */
-  | { type: "check"; requestId: string; jobId: string };
+  | { type: "check"; requestId: string; jobId: string }
+  /** The designer quit Pilot on this site (in this tab or another): close it here too. */
+  | { type: "quit" };
 
 /** `{ origin }` an agent works on, from a URL: `http://localhost:5173/about` → `http://localhost:5173`. */
 export function originOf(url: string): string | null {
@@ -243,6 +245,30 @@ export function originOf(url: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Whether `hostname` is a development address, never a server's: this
+ * machine (localhost, *.localhost, 127.x, ::1, 0.0.0.0), a local name
+ * (*.local, *.test, *.internal, *.lan, *.home.arpa, or one with no dot,
+ * like MAMP's `nucleo`), or a private network (10.x, 172.16–31.x, 192.168.x,
+ * 169.254.x, IPv6 fc00::/7 and fe80::/10, a phone on the Wi-Fi). Pilot only
+ * runs on these (mountPilot), and an agent only takes a site from these
+ * without being told (pilot_launch): it must never run in production.
+ */
+export function isLocalHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  if (!h) return false;
+  if (h === "localhost" || h === "0.0.0.0" || h === "::1" || h === "::") return true;
+  if (/\.(localhost|local|test|internal|lan|home\.arpa)$/.test(h)) return true;
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(h);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
+  }
+  if (h.includes(":")) return /^f[cd][0-9a-f]{2}:/.test(h) || /^fe[89ab][0-9a-f]:/.test(h);
+  // A name with no dot (`nucleo`, `myapp`): only a local resolver answers it.
+  return !h.includes(".");
 }
 
 /**

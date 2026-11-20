@@ -14,6 +14,8 @@ import { CHECK_TIMEOUT, localAgents, startHub, type HubServer } from "./server.t
 export interface HubApi {
   register(agent: AgentInfo, origin: string): Promise<void>;
   launch(agent: AgentInfo, origin: string): Promise<number>;
+  /** The sites with Pilot open in a browser (their origins). */
+  pages(): Promise<string[]>;
   wait(agent: AgentInfo, origin: string, timeoutMs: number, signal?: AbortSignal): Promise<WaitResult>;
   done(agent: AgentInfo, jobId: string, notes?: string, question?: AgentQuestion, props?: PropSpec[]): Promise<Job | null>;
   check(agent: AgentInfo, jobId: string, timeoutMs: number): Promise<WidthCheck | null>;
@@ -30,6 +32,9 @@ class LocalApi implements HubApi {
   async launch(agent: AgentInfo, origin: string) {
     localAgents.add(agent.id);
     return this.hub.launch(agent, origin);
+  }
+  async pages() {
+    return this.hub.pageOrigins();
   }
   wait(agent: AgentInfo, origin: string, timeoutMs: number, signal?: AbortSignal) {
     localAgents.add(agent.id);
@@ -65,6 +70,15 @@ class RemoteApi implements HubApi {
   }
   async launch(agent: AgentInfo, origin: string) {
     return (await this.post<{ pages: number }>("launch", { agent, origin })).pages;
+  }
+  async pages() {
+    // A hub from before this route (same bridge version): it can't say.
+    try {
+      return (await this.post<{ origins: string[] }>("pages", {})).origins;
+    } catch (error) {
+      if (isConnectionError(error)) throw error;
+      return [];
+    }
   }
   wait(agent: AgentInfo, origin: string, timeoutMs: number, signal?: AbortSignal) {
     return this.post<WaitResult>("wait", { agent, origin, timeoutMs }, signal);
@@ -106,6 +120,11 @@ export class Bridge {
     const pages = await this.call((api) => api.launch(this.agent, origin));
     this.startHeartbeat();
     return pages;
+  }
+
+  /** The sites with Pilot open in a browser (their origins). */
+  pages(): Promise<string[]> {
+    return this.call((api) => api.pages());
   }
 
   /** Waits up to `timeoutMs` for a job; survives the hub moving to another process mid-wait. */

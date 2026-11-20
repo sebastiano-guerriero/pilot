@@ -159,6 +159,8 @@ export interface SessionOptions {
    * agent ran /pilot): launch Pilot, unless the designer quit it in this tab.
    */
   onAgentsArrived?(): void;
+  /** The designer quit Pilot on this site, in another tab (or this one): close it here. */
+  onQuit?(): void;
 }
 
 export class PilotSession {
@@ -195,6 +197,7 @@ export class PilotSession {
           onConnect: () => this.repost(),
           onAgentsArrived: options.onAgentsArrived,
           onCheck: (requestId, jobId) => void this.answerCheck(requestId, jobId),
+          onQuit: options.onQuit,
         })
       : null;
     // An agent arrived: changes held for want of one can go.
@@ -682,6 +685,18 @@ export class PilotSession {
       const note: ThreadMessage = { from: "agent", text: STOPPED_NOTE, at: new Date().toISOString(), replyTo: jobId, stopped: true };
       this.patchThread(thread.id, { messages: [...messages, note] });
     }
+  }
+
+  /**
+   * The designer quit Pilot (the toolbar's Quit), for the whole site: the
+   * jobs no agent has taken yet come back as unsent changes (their previews
+   * stay, for the next Send), the ones an agent is on finish quietly and are
+   * checked as usual, and the hub tells the site's agents to stop waiting
+   * (their chats end the loop) and its other pages to close (Hub.quit).
+   */
+  quit(): void {
+    for (const job of this.jobs.filter((j) => j.status === "queued")) this.cancel(job.id);
+    void this.bridge?.quit();
   }
 
   /** Removes a job from the list; any of its changes still previewed are unsent again. */
