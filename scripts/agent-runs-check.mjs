@@ -60,8 +60,10 @@ const AGENTS = {
     bins: ["cursor-agent", "agent"],
     // Its status says "Not logged in" with an API key, which runs use: the key counts.
     status: { args: ["status"], ok: (out) => /logged in/i.test(out) && !/not logged in/i.test(out) || !!process.env.CURSOR_API_KEY },
+    // CURSOR_SANDBOX=off: its allowlist mode instead (no sandbox on Windows; on Linux it needs user namespaces).
     args: (resume) => [
-      "-p", "--output-format", "json", "--trust", "--sandbox", "enabled",
+      "-p", "--output-format", "json", "--trust",
+      ...(process.env.CURSOR_SANDBOX === "off" ? [] : ["--sandbox", "enabled"]),
       ...(resume ? ["--resume", resume] : []),
     ],
     parse: jsonResult,
@@ -127,7 +129,12 @@ function paddingOf(project) {
 async function check(id, root) {
   const agent = AGENTS[id];
   const rows = [];
-  const label = id === "codex" && process.env.CODEX_CONFIG ? `${agent.label} (${process.env.CODEX_CONFIG})` : agent.label;
+  const label =
+    id === "codex" && process.env.CODEX_CONFIG
+      ? `${agent.label} (${process.env.CODEX_CONFIG})`
+      : id === "cursor" && process.env.CURSOR_SANDBOX === "off"
+        ? `${agent.label} (no sandbox)`
+        : agent.label;
   const row = (step, pass, detail, seconds) => rows.push({ agent: label, step, pass, detail, seconds });
 
   const bin = process.env[`${id.toUpperCase()}_BIN`] || findBin(agent.bins);
