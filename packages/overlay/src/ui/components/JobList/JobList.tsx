@@ -78,7 +78,7 @@ export function elapsed(since: string | undefined, now = Date.now()): string {
 
 /** Where a job stands, in words. A task is checked at every width once done (checks/widths.ts). */
 export function statusText(job: JobRecord): string {
-  if (job.status === "queued") return "Waiting for an agent";
+  if (job.status === "queued") return "Queued";
   if (job.status === "working") return `${job.agent?.label ?? "The agent"} is ${job.changeSet.request ? "working" : "applying"}${elapsed(job.takenAt)}`;
   if (job.status === "cancelled") return "Cancelled";
   if (job.changeSet.request?.kind === "comment" || job.changeSet.request?.kind === "props") return "Done";

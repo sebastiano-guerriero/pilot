@@ -28,7 +28,7 @@ interface ToolbarProps {
   attention?: number;
   /**
    * What the Send button does: `send` the changes not sent yet to the agent
-   * working on this page (it ran /pilot), or `copy` the prompt (no agent).
+   * running for this page (`npx usepilot`), or `copy` the prompt (no agent).
    */
   mode: "send" | "copy";
   /** There's something to send (or copy): the button lights up. */
@@ -44,9 +44,8 @@ interface ToolbarProps {
   pending: number;
   /** The jobs button: scroll to the next job's elements (see App's nextJob). */
   onNextJob(): void;
-  /** Quit: closes Pilot on the site and stops its agents listening. What it stops, under its tooltip ("Stops Claude Code listening"). */
+  /** Close: closes Pilot on every tab of the site (jobs go on; the shortcut opens it again). */
   onQuit(): void;
-  quitDetail?: string;
   /**
    * Jobs stuck (nothing will move them by itself, see PilotSession.stuck),
    * on the button they belong to: `comment` for comments and tasks asked in
@@ -93,7 +92,6 @@ export function Toolbar({
   pending,
   onNextJob,
   onQuit,
-  quitDetail,
   alerts = {},
   spot = null,
   onMove,
@@ -285,8 +283,8 @@ export function Toolbar({
         </span>
       )}
       <span class="divider" aria-hidden="true" />
-      <Tooltip text="Quit Pilot" detail={quitDetail} gap={TIP_GAP}>
-        <button type="button" class="button" aria-label={quitDetail ? `Quit Pilot. ${quitDetail}` : "Quit Pilot"} onClick={onQuit}>
+      <Tooltip text="Close Pilot" gap={TIP_GAP}>
+        <button type="button" class="button" aria-label="Close Pilot" onClick={onQuit}>
           <Icon name="power" />
         </button>
       </Tooltip>

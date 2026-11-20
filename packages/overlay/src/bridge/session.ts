@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentQuestion, AgentRequest, ChangeResult, ChangeSet, CommentAction, CommentAttachment, CommentMessage, CommentReference, ElementTarget, FileToken, Job, JobStatus, ProjectComponent, PropChange, PropSpec, WidthCheck } from "@pilot/protocol";
+import type { AgentInfo, AgentQuestion, AgentRequest, AgentSession, ChangeResult, ChangeSet, CommentAction, CommentAttachment, CommentMessage, CommentReference, ElementTarget, FileToken, Job, JobError, JobStatus, ProjectComponent, PropChange, PropSpec, WidthCheck } from "@pilot/protocol";
 import { attachmentType, requestTargets } from "@pilot/protocol";
 import { checkWidths, problemLines, snapshotAt, type StyleSnapshot, widthsToCheck } from "../checks/widths.ts";
 import { componentProps } from "../dom/component.ts";
@@ -12,7 +12,7 @@ import { BridgeClient, type BridgeState } from "./client.ts";
 /**
  * The handoff to agents, for one page load (owned by mountPilot, like the
  * history). Send turns the changes not sent yet into a job; the hub gives it
- * to an agent working on this page (it ran /pilot); the page keeps previewing
+ * to Pilot running for this site (`npx usepilot`, which runs the agent); the page keeps previewing
  * the job's changes until the agent says it's done, then checks them against
  * the page's real CSS (edits/verify.ts): what landed stops being previewed.
  * What didn't goes back to the agent once, as a follow-up with what the page
@@ -55,6 +55,10 @@ export interface JobRecord {
   check?: WidthCheck;
   /** A `/props` job's answer: the component's props (Job.props). */
   props?: PropSpec[];
+  /** The agent's session for it, when Pilot ran the agent (Job.session): its follow-up resumes it, and its thread keeps it. */
+  session?: AgentSession;
+  /** Pilot couldn't run the agent for it (Job.error): said where stuck jobs are, until the designer sends again. */
+  error?: JobError;
 }
 
 /**
@@ -74,6 +78,8 @@ export interface CommentThread {
    */
   others?: ElementTarget[];
   messages: ThreadMessage[];
+  /** The agent's session that answered it last (Job.session): its next message resumes it, so the agent remembers the thread. */
+  session?: AgentSession;
 }
 
 /**
@@ -124,17 +130,9 @@ const PROPS_WAIT = 6000;
 const PROPS_RECHECK = 400;
 /**
  * How long a stuck state lasts before the page says so: past a reconnect
- * (the hub's process restarting) and the moment between two waits of an
- * agent (it asks again right after "no edits yet").
+ * (the hub's process restarting). A run that failed is said at once.
  */
 const STUCK_OFFLINE_MS = 5_000;
-const STUCK_NOT_LISTENING_MS = 10_000;
-/**
- * With no job waiting, an agent that isn't listening blocks nothing yet
- * (the next Send would wait): said later, past an agent writing its
- * message between `pilot_done` and its next wait.
- */
-const STUCK_IDLE_MS = 30_000;
 
 /**
  * Jobs nothing will move by themselves, and why: the page says so (the
@@ -143,7 +141,7 @@ const STUCK_IDLE_MS = 30_000;
  * of the jobs it's about.
  */
 export interface Stuck {
-  kind: "offline" | "older-agent" | "no-agent" | "not-listening";
+  kind: "offline" | "older-agent" | "no-agent" | "agent-error";
   title: string;
   detail: string;
   jobs: string[];
@@ -152,7 +150,7 @@ export interface Stuck {
 export interface SessionOptions {
   /** The hub's URL, or false for no bridge (Send is never offered: Copy prompt only). */
   bridge: string | false;
-  /** An agent ran /pilot for this page: launch Pilot. */
+  /** Pilot started running for this site (`npx usepilot`): launch it. */
   onLaunch(agent: AgentInfo): void;
   /**
    * The page found an agent working on it (opened, or reloaded, after the
@@ -208,8 +206,8 @@ export class PilotSession {
     for (const job of [...this.jobs]) {
       // Finished before the reload: nothing left to show.
       if (job.checked || job.status === "cancelled") this.dismiss(job.id);
-      // Done before the reload, checking interrupted: check again.
-      else if (job.status === "done") this.verify(job);
+      // Done before the reload, checking interrupted: check again (a run that failed has nothing to check).
+      else if (job.status === "done" && !job.error) this.verify(job);
     }
   }
 
@@ -468,7 +466,7 @@ export class PilotSession {
   }
 
   /** A comment job's change set: the thread so far, as the agent reads it. */
-  private commentSet(element: Element, messages: ThreadMessage[], others: Element[], id?: string): ChangeSet {
+  private commentSet(element: Element, messages: ThreadMessage[], others: Element[], id?: string, session?: AgentSession): ChangeSet {
     // Attachments go by id (the hub adds where it saved them); their previews stay here.
     const thread = messages.map(({ from, text, at, attachments, action, references, props, stopped }) => ({
       from,
@@ -480,7 +478,10 @@ export class PilotSession {
       ...(references?.length ? { references } : {}),
       ...(props ? { props } : {}),
     }));
-    return buildRequest(element, "comment", { id, thread, others });
+    const set = buildRequest(element, "comment", { id, thread, others });
+    // The thread's agent session: resumed, so the agent remembers the thread.
+    if (session && set.request?.kind === "comment") set.request.session = session;
+    return set;
   }
 
   /**
@@ -540,7 +541,7 @@ export class PilotSession {
       changeSet = job?.changeSet ?? buildRequest(element, action, { id, note, attachments, references, others });
       if (!job) return { job: null, changeSet };
     } else {
-      changeSet = this.commentSet(element, thread.messages, others, id);
+      changeSet = this.commentSet(element, thread.messages, others, id, thread.session);
       if (!this.canSendToAgent) return { job: null, changeSet };
       // The designer's edits on these elements, not sent yet, go with the
       // comment when it asks (its chip, kept): one job, checked like Send's
@@ -612,6 +613,8 @@ export class PilotSession {
   private reply(job: JobRecord): void {
     const thread = this.threads.find((t) => t.messages.some((m) => m.jobId === job.id));
     if (!thread) return;
+    // The session that answered: the thread's next message resumes it.
+    if (job.session && job.session.id !== thread.session?.id) this.patchThread(thread.id, { session: job.session });
     const request = job.changeSet.request;
     // A `/props` list: remembered for this component, for the next `/props`.
     if (request?.kind === "props" && job.props?.length) rememberProps(request.component, request.target.source?.file, job.props);
@@ -659,6 +662,8 @@ export class PilotSession {
   }
 
   private post(id: string, changeSet: ChangeSet): JobRecord {
+    // Sending again: the runs that failed are said no more (their changes are unsent again already).
+    for (const failed of this.jobs.filter((j) => j.error)) this.dismiss(failed.id);
     const job: JobRecord = { id, changeSet, status: "queued", createdAt: new Date().toISOString() };
     this.jobs = [...this.jobs, job];
     this.save();
@@ -669,6 +674,7 @@ export class PilotSession {
   /** Take a job back before the agent is done: its changes are unsent again (they stay on the page). */
   cancel(jobId: string): void {
     const job = this.jobs.find((j) => j.id === jobId);
+    if (job?.error) return this.dismiss(jobId);
     if (!job || job.status === "done" || job.status === "cancelled") return;
     void this.bridge?.cancel(jobId);
     this.unhold(job);
@@ -688,14 +694,11 @@ export class PilotSession {
   }
 
   /**
-   * The designer quit Pilot (the toolbar's Quit), for the whole site: the
-   * jobs no agent has taken yet come back as unsent changes (their previews
-   * stay, for the next Send), the ones an agent is on finish quietly and are
-   * checked as usual, and the hub tells the site's agents to stop waiting
-   * (their chats end the loop) and its other pages to close (Hub.quit).
+   * The designer closed Pilot (the toolbar's last button), for the whole
+   * site: its other pages close it too (Hub.quit). Jobs go on: Pilot keeps
+   * running the agent for them, and checks them when it's open again.
    */
   quit(): void {
-    for (const job of this.jobs.filter((j) => j.status === "queued")) this.cancel(job.id);
     void this.bridge?.quit();
   }
 
@@ -730,6 +733,8 @@ export class PilotSession {
       question: job.question ?? mine.question,
       answer: job.answer ?? mine.answer,
       ...(job.props ? { props: job.props } : {}),
+      session: job.session ?? mine.session,
+      error: job.error,
     });
     if (job.status === "cancelled") {
       this.unhold(mine);
@@ -737,6 +742,12 @@ export class PilotSession {
     }
     if (!becameDone) return;
     const done = this.jobs.find((j) => j.id === job.id) as JobRecord;
+    // Pilot couldn't run the agent: its changes are unsent again (still previewed, for the next Send), and it's said until then.
+    if (done.error) {
+      this.unhold(done);
+      this.history.unsend(done.id);
+      return;
+    }
     if (awaitsAnswer(done)) this.ask(done);
     else this.verify(done);
   }
@@ -786,8 +797,8 @@ export class PilotSession {
     this.patch(job.id, { status: "queued", answer, notes: undefined });
     void this.bridge?.answer(job.id, answer).then((ok) => {
       if (!ok) {
-        const { changeSet, agent, attempt, question } = job;
-        void this.bridge?.postJob({ id: job.id, changeSet, status: "queued", agent, attempt, question, answer });
+        const { changeSet, agent, attempt, question, session } = job;
+        void this.bridge?.postJob({ id: job.id, changeSet, status: "queued", agent, attempt, question, answer, session });
       }
     });
   }
@@ -824,6 +835,7 @@ export class PilotSession {
           issues: job.issues,
           question: job.question,
           answer: job.answer,
+          session: job.session,
         });
       }
     }
@@ -955,7 +967,7 @@ export class PilotSession {
     void this.bridge?.retry(jobId, differences, issues).then((ok) => {
       // The hub doesn't have it as done (a new hub, after a takeover): post the follow-up as a job.
       if (!ok) {
-        void this.bridge?.postJob({ id: jobId, changeSet: job.changeSet, status: "queued", agent: job.agent, attempt: 2, differences, issues });
+        void this.bridge?.postJob({ id: jobId, changeSet: job.changeSet, status: "queued", agent: job.agent, attempt: 2, differences, issues, session: job.session });
       }
     });
   }
@@ -1004,45 +1016,36 @@ export class PilotSession {
 
   /**
    * What would be stuck right now, before it has lasted. Only jobs waiting
-   * for an agent or with one count (not one being checked, nor one whose
+   * for a run or in one count (not one being checked, nor one whose
    * question waits for the designer: that's the designer's turn):
-   * - offline: the page can't reach the hub (every chat running Pilot closed);
-   * - older-agent: it can't, and an older Pilot's hub answers on its port:
-   *   an agent runs an older Pilot (its /pilot can't reach this page), said
-   *   with jobs or without (BridgeClient's olderHub);
-   * - no-agent: it can, but no agent works on this page;
-   * - not-listening: no agent is waiting for a job, and none is on one: jobs
-   *   wait, or none does yet (the next Send would wait; cancelling the stuck
-   *   jobs doesn't make the agent listen). An agent on another job, or
-   *   between two waits, isn't stuck.
-   * Without an agent and with no job waiting, the page is in Copy prompt
+   * - agent-error: Pilot couldn't run the agent for a job (not installed,
+   *   not signed in, the run failed): said at once, with what to do, until
+   *   the designer sends again or takes it back;
+   * - older-agent: the page can't reach the hub, and an older Pilot's hub
+   *   answers on its port (an agent's chat on the MCP loop, or an older
+   *   `npx usepilot`): it can't reach this page, said with jobs or without
+   *   (BridgeClient's olderHub);
+   * - offline: the page can't reach the hub (`npx usepilot` isn't running);
+   * - no-agent: it can, but Pilot doesn't run for this site (it's running
+   *   for another project).
+   * With no job waiting, and Pilot not running, the page is in Copy prompt
    * mode: nothing's stuck.
    */
   private stuckNow(): Stuck | null {
     if (!this.bridge) return null;
+    const failed = this.jobs.filter((j) => j.error && j.status === "done");
+    const last = failed.at(-1)?.error;
+    if (last) return { kind: "agent-error", title: last.title, detail: last.detail, jobs: failed.map((j) => j.id) };
     const open = this.jobs.filter((j) => j.status === "queued" || j.status === "working");
-    const { connected, agents, waiting, older } = this.state;
-    // An agent on an older Pilot: its /pilot can't reach this page, jobs or not.
+    const { connected, agents, older } = this.state;
+    const ids = (jobs: JobRecord[]) => jobs.map((j) => j.id);
     if (!connected && older) {
-      return {
-        kind: "older-agent",
-        title: "Your agent runs an older Pilot",
-        detail: "Run npx usepilot@latest update, then restart Pilot in your agent",
-        jobs: open.map((j) => j.id),
-      };
+      return { kind: "older-agent", title: "Pilot isn't running for this site", detail: NOT_RUNNING_OLDER, jobs: ids(open) };
     }
     if (!open.length && !(connected && agents.length)) return null;
-    const label = agents[0]?.label ?? open.find((j) => j.agent)?.agent?.label;
-    const name = label?.split(" · ")[0] || "Your agent";
-    const command = /codex/i.test(label ?? "") ? "$pilot" : "/pilot";
-    const ids = (jobs: JobRecord[]) => jobs.map((j) => j.id);
-    if (!connected) return { kind: "offline", title: "Pilot can't reach your agent", detail: `Open its chat and run ${command}`, jobs: ids(open) };
-    if (!agents.length) return { kind: "no-agent", title: "No agent is connected", detail: `Run ${command} in your agent's chat`, jobs: ids(open) };
-    const queued = open.filter((j) => j.status === "queued");
-    if (waiting > 0 || open.some((j) => j.status === "working")) return null;
-    return agents.length > 1
-      ? { kind: "not-listening", title: "No chat is listening", detail: `Run ${command} again in one of them`, jobs: ids(queued) }
-      : { kind: "not-listening", title: `${name} isn't listening`, detail: `Run ${command} again in its chat`, jobs: ids(queued) };
+    if (!connected) return { kind: "offline", title: "Pilot isn't running for this site", detail: NOT_RUNNING, jobs: ids(open) };
+    if (!agents.length) return { kind: "no-agent", title: "Pilot isn't running for this site", detail: NOT_RUNNING, jobs: ids(open) };
+    return null;
   }
 
   /** Keeps `stuckSince` in step, and tells the listeners when a stuck state has lasted long enough to show. */
@@ -1073,20 +1076,23 @@ export function needsYou(thread: CommentThread): boolean {
   return last?.from === "agent" && !last.stopped && !last.early;
 }
 
-/** How long a stuck state lasts before the page says so (see the STUCK_ constants). */
+/** How long a stuck state lasts before the page says so (see STUCK_OFFLINE_MS). */
 function stuckAfter(stuck: Stuck): number {
-  if (stuck.kind !== "not-listening") return STUCK_OFFLINE_MS;
-  return stuck.jobs.length ? STUCK_NOT_LISTENING_MS : STUCK_IDLE_MS;
+  return stuck.kind === "agent-error" ? 0 : STUCK_OFFLINE_MS;
 }
+
+/** What to do when Pilot isn't running for the site. */
+const NOT_RUNNING = "Run npx usepilot in your project's folder";
+const NOT_RUNNING_OLDER = "Run npx usepilot in your project's folder (an older Pilot is running, and can't reach this page)";
 
 /** Done, with a question for the designer not answered yet (see PilotSession.ask). */
 export function awaitsAnswer(job: Pick<JobRecord, "status" | "question" | "answer" | "checked">): boolean {
   return job.status === "done" && !!job.question && !job.answer && !job.checked;
 }
 
-/** Not finished yet: waiting, an agent on it, being checked, or its follow-up. */
+/** Not finished yet: waiting, an agent on it, being checked, or its follow-up (a run that failed is over: its changes are unsent again). */
 function unfinished(job: JobRecord): boolean {
-  return job.status !== "cancelled" && !job.checked;
+  return job.status !== "cancelled" && !job.checked && !job.error;
 }
 
 /** The elements held before a reload (see PilotSession.held), found again by selector. */

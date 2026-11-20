@@ -1,4 +1,5 @@
 import type { AgentInfo, AgentQuestion, Job, PropSpec, WidthCheck } from "@pilot/protocol";
+import type { DoneExtra } from "./hub.ts";
 import { BRIDGE_VERSION } from "@pilot/protocol";
 import type { Hub, WaitResult } from "./hub.ts";
 import { CHECK_TIMEOUT, localAgents, startHub, type HubServer } from "./server.ts";
@@ -17,7 +18,9 @@ export interface HubApi {
   /** The sites with Pilot open in a browser (their origins). */
   pages(): Promise<string[]>;
   wait(agent: AgentInfo, origin: string, timeoutMs: number, signal?: AbortSignal): Promise<WaitResult>;
-  done(agent: AgentInfo, jobId: string, notes?: string, question?: AgentQuestion, props?: PropSpec[]): Promise<Job | null>;
+  done(agent: AgentInfo, jobId: string, notes?: string, question?: AgentQuestion, props?: PropSpec[], extra?: DoneExtra): Promise<Job | null>;
+  /** A job as the hub has it (null: it doesn't know it). */
+  job(agent: AgentInfo, jobId: string): Promise<Job | null>;
   check(agent: AgentInfo, jobId: string, timeoutMs: number): Promise<WidthCheck | null>;
   leave(agent: AgentInfo): Promise<void>;
 }
@@ -40,8 +43,11 @@ class LocalApi implements HubApi {
     localAgents.add(agent.id);
     return this.hub.wait(agent, origin, timeoutMs, signal);
   }
-  async done(agent: AgentInfo, jobId: string, notes?: string, question?: AgentQuestion, props?: PropSpec[]) {
-    return this.hub.done(agent.id, jobId, notes, question, props);
+  async done(agent: AgentInfo, jobId: string, notes?: string, question?: AgentQuestion, props?: PropSpec[], extra?: DoneExtra) {
+    return this.hub.done(agent.id, jobId, notes, question, props, extra);
+  }
+  async job(_agent: AgentInfo, jobId: string) {
+    return this.hub.job(jobId) ?? null;
   }
   check(_agent: AgentInfo, jobId: string, timeoutMs: number) {
     return this.hub.check(jobId, timeoutMs);
@@ -83,8 +89,11 @@ class RemoteApi implements HubApi {
   wait(agent: AgentInfo, origin: string, timeoutMs: number, signal?: AbortSignal) {
     return this.post<WaitResult>("wait", { agent, origin, timeoutMs }, signal);
   }
-  async done(agent: AgentInfo, jobId: string, notes?: string, question?: AgentQuestion, props?: PropSpec[]) {
-    return (await this.post<{ job: Job | null }>("done", { agent, jobId, notes, question, props })).job;
+  async done(agent: AgentInfo, jobId: string, notes?: string, question?: AgentQuestion, props?: PropSpec[], extra?: DoneExtra) {
+    return (await this.post<{ job: Job | null }>("done", { agent, jobId, notes, question, props, ...extra })).job;
+  }
+  async job(agent: AgentInfo, jobId: string) {
+    return (await this.post<{ job: Job | null }>("job", { agent, jobId })).job;
   }
   async check(agent: AgentInfo, jobId: string, timeoutMs: number) {
     return (await this.post<{ check: WidthCheck | null }>("check", { agent, jobId, timeoutMs })).check;
@@ -143,8 +152,13 @@ export class Bridge {
     }
   }
 
-  done(jobId: string, notes?: string, question?: AgentQuestion, props?: PropSpec[]): Promise<Job | null> {
-    return this.call((api) => api.done(this.agent, jobId, notes, question, props));
+  done(jobId: string, notes?: string, question?: AgentQuestion, props?: PropSpec[], extra?: DoneExtra): Promise<Job | null> {
+    return this.call((api) => api.done(this.agent, jobId, notes, question, props, extra));
+  }
+
+  /** A job as the hub has it now (null: it doesn't know it). */
+  job(jobId: string): Promise<Job | null> {
+    return this.call((api) => api.job(this.agent, jobId));
   }
 
   /** Pilot's width check of a task's element, measured by the page (null: no page answered). */

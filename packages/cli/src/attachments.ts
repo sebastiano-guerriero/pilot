@@ -114,6 +114,22 @@ export function withAttachmentPaths<T extends { changeSet: Job["changeSet"] }>(j
 }
 
 /** An MCP content block shown to the agent with a job. */
+/**
+ * The files the designer attached to what this job asks now (a task's, or
+ * the comment's messages since the agent's last reply), each one of Pilot's
+ * own saved files (in its folder, named by content): never another path.
+ */
+export function newAttachments(job: Job): CommentAttachment[] {
+  const request = job.changeSet.request;
+  let files: CommentAttachment[];
+  if (request && request.kind !== "comment") files = request.attachments ?? [];
+  else if (request?.kind === "comment") {
+    const lastReply = request.thread.map((m) => m.from).lastIndexOf("agent");
+    files = request.thread.slice(lastReply + 1).flatMap((m) => m.attachments ?? []);
+  } else return [];
+  return files.filter((f) => !!f.path && basename(dirname(f.path)) === FOLDER && ATTACHMENT_ID.test(basename(f.path)));
+}
+
 export type AttachmentBlock = { type: "image"; data: string; mimeType: string } | { type: "text"; text: string };
 
 /**
@@ -124,17 +140,9 @@ export type AttachmentBlock = { type: "image"; data: string; mimeType: string } 
  * attachments folder, named as attachments are.
  */
 export async function attachmentBlocks(job: Job): Promise<AttachmentBlock[]> {
-  const request = job.changeSet.request;
-  let files: CommentAttachment[];
-  if (request && request.kind !== "comment") files = request.attachments ?? [];
-  else if (request?.kind === "comment") {
-    const lastReply = request.thread.map((m) => m.from).lastIndexOf("agent");
-    files = request.thread.slice(lastReply + 1).flatMap((m) => m.attachments ?? []);
-  } else return [];
   const blocks: AttachmentBlock[] = [];
-  for (const file of files) {
-    const path = file.path;
-    if (!path || basename(dirname(path)) !== FOLDER || !ATTACHMENT_ID.test(basename(path))) continue;
+  for (const file of newAttachments(job)) {
+    const path = file.path as string;
     const kind = attachmentKind(path);
     if (kind === "pdf") continue;
     try {

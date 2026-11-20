@@ -2,25 +2,25 @@
 
 What Pilot draws on the page and how you work with it, apart from the property dialog ([property-dialog.md](property-dialog.md)) and handoff ([handoff.md](handoff.md)).
 
-## Launching and quitting
+## Launching and closing
 
-- **Option+P** (Alt+P) launches Pilot on any page of the app; pressed while it's open, it **hides** it (a look at the bare page), and again shows it: the agents keep listening, unlike Quit. `mountPilot({ shortcut })` changes the key, and `false` turns it off. It's ignored while typing in the page's own fields. `/pilot` in the agent launches it too ([handoff.md](handoff.md)).
+- **Option+P** (Alt+P) launches Pilot on any page of the app; pressed while it's open, it **hides** it in this tab (a look at the bare page), and again shows it. `mountPilot({ shortcut })` changes the key, and `false` turns it off. It's ignored while typing in the page's own fields. `npx usepilot` starting for the site launches it in its open tabs too ([handoff.md](handoff.md), *Agent runs*).
 - Pilot is loaded in dev but invisible until launched.
-- The toolbar's **Quit** button quits Pilot **for the whole site**, as `/pilot` opens it on the whole site (the owner's call): every tab of it closes, and the site's agents stop listening, so their chats end the loop and are the designer's again (`PilotSession.quit()`, `Hub.quit()`: the hub ends their waits with "the designer quit Pilot", and their next ones, until `/pilot` there again). Work isn't lost: jobs no agent took yet are unsent changes again (still previewed, for the next Send), and a job an agent is applying finishes quietly and is checked as usual (no confirmation, for now). Its tooltip says what it stops ("Stops Claude Code listening"). Before, Quit only hid the toolbar, and the chats kept waiting with no sign of it. An agent's server that doesn't know quit (older) just waits again.
-- Pilot remembers whether it's running **per browser tab**, so the reloads a dev session triggers all the time (the agent editing files, HMR) don't open or close it by themselves. A launch or quit in the tab wins over `mountPilot({ launch })`.
+- The toolbar's **Close** button closes Pilot **for the whole site** (the owner's call): every tab of it closes (`PilotSession.quit()`, `Hub.quit()`). Jobs go on: Pilot keeps running the agent for them, and checks them when it's open again; the shortcut opens it again. Until agent runs it was Quit, which also made the agents' chats stop listening; there are no chats to stop now.
+- Pilot remembers whether it's running **per browser tab**, so the reloads a dev session triggers all the time (the agent editing files, HMR) don't open or close it by themselves. A launch or close in the tab wins over `mountPilot({ launch })`.
 
 ## The toolbar
 
 [Toolbar](../packages/overlay/src/ui/components/Toolbar/Toolbar.tsx). The owner's design.
 
-- **Buttons, in order:** Comment, a divider, Select, Send, the jobs button (only while there are jobs), a divider, Quit. Icons are Nucleo UI.
+- **Buttons, in order:** Comment, a divider, Select, Send, the jobs button (only while there are jobs), a divider, Close. Icons are Nucleo UI.
 - **Position:** starts centered near the bottom edge. Drag it by the strip along its top edge (the grip), as on the property dialog. It moves by its center, so it stays centered on its spot as it widens, is kept inside the window (on resize too), and stays put through reloads (the tab's sessionStorage, [toolbarSpot.ts](../packages/overlay/src/ui/toolbarSpot.ts)).
 - **Pills** are the counts on buttons: comments to review, changes Send would send, jobs in progress.
 - **Comment** and **Select** are the two tools; one is on at a time. Option+C turns on Comment and Option+V Select (Option with a key, like Option+P and Alt+D, so the page's plain-key shortcuts keep working; `toolShortcut()` in [App.tsx](../packages/overlay/src/ui/App.tsx)). They work in Pilot's own fields too, the comment box included: a tool always puts the focus in its field (the search, the comment), so a shortcut that stepped aside there would never switch, and would type its character instead (`ç`, `√`). The owner's call: switching wins, and those two combos can't type their character in Pilot's fields (a layout that types a letter with them, Polish `ć`, loses it in comments). Not in the page's own fields. Their tooltips show the shortcut after the label, dimmed, as the platform writes it (`⌥C` on a Mac, `Alt+C` elsewhere: `keyLabel()` in [keys.ts](../packages/overlay/src/ui/keys.ts)); not while the tooltip says what's stuck. Switching tools keeps the selection. Clicking the tool that's on doesn't turn it off: Esc does. Instead, Comment's button goes to the next thread that needs you ([handoff.md](handoff.md), *Comments*); Select's does nothing.
-- **Send**: with an agent on this page, sends the changes not sent yet as a job; without one, it's **Copy prompt** and copies everything in effect. Its pill counts the changes it would send (unsent ones, less those waiting for a job). With nothing to send it's dimmed and disabled. It isn't an accent button. Once the prompt is copied its icon morphs into a check for a moment. After a send its tooltip says Sent / Copied (or Queued, Sent; some queued) for a moment, hovered or not.
+- **Send**: with Pilot running for this site (`npx usepilot`), sends the changes not sent yet as a job; without one, it's **Copy prompt** and copies everything in effect. Its pill counts the changes it would send (unsent ones, less those waiting for a job). With nothing to send it's dimmed and disabled. It isn't an accent button. Once the prompt is copied its icon morphs into a check for a moment. After a send its tooltip says Sent / Copied (or Queued, Sent; some queued) for a moment, hovered or not.
 - **Jobs**: while jobs aren't finished, a button with a loader and a pill for how many. Its arrival is animated (its slot grows, so the toolbar widens and stays centered). Clicking it goes to the **next job**: its elements are scrolled into view (unless they already are) and flash. Oldest first, as the agents take them, wrapping around; jobs with no element on this page are skipped (`nextJob` in [App.tsx](../packages/overlay/src/ui/App.tsx)).
-- **Quit** closes Pilot.
-- Each button names itself in a Tooltip, with short labels: Select element, Send to agent (or Copy prompt; Nothing to send / Nothing to copy when disabled), 2 jobs running, Quit Pilot.
+- **Close** closes Pilot on the site.
+- Each button names itself in a Tooltip, with short labels: Select element, Send to agent (or Copy prompt; Nothing to send / Nothing to copy when disabled), 2 jobs running, Close Pilot.
 
 ## Selecting
 

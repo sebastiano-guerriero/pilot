@@ -139,6 +139,34 @@ describe("formatPrompt", () => {
     }
   });
 
+  it("for a run Pilot started (no tools), names none of Pilot's tools: questions and props go in the reply's pilot block", () => {
+    const target = changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"];
+    const prompts = [
+      formatPrompt(changeSet, { tools: false }),
+      formatPrompt({ ...changeSet, edits: [], request: { kind: "responsive", target, breakpoints: [768] } }, { tools: false }),
+      formatPrompt({ ...changeSet, edits: [], request: { kind: "break-and-fix", target, breakpoints: [] } }, { tools: false }),
+      formatPrompt(
+        {
+          ...changeSet,
+          request: {
+            kind: "comment",
+            target,
+            breakpoints: [],
+            thread: [{ from: "designer", text: "", at: "", props: { component: "Card", usedIn: "src/App.jsx", set: [{ name: "tone", from: "light", to: "dark" }] } }],
+          },
+        },
+        { tools: false },
+      ),
+      formatPrompt({ ...changeSet, edits: [], request: { kind: "props", target, breakpoints: [], component: "Card", current: {} } }, { tools: false }),
+    ];
+    for (const text of prompts) expect(text).not.toMatch(/pilot_(done|check_widths|wait_for_edits)/);
+    expect(prompts[0]).toContain("your reply's `pilot` block");
+    expect(prompts[1]).toMatch(/Check every width from the code/);
+    expect(prompts[4]).toContain("as `props` in your reply's `pilot` block");
+    // With tools (the MCP path and Copy prompt), as before.
+    expect(formatPrompt({ ...changeSet, edits: [], request: { kind: "responsive", target, breakpoints: [] } })).toContain("pilot_check_widths");
+  });
+
   it("break and fix: stress-test one element with odd content, fix it, put the real content back", () => {
     const target = changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"];
     const text = formatPrompt({ ...changeSet, note: "Names can be very long", edits: [], request: { kind: "break-and-fix", target, breakpoints: [768] } });

@@ -3,7 +3,6 @@ import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { keyLabel } from "../../keys.ts";
-import { quitDetail } from "../../App.tsx";
 import { Toolbar } from "./Toolbar.tsx";
 
 let container: HTMLElement;
@@ -122,11 +121,10 @@ describe("Toolbar", () => {
   });
 });
 
-describe("Toolbar's Quit", () => {
-  it("names what it stops: the agents on the site", () => {
-    draw({ quitDetail: quitDetail([{ label: "Claude Code · app" }, { label: "Cursor · app" }, { label: "Claude Code · app" }]) } as Partial<typeof props>);
-    const quit = container.querySelector('[aria-label^="Quit Pilot"]') as HTMLButtonElement;
-    expect(tip(quit)?.textContent).toBe("Quit PilotStops Claude Code and Cursor listening");
-    expect(quitDetail([])).toBeUndefined();
+describe("Toolbar's Close", () => {
+  it("closes Pilot", () => {
+    draw();
+    const close = container.querySelector('[aria-label="Close Pilot"]') as HTMLButtonElement;
+    expect(tip(close)?.textContent).toBe("Close Pilot");
   });
 });

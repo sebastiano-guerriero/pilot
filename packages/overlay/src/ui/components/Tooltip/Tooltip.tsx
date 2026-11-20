@@ -6,7 +6,7 @@ import { onSwitch, openDelay, switched, tooltipClosed, tooltipOpened } from "./d
 interface TooltipProps {
   /** What the tooltip says. Empty: it doesn't open (a trigger that only sometimes has one keeps its place in the tree). */
   text: string;
-  /** A second line, dimmed, under `text`: what to do about it ("Run /pilot again in its chat"). */
+  /** A second line, dimmed, under `text`: what to do about it ("Run npx usepilot in your project's folder"). */
   detail?: string;
   /** The trigger's keyboard shortcut, as it reads (`⌥C`, from `keyLabel()`): after `text`, dimmed. Not with a `detail`. */
   shortcut?: string;

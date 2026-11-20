@@ -138,7 +138,7 @@ describe("the hub's HTTP server", () => {
 });
 
 describe("the loop, through MCP", () => {
-  it("the designer quits Pilot: the waiting chat stops, so do its next waits, the site's pages close; /pilot starts it again", async () => {
+  it("closing Pilot closes it on the site's other tabs, and nothing else: the agent keeps taking jobs", async () => {
     const port = nextPort++;
     const agent = await agentClient(port);
     await agent.call("pilot_launch", { url: APP, folder: "/work/app" }); // starts the hub
@@ -149,16 +149,9 @@ describe("the loop, through MCP", () => {
     const other = fakePage(port); // another tab of the site
     await other.ready;
     await app.post("/quit", {});
-    expect(await waiting).toContain("The designer quit Pilot. Stop here");
     await until(() => other.events.some((e) => e.type === "quit"));
-    // Its next wait (after a job it was on) stops at once.
-    expect(await agent.call("pilot_wait_for_edits")).toContain("The designer quit Pilot");
-    // /pilot again: waiting works again.
-    await agent.call("pilot_launch", { folder: "/work/app" });
-    const again = agent.call("pilot_wait_for_edits");
-    await until(() => app.events.filter((e) => e.type === "agents" && e.waiting === 1).length >= 2);
     await app.post("/jobs", { id: "q1", changeSet: changeSet("q1") });
-    expect(await again).toContain("q1");
+    expect(await waiting).toContain("q1");
   });
 
   it("launches on the whole site where Pilot is open, without a URL; a public page never gets an agent by itself", async () => {

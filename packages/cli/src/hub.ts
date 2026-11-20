@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AgentInfo, AgentQuestion, ChangeResult, ChangeSet, Job, PageEvent, PropSpec, WidthCheck } from "@pilot/protocol";
+import type { AgentInfo, AgentQuestion, AgentSession, ChangeResult, ChangeSet, Job, JobError, PageEvent, PropSpec, WidthCheck } from "@pilot/protocol";
 import { originKey } from "@pilot/protocol";
 
 /**
@@ -34,13 +34,21 @@ export interface JobPost {
   /** An answered question (see Hub.answer), posted again. */
   question?: AgentQuestion;
   answer?: string;
+  /** The job's agent session (a follow-up posted again resumes it). */
+  session?: AgentSession;
 }
 
 /** What `wait` returns: the job taken, or none (timed out). */
 export interface WaitResult {
   job: Job | null;
-  /** The designer quit Pilot on the site: stop the loop (no more waits) until /pilot again. */
+  /** Never set since Pilot runs the agent (bridge 7); an MCP chat read it as "stop the loop". */
   quit?: boolean;
+}
+
+/** What a run adds when it reports a job done: the agent's session, or why it couldn't run. */
+export interface DoneExtra {
+  session?: AgentSession;
+  error?: JobError;
 }
 
 interface Agent {
@@ -54,7 +62,7 @@ interface Agent {
 interface Waiter {
   agentId: string;
   origin: string;
-  resolve(job: Job | null, quit?: boolean): void;
+  resolve(job: Job | null): void;
 }
 
 /** A width check an agent asked for, waiting for the page's answer. */
@@ -66,8 +74,6 @@ interface PendingCheck {
 export class Hub {
   private agents = new Map<string, Agent>();
   private pages = new Set<PageConnection>();
-  /** Sites the designer quit Pilot on: their agents' waits end at once, until one runs /pilot there again. */
-  private quitOrigins = new Set<string>();
   private jobs = new Map<string, Job>();
   private waiters: Waiter[] = [];
   private checks = new Map<string, PendingCheck>();
@@ -125,21 +131,12 @@ export class Hub {
   }
 
   /**
-   * The designer quit Pilot on `origin` (the whole site): its agents' waits
-   * end with `quit`, so their chats stop the loop and are theirs again, and
-   * so do their next waits (an agent on a job finishes it first) until one
-   * runs /pilot there again; its open pages close Pilot. Jobs aren't touched
-   * here: the page takes back the ones still queued.
+   * The designer closed Pilot on `origin` (the whole site): its open pages
+   * close it too. Nothing else: jobs aren't touched (a run on one finishes),
+   * and Pilot keeps running for the site, so the shortcut opens it again.
    */
   quit(origin: string): void {
-    const key = originKey(origin);
-    this.quitOrigins.add(key);
-    for (const waiter of this.waiters.filter((w) => w.origin === key)) {
-      this.waiters = this.waiters.filter((w) => w !== waiter);
-      waiter.resolve(null, true);
-    }
-    this.sendTo(key, { type: "quit" });
-    this.notifyAgents(key);
+    this.sendTo(originKey(origin), { type: "quit" });
   }
 
   /**
@@ -152,7 +149,6 @@ export class Hub {
 
   /** An agent ran /pilot: registers it and tells the open pages of `origin` to launch Pilot. Returns how many pages got it. */
   launch(info: AgentInfo, origin: string): number {
-    this.quitOrigins.delete(originKey(origin));
     this.register(info, origin);
     return this.sendTo(originKey(origin), { type: "launch", agent: this.shown(info) });
   }
@@ -165,18 +161,16 @@ export class Hub {
   wait(info: AgentInfo, origin: string, timeoutMs: number, signal?: AbortSignal): Promise<WaitResult> {
     this.register(info, origin);
     const key = originKey(origin);
-    // Quit there: the agent stops (it finished what it was on).
-    if (this.quitOrigins.has(key)) return Promise.resolve({ job: null, quit: true });
     const queued = this.oldestQueued(key);
     if (queued) return Promise.resolve({ job: this.take(queued, this.shown(info)) });
     return new Promise((resolve) => {
       const waiter: Waiter = {
         agentId: info.id,
         origin: key,
-        resolve: (job, quit) => {
+        resolve: (job) => {
           clearTimeout(timer);
           signal?.removeEventListener("abort", onAbort);
-          resolve(quit ? { job: null, quit: true } : { job });
+          resolve({ job });
         },
       };
       const timer = setTimeout(() => this.endWait(waiter, null), timeoutMs);
@@ -193,7 +187,7 @@ export class Hub {
    * the answer, see answer). A job asks once: a question on an answered job
    * is dropped. Null for a job the hub doesn't know.
    */
-  done(agentId: string, jobId: string, notes?: string, question?: AgentQuestion, props?: PropSpec[]): Job | null {
+  done(agentId: string, jobId: string, notes?: string, question?: AgentQuestion, props?: PropSpec[], extra: DoneExtra = {}): Job | null {
     const job = this.jobs.get(jobId);
     if (!job || job.status === "cancelled") return null;
     const agent = this.agents.get(agentId)?.info ?? job.agent;
@@ -207,6 +201,9 @@ export class Hub {
       doneAt: new Date(this.now()).toISOString(),
       ...asks,
       ...listed,
+      // The session to resume for its follow-up (kept from the first run when a later one has none), and the run's error or none.
+      session: extra.session ?? job.session,
+      error: extra.error,
     });
     return job;
   }
@@ -296,6 +293,7 @@ export class Hub {
       issues: post.issues,
       question: post.question,
       answer: post.answer,
+      session: post.session,
       createdAt: at,
       updatedAt: at,
     };

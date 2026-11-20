@@ -8,10 +8,10 @@
  * them done (`pilot_done`). Jobs are routed by the page's origin: an agent
  * gets jobs only from the page it launched Pilot in.
  */
-import type { ChangeSet, PropSpec, PropValue } from "./types.ts";
+import type { AgentSession, ChangeSet, PropSpec, PropValue } from "./types.ts";
 
-/** Bumped when the hub's HTTP API changes incompatibly. 2: width checks (`/agents/check`, `/checks/:id`). 3: comment images (`/attachments`). 4: the agent's questions (`question` on `/agents/done`, `/jobs/:id/answer`). 5: the project's components (`/components`, the agent's `folder`) and `/props` (`props` on `/agents/done`). 6: the project's token files (`/tokens`, and what they stand for in the prompt: `fileTokens`). */
-export const BRIDGE_VERSION = 6;
+/** Bumped when the hub's HTTP API changes incompatibly. 2: width checks (`/agents/check`, `/checks/:id`). 3: comment images (`/attachments`). 4: the agent's questions (`question` on `/agents/done`, `/jobs/:id/answer`). 5: the project's components (`/components`, the agent's `folder`) and `/props` (`props` on `/agents/done`). 6: the project's token files (`/tokens`, and what they stand for in the prompt: `fileTokens`). 7: Pilot runs the agent (`npx usepilot`): a job's agent `session` and `error`, `/agents/job`, and quit closes pages only. */
+export const BRIDGE_VERSION = 7;
 
 /**
  * The hub's port: one per bridge version (4747 + the version, so 4750 for
@@ -108,6 +108,16 @@ export interface Job {
   answer?: string;
   /** A `/props` job's answer: the component's props, as the agent read them (see PropSpec). */
   props?: PropSpec[];
+  /** The agent's session for this job, when Pilot ran the agent: its follow-up resumes it, and a comment thread keeps it for its next message. */
+  session?: AgentSession;
+  /** Pilot couldn't run the agent for it (not installed, not signed in, the run failed): what's wrong and what to do. The job is done, unapplied. */
+  error?: JobError;
+}
+
+/** Why a job couldn't run, for the designer: a title ("Claude Code isn't signed in") and what to do ("Run claude auth login in a terminal"). */
+export interface JobError {
+  title: string;
+  detail: string;
 }
 
 /**
@@ -136,6 +146,25 @@ export function questionOf(value: unknown): AgentQuestion | undefined {
     .filter(Boolean)
     .slice(0, MAX_CHOICES);
   return { text: q.text.trim().slice(0, 500), ...(choices.length ? { choices } : {}) };
+}
+
+/**
+ * An agent session from a page or a run (see AgentSession), checked: its id
+ * becomes an argument of the agent's command, so only plain ids (letters,
+ * digits, dashes, like the UUIDs agents use) pass.
+ */
+export function sessionOf(value: unknown): AgentSession | undefined {
+  const s = value as { agent?: unknown; id?: unknown } | undefined;
+  if (typeof s?.agent !== "string" || !/^[a-z]{1,20}$/.test(s.agent)) return undefined;
+  if (typeof s.id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9-]{7,99}$/.test(s.id)) return undefined;
+  return { agent: s.agent, id: s.id };
+}
+
+/** A job's error from a run (see JobError), trimmed; undefined when it isn't one. */
+export function jobErrorOf(value: unknown): JobError | undefined {
+  const e = value as { title?: unknown; detail?: unknown } | undefined;
+  if (typeof e?.title !== "string" || !e.title.trim()) return undefined;
+  return { title: e.title.trim().slice(0, 200), detail: typeof e.detail === "string" ? e.detail.trim().slice(0, 1000) : "" };
 }
 
 /** Props at most, from one `/props` answer. */
@@ -234,7 +263,7 @@ export type PageEvent =
   | { type: "job"; job: Job }
   /** An agent asks for a width check of a job's element: the page that has the job posts it to `/checks/:requestId`. */
   | { type: "check"; requestId: string; jobId: string }
-  /** The designer quit Pilot on this site (in this tab or another): close it here too. */
+  /** The designer closed Pilot on this site (in this tab or another): close it here too. */
   | { type: "quit" };
 
 /** `{ origin }` an agent works on, from a URL: `http://localhost:5173/about` → `http://localhost:5173`. */

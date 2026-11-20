@@ -356,6 +356,8 @@ export const ATTACHMENT_ACCEPT = [...new Set(Object.values(ATTACHMENT_TYPES))].j
  */
 export interface CommentRequest {
   kind: "comment";
+  /** The thread's agent session, when Pilot ran the agent for its earlier messages: resumed, so the agent remembers the thread (see AgentSession). */
+  session?: AgentSession;
   target: ElementTarget;
   /** The other elements selected with `target` (see requestTargets). */
   others?: ElementTarget[];
@@ -365,6 +367,17 @@ export interface CommentRequest {
 }
 
 export type AgentRequest = TaskRequest | CommentRequest | PropsRequest;
+
+/**
+ * A session of the agent's command-line tool, when Pilot runs the agent for
+ * a job (docs/handoff.md, *Agent runs*): which agent (`claude`, `codex`,
+ * `cursor`), and its session id there. Resumed for the job's follow-up and
+ * a comment thread's next message; only by the same agent.
+ */
+export interface AgentSession {
+  agent: string;
+  id: string;
+}
 
 /**
  * The elements a request is about: `target`, the first the designer

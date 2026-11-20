@@ -878,7 +878,7 @@ export function CommentWidget({
             {agentOn ? (
               sendButton
             ) : (
-              <Tooltip text="No agent connected" align="end">
+              <Tooltip text="Pilot isn't running for this site" detail="Run npx usepilot in your project's folder" align="end">
                 {sendButton}
               </Tooltip>
             )}

@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AgentInfo, ChangeResult, PageEvent, WidthCheck } from "@pilot/protocol";
-import { BRIDGE_VERSION, originKey, propsOf, questionOf } from "@pilot/protocol";
+import { BRIDGE_VERSION, jobErrorOf, originKey, propsOf, questionOf, sessionOf } from "@pilot/protocol";
 import { attachmentsDir, extensionOf, MAX_ATTACHMENT_BYTES, saveAttachment, sweepAttachments, withAttachmentPaths } from "./attachments.ts";
 import { projectComponents } from "./components.ts";
 import { fileTokens } from "./tokenFiles.ts";
@@ -16,16 +16,17 @@ import { Hub, type JobPost } from "./hub.ts";
  * - POST /jobs/:id/retry        a done job's changes that didn't come out right (or a task's problems): one follow-up
  * - POST /jobs/:id/answer       the designer's answer to the agent's question about a done job: back to the agent with it
  * - POST /checks/:requestId     the answer to a width check an agent asked for (`check` event)
- * - POST /quit                  the designer quit Pilot on the page's site: its agents stop waiting, its pages close
+ * - POST /quit                  the designer closed Pilot on the page's site: its other pages close it too
  * - POST /attachments           a file for a comment: an image, text file or PDF (the raw bytes, its type as Content-Type): saved in
  *                               the OS temp folder (attachments.ts), answers its id. Jobs name files by id only.
  * The page's origin comes from the `Origin` header the browser always sends,
- * never from the request. Jobs are only taken from an origin an agent works
- * on (it ran /pilot for it), so another website can't hand prompts to the
- * agent.
+ * never from the request. Jobs are only taken from an origin Pilot runs an
+ * agent for (`npx usepilot` in its project, which registers it), so another
+ * website can't hand prompts to the agent.
  *
- * Agents (`pilot mcp` processes that aren't the hub, see agent.ts):
+ * Agents (`npx usepilot` processes that aren't the hub, and `pilot mcp` ones, see agent.ts):
  * - POST /agents/register | /agents/launch | /agents/wait | /agents/done | /agents/check | /agents/leave
+ * - POST /agents/job            a job as the hub has it (a run polls it, to stop when it's cancelled)
  * - POST /agents/pages          the sites with Pilot open (the connected pages' origins)
  * Refused for any request with an `Origin` (browsers send one; Node doesn't).
  *
@@ -108,7 +109,7 @@ async function handle(hub: Hub, req: IncomingMessage, res: ServerResponse, attac
   }
 
   if (req.method !== "POST") return json(res, 405, { error: "POST only" });
-  if (!hub.hasAgents(origin)) return json(res, 403, { error: "no agent works on this page: run /pilot in your agent" });
+  if (!hub.hasAgents(origin)) return json(res, 403, { error: "Pilot isn't running for this site: run npx usepilot in your project" });
 
   // The project's components, for the comment box's `@` list (components.ts).
   if (path === "/components") return json(res, 200, { components: projectComponents(hub.folders(origin)) });
@@ -128,7 +129,7 @@ async function handle(hub: Hub, req: IncomingMessage, res: ServerResponse, attac
   if (path === "/jobs") {
     const post = data as unknown as JobPost;
     if (typeof post?.id !== "string" || !post.changeSet) return json(res, 400, { error: "job needs id and changeSet" });
-    return json(res, 202, { job: hub.postJob(origin, withAttachmentPaths(post, attachments)) });
+    return json(res, 202, { job: hub.postJob(origin, withAttachmentPaths({ ...post, session: sessionOf(post.session) }, attachments)) });
   }
   const jobRoute = path.match(/^\/jobs\/([^/]+)\/(cancel|retry|answer)$/);
   if (jobRoute) {
@@ -178,7 +179,7 @@ function events(hub: Hub, origin: string, req: IncomingMessage, res: ServerRespo
 }
 
 async function handleAgent(hub: Hub, action: string, data: unknown, req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const d = data as { agent: AgentInfo; origin?: string; jobId?: string; notes?: string; question?: unknown; props?: unknown; timeoutMs?: number };
+  const d = data as { agent: AgentInfo; origin?: string; jobId?: string; notes?: string; question?: unknown; props?: unknown; session?: unknown; error?: unknown; timeoutMs?: number };
   if (!d?.agent?.id) return json(res, 400, { error: "agent needed" });
   switch (action) {
     case "register":
@@ -201,7 +202,12 @@ async function handleAgent(hub: Hub, action: string, data: unknown, req: Incomin
     }
     case "done":
       if (!d.jobId) return json(res, 400, { error: "jobId needed" });
-      return json(res, 200, { job: hub.done(d.agent.id, d.jobId, d.notes, questionOf(d.question), propsOf(d.props)) });
+      return json(res, 200, {
+        job: hub.done(d.agent.id, d.jobId, d.notes, questionOf(d.question), propsOf(d.props), { session: sessionOf(d.session), error: jobErrorOf(d.error) }),
+      });
+    case "job":
+      if (!d.jobId) return json(res, 400, { error: "jobId needed" });
+      return json(res, 200, { job: hub.job(d.jobId) ?? null });
     case "check": {
       if (!d.jobId) return json(res, 400, { error: "jobId needed" });
       const check = await hub.check(d.jobId, Math.min(d.timeoutMs ?? CHECK_TIMEOUT, 2 * 60_000));

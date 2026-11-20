@@ -5,6 +5,13 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 ## Next
 
 - [x] **One description of what Pilot is, everywhere:** "Design in your running app. Your agents write the code." in both READMEs, `usepilot help`, product.md and the loop diagram.
+- [ ] **Pilot runs the agent for each Send** (branch `agent-runs`), instead of a chat parked in `pilot_wait_for_edits` ([handoff.md](handoff.md), *Agent runs*). **Windows decides it:** if it can't work there, this is a dead end.
+  - [x] Tested on macOS with Claude Code, Codex and Cursor (jobs, follow-ups, two jobs at once, file and network limits); `scripts/agent-runs-check.mjs` and the Agent runs workflow
+  - [x] Codex on Windows and Linux (Windows needs `windows.sandbox="unelevated"`)
+  - [ ] Claude Code and Cursor on Windows and Linux (their API keys as repo secrets)
+  - [x] `npx usepilot`: the runner (agent picked and saved per project, up to 3 jobs at once, Stop kills the run, errors said on the page); threads keep their agent session; Close only closes
+  - [ ] `init` and `update` for it (check the agent's tool, no MCP or skill), both READMEs, then remove the MCP loop and the `/pilot` skill
+- [ ] **Speed, after agent runs:** a comment took 15–17s with the right code location and 21–34s with Pilot's real prompt on nucleo-2, where the search found the wrong file (`app/modules/modal-pro.php`, part of whose text matched "Web app"; the heading is in `web-3/routes/home.php`). To do: exact text matches first, and the site folder that serves the page; send the look-alikes' locations, where a value comes from (inherited from a parent's class), and the project's scale for that property (14–18s in a test). Each agent step costs 3–4s, so about 15s is the floor for a comment; faster models gave wrong answers.
 
 ## Foundation
 

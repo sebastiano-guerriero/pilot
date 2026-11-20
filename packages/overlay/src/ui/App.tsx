@@ -284,14 +284,14 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     return Number(!!mark?.job) + Number(!!mark?.thread);
   };
   // Jobs not finished yet: waiting, an agent applying, checking the page.
-  const pending = (session?.jobs ?? []).filter((j) => j.status === "queued" || j.status === "working" || (j.status === "done" && !j.checked)).length;
-  // The toolbar's alerts. An agent that isn't listening, or on an older Pilot: on Comment and Send both, jobs or not (whatever goes
-  // next goes to it), so cancelling the stuck jobs doesn't hide it. No agent, or no hub: on Comment for stuck
-  // jobs asked in a thread (comments, tasks from the comment box), on Send for the rest.
+  const pending = (session?.jobs ?? []).filter((j) => j.status === "queued" || j.status === "working" || (j.status === "done" && !j.checked && !j.error)).length;
+  // The toolbar's alerts. An older Pilot running in the way: on Comment and Send both, jobs or not (whatever goes next
+  // can't reach Pilot), so cancelling the stuck jobs doesn't hide it. Pilot not running, or a run that failed: on Comment
+  // for stuck jobs asked in a thread (comments, tasks from the comment box), on Send for the rest.
   const inThread = (id: string) => !!session?.threads.some((t) => t.messages.some((m) => m.jobId === id));
   const toolbarAlerts = !stuck
     ? undefined
-    : stuck.kind === "not-listening" || stuck.kind === "older-agent"
+    : stuck.kind === "older-agent"
       ? { comment: stuckAlert, send: stuckAlert }
       : {
           ...(stuck.jobs.some(inThread) ? { comment: stuckAlert } : {}),
@@ -853,7 +853,6 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
         onSend={sendToAgent ? sendChanges : copyPrompt}
         pending={running}
         alerts={toolbarAlerts}
-        quitDetail={quitDetail(session?.state.agents ?? [])}
         onNextJob={nextJob}
         onQuit={onQuit}
         spot={toolbarSpot}
@@ -885,21 +884,13 @@ function jobText(job: JobRecord): string {
 }
 
 /** The agent's name from its label ("Claude Code · app" → "Claude Code"). */
-/** What Quit stops, for its tooltip: the agents on this site, by name ("Stops Claude Code and Cursor"); none: nothing to say. */
-export function quitDetail(agents: ReadonlyArray<{ label?: string }>): string | undefined {
-  const names = [...new Set(agents.map((a) => agentName(a.label) ?? "your agent"))];
-  if (!names.length) return undefined;
-  const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
-  return `Stops ${list} listening`;
-}
-
 export function agentName(label: string | undefined): string | undefined {
   return label?.split(" · ")[0] || undefined;
 }
 
 /** Where a thread's latest comment stands, while it's with the agent. */
 function threadJobStatus(job: JobRecord): string | undefined {
-  if (job.status === "queued") return "Waiting for an agent";
+  if (job.status === "queued") return "Queued";
   if (job.status === "working") return `${agentName(job.agent?.label) ?? "The agent"} is working on it`;
   // A task (Make responsive, Break and fix) is done, and Pilot checks it before taking it.
   const kind = job.changeSet.request?.kind;

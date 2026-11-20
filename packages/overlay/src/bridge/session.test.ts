@@ -595,62 +595,62 @@ describe("PilotSession", () => {
     ]);
   });
 
-  it("stuck: jobs no agent is waiting for, said once it has lasted; an agent busy or between waits isn't stuck", async () => {
+  it("stuck: Pilot not running for the site, said once it has lasted; a job queued or being run isn't stuck", async () => {
     vi.useFakeTimers();
     const s = session();
-    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    hub().emit({ type: "agents", agents: [agent], waiting: 0 });
     history.apply(el, "padding-top", "20px");
     const sent = s.send() as { id: string };
-    // Queued, and the agent stops waiting (it ended its turn).
-    hub().emit({ type: "agents", agents: [agent], waiting: 0 });
-    expect(s.stuck).toBeNull(); // not yet: it may be between two waits
-    await vi.advanceTimersByTimeAsync(10_000);
-    expect(s.stuck).toMatchObject({ kind: "not-listening", title: "Claude Code isn't listening", detail: "Run /pilot again in its chat", jobs: [sent.id] });
-    expect(s.isStuck(s.jobs[0] as never)).toBe(true);
-    // It waits again: not stuck.
-    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    // Queued, then run: not stuck, however long it takes.
+    await vi.advanceTimersByTimeAsync(30_000);
     expect(s.stuck).toBeNull();
-    // On a job: the others queued behind it aren't stuck.
     hub().emit({ type: "job", job: job({ id: sent.id, status: "working", agent }) });
-    hub().emit({ type: "agents", agents: [agent], waiting: 0 });
-    await vi.advanceTimersByTimeAsync(20_000);
+    await vi.advanceTimersByTimeAsync(60_000);
     expect(s.stuck).toBeNull();
-    // The agent left: no agent is connected.
+    // Pilot stopped running for the site (npx usepilot closed, another took over the hub).
     hub().emit({ type: "agents", agents: [], waiting: 0 });
+    expect(s.stuck).toBeNull(); // not yet: it may be restarting
     await vi.advanceTimersByTimeAsync(5_000);
-    expect(s.stuck).toMatchObject({ kind: "no-agent", title: "No agent is connected", detail: "Run /pilot in your agent's chat" });
-    // The hub is gone: Pilot can't reach the agent.
+    expect(s.stuck).toMatchObject({ kind: "no-agent", title: "Pilot isn't running for this site", detail: "Run npx usepilot in your project's folder", jobs: [sent.id] });
+    expect(s.isStuck(s.jobs[0] as never)).toBe(true);
+    // The hub is gone.
     hub().readyState = 2;
     hub().onerror?.();
     await vi.advanceTimersByTimeAsync(5_000);
-    expect(s.stuck).toMatchObject({ kind: "offline", title: "Pilot can't reach your agent", detail: "Open its chat and run /pilot" });
+    expect(s.stuck).toMatchObject({ kind: "offline", title: "Pilot isn't running for this site" });
     s.destroy();
   });
 
-  it("stuck without jobs: cancelling them doesn't hide that the agent isn't listening; with no agent and no job, nothing's stuck", async () => {
-    vi.useFakeTimers();
+  it("a run that failed: said at once with what to do, its changes unsent again (still previewed), until the designer sends again", () => {
     const s = session();
-    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    hub().emit({ type: "agents", agents: [agent], waiting: 0 });
     history.apply(el, "padding-top", "20px");
     const sent = s.send() as { id: string };
+    expect(history.changes({ unsent: true })).toEqual([]);
+    const error = { title: "Claude Code isn't signed in", detail: "Run claude auth login in a terminal, then send again." };
+    hub().emit({ type: "job", job: job({ id: sent.id, status: "done", agent, error }) });
+    expect(s.stuck).toEqual({ kind: "agent-error", ...error, jobs: [sent.id] });
+    // Back as unsent changes, still on the page: the next Send has them.
+    expect(history.changes({ unsent: true }).map((c) => c.property)).toEqual(["padding-top"]);
+    expect(getComputedStyle(el).paddingTop).toBe("20px");
+    // Sent again: no longer said.
+    s.send();
+    expect(s.stuck).toBeNull();
+    expect(s.jobs.map((j) => j.id)).not.toContain(sent.id);
+    s.destroy();
+  });
+
+  it("a comment thread keeps the agent's session: its next message resumes it", () => {
+    const s = session();
     hub().emit({ type: "agents", agents: [agent], waiting: 0 });
-    await vi.advanceTimersByTimeAsync(10_000);
-    expect(s.stuck?.jobs).toEqual([sent.id]);
-    s.cancel(sent.id);
-    // Nothing waits now, but the agent still isn't listening: it stays said.
-    expect(s.stuck).toMatchObject({ kind: "not-listening", title: "Claude Code isn't listening", jobs: [] });
-    // Listening again: gone. Not listening, no job waiting: said later this time.
-    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
-    expect(s.stuck).toBeNull();
-    hub().emit({ type: "agents", agents: [agent], waiting: 0 });
-    await vi.advanceTimersByTimeAsync(10_000);
-    expect(s.stuck).toBeNull();
-    await vi.advanceTimersByTimeAsync(20_000);
-    expect(s.stuck).toMatchObject({ kind: "not-listening", jobs: [] });
-    // No agent and no job: the page is in Copy prompt mode, nothing's stuck.
-    hub().emit({ type: "agents", agents: [], waiting: 0 });
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect(s.stuck).toBeNull();
+    const first = s.comment(el, "Bigger").job as { id: string };
+    const session1 = { agent: "claude", id: "aaaaaaaa-1111-2222-3333-444444444444" };
+    hub().emit({ type: "job", job: job({ id: first.id, status: "done", agent, notes: "Bigger now.", session: session1 }) });
+    expect(s.threadFor(el)?.session).toEqual(session1);
+    posts = [];
+    s.comment(el, "a bit more");
+    const posted = posts.find((p) => p.url === "http://hub/jobs")?.body as { changeSet: { request: { session?: unknown } } };
+    expect(posted.changeSet.request.session).toEqual(session1);
     s.destroy();
   });
 
@@ -821,7 +821,7 @@ describe("an agent on an older Pilot", () => {
     hub().onerror?.();
     await vi.advanceTimersByTimeAsync(5_000);
     expect(asked[0]).toBe(`http://127.0.0.1:${4747 + BRIDGE_VERSION - 1}/`);
-    expect(s.stuck).toMatchObject({ kind: "older-agent", title: "Your agent runs an older Pilot", jobs: [] });
+    expect(s.stuck).toMatchObject({ kind: "older-agent", title: "Pilot isn't running for this site", jobs: [] });
     s.destroy();
     vi.unstubAllGlobals();
   });
@@ -831,24 +831,16 @@ describe("an agent on an older Pilot", () => {
   });
 });
 
-describe("quitting Pilot", () => {
-  it("takes back the jobs no agent took (unsent changes again), lets the one being applied finish, and tells the hub", () => {
+describe("closing Pilot", () => {
+  it("tells the hub (the site's other tabs close too), and leaves the jobs alone: Pilot keeps running them", () => {
     const s = session();
-    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    hub().emit({ type: "agents", agents: [agent], waiting: 0 });
     history.apply(el, "padding-top", "20px");
-    const taken = s.send() as { id: string };
-    hub().emit({ type: "job", job: job({ id: taken.id, status: "working", agent }) });
-    const other = document.createElement("p");
-    other.className = "other";
-    document.body.append(other);
-    history.apply(other, "margin-top", "8px");
     const queued = s.send() as { id: string };
     s.quit();
-    expect(s.jobs.map((j) => j.id)).toEqual([taken.id]);
-    expect(history.changes({ unsent: true }).map((c) => c.property)).toEqual(["margin-top"]);
+    expect(s.jobs.map((j) => j.id)).toEqual([queued.id]);
     expect(posts.map((p) => p.url)).toContain("http://hub/quit");
-    expect(posts.some((p) => p.url.endsWith(`/jobs/${queued.id}/cancel`))).toBe(true);
-    other.remove();
+    expect(posts.some((p) => p.url.includes("/cancel"))).toBe(false);
     s.destroy();
   });
 

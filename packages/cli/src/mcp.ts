@@ -4,7 +4,7 @@ import { basename, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { AgentInfo, Job } from "@pilot/protocol";
-import { DEFAULT_BRIDGE_PORT, EDIT_GUIDELINES, formatPrompt, formatWidthCheck, isLocalHost, MAX_CHOICES, MAX_PROPS, originKey, originOf, propsOf, questionOf, SHARED_CHOICES, sharedChoiceMeaning } from "@pilot/protocol";
+import { DEFAULT_BRIDGE_PORT, EDIT_GUIDELINES, formatWidthCheck, isLocalHost, MAX_CHOICES, MAX_PROPS, originKey, originOf, propsOf, questionOf, SHARED_CHOICES } from "@pilot/protocol";
 import { z } from "zod";
 import { Bridge } from "./agent.ts";
 import { attachmentBlocks } from "./attachments.ts";
@@ -12,6 +12,9 @@ import { searchable, whereSection, withComponentFiles } from "./locate.ts";
 import { clientOf, RESTART } from "./clients.ts";
 import { installedVersion } from "./init.ts";
 import { olderThan, VERSION } from "./version.ts";
+import { jobPrompt } from "./prompt.ts";
+
+export { answered, followUp, jobPrompt, taskFollowUp } from "./prompt.ts";
 
 /**
  * Pilot's MCP server: the tools an agent uses to hand the UI to the designer
@@ -65,82 +68,6 @@ function agentLabel(clientName: string | undefined, cwd: string): string {
   return `${app} · ${basename(cwd)}`;
 }
 
-/**
- * What the agent reads for a job: the change set's prompt (or the
- * follow-up), where its elements' code probably is (`where`, found by Pilot
- * in the project), then what to do when done. The edit guidelines aren't
- * repeated: the agent read them in `pilot_wait_for_edits`'s description.
- */
-export function jobPrompt(job: Job, where = ""): string {
-  const body =
-    job.attempt === 2 && job.issues?.length
-      ? taskFollowUp(job)
-      : job.attempt === 2 && job.differences?.length
-        ? followUp(job)
-        : job.answer && job.question
-          ? answered(job)
-          : formatPrompt(job.changeSet, { guidelines: false });
-  return `${body}${where ? `\n${where}\n` : ""}
----
-Pilot job \`${job.id}\`. When you've applied it, call \`pilot_done\` with \`jobId: "${job.id}"\` and short notes (${notesFor(job)}). Then call \`pilot_wait_for_edits\` again for the next job.
-`;
-}
-
-/**
- * A job back with the designer's answer to the agent's question (see
- * pilot_done): what was asked and answered, then the job for reference.
- */
-export function answered(job: Job): string {
-  // A one-click answer to "all of them, or only this one?": what it asks of the code, spelled out.
-  const meaning = job.answer ? sharedChoiceMeaning(job.answer) : null;
-  return [
-    "# Pilot: the designer answered your question",
-    "",
-    `You did this job and asked the designer: ${job.question?.text}`,
-    "",
-    "Their answer:",
-    "",
-    job.answer
-      ?.trim()
-      .split("\n")
-      .map((l) => `> ${l}`)
-      .join("\n"),
-    "",
-    ...(meaning ? [`What that means for the code: ${meaning}`, ""] : []),
-    "Do what's left of the job the way they answered, then call `pilot_done` again. Pilot then checks it like any job. (Don't ask again: say anything still open in your notes.)",
-    "",
-    "The job, for reference:",
-    "",
-    formatPrompt(job.changeSet, { guidelines: false }),
-  ].join("\n");
-}
-
-/**
- * The follow-up of a job: the changes that didn't come out as the designer
- * set them, with what the page gives instead, found by their elements.
- * Pilot takes what the code gives after it, so it says to keep a deliberate
- * approximation and explain it.
- */
-export function followUp(job: Job): string {
-  const lines = [
-    "# Pilot design edits: follow-up",
-    "",
-    "You applied this job, but Pilot checked the page and these changes don't give the designer's value yet (the values are what the browser computes for the element):",
-    "",
-  ];
-  for (const d of job.differences ?? []) {
-    const edit = job.changeSet.edits.find((e) => e.target.selector === d.selector);
-    const where = edit ? `\`${edit.target.path}\` (selector \`${d.selector}\`${edit.target.text ? `, text "${edit.target.text}"` : ""})` : `\`${d.selector}\``;
-    // A change to the DOM itself: in words, there's no value to compare.
-    lines.push(`- ${where}: \`${d.property}\` should be \`${d.expected}\`, the page gives \`${d.actual ?? "?"}\`.`);
-  }
-  lines.push(
-    "",
-    "Fix them: the usual causes are a rule that overrides yours (more specific, later, or in a media query), an edit in the wrong file or component, or a missed change. If you chose a different value on purpose (a token or the nearest step in the project's scale), keep it and say so in your notes. Pilot takes what the code gives after this.",
-  );
-  return lines.join("\n");
-}
-
 /** At most this many jobs come in one wait: past it, the next wait takes the rest. */
 export const MAX_BATCH = 6;
 
@@ -171,64 +98,6 @@ export function batchIntro(jobs: Job[]): string {
   return `# Pilot: ${jobs.length} jobs
 
 The designer sent these while you were busy. Do them all (they're on different elements), then call \`pilot_done\` once per job, each with its own id and notes (you can make the calls together): ${jobs.map((j) => `\`${j.id}\``).join(", ")}. Then call \`pilot_wait_for_edits\` again.`;
-}
-
-/** What `pilot_done`'s notes should say, per kind of job. */
-function notesFor(job: Job): string {
-  switch (job.changeSet.request?.kind) {
-    case "comment":
-      return "your reply in the designer's comment thread, a small chat box: one short sentence, about 120 characters at most, with what you changed or your answer; no lists or code blocks";
-    case "responsive":
-      return "what changed at which widths, anything left for the designer";
-    case "break-and-fix":
-      return "what broke and how you fixed it, anything for the designer to decide";
-    case "props":
-      return "one short sentence for the designer, like a chat message; the props go in `props`";
-    default:
-      return "values you approximated, anything you did differently";
-  }
-}
-
-/**
- * A task's follow-up (Make responsive, Break and fix): the problems Pilot's
- * width check found once the agent was done, then the task again for
- * reference.
- */
-export function taskFollowUp(job: Job): string {
-  const request = job.changeSet.request;
-  const target = `\`${request?.target.path ?? "the element"}\``;
-  // Props set from the thread: Pilot read the instance again, and these aren't what the designer picked.
-  if (request?.kind === "comment")
-    return [
-      "# Pilot: props, follow-up",
-      "",
-      `You set the props the designer picked on ${target}, but Pilot read the instance on the page after hot reload, and these aren't what they picked yet:`,
-      "",
-      ...(job.issues ?? []).map((i) => `- ${i}`),
-      "",
-      "Fix them where this instance is written: the usual causes are another instance's line, a value the parent passes from a variable or data, or a default the prop falls back to. If one can't be set there, say why in your notes. Pilot takes what the code gives after this.",
-      "",
-      "The comment, for reference:",
-      "",
-      formatPrompt(job.changeSet, { guidelines: false }),
-    ].join("\n");
-  const breakFix = request?.kind === "break-and-fix";
-  const lines = [
-    breakFix ? "# Pilot: break and fix, follow-up" : "# Pilot: make responsive, follow-up",
-    "",
-    breakFix
-      ? `You stress-tested ${target} and reported it done, but Pilot's width check (the page with its usual content, measured at each width) finds these problems. If one comes from test content still in the code, remove it:`
-      : `You made ${target} responsive, but Pilot's width check (the page measured at each width) still finds these problems:`,
-    "",
-    ...(job.issues ?? []).map((i) => `- ${i}`),
-    "",
-    "Fix them, then run `pilot_check_widths` to confirm before `pilot_done`. If one is deliberate, keep it and say why in your notes. Pilot takes what the code gives after this.",
-    "",
-    "The task, for reference:",
-    "",
-    formatPrompt(job.changeSet),
-  ];
-  return lines.join("\n");
 }
 
 /**

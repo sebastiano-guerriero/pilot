@@ -11,7 +11,7 @@ import styles from "./ui/styles/index.css?inline";
 export interface PilotOptions {
   /**
    * Launch Pilot as soon as it mounts. Default: false (Pilot stays dormant
-   * until the shortcut, or `/pilot` in an agent, launches it). A launch/quit from the current tab session
+   * until the shortcut, or `npx usepilot` starting, launches it). A launch/close from the current tab session
    * takes precedence, so reloads keep whatever the user chose.
    */
   launch?: boolean;
@@ -30,9 +30,9 @@ export interface PilotOptions {
    */
   shortcut?: string | false;
   /**
-   * Where Pilot reaches the agents: the bridge's URL (`pilot mcp`, started by
-   * the agent). Default `http://127.0.0.1:` + the bridge's port for this version (DEFAULT_BRIDGE_PORT). `false` turns it off: no
-   * Send, no launch from `/pilot`, Copy prompt only.
+   * Where Pilot reaches the agents: the bridge's URL (the hub, in `npx
+   * usepilot`, which runs the agent). Default `http://127.0.0.1:` + the bridge's port for this version (DEFAULT_BRIDGE_PORT). `false` turns it off: no
+   * Send, Copy prompt only.
    */
   bridge?: string | false;
 }
@@ -49,14 +49,12 @@ export interface PilotDevOptions {
 }
 
 export interface PilotInstance {
-  /** Show the toolbar. No-op if already running. Called by `/pilot` (via the bridge). */
+  /** Show the toolbar. No-op if already running. Called when `npx usepilot` starts for the site (via the bridge). */
   launch(): void;
   /**
-   * Quit, the toolbar's Quit button: closes Pilot on the whole site (every
-   * tab of it) and tells its agents to stop listening, so their chats end the
-   * loop. Jobs no agent took yet are unsent changes again; the ones being
-   * applied finish. `/pilot` in a chat starts it again. (Hiding without
-   * quitting: the launch shortcut, pressed while Pilot is open.)
+   * Close, the toolbar's last button: closes Pilot on the whole site (every
+   * tab of it). Jobs go on (Pilot keeps running the agent for them); the
+   * launch shortcut opens it again, as it hides it in this tab only.
    */
   quit(): void;
   readonly running: boolean;
@@ -107,15 +105,15 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
   // survive reloads, quitting and relaunching (see edits/persist.ts).
   const history = persistentHistory();
   const reattach = () => history.reattach(resolveTarget);
-  // The handoff to agents: Send, the jobs, and /pilot launching Pilot.
+  // The handoff to agents: Send, the jobs, and `npx usepilot` launching Pilot.
   const session = new PilotSession(history, {
     bridge: options.bridge ?? DEFAULT_BRIDGE_URL,
     onLaunch: () => instance.launch(),
-    // A page opened after /pilot: Pilot opens by itself, unless quit in this tab.
+    // A page opened while Pilot runs for the site: it opens by itself, unless closed in this tab.
     onAgentsArrived: () => {
       if (readStoredRunning() !== false) instance.launch();
     },
-    // Quit on this site, in another tab: closed here too.
+    // Closed on this site, in another tab: closed here too.
     onQuit: () => setRunning(false),
   });
 

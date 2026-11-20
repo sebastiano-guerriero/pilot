@@ -8,7 +8,7 @@ export const DEFAULT_BRIDGE_URL = `http://127.0.0.1:${DEFAULT_BRIDGE_PORT}`;
 export interface BridgeState {
   /** Connected to the hub. */
   connected: boolean;
-  /** The agents working on this page (they ran /pilot for it). */
+  /** Pilot running for this page's site (`npx usepilot` registers it as its agent). */
   agents: AgentInfo[];
   /** How many of them are waiting for a job right now. */
   waiting: number;
@@ -46,7 +46,7 @@ export async function olderHub(fetchImpl: typeof fetch = globalThis.fetch): Prom
 }
 
 export interface BridgeHandlers {
-  /** An agent ran /pilot for this page. */
+  /** Pilot started running for this page's site. */
   onLaunch(agent: AgentInfo): void;
   /** A job changed on the hub. */
   onJob(job: Job): void;
@@ -155,7 +155,7 @@ export class BridgeClient {
     }
   }
 
-  postJob(job: Pick<Job, "id" | "changeSet" | "status" | "agent" | "attempt" | "differences" | "issues" | "question" | "answer">): Promise<boolean> {
+  postJob(job: Pick<Job, "id" | "changeSet" | "status" | "agent" | "attempt" | "differences" | "issues" | "question" | "answer" | "session">): Promise<boolean> {
     return this.post("/jobs", job);
   }
 
@@ -182,7 +182,7 @@ export class BridgeClient {
     return this.post(`/jobs/${encodeURIComponent(jobId)}/answer`, { answer });
   }
 
-  /** The designer quit Pilot on this site: its agents stop waiting, its other pages close (false: no hub to tell). */
+  /** The designer closed Pilot on this site: its other pages close it too (false: no hub to tell). */
   quit(): Promise<boolean> {
     return this.post("/quit", {});
   }
