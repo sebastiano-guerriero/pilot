@@ -34,8 +34,10 @@ const AGENTS = {
     label: "Codex",
     bins: ["codex"],
     status: { args: ["login", "status"], ok: (_out, code) => code === 0 },
+    // CODEX_CONFIG adds `-c` settings, `;`-separated (e.g. windows.sandbox="elevated").
     args: (resume) => [
       "exec", "--json", "-s", "workspace-write", "-c", 'web_search="disabled"',
+      ...(process.env.CODEX_CONFIG ?? "").split(";").filter(Boolean).flatMap((c) => ["-c", c]),
       ...(resume ? ["resume", resume] : []), "-",
     ],
     parse: (out) => {
@@ -121,7 +123,8 @@ function paddingOf(project) {
 async function check(id, root) {
   const agent = AGENTS[id];
   const rows = [];
-  const row = (step, pass, detail, seconds) => rows.push({ agent: agent.label, step, pass, detail, seconds });
+  const label = id === "codex" && process.env.CODEX_CONFIG ? `${agent.label} (${process.env.CODEX_CONFIG})` : agent.label;
+  const row = (step, pass, detail, seconds) => rows.push({ agent: label, step, pass, detail, seconds });
 
   const bin = process.env[`${id.toUpperCase()}_BIN`] || findBin(agent.bins);
   if (!bin) {
@@ -209,7 +212,7 @@ const results = (await Promise.all(ids.map((id) => check(id, root).catch((e) => 
 
 const mark = (p) => (p === null ? "ℹ️" : p ? "✅" : "❌");
 // Results may be shown publicly (a CI summary): no email addresses.
-const cell = (s) => String(s ?? "").replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, "<email>").replace(/\|/g, "\\|").replace(/\n/g, " ");
+const cell = (s) => String(s ?? "").replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, "<email>").replace(/\b(sk|key|crsr)[-_][\w*-]+/gi, "<key>").replace(/\|/g, "\\|").replace(/\n/g, " ");
 const table = [
   `### Agent runs on ${process.platform} (${process.arch})`,
   "",

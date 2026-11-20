@@ -97,3 +97,15 @@ jobs:
           done
           if [ ${#keep[@]} -eq 0 ]; then echo "No agent has a key" | tee -a "$GITHUB_STEP_SUMMARY"; exit 1; fi
           node scripts/agent-runs-check.mjs --agents "$(IFS=,; echo "${keep[*]}")"
+
+      # Codex's Windows sandbox modes: which one lets a headless run edit the
+      # project while keeping the limits (the default run above is read-only).
+      - name: Codex with each Windows sandbox mode
+        if: runner.os == 'Windows' && env.OPENAI_API_KEY != '' && !cancelled()
+        shell: bash
+        run: |
+          status=0
+          for mode in elevated unelevated; do
+            CODEX_CONFIG="windows.sandbox=\"$mode\"" node scripts/agent-runs-check.mjs --agents codex --dir ".agent-runs-check/$mode" || status=1
+          done
+          exit $status
