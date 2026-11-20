@@ -68,7 +68,9 @@ describe("a run's arguments", () => {
     const codex = AGENTS.codex.args({});
     expect(codex.join(" ")).toContain("-s workspace-write");
     expect(codex).toContain('web_search="disabled"');
-    expect(AGENTS.cursor.args({}).join(" ")).toContain("--sandbox enabled");
+    // Allowlist mode (its sandbox isn't on Windows), and never --force: what isn't allowed is refused.
+    expect(AGENTS.cursor.args({}).join(" ")).toContain("--sandbox disabled");
+    expect(AGENTS.cursor.args({})).not.toContain("--force");
   });
 
   it("never takes the prompt as an argument (it goes on stdin)", () => {

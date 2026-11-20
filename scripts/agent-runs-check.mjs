@@ -60,10 +60,10 @@ const AGENTS = {
     bins: ["cursor-agent", "agent"],
     // Its status says "Not logged in" with an API key, which runs use: the key counts.
     status: { args: ["status"], ok: (out) => /logged in/i.test(out) && !/not logged in/i.test(out) || !!process.env.CURSOR_API_KEY },
-    // CURSOR_SANDBOX=off: its allowlist mode instead (no sandbox on Windows; on Linux it needs user namespaces).
+    // Its allowlist mode, as Pilot runs it (its sandbox isn't on Windows); CURSOR_SANDBOX=on tries the sandbox.
     args: (resume) => [
       "-p", "--output-format", "json", "--trust",
-      ...(process.env.CURSOR_SANDBOX === "off" ? [] : ["--sandbox", "enabled"]),
+      "--sandbox", process.env.CURSOR_SANDBOX === "on" ? "enabled" : "disabled",
       ...(resume ? ["--resume", resume] : []),
     ],
     parse: jsonResult,
@@ -132,8 +132,8 @@ async function check(id, root) {
   const label =
     id === "codex" && process.env.CODEX_CONFIG
       ? `${agent.label} (${process.env.CODEX_CONFIG})`
-      : id === "cursor" && process.env.CURSOR_SANDBOX === "off"
-        ? `${agent.label} (no sandbox)`
+      : id === "cursor" && process.env.CURSOR_SANDBOX === "on"
+        ? `${agent.label} (sandbox)`
         : agent.label;
   const row = (step, pass, detail, seconds) => rows.push({ agent: label, step, pass, detail, seconds });
 

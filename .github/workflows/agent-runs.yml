@@ -98,15 +98,3 @@ jobs:
           if [ ${#keep[@]} -eq 0 ]; then echo "No agent has a key" | tee -a "$GITHUB_STEP_SUMMARY"; exit 1; fi
           node scripts/agent-runs-check.mjs --agents "$(IFS=,; echo "${keep[*]}")"
 
-      # Cursor's sandbox isn't on Windows, and needs user namespaces on Linux
-      # (Ubuntu's AppArmor blocks them by default): which limits hold without it,
-      # and whether the sandbox works on Linux once namespaces are allowed.
-      - name: Cursor without its sandbox
-        if: env.CURSOR_API_KEY != '' && !cancelled()
-        shell: bash
-        run: CURSOR_SANDBOX=off node scripts/agent-runs-check.mjs --agents cursor --dir .agent-runs-check/no-sandbox
-      - name: Cursor's sandbox with user namespaces allowed (Linux)
-        if: runner.os == 'Linux' && env.CURSOR_API_KEY != '' && !cancelled()
-        run: |
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          node scripts/agent-runs-check.mjs --agents cursor --dir .agent-runs-check/userns

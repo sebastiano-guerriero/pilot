@@ -150,8 +150,10 @@ export const AGENTS: Record<AgentKind, AgentCli> = {
     signIn: "cursor-agent login",
     status: { args: ["status"], ok: (out) => /logged in/i.test(out) && !/not logged in/i.test(out) },
     keyEnv: "CURSOR_API_KEY",
-    // Its sandbox: commands run with writes only in the project, no network.
-    args: ({ resume }) => ["-p", "--output-format", "stream-json", "--trust", "--sandbox", "enabled", ...(resume ? ["--resume", resume] : [])],
+    // Its allowlist mode, not its sandbox: the sandbox doesn't exist on Windows and fails on Ubuntu's
+    // default AppArmor settings. Without `--force`, a run is refused what the user's allowlist doesn't
+    // allow (it can't ask): writes outside the project, web fetches, shell commands. Checked on all three.
+    args: ({ resume }) => ["-p", "--output-format", "stream-json", "--trust", "--sandbox", "disabled", ...(resume ? ["--resume", resume] : [])],
     parse: parseStream,
   },
 };

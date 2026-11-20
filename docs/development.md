@@ -81,7 +81,7 @@ Pilot runs other people's command-line tools, and an update of one can change ho
 | --- | --- | --- |
 | One task and exit, the prompt on stdin, JSON lines out | `claude -p --output-format stream-json --verbose`; `codex exec --json -`; `cursor-agent -p --output-format stream-json` | `args` and `parse` per agent |
 | A session id in its output, resumed by id | `session_id`; `thread.started`'s `thread_id`, `codex exec resume <id>`; `session_id` | thread sessions (`sessionToResume`) |
-| Limits: no writes outside the project, no internet | `--restricted --tools Read,Edit,Write,Glob,Grep`; `-s workspace-write`, `web_search="disabled"`, on Windows `windows.sandbox="unelevated"`; `--sandbox enabled` | the README's promise |
+| Limits: no writes outside the project, no internet | `--restricted --tools Read,Edit,Write,Glob,Grep`; `-s workspace-write`, `web_search="disabled"`, on Windows `windows.sandbox="unelevated"`; `--sandbox disabled` (allowlist mode, never `--force`: its sandbox isn't on Windows) | the README's promise |
 | Its sign-in check | `claude auth status` (`loggedIn`); `codex login status` (exit code); `cursor-agent status` | `detectAgents`, `init` |
 | Runs outside a git repository | yes; only with `--skip-git-repo-check`; yes | Codex's flags |
 | Its last message is the reply | the last `assistant` message; the last `agent_message`; the last `assistant` message (its `result` joins them all) | the notes |

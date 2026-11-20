@@ -5,10 +5,10 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 ## Next
 
 - [x] **One description of what Pilot is, everywhere:** "Design in your running app. Your agents write the code." in both READMEs, `usepilot help`, product.md and the loop diagram.
-- [ ] **Pilot runs the agent for each Send** (branch `agent-runs`), instead of a chat parked in `pilot_wait_for_edits` ([handoff.md](handoff.md), *Agent runs*). **Windows decides it:** if it can't work there, this is a dead end.
+- [ ] **Pilot runs the agent for each Send** (branch `agent-runs`), instead of a chat parked in `pilot_wait_for_edits` ([handoff.md](handoff.md), *Agent runs*). **Windows decided it** (it had to work there, or this was a dead end): Claude Code, Codex and Cursor pass on Windows, Linux and macOS.
   - [x] Tested on macOS with Claude Code, Codex and Cursor (jobs, follow-ups, two jobs at once, file and network limits); `scripts/agent-runs-check.mjs` and the Agent runs workflow
   - [x] Codex on Windows and Linux (Windows needs `windows.sandbox="unelevated"`)
-  - [ ] Claude Code and Cursor on Windows and Linux (their API keys as repo secrets)
+  - [x] Claude Code and Cursor on Windows and Linux: Claude Code passes as is; Cursor in its allowlist mode (its sandbox isn't on Windows and fails on Ubuntu's AppArmor)
   - [x] `npx usepilot`: the runner (agent picked and saved per project, up to 3 jobs at once, Stop kills the run, errors said on the page); threads keep their agent session; Close only closes
   - [x] `init` and `update` for it (check the agent's tool, remove the old chat setup), both READMEs; the MCP loop, `setup` and the `/pilot` skill removed (`usepilot mcp` only says what to do instead)
 - [ ] **After agent runs, before the release:**
