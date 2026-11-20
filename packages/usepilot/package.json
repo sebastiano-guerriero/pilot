@@ -1,6 +1,6 @@
 {
   "name": "usepilot",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "license": "FSL-1.1-MIT",
   "description": "Pilot: take the controls from your coding agent. A control surface for coding agents, with checked results: edit, comment on and ask for tasks on your running app, and Pilot checks what the agent changed on the page.",
   "keywords": [

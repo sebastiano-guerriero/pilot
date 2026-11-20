@@ -5,7 +5,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 ## Next
 
 - [x] **One description of what Pilot is, everywhere:** "Design in your running app. Your agents write the code." in both READMEs, `usepilot help`, product.md and the loop diagram.
-- [ ] **Pilot runs the agent for each Send** (branch `agent-runs`), instead of a chat parked in `pilot_wait_for_edits` ([handoff.md](handoff.md), *Agent runs*). **Windows decided it** (it had to work there, or this was a dead end): Claude Code, Codex and Cursor pass on Windows, Linux and macOS.
+- [x] **Pilot runs the agent for each Send** (0.14.0), instead of a chat parked in `pilot_wait_for_edits` ([handoff.md](handoff.md), *Agent runs*). **Windows decided it** (it had to work there, or this was a dead end): Claude Code, Codex and Cursor pass on Windows, Linux and macOS.
   - [x] Tested on macOS with Claude Code, Codex and Cursor (jobs, follow-ups, two jobs at once, file and network limits); `scripts/agent-runs-check.mjs` and the Agent runs workflow
   - [x] Codex on Windows and Linux (Windows needs `windows.sandbox="unelevated"`)
   - [x] Claude Code and Cursor on Windows and Linux: Claude Code passes as is; Cursor in its allowlist mode (its sandbox isn't on Windows and fails on Ubuntu's AppArmor)
@@ -17,7 +17,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
   - [ ] Choosing the agent: in the terminal now (asked once, `--agent` changes it); a place in the toolbar is the owner's call
   - [ ] Starting Pilot with the dev server (a Vite plugin, the dev script), so there's no second terminal; sites without an npm dev server keep `npx usepilot`
   - [ ] More agents with the same three abilities (one task and exit, a session id, resume by id): Gemini (`gemini -p`), Copilot (`copilot -p`), opencode (`opencode run`)
-  - [ ] Release it (a minor version: bridge 7), with the README's update notes
+  - [x] Released in 0.14.0 (bridge 7)
 - [ ] **Speed, after agent runs:** a comment took 15–17s with the right code location and 21–34s with Pilot's real prompt on nucleo-2, where the search found the wrong file (`app/modules/modal-pro.php`, part of whose text matched "Web app"; the heading is in `web-3/routes/home.php`). To do: exact text matches first, and the site folder that serves the page; send the look-alikes' locations, where a value comes from (inherited from a parent's class), and the project's scale for that property (14–18s in a test). Each agent step costs 3–4s, so about 15s is the floor for a comment; faster models gave wrong answers.
 
 ## Foundation
