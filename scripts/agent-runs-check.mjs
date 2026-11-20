@@ -156,6 +156,8 @@ async function check(id, root) {
     const t = Date.now();
     const r = await run(bin, agent.args(resume), { cwd: project, input: prompt });
     const parsed = agent.parse(r.out);
+    // A run that printed nothing: what it said on stderr (and its exit code) is the reason.
+    if (parsed.error && !parsed.reply) parsed.error = `${parsed.error} | exit ${r.code} | ${r.err.trim().slice(-300) || "no stderr"}`;
     return { ...parsed, seconds: Math.round((Date.now() - t) / 100) / 10, raw: (r.out + r.err).slice(-400), code: r.code };
   };
 
