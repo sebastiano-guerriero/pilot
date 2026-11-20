@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
-import { insertToken, matchTokens, stepToken, tokenAt, tokenKindsFor, tokenScale } from "./tokens.ts";
+import { currentToken, insertToken, matchTokens, stepToken, tokenAt, tokenKindsFor, tokenScale } from "./tokens.ts";
 
 const tokens = [
   { name: "--space-2", value: "8px", kind: "length" as const },
@@ -90,5 +90,17 @@ describe("stepping a token along its scale", () => {
     expect(stepToken("var(--space-2) + 4px", 1, scale, ["length"])).toBeNull();
     expect(stepToken("12px", 1, scale, ["length"])).toBeNull();
     expect(stepToken("var(--gray-100)", 1, scale, ["length"])).toBeNull();
+  });
+});
+
+describe("currentToken", () => {
+  it("the whole value when it's one variable; else the one at the caret; none for a number or a selection across math", () => {
+    expect(currentToken("--space-4", 0, 9)).toEqual({ name: "--space-4", start: 0, end: 9 });
+    expect(currentToken("var(--space-4)", 0, 0)).toEqual({ name: "--space-4", start: 0, end: 14 });
+    const math = "calc(var(--space-2) * 2)";
+    expect(currentToken(math, 12, 12)).toEqual({ name: "--space-2", start: 5, end: 19 });
+    expect(currentToken(math, 22, 22)).toBeNull(); // on the 2
+    expect(currentToken(math, 0, math.length)).toBeNull();
+    expect(currentToken("16px", 0, 4)).toBeNull();
   });
 });

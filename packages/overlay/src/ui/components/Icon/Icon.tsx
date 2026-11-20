@@ -37,6 +37,62 @@ const BARS = {
 const sides = (...names: Array<keyof typeof BARS>) => layout(names.map((n) => BARS[n]));
 
 /**
+ * A mask direction icon: the frame, and the fade's way as accent arrows.
+ * To right, to top right and both edges of an axis (left and right) are
+ * designed; the other sides, corners and axis turn them.
+ */
+const turned = (deg: number, body: JSX.Element) => ({
+  size: 12,
+  body: (
+    <>
+      <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+      <g transform={deg ? `rotate(${deg} 6 6)` : undefined} stroke="var(--plt-color-accent)" stroke-linecap="round" stroke-linejoin="round">
+        {body}
+      </g>
+    </>
+  ),
+});
+const SIDE_ARROW = (
+  <>
+    <path d="M2.5 6H9.5" />
+    <path d="M7.5 4L9.5 6L7.5 8" />
+  </>
+);
+const CORNER_ARROW = (
+  <>
+    <path d="M2.52148 9.47632L9.22123 2.77657" />
+    <path d="M6.62866 2.54285H9.45709V5.37127" />
+  </>
+);
+const AXIS_ARROWS = (
+  <>
+    <path d="M2.5 6H9.5" />
+    <path d="M7.5 4L9.5 6L7.5 8" />
+    <path d="M4.5 4L2.5 6L4.5 8" />
+  </>
+);
+
+/**
+ * A margin side icon: the element, a box (contrast-high at 20%) in the
+ * middle, and an accent bar (2px) along each side it stands for, on the
+ * icon's outer edge: the space around the box. Top and all four are
+ * designed; right, bottom and left are derived from top.
+ */
+const MARGIN_BOX = "M9 3V9H3V3H9ZM4 8H8V4H4V8Z";
+const margins = (...names: Array<keyof typeof BARS>) => ({
+  size: 12,
+  body: (
+    <>
+      {names.map((n) => {
+        const { x, y, w, h } = BARS[n];
+        return <rect key={n} x={x} y={y} width={w} height={h} fill="var(--plt-color-accent)" />;
+      })}
+      <path d={MARGIN_BOX} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+    </>
+  ),
+});
+
+/**
  * An inset icon: the frame, and an accent bar (2px) from the side it stands
  * for to the center. Top is designed; the other sides rotate it.
  */
@@ -540,6 +596,58 @@ const ICONS = {
   "side-right": sides("right"),
   "side-bottom": sides("bottom"),
   "side-left": sides("left"),
+  // Adding a value to a list (a mask): a plus.
+  plus: {
+    size: 8,
+    body: (
+      <g stroke="currentColor" stroke-linecap="round">
+        <path d="M4 0.5V7.5" />
+        <path d="M7.50488 3.99512L0.504883 3.99512" />
+      </g>
+    ),
+  },
+  // Mask types: custom (a fade over the frame) and none (the frame, struck through in red), designed.
+  "mask-custom": {
+    size: 12,
+    body: (
+      <>
+        <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+        <path d="M0 0H12V12H0V0Z" fill="url(#plt-mask-custom-fade)" />
+        <defs>
+          <linearGradient id="plt-mask-custom-fade" x1="6" y1="0" x2="6" y2="12" gradientUnits="userSpaceOnUse">
+            <stop stop-color="var(--plt-color-contrast-high)" />
+            <stop offset="1" stop-color="var(--plt-color-contrast-high)" stop-opacity="0" />
+          </linearGradient>
+        </defs>
+      </>
+    ),
+  },
+  "mask-none": {
+    size: 12,
+    body: (
+      <>
+        <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+        <path d="M2.5 9.5L9.5 2.5" stroke="var(--plt-color-red)" stroke-linecap="round" stroke-linejoin="round" />
+      </>
+    ),
+  },
+  // Mask directions: to right, to top right and left and right are designed; the others turn them.
+  "mask-to-right": turned(0, SIDE_ARROW),
+  "mask-to-bottom": turned(90, SIDE_ARROW),
+  "mask-to-left": turned(180, SIDE_ARROW),
+  "mask-to-top": turned(270, SIDE_ARROW),
+  "mask-to-top-right": turned(0, CORNER_ARROW),
+  "mask-to-bottom-right": turned(90, CORNER_ARROW),
+  "mask-to-bottom-left": turned(180, CORNER_ARROW),
+  "mask-to-top-left": turned(270, CORNER_ARROW),
+  "mask-left-and-right": turned(0, AXIS_ARROWS),
+  "mask-top-and-bottom": turned(90, AXIS_ARROWS),
+  // Margin sides: all four and top are designed; right, bottom and left are derived from top.
+  "margin-all": margins("top", "bottom", "left", "right"),
+  "margin-top": margins("top"),
+  "margin-right": margins("right"),
+  "margin-bottom": margins("bottom"),
+  "margin-left": margins("left"),
   // Inset sides: top is designed; right, bottom, left and all four are derived.
   "inset-all": insets("top", "right", "bottom", "left"),
   "inset-top": insets("top"),

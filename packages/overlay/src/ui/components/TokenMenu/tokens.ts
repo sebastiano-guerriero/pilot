@@ -57,6 +57,25 @@ export function tokenAt(text: string, caret: number): { start: number; end: numb
   return { start: caret - query.length - 2, end: caret, query };
 }
 
+/**
+ * The variable a field holds, for its list to open on (as a select does):
+ * the whole value when it's one (`--space-4`, `var(--space-4)`), else the
+ * one the caret is in (`calc(var(--space-2) * 2)`), with where it is, so a
+ * pick replaces just it. Null for anything else, and for a selection across
+ * math (a pick replaces the selection then).
+ */
+export function currentToken(text: string, start: number, end: number): { name: string; start: number; end: number } | null {
+  const lone = /^\s*(?:var\(\s*(--[\w-]+)\s*\)|(--[\w-]+))\s*$/.exec(text);
+  if (lone) return { name: (lone[1] ?? lone[2]) as string, start: 0, end: text.length };
+  if (start !== end) return null;
+  for (const m of text.matchAll(/var\(\s*(--[\w-]+)\s*(?:,[^()]*)?\)|(?<![\w-])--[\w-]+/g)) {
+    const from = m.index ?? 0;
+    const to = from + m[0].length;
+    if (start >= from && start <= to) return { name: m[1] ?? m[0], start: from, end: to };
+  }
+  return null;
+}
+
 /** At most this many in the list: it narrows as you type. */
 const MAX = 50;
 

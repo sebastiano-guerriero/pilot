@@ -19,7 +19,7 @@ export interface SidesConfig {
    * The view button's icons: `<icons>-all` for one value, `<icons>-top`… for
    * each side. Defaults to the box sides (`sides-all`, `side-top`…).
    */
-  icons?: "inset";
+  icons?: "inset" | "margin";
   /** The box-model area each side's field shows on the page; none when absent. */
   box?: SideArea["box"];
   /** Tailwind's aliases: all sides, each side, each axis, the logical sides (start/end). */

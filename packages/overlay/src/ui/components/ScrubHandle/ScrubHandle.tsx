@@ -9,9 +9,12 @@ interface ScrubHandleProps {
   /**
    * The drag moved: `steps` is the total from where it started (up is
    * positive), ×10 while Shift is held. The same `gesture` object for the
-   * whole drag, so it's undone in one step.
+   * whole drag, so it's undone in one step. Returns how many of those steps
+   * are past a limit the value stops at (0, or a percent's 100), counted
+   * from where it got there and negative below a minimum: let go there, the
+   * wheel springs back a little (`recoil()`).
    */
-  onScrub(steps: number, gesture: object): void;
+  onScrub(steps: number, gesture: object): number | void;
 }
 
 /** Drag distance (px) per step: the value moves with the pointer, as the wheel does. */
@@ -33,6 +36,42 @@ const BLUR_FROM = 35;
 /** Drum rotation (deg) per px dragged: the center line follows the pointer. */
 const DEG_PER_PX = SPACING / 3;
 
+/** The most the wheel springs back when let go past a limit (deg): a line and a half. */
+const MAX_RECOIL = SPACING * 1.5;
+/** How quickly the spring back stops growing with the pull: iOS's rubber band at the end of a list. */
+const RECOIL_STIFFNESS = 0.55;
+
+/**
+ * How far the wheel springs back (deg) when let go `px` past a limit
+ * (signed, the pull's way): about half the pull after a nudge, then less
+ * and less of it, never more than MAX_RECOIL. So a little pull comes back a
+ * little, and a long one doesn't spin the wheel all the way back.
+ */
+export function recoil(px: number): number {
+  const pulled = Math.abs(px) * DEG_PER_PX;
+  return Math.sign(px) * MAX_RECOIL * (1 - 1 / ((pulled * RECOIL_STIFFNESS) / MAX_RECOIL + 1));
+}
+
+/** How long the spring back takes (ms): longer from further, within these. */
+function springDuration(deg: number): number {
+  return Math.min(420, 180 + Math.abs(deg) * 7);
+}
+
+/** Back home with a small overshoot, like something let go of (easeOutBack). */
+function springEase(t: number): number {
+  const s = 1.4;
+  const u = t - 1;
+  return 1 + (s + 1) * u * u * u + s * u * u;
+}
+
+function reducedMotion(): boolean {
+  try {
+    return matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * A drag handle that changes a field's value, drawn as a spinning wheel: drag
  * up to increase, down to decrease, one step per pixel (Shift for ×10). The
@@ -43,11 +82,47 @@ const DEG_PER_PX = SPACING / 3;
 export function ScrubHandle({ onStart, onScrub }: ScrubHandleProps) {
   const id = useId();
   const [angle, setAngle] = useState(0);
+  // What's drawn is `turn + band`: the drum's turn (following the pointer),
+  // and, let go past a limit, how far it still is from where it springs back
+  // to (going to 0).
+  const turn = useRef(0);
+  const band = useRef(0);
+  const spring = useRef<number | null>(null);
+  const paint = () => setAngle(turn.current + band.current);
   // The latest callbacks, for the window listeners of an ongoing drag.
   const latest = useRef({ onStart, onScrub });
   latest.current = { onStart, onScrub };
   const stop = useRef<(() => void) | null>(null);
-  useEffect(() => () => stop.current?.(), []);
+  useEffect(
+    () => () => {
+      stop.current?.();
+      if (spring.current !== null) cancelAnimationFrame(spring.current);
+    },
+    [],
+  );
+
+  const stopSpring = () => {
+    if (spring.current !== null) cancelAnimationFrame(spring.current);
+    spring.current = null;
+  };
+  /** The band goes to 0: the wheel springs to `turn`. */
+  const springBack = () => {
+    stopSpring();
+    const from = band.current;
+    if (!from || reducedMotion() || typeof requestAnimationFrame !== "function") {
+      band.current = 0;
+      return paint();
+    }
+    const duration = springDuration(from);
+    const t0 = performance.now();
+    const frame = (now: number) => {
+      const t = Math.min(1, (now - t0) / duration);
+      band.current = from * (1 - springEase(t));
+      paint();
+      spring.current = t < 1 ? requestAnimationFrame(frame) : null;
+    };
+    spring.current = requestAnimationFrame(frame);
+  };
 
   // The drag is followed on the window, not the handle: every move counts
   // wherever the pointer goes (off the handle, over the page), so the value
@@ -63,19 +138,31 @@ export function ScrubHandle({ onStart, onScrub }: ScrubHandleProps) {
     } catch {
       // Not an active pointer (e.g. a synthetic event): the window listeners suffice.
     }
+    // A spring still going: the drag picks the wheel up where it is.
+    stopSpring();
+    turn.current += band.current;
+    band.current = 0;
     const pointer = e.pointerId;
     const startY = e.clientY;
     const gesture = {};
     let steps = 0;
+    const from = turn.current;
+    // How far past a limit the drag is, in px (0: not at one).
+    let past = 0;
 
     const move = (m: PointerEvent) => {
       if (m.pointerId !== pointer) return;
       const dy = startY - m.clientY; // up is positive
-      setAngle(dy * DEG_PER_PX);
-      const next = Math.trunc(dy / PX_PER_STEP) * (m.shiftKey ? 10 : 1);
-      if (next === steps) return;
-      steps = next;
-      latest.current.onScrub(steps, gesture);
+      const scale = m.shiftKey ? 10 : 1;
+      const next = Math.trunc(dy / PX_PER_STEP) * scale;
+      if (next !== steps) {
+        steps = next;
+        const overflow = latest.current.onScrub(steps, gesture);
+        past = typeof overflow === "number" ? (overflow * PX_PER_STEP) / scale : 0;
+      }
+      // The drum follows the pointer, past a limit too: no resistance.
+      turn.current = from + dy * DEG_PER_PX;
+      paint();
     };
     const up = (u: PointerEvent) => {
       if (u.pointerId === pointer) stop.current?.();
@@ -88,8 +175,24 @@ export function ScrubHandle({ onStart, onScrub }: ScrubHandleProps) {
       window.removeEventListener("pointerup", up, true);
       window.removeEventListener("pointercancel", up, true);
       stop.current = null;
-      // Come to rest on a line, so lines land where they were designed.
-      setAngle((a) => Math.round(a / SPACING) * SPACING);
+      // Come to rest on a line, so lines land where they were designed. Let
+      // go past a limit, the drum springs back against the pull, by
+      // `recoil()`: to the line nearest that, if it's on the way back, else
+      // just there (a nudge: the nearest line could be the pull's way, or a
+      // whole line further). Otherwise it lands on the nearest line at once.
+      let rest = Math.round(turn.current / SPACING) * SPACING;
+      if (past) {
+        const shown = turn.current;
+        const target = shown - recoil(past);
+        rest = Math.round(target / SPACING) * SPACING;
+        if ((rest - shown) * Math.sign(target - shown) <= 0) rest = target;
+        band.current = shown - rest;
+        turn.current = rest;
+        springBack();
+      } else {
+        turn.current = rest;
+        paint();
+      }
     };
   };
 

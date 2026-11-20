@@ -120,8 +120,10 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
           onScrub={(steps, startText, gesture) => {
             const start = parseOpacity(startText) ?? opacity ?? 100;
             const next = Math.min(100, Math.max(0, start + steps));
-            if (next === start) return onRevert?.(property, gesture);
-            setOpacity(next, gesture);
+            if (next === start) onRevert?.(property, gesture);
+            else setOpacity(next, gesture);
+            // Past 0 or 100: the handle stretches by how far (ScrubHandle).
+            return start + steps - next;
           }}
           onSubmit={onReturnToSearch}
           onTab={(direction) => (direction > 0 ? tabOut(1) : focus(colorRef))}

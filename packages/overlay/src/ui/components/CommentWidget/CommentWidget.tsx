@@ -66,6 +66,13 @@ interface CommentWidgetProps {
   /** Who replies ("Claude Code · app"), for the agent's messages. */
   agentName?: string;
   /**
+   * Adjust what the agent did by hand: the latest reply, once a job's done,
+   * has a button that switches to Select, with the thread's elements
+   * selected, so the property dialog opens on them (its width chip and state
+   * pills reach what a comment can't).
+   */
+  onAdjust?(): void;
+  /**
    * Sends the comment: its words, the files attached, and the action picked
    * from the `/` menu (Make responsive); any of them may be missing, but
    * not all; and what it mentions with `@` (see mentionsIn: picked from
@@ -159,6 +166,7 @@ export function CommentWidget({
   agentName,
   onSend,
   onResolve,
+  onAdjust,
   onClose,
   autoFocus = true,
   agentOn = true,
@@ -661,6 +669,14 @@ export function CommentWidget({
                             {choice}
                           </button>
                         ))}
+                      </div>
+                    ) : null}
+                    {/* The latest reply to a job that may have changed something: adjust it by hand. Not on a question (its answers are there), a props list, or Pilot's "Stopped". */}
+                    {onAdjust && i === count - 1 && !m.choices?.length && !m.propList && !m.early && !m.stopped ? (
+                      <div class="choices">
+                        <button type="button" class="choice" data-secondary onMouseDown={(e) => e.preventDefault()} onClick={onAdjust}>
+                          Adjust
+                        </button>
                       </div>
                     ) : null}
                   </div>

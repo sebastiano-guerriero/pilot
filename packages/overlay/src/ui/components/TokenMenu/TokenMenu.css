@@ -44,6 +44,13 @@
     }
   }
 
+  /* The checkmark's column, when the field holds one of them: there on every row, so names line up (as in a select). */
+  .token-check {
+    flex: none;
+    display: flex;
+    width: 8px;
+  }
+
   .token-swatch {
     --_square: 2px; /* the checkerboard's (.color-preview): 5 × 5 */
 
@@ -67,6 +74,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--plt-color-contrast-low);
+    /* Digits of one width, so the values (right-aligned) line up in columns. */
+    font-variant-numeric: tabular-nums;
   }
 
   .token-none {

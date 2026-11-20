@@ -17,6 +17,7 @@ import type { PilotDevOptions } from "../mount.tsx";
 import { caretAt, editText } from "../select/inlineText.ts";
 import { useElementPicker } from "../select/useElementPicker.ts";
 import { useAltHeld } from "../select/useAltHeld.ts";
+import { clearsView } from "../editors/listOrder.ts";
 import { useElementRect } from "../select/useElementRect.ts";
 import { Measurements } from "./components/Measurements/Measurements.tsx";
 import { BoxAreas } from "./components/BoxAreas/BoxAreas.tsx";
@@ -206,6 +207,8 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // Areas of the selected element an editor wants shown (e.g. the padding
   // being hovered or dragged); while set, they replace the selection highlight.
   const [inspect, setInspect] = useState<BoxArea[] | null>(null);
+  // The dialog's editor whose change is being looked at (PropertyDialog's onEditing), for clearsView().
+  const [editingId, setEditingId] = useState<string | null>(null);
   useEffect(() => setInspect(null), [selected?.key]);
 
   const [, refresh] = useReducer((n: number) => n + 1, 0);
@@ -596,7 +599,12 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     selected ? history.changes({ unsent: true }).filter((c) => c.element === selected.element || others.includes(c.element)) : [],
   );
 
-  const hideSelection = !!inspect?.some(hidesSelection) || measuring;
+  // Changing how the element looks (an Appearance property: dragging its
+  // wheel, or a value changed a moment ago): every highlight goes, so the
+  // element shows clear (clearsView()). Measuring hides them too.
+  const clearView = !commenting && !!editingId && clearsView(editingId);
+  const bare = measuring || clearView;
+  const hideSelection = !!inspect?.some(hidesSelection) || bare;
   // Beside the latest one added, while it's still selected (taken out: back to the first).
   const placeBy = latest && others.includes(latest) ? latest : undefined;
 
@@ -723,6 +731,8 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
                   }
                 : undefined
             }
+            // Adjust by hand: Select keeps the selection (the thread's elements), so the dialog opens on them.
+            onAdjust={() => setTool("select")}
             onClose={dismiss}
             autoFocus={selected.from !== "dom"}
           />
@@ -752,7 +762,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
           {inspect && <BoxAreas element={selected.element} areas={inspect} />}
           {!hideSelection && <GridOverlay element={selected.element} part="numbers" orParent />}
           {/* The other selected elements: the selection's outline, and dots. */}
-          {!measuring &&
+          {!bare &&
             others.map((element) => <SelectedOutline key={elementKey(element)} element={element} working={workingOn(element)} />)}
           {/* Before the dialog (same layer: DOM order decides), so the dialog
               covers them when it's over the element's corner. */}
@@ -783,6 +793,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
             history={history}
             onClose={dismiss}
             onInspect={setInspect}
+            onEditing={setEditingId}
             widths={widths}
             onWidthsChange={setWidths}
             states={states}
@@ -800,10 +811,10 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
       {measuring && selected && selectedRect && measureTo && measureRect && (
         <Measurements {...measuredBoxes(selected.element, selectedRect, measureTo, measureRect)} />
       )}
-      {!measuring && domHover && domHoverRect && domHover !== selected?.element && (
+      {!bare && domHover && domHoverRect && domHover !== selected?.element && (
         <Highlight element={domHover} rect={domHoverRect} variant="hover" nameAttributes={nameAttributes} {...labelPlace(domHover, domHoverRect)} />
       )}
-      {!measuring && hovered && hoverRect && !domHover && (
+      {!bare && hovered && hoverRect && !domHover && (
         <>
           <Highlight element={hovered} rect={hoverRect} variant="hover" nameAttributes={nameAttributes} {...labelPlace(hovered, hoverRect)} />
           {/* A hovered grid shows its lines; numbers come with the selection. */}
@@ -814,7 +825,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
       {selected && selectedRect && !measuring && (commenting || !hideSelection) && (
         <Highlight element={selected.element} rect={selectedRect} variant="dots" label={false} />
       )}
-      {!measuring && others.map((element) => <SelectedDots key={elementKey(element)} element={element} />)}
+      {!bare && others.map((element) => <SelectedDots key={elementKey(element)} element={element} />)}
       {domOpen && (
         <DomTree
           selected={selected?.element ?? null}

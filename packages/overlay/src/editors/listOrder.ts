@@ -115,7 +115,7 @@ export const LIST_ORDER: ReadonlyArray<{ group: string; entries: readonly ListEn
   {
     // What's drawn of the element (mask, clip-path… will join it).
     group: "Visibility",
-    entries: ["visibility"],
+    entries: ["visibility", "mask-image", "mask-composite"],
   },
 ];
 
@@ -138,6 +138,23 @@ export function listedIds(): string[] {
 }
 
 const position = new Map(listedIds().map((id, i) => [id, i]));
+
+/**
+ * Groups whose properties are about how the element looks: while one of
+ * their editors is in use, the page hides every highlight on the selection
+ * (outline, dots, grid lines and numbers, the hover), so the element shows
+ * clear, as it will be. The owner's call, per group.
+ */
+const CLEAR_VIEW_GROUPS = new Set(["Appearance"]);
+/** Editors that do too, outside those groups: the mask's (in Visibility, which `visibility` itself shares). */
+const CLEAR_VIEW_EDITORS = new Set(["mask-image", "mask-composite"]);
+
+/** Whether using this editor hides the page's highlights (CLEAR_VIEW_GROUPS, CLEAR_VIEW_EDITORS). */
+export function clearsView(id: string): boolean {
+  if (CLEAR_VIEW_EDITORS.has(id)) return true;
+  const group = groupOf(id);
+  return !!group && CLEAR_VIEW_GROUPS.has(group);
+}
 
 /** The group an editor is listed in (`Layout`), its rows included; undefined when it has no place. */
 export function groupOf(id: string): string | undefined {

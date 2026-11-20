@@ -68,6 +68,8 @@ import {
   whiteSpaceEditor,
 } from "./typography/TypographyEditors.tsx";
 import { visibilityEditor } from "./visibility/VisibilityEditor.tsx";
+import { maskCompositeEditor } from "./mask/MaskCompositeEditor.tsx";
+import { maskImageEditor } from "./mask/MaskImageEditor.tsx";
 import { zIndexEditor } from "./z-index/ZIndexEditor.tsx";
 import { sizeEditor } from "./size/SizeEditor.tsx";
 import { normalizeQuery } from "./query.ts";
@@ -128,6 +130,8 @@ export const editors: PropertyEditor[] = [
   mixBlendModeEditor,
   backgroundBlendModeEditor,
   visibilityEditor,
+  maskImageEditor,
+  maskCompositeEditor,
   fontFamilyEditor,
   fontSizeEditor,
   fontStyleEditor,

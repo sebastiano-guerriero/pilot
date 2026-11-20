@@ -289,6 +289,63 @@ describe("PropertyInputText's variables", () => {
     expect(container.querySelector(".token-menu")).toBeNull();
   });
 
+  const active = () => container.querySelector(".token-option[data-active] .token-name")?.textContent ?? null;
+  const checked = () => container.querySelector(".token-option[data-current] .token-name")?.textContent ?? null;
+  const openList = () => act(() => (container.querySelector(".token-button") as HTMLButtonElement).click());
+
+  it("the button on a field holding a variable opens on it, checked, as a select; Enter keeps it", () => {
+    act(() =>
+      render(
+        h(PropertyInputText, { value: "--space-4", label: "padding-top", tokens: { kinds: ["length"], property: "padding-top" }, onCommit: (t: string) => committed.push(t) }),
+        container,
+      ),
+    );
+    openList();
+    expect(checked()).toBe("--space-4");
+    expect(active()).toBe("--space-4");
+    expect(container.querySelectorAll(".token-check").length).toBe(2); // a column on every row
+    press("ArrowUp");
+    expect(active()).toBe("--space-2");
+    press("ArrowDown");
+    press("Enter");
+    expect(container.querySelector(".token-menu")).toBeNull();
+    expect(input().value).toBe("--space-4"); // kept as it is
+  });
+
+  it("on any other value, nothing is highlighted (no checkmarks); ↓ starts at the top, ↑ at the bottom", () => {
+    openList(); // the field holds 16px
+    expect(active()).toBeNull();
+    expect(checked()).toBeNull();
+    expect(container.querySelector(".token-check")).toBeNull();
+    press("ArrowUp");
+    expect(active()).toBe("--space-4");
+    press("ArrowDown");
+    expect(active()).toBe("--space-2");
+  });
+
+  it("typing: a bare `--` highlights nothing, a name its first match", () => {
+    act(() => input().focus());
+    typeIn("--");
+    expect(active()).toBeNull();
+    typeIn("--space");
+    expect(active()).toBe("--space-2");
+  });
+
+  it("in math, the variable at the caret is the current one, and a pick replaces just it", () => {
+    act(() =>
+      render(
+        h(PropertyInputText, { value: "calc(var(--space-2) * 2)", label: "padding-top", tokens: { kinds: ["length"], property: "padding-top" }, onCommit: () => {} }),
+        container,
+      ),
+    );
+    act(() => input().focus());
+    act(() => input().setSelectionRange(12, 12)); // inside var(--space-2)
+    openList();
+    expect(checked()).toBe("--space-2");
+    act(() => (container.querySelectorAll(".token-option")[1] as HTMLElement).click());
+    expect(input().value).toBe("calc(var(--space-4) * 2)");
+  });
+
   it("Esc closes only the list; the button opens it, and a pick takes the whole value when the field wasn't being edited", () => {
     act(() => input().focus());
     typeIn("--");

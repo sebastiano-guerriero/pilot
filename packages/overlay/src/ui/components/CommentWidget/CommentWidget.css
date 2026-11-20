@@ -238,7 +238,8 @@
     line-height: 20px;
     cursor: pointer;
 
-    &:first-child {
+    /* The first answer is the agent's suggestion; a lone secondary button (Adjust) keeps the others' look. */
+    &:first-child:not([data-secondary]) {
       background: var(--plt-color-contrast-high);
       color: var(--plt-color-background);
     }

@@ -14,6 +14,9 @@ import { type FocusRequest, type PropertyEditor, propertiesOf } from "../../../e
 import { px } from "../../px.ts";
 import { Icon } from "../Icon/Icon.tsx";
 import { ScrollThumb } from "../ScrollThumb/ScrollThumb.tsx";
+import { ContextMenu } from "../ContextMenu/ContextMenu.tsx";
+import { copiedProperties, copyProperties, cssText, rowEntries } from "../../propertyClipboard.ts";
+import { copyText } from "../../../edits/changeSet.ts";
 import { PropertySearch } from "../PropertySearch/PropertySearch.tsx";
 
 interface PropertyDialogProps {
@@ -63,6 +66,12 @@ interface PropertyDialogProps {
   /** The editor wants areas of the element shown on the page (null: back to the highlight). */
   onInspect?(areas: BoxArea[] | null): void;
   /**
+   * The editor whose change is being looked at (by id): its drag handle is
+   * being dragged, or it changed the value in the last CHANGE_SHOWN_MS (↑/↓,
+   * the wheel, Enter, a pick). null when none is. The focus alone isn't it.
+   */
+  onEditing?(id: string | null): void;
+  /**
    * The width chip: the viewport widths changes are for (null: every width).
    * App keeps it across selections, until it's removed.
    */
@@ -98,6 +107,8 @@ export interface WidthPick {
 }
 
 const GAP = 8;
+/** How long a change (↑/↓, Enter, a pick) is looked at with the page's highlights hidden, when its editor clears the view (clearsView()), in ms. */
+export const CHANGE_SHOWN_MS = 1000;
 
 /**
  * The dialog next to the selected element. It starts with only the search
@@ -123,6 +134,7 @@ export function PropertyDialog({
   history: sharedHistory,
   onClose,
   onInspect,
+  onEditing,
   widths = null,
   onWidthsChange,
   states = NO_STATES,
@@ -212,11 +224,80 @@ export function PropertyDialog({
   useLayoutEffect(() => {
     onInspect?.(inspected.length ? inspected : null);
   }, [inspectKey]);
+  // The editor whose change is being looked at: what's being dragged (its
+  // drag handle), else what just changed a value, for a moment.
+  const [draggedEditor, setDraggedEditor] = useState<string | null>(null);
+  const [changedEditor, setChangedEditor] = useState<string | null>(null);
+  const scrubbing = useRef(false);
+  const changeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const editing = draggedEditor ?? changedEditor;
+  useEffect(() => onEditing?.(editing), [editing]);
+  useEffect(
+    () => () => {
+      clearTimeout(changeTimer.current);
+      onEditing?.(null);
+    },
+    [],
+  );
+  const changedBy = (id: string) => {
+    // A drag's changes are looked at for as long as it lasts (onPointerDown).
+    if (scrubbing.current) return;
+    clearTimeout(changeTimer.current);
+    setChangedEditor(id);
+    changeTimer.current = setTimeout(() => setChangedEditor(null), CHANGE_SHOWN_MS);
+  };
+  const onPointerDown = (e: PointerEvent) => {
+    const target = e.target instanceof Element ? e.target : null;
+    const id = target?.closest(".scrub-handle") ? (target.closest<HTMLElement>(".editor[data-editor]")?.dataset.editor ?? null) : null;
+    if (!id || e.button !== 0) return;
+    scrubbing.current = true;
+    clearTimeout(changeTimer.current);
+    setChangedEditor(null);
+    setDraggedEditor(id);
+    const done = () => {
+      scrubbing.current = false;
+      setDraggedEditor(null);
+      window.removeEventListener("pointerup", done, true);
+      window.removeEventListener("pointercancel", done, true);
+    };
+    window.addEventListener("pointerup", done, true);
+    window.addEventListener("pointercancel", done, true);
+  };
+
+  // A right-click on a property's name: Copy CSS, Copy properties, Paste
+  // properties, for that row's properties (its editor's, the ones it reads
+  // with them: line-clamp's companions, mask-image's composite).
+  const [rowMenu, setRowMenu] = useState<{ x: number; y: number; editor: PropertyEditor } | null>(null);
+  const [, repaint] = useReducer((n: number) => n + 1, 0);
+  const onContextMenu = (e: MouseEvent) => {
+    const label = (e.composedPath()[0] as Element | null)?.closest?.(".property-label");
+    // A panel's rows (a mask's type, from…) aren't properties.
+    if (!label || label.closest(".property-panel")) return;
+    const id = label.closest<HTMLElement>("[data-row]")?.dataset.row ?? label.closest<HTMLElement>(".editor[data-editor]")?.dataset.editor;
+    const editor = id ? findEditor(editors, id) : undefined;
+    if (!editor) return;
+    e.preventDefault();
+    setRowMenu({ x: e.clientX, y: e.clientY, editor });
+  };
+  const rowValues = (editor: PropertyEditor) => {
+    const properties = [...editor.properties, ...(editor.reads ?? [])];
+    return rowEntries(properties, fieldValues(element, properties, history, states));
+  };
+  const paste = () => {
+    const entries = copiedProperties();
+    if (!entries) return;
+    // On every selected element, as one undo step, for the width chip and the state pills.
+    const gesture = {};
+    for (const el of [element, ...others]) for (const [p, v] of entries) history.apply(el, p, v, gesture, { widths: widths ?? undefined, states });
+    repaint(0);
+  };
+
   const onFocusIn = (e: FocusEvent) => {
     const target = e.target as Element | null;
     if (target === searchRef.current) setFocusArea("search");
     else if (target?.closest(".editor")) setFocusArea("editor");
   };
+
 
   const returnToSearch = () => {
     searchRef.current?.focus();
@@ -329,6 +410,8 @@ export function PropertyDialog({
       data-veiled={veiled || undefined}
       onKeyDown={onKeyDown}
       onFocusIn={onFocusIn}
+      onPointerDown={onPointerDown}
+      onContextMenu={onContextMenu}
     >
       {/* The drag strip: 12px along the top edge, over the search (it adds no
           height), with the grip as the visual clue. */}
@@ -388,6 +471,7 @@ export function PropertyDialog({
                         onTabOut={(direction) => tabOut(index, direction)}
                         onHint={setEditorHint}
                         onInspect={inspectFor(match.id)}
+                        onChanged={() => changedBy(match.id)}
                       />
                     </div>
                   </Fragment>
@@ -410,6 +494,21 @@ export function PropertyDialog({
             No property matches “{query.trim()}”
           </p>
         </div>
+      )}
+      {rowMenu && (
+        <ContextMenu
+          x={rowMenu.x}
+          y={rowMenu.y}
+          onClose={() => setRowMenu(null)}
+          items={(() => {
+            const entries = rowValues(rowMenu.editor);
+            return [
+              { label: "Copy CSS", disabled: !entries.length, onSelect: () => void copyText(cssText(entries)) },
+              { label: "Copy properties", disabled: !entries.length, onSelect: () => copyProperties(entries) },
+              { label: "Paste properties", disabled: !copiedProperties(), onSelect: paste },
+            ];
+          })()}
+        />
       )}
     </div>
   );
@@ -523,6 +622,16 @@ function editorsWithValues(element: EditableElement, editors: PropertyEditor[], 
  * else "". A removed property shows nothing: the element doesn't set it (the
  * page shows what applies without it). See clearProperty.
  */
+/** The editor with `id`, among `list` or the rows they reveal (display's gap). */
+function findEditor(list: readonly PropertyEditor[], id: string): PropertyEditor | undefined {
+  for (const editor of list) {
+    if (editor.id === id) return editor;
+    const inner = editor.embeds && findEditor(editor.embeds, id);
+    if (inner) return inner;
+  }
+  return undefined;
+}
+
 function fieldValues(
   element: EditableElement,
   properties: string[],
@@ -578,6 +687,7 @@ function MatchedEditor({
   onTabOut,
   onHint,
   onInspect,
+  onChanged,
 }: {
   editor: PropertyEditor;
   element: EditableElement;
@@ -591,6 +701,8 @@ function MatchedEditor({
   onTabOut(direction: 1 | -1): void;
   onHint(hint: ComponentChildren | null): void;
   onInspect?(areas: BoxArea[] | null): void;
+  /** The editor changed a value (or took one back). */
+  onChanged?(): void;
 }) {
   const [, rerender] = useReducer((n: number) => n + 1, 0);
   const computed = getComputedStyle(element);
@@ -621,10 +733,12 @@ function MatchedEditor({
           if (value === "") clearProperty(history, el, property, gesture, widths, states);
           else history.apply(el, property, value, gesture, { widths, states });
         }
+        onChanged?.();
         rerender(0);
       }}
       onRevert={(property, gesture) => {
         for (const el of all) history.revert(el, property, gesture);
+        onChanged?.();
         rerender(0);
       }}
       query={query}

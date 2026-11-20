@@ -184,8 +184,10 @@ export function SplitEditor({
 
   const scrub = useScrub({ onChange, onRevert });
   // ↑/↓ and drags on an empty field start from the part's computed value.
+  // Read when the step or drag starts, not at the last render: a value just
+  // applied (a variable picked, then dragged) must count.
   const baseOf = (part: SplitPart) => () => {
-    const computed = values[part.property];
+    const computed = getComputedStyle(element).getPropertyValue(part.property) || values[part.property];
     return computed && Number.isFinite(Number.parseFloat(computed)) ? computed : "0px";
   };
 

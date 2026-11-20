@@ -85,10 +85,13 @@ export function LengthEditor({
   // ↑/↓ on an empty field or a keyword start from a px value: the property's
   // computed value; when that isn't a length, the element's computed width or
   // height for those families (max-width: none), or 0 (gap: normal).
+  // Read when the step or drag starts, not at the last render: a value just
+  // applied (a variable picked, then dragged) must count.
   const stepBase = () => {
-    if (computed && Number.isFinite(Number.parseFloat(computed))) return computed;
+    const now = getComputedStyle(element).getPropertyValue(property) || computed;
+    if (now && Number.isFinite(Number.parseFloat(now))) return now;
     // line-height: normal steps from 1.2, unitless (css/values.ts), not 0px.
-    if (cssProperty(property).kind === "line-height") return computed ?? "normal";
+    if (cssProperty(property).kind === "line-height") return now ?? "normal";
     const size = /^(?:min-|max-)?(width|height)$/.exec(property)?.[1];
     return size ? getComputedStyle(element).getPropertyValue(size) : "0px";
   };

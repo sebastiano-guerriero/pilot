@@ -155,6 +155,9 @@ export const FONT_WEIGHTS = ["100", "200", "300", "400", "500", "600", "700", "8
 /** text-align's options, in menu order (each has an icon). */
 export const TEXT_ALIGN_VALUES = ["left", "center", "right", "justify"] as const;
 
+/** mask-composite's options, in menu order: CSS's default first. */
+export const MASK_COMPOSITE_VALUES = ["add", "subtract", "intersect", "exclude"] as const;
+
 /** visibility's options, in menu order. */
 export const VISIBILITY_VALUES = ["visible", "hidden", "collapse"] as const;
 
@@ -360,6 +363,8 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   position: { initial: "static", keywords: [...POSITION_VALUES], negative: false },
   "z-index": { initial: "auto", keywords: ["auto"], negative: true, kind: "integer" },
   visibility: { initial: "visible", keywords: [...VISIBILITY_VALUES], negative: false },
+  "mask-image": { initial: "none", keywords: ["none"], negative: false },
+  "mask-composite": { initial: "add", keywords: [...MASK_COMPOSITE_VALUES], negative: false },
   "border-radius": { initial: "0", keywords: [], negative: false, named: { full: "calc(infinity * 1px)" } },
   opacity: { initial: "1", keywords: [], negative: false, kind: "percent" },
   "font-family": { initial: "", keywords: [], negative: false, kind: "font-family" },

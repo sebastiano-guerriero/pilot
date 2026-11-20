@@ -11,5 +11,6 @@ export const marginEditor = sidesEditor({
   title: "margin",
   shorthand: "margin",
   box: "margin",
+  icons: "margin",
   aliases: { all: "m", top: "mt", right: "mr", bottom: "mb", left: "ml", x: "mx", y: "my", start: "ms", end: "me" },
 });

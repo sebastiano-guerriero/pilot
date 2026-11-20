@@ -60,6 +60,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [x] Variables in the property fields: the page's tokens that fit, by `--` at the caret or the variable button ([property-dialog.md](property-dialog.md), *Variables*)
 - [x] Design tokens: a token-bound field steps along its scale (↑/↓, the wheel), else from the computed value; the list and the button approved
 - [x] The wheel steps a field being edited, like ↑/↓
+- [x] A property's menu (right-click its name): Copy CSS, Copy properties, Paste properties, for that row ([property-dialog.md](property-dialog.md), *Copy and paste*)
 - [ ] Design tokens: a plain number stepping to the scale's values, scrubbing along it ([design-tokens.md](design-tokens.md))
 
 ### Property editors
@@ -74,7 +75,9 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [x] Visibility: visibility
 - [ ] Border: a new component is being designed
 - [ ] Inset areas on the page (none designed)
-- [ ] Mask, clip-path and other properties about what's drawn
+- [x] mask-composite
+- [x] mask-image: chips and + in the row, a panel per mask (PropertyPanel), linear (sides, corners, axes, angle) and radial (nine positions) fades, custom and none; mask-composite: intersect with them
+- [ ] Clip-path and other properties about what's drawn
 
 ## Handoff
 

@@ -336,6 +336,23 @@ describe("drag to scrub", () => {
     expect(changes.map(([, v]) => v)).toEqual(["48%", "70%"]);
   });
 
+  it("a variable picked but not applied yet: the drag applies it, and goes from its value", () => {
+    element.style.setProperty("--a", "10px");
+    element.style.setProperty("--b", "30px");
+    element.style.width = "var(--a)";
+    mountScrub();
+    // The field holds --b, not applied yet (as after a pick from the variables).
+    act(() => input().focus());
+    act(() => {
+      input().value = "--b";
+      input().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    down(100);
+    move(98);
+    expect(changes.at(0)).toEqual(["width", "var(--b)"]);
+    expect(changes.at(-1)).toEqual(["width", "32px"]);
+  });
+
   it("back where it started: the earlier value is restored exactly", () => {
     element.style.width = "100px";
     mountScrub();

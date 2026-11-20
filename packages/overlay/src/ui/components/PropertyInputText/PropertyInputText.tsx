@@ -6,7 +6,7 @@ import { Icon } from "../Icon/Icon.tsx";
 import { ScrubHandle } from "../ScrubHandle/ScrubHandle.tsx";
 import { TokenMenu } from "../TokenMenu/TokenMenu.tsx";
 import { Tooltip } from "../Tooltip/Tooltip.tsx";
-import { insertToken, matchTokens, tokenAt } from "../TokenMenu/tokens.ts";
+import { currentToken, insertToken, matchTokens, tokenAt } from "../TokenMenu/tokens.ts";
 
 /**
  * What's in a field being edited, for linked fields to mirror (padding's
@@ -52,8 +52,10 @@ interface PropertyInputTextProps {
    * up or down changes the value. Called on every change of the drag with
    * the total `steps` from the start (Shift: ×10), the field's text when the
    * drag started, and one `gesture` object for the whole drag (one undo step).
+   * Returns how many steps the drag is past a limit the value stops at (see
+   * ScrubHandle's onScrub), so the handle stretches.
    */
-  onScrub?(steps: number, startText: string, gesture: object): void;
+  onScrub?(steps: number, startText: string, gesture: object): number | void;
   /**
    * Dimmed text shown while the field is empty, for a field that stands for
    * several values that differ ("Mixed"). Boxed fields have none otherwise:
@@ -170,6 +172,10 @@ export function PropertyInputText({
   const result = draft === null ? mathResult(value, computed) : null;
   const tip = draft !== null ? "" : cut && value ? (result ? `${value} = ${result}` : value) : result ? `= ${result}` : "";
 
+  // Also before a step or a drag: what the field shows (a variable just
+  // picked, a value typed) is applied first, so the step goes from it, the
+  // page's value of it included (a drag turns a variable into its number),
+  // never from what was applied before.
   const commit = () => {
     if (draft !== null && draft !== value) onCommit(draft);
   };
@@ -221,9 +227,13 @@ export function PropertyInputText({
 
   // The field's variables (TokenMenu): open for a `--name` typed at the caret
   // (`at` follows it as you type), or from the button (`at`: the selection
-  // then). The page's tokens are read when it opens.
-  const [menu, setMenu] = useState<{ start: number; end: number; query: string; typed: boolean } | null>(null);
-  const [active, setActive] = useState(0);
+  // then, or the variable the field holds: `current`). The page's tokens are
+  // read when it opens. The highlighted row (`active`) is -1 for none: the
+  // list opens on the field's variable, as a select on its value, and on
+  // nothing for any other value (a number isn't one of them); typing a name
+  // highlights its first match.
+  const [menu, setMenu] = useState<{ start: number; end: number; query: string; typed: boolean; current?: string } | null>(null);
+  const [active, setActive] = useState(-1);
   const pool = useRef<Token[] | null>(null);
   if (!menu) pool.current = null;
   else pool.current ??= allTokens();
@@ -234,7 +244,8 @@ export function PropertyInputText({
     if (!el || !tokens?.kinds.length) return;
     const at = tokenAt(el.value, el.selectionStart ?? el.value.length);
     if (at) {
-      if (!(menu?.typed && menu.start === at.start)) setActive(0); // a new `--`: from the top
+      // A new `--`, or the name typed changed: its first match, or none for a bare `--`.
+      if (!(menu?.typed && menu.start === at.start && menu.query === at.query)) setActive(at.query ? 0 : -1);
       setMenu({ ...at, typed: true });
     } else if (menu?.typed) setMenu(null);
   };
@@ -242,12 +253,19 @@ export function PropertyInputText({
     const el = ref.current;
     if (!el) return;
     if (!editing.current) el.focus(); // focusing selects it all: the token takes the whole value
-    setActive(0);
-    setMenu({ start: el.selectionStart ?? 0, end: el.selectionEnd ?? el.value.length, query: "", typed: false });
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? el.value.length;
+    const current = tokens ? currentToken(el.value, start, end) : null;
+    pool.current = allTokens();
+    const list = tokens ? matchTokens(pool.current, tokens.kinds, "", tokens.property) : [];
+    setActive(current ? list.findIndex((t) => t.name === current.name) : -1);
+    setMenu(current ? { start: current.start, end: current.end, query: "", typed: false, current: current.name } : { start, end, query: "", typed: false });
   };
   const pickToken = (token: Token) => {
     const el = ref.current;
     if (!el || !menu) return;
+    // The one it holds: kept as it is.
+    if (token.name === menu.current) return setMenu(null);
     const next = insertToken(el.value, menu, token.name);
     el.value = next.text;
     el.setSelectionRange(next.caret, next.caret);
@@ -281,6 +299,7 @@ export function PropertyInputText({
       burst.distance += px;
       if (!fresh && Math.abs(burst.distance) < WHEEL_STEP) return;
       burst.distance = 0;
+      commit();
       onStep((e.shiftKey ? 10 : 1) * (px < 0 ? 1 : -1), el.value, burst.gesture);
     };
     el.addEventListener("wheel", onWheel, { passive: false });
@@ -292,7 +311,9 @@ export function PropertyInputText({
     if (menu) {
       if ((e.key === "ArrowDown" || e.key === "ArrowUp") && offered.length) {
         e.preventDefault();
-        setActive((i) => (i + (e.key === "ArrowDown" ? 1 : -1) + offered.length) % offered.length);
+        const down = e.key === "ArrowDown";
+        // From none: ↓ starts at the top, ↑ at the bottom.
+        setActive((i) => (i < 0 ? (down ? 0 : offered.length - 1) : (i + (down ? 1 : -1) + offered.length) % offered.length));
         return;
       }
       if ((e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) && offered[active]) {
@@ -318,6 +339,7 @@ export function PropertyInputText({
       onTab(e.shiftKey ? -1 : 1); // focus moves; the value commits on blur
     } else if ((e.key === "ArrowUp" || e.key === "ArrowDown") && onStep) {
       e.preventDefault();
+      commit();
       onStep((e.shiftKey ? 10 : 1) * (e.key === "ArrowUp" ? 1 : -1), shown);
     } else if (e.key === "Escape") {
       setDraft(value); // discard; the dialog then returns to the search
@@ -396,6 +418,7 @@ export function PropertyInputText({
       {onScrub && (
         <ScrubHandle
           onStart={() => {
+            commit();
             scrubStart.current = ref.current?.value ?? value;
             return true;
           }}
@@ -420,6 +443,7 @@ export function PropertyInputText({
           tokens={offered}
           any={anyFit}
           active={active}
+          current={menu.current}
           anchor={ref.current.getBoundingClientRect()}
           onActive={setActive}
           onPick={pickToken}

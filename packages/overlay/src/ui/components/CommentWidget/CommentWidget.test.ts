@@ -352,3 +352,44 @@ describe("CommentWidget's @ mentions", () => {
     expect(projectComponents).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("CommentWidget's Adjust", () => {
+  const target = { selector: "button", path: "button", tag: "button", classes: [] };
+  const drawMessages = (messages: object[], onAdjust = vi.fn()) => {
+    act(() =>
+      render(
+        h(CommentWidget, {
+          element,
+          anchor: new DOMRect(0, 0, 100, 40),
+          thread: { id: "t", target, messages } as never,
+          onSend: () => "sent" as const,
+          onClose: () => {},
+          agentOn: true,
+          onAdjust,
+        }),
+        container,
+      ),
+    );
+    return onAdjust;
+  };
+  const adjust = () => [...container.querySelectorAll(".choice")].find((b) => b.textContent === "Adjust") as HTMLButtonElement | undefined;
+  const asked = { from: "designer", text: "Make the text bigger", at: "1" };
+
+  it("on the latest reply to a job: a secondary button that adjusts it by hand", () => {
+    const onAdjust = drawMessages([asked, { from: "agent", text: "Done.", at: "2" }]);
+    expect(adjust()?.hasAttribute("data-secondary")).toBe(true);
+    act(() => adjust()?.click());
+    expect(onAdjust).toHaveBeenCalledTimes(1);
+  });
+
+  it("only the latest, and not on a question, a props list or a stopped job", () => {
+    drawMessages([asked, { from: "agent", text: "Done.", at: "2" }, { from: "designer", text: "And the title?", at: "3" }]);
+    expect(adjust()).toBeUndefined();
+    drawMessages([asked, { from: "agent", text: "Every card?", at: "2", choices: ["All of them", "Only this"] }]);
+    expect(adjust()).toBeUndefined();
+    drawMessages([asked, { from: "agent", text: "1 prop.", at: "2", propList: [{ name: "tone", type: "options", options: ["a"] }] }]);
+    expect(adjust()).toBeUndefined();
+    drawMessages([asked, { from: "agent", text: "Stopped.", at: "2", stopped: true }]);
+    expect(adjust()).toBeUndefined();
+  });
+});

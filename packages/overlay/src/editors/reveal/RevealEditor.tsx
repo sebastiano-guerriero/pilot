@@ -82,13 +82,11 @@ export function RevealEditor({ config, ...props }: PropertyEditorProps & { confi
         onChange={(next) => onChange(config.property, next)}
         onTab={(direction) => tab(0, direction)}
       />
+      {/* Each row says whose it is (a right-click on its name copies its properties, not display's). */}
       {rows.map((editor, i) => (
-        <editor.component
-          key={editor.id}
-          {...props}
-          focusRequest={requestFor(i + 1)}
-          onTabOut={(direction) => tab(i + 1, direction)}
-        />
+        <div key={editor.id} data-row={editor.id} style={{ display: "contents" }}>
+          <editor.component {...props} focusRequest={requestFor(i + 1)} onTabOut={(direction) => tab(i + 1, direction)} />
+        </div>
       ))}
     </div>
   );

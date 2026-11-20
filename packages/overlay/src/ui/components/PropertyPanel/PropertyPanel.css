@@ -1,0 +1,92 @@
+/* A panel beside the property dialog, for a property too rich for one row
+   (PropertyPanel.tsx): the dialog's look (PropertyDialog.css), a header
+   like the DOM tree's (DomTree.css), its rows spaced as the dialog's. Its
+   spot is set inline. Its rows own their styles (the boundary). */
+@scope (.property-panel) to (.panel-rows > *) {
+  :scope {
+    position: fixed;
+    z-index: var(--plt-z-ui);
+    width: 260px;
+    max-height: calc(100vh - 16px);
+    display: flex;
+    flex-direction: column;
+    border-radius: 12px;
+    background: var(--plt-color-background);
+    box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.15), var(--plt-shadow-lg);
+    overflow: hidden;
+    outline: none;
+  }
+
+  /* The drag strip, as the dialog's: 12px along the top edge, the grip centered. */
+  .drag-handle {
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 12px;
+    padding-top: 3px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    color: var(--plt-color-contrast-low);
+    cursor: grab;
+    touch-action: none;
+
+    & .icon {
+      pointer-events: none;
+    }
+
+    &:hover {
+      color: var(--plt-color-contrast-high);
+    }
+  }
+
+  :scope[data-dragging],
+  :scope[data-dragging] .drag-handle {
+    cursor: grabbing;
+    user-select: none;
+  }
+
+  .panel-header {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 40px;
+    padding-inline: 16px 10px;
+    border-bottom: 1px solid var(--plt-color-border);
+    user-select: none;
+  }
+
+  /* Above the drag strip, which its top meets. */
+  .panel-close {
+    all: unset;
+    position: relative;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    color: var(--plt-color-contrast-low);
+    cursor: pointer;
+
+    &:hover {
+      color: var(--plt-color-contrast-high);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--plt-color-accent);
+    }
+  }
+
+  .panel-rows {
+    min-height: 0;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+}
