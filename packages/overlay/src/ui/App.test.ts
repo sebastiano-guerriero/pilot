@@ -88,3 +88,33 @@ describe("App: the search carries over between selections", () => {
     expect(search().value).toBe("");
   });
 });
+
+describe("App: tool shortcuts", () => {
+  const altKey = (target: EventTarget, code: string) => {
+    const e = new KeyboardEvent("keydown", { key: code === "KeyV" ? "√" : "ç", code, altKey: true, bubbles: true, cancelable: true, composed: true });
+    act(() => {
+      target.dispatchEvent(e);
+    });
+    return e;
+  };
+
+  it("Option+V in the comment box switches to Select, typing nothing", () => {
+    act(() => (host.querySelector('[aria-label="Comment"]') as HTMLButtonElement).click());
+    act(() => page.click());
+    const box = host.querySelector("textarea") as HTMLTextAreaElement;
+    expect(box).not.toBeNull();
+    const e = altKey(box, "KeyV");
+    expect(e.defaultPrevented).toBe(true);
+    expect(selecting()).toBe(true);
+  });
+
+  it("not in the page's own fields", () => {
+    const field = document.createElement("textarea");
+    document.body.append(field);
+    field.focus();
+    const e = altKey(field, "KeyV");
+    expect(e.defaultPrevented).toBe(false);
+    expect(selecting()).toBe(false);
+    field.remove();
+  });
+});

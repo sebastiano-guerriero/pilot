@@ -2,6 +2,7 @@
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { keyLabel } from "../../keys.ts";
 import { Toolbar } from "./Toolbar.tsx";
 
 let container: HTMLElement;
@@ -65,10 +66,21 @@ describe("Toolbar", () => {
     draw({ tool: "comment" });
     const comment = container.querySelector('[aria-keyshortcuts="Alt+C"]') as HTMLButtonElement;
     expect(comment.querySelector(".pill")).toBeNull();
-    expect(tip(comment)?.textContent).toBe("Comment");
+    expect(tip(comment)?.firstChild?.textContent).toBe("Comment");
     draw({ tool: "comment", attention: 2 } as Partial<typeof props>);
     expect(comment.querySelector(".pill")?.textContent).toBe("2");
-    expect(tip(comment)?.textContent).toBe("2 comments to review");
+    expect(tip(comment)?.firstChild?.textContent).toBe("2 comments to review");
+  });
+
+  it("the tools' tooltips show their shortcuts; with an alert, Comment's doesn't", () => {
+    draw();
+    const comment = container.querySelector('[aria-keyshortcuts="Alt+C"]');
+    const select = container.querySelector('[aria-keyshortcuts="Alt+V"]');
+    expect(tip(comment)?.querySelector(".shortcut")?.textContent).toBe(keyLabel("alt+c"));
+    expect(tip(select)?.querySelector(".shortcut")?.textContent).toBe(keyLabel("alt+v"));
+    expect(tip(send())?.querySelector(".shortcut")).toBeNull();
+    draw({ alerts: { comment: { title: "No agent", detail: "Run /pilot" } } } as Partial<typeof props>);
+    expect(tip(comment)?.querySelector(".shortcut")).toBeNull();
   });
 
   it("jobs in progress: the jobs button, with their number, after Send; it leaves once they're done", () => {

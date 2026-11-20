@@ -103,6 +103,8 @@ export function parseValue(property: string, typed: string): string | null {
   let t = lowerExceptNames(text.trim().replace(/\s+/g, " "));
   if (!t) return null;
   const info = cssProperty(property);
+  const named = info.named?.[t];
+  if (named) return supported(property, named);
   if (info.kind === "font-family") return supported(property, parseFontFamily(text, t));
   if (info.kind === "marker") return supported(property, parseMarker(text, t));
   t = unwrapCalc(t) ?? t; // typed calc(): we add it back where needed
@@ -285,6 +287,8 @@ export function stepValue(property: string, text: string, delta: number, compute
   // read `50` as a CSS fraction.
   const t = info.kind === "percent" ? text.trim().toLowerCase() : displayValue(text.trim().toLowerCase(), property);
   if (info.kind === "font-family") return null; // names: nothing to step
+  // Infinite (`full`, calc(infinity * 1px)): no number to step from, its computed one is huge.
+  if (/\binfinity\b/.test(t)) return null;
   // Whole steps for the other kinds, except line-height, whose lengths drag
   // finely like any length (0.1em).
   if (info.kind && info.kind !== "length") {
@@ -410,7 +414,8 @@ function unwrapCalc(value: string): string | null {
  */
 export function mathResult(text: string, computed: string | undefined): string | null {
   const t = text.trim();
-  if (!computed || !(/\b(calc|min|max|clamp)\(/i.test(t) || isMath(t))) return null;
+  // Infinite: its computed value (1.67772e+07px) says nothing the text doesn't.
+  if (!computed || /\binfinity\b/i.test(t) || !(/\b(calc|min|max|clamp)\(/i.test(t) || isMath(t))) return null;
   const shown = computed.trim().replace(/-?\d*\.\d+/g, (n) => String(Math.round(Number(n) * 100) / 100));
   return shown && shown !== t ? shown : null;
 }

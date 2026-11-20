@@ -57,6 +57,12 @@
       }
     }
 
+    /* The trigger's shortcut, after what it does: dimmed, like a detail. */
+    & .shortcut {
+      margin-left: 6px;
+      color: var(--plt-color-contrast-low);
+    }
+
     &[data-side="bottom"] {
       bottom: auto;
       top: 100%;

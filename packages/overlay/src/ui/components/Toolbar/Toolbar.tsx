@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { keyLabel } from "../../keys.ts";
 import { px } from "../../px.ts";
 import { clampSpot, type ToolbarSpot } from "../../toolbarSpot.ts";
 import { Icon } from "../Icon/Icon.tsx";
@@ -175,6 +176,7 @@ export function Toolbar({
       <Tooltip
         text={alerts.comment?.title ?? (attention ? `${attention} ${attention === 1 ? "comment" : "comments"} to review` : "Comment")}
         detail={alerts.comment?.detail}
+        shortcut={keyLabel("alt+c")}
         gap={TIP_GAP}
       >
         <button
@@ -204,7 +206,7 @@ export function Toolbar({
         </button>
       </Tooltip>
       <span class="divider" aria-hidden="true" />
-      <Tooltip text="Select element" gap={TIP_GAP}>
+      <Tooltip text="Select element" shortcut={keyLabel("alt+v")} gap={TIP_GAP}>
         <button
           type="button"
           class="button"

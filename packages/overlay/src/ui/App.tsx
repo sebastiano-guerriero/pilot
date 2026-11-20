@@ -185,14 +185,15 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
 
   // Option+C and Option+V turn on Comment and Select (or off, when on), as
   // their toolbar buttons do; the selection stays. Alt with a key, like
-  // Option+P and Alt+D, so plain keys stay the page's. Not while typing
-  // (a comment, or the page's own fields).
+  // Option+P and Alt+D, so plain keys stay the page's. In Pilot's own fields
+  // too, the comment box included: a tool's field always has the focus, so
+  // the shortcut wins over the character it would type there (ç, √); not in
+  // the page's own fields.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return;
       const next = toolShortcut(e.code);
       if (!next) return;
-      if (e.composedPath()[0] instanceof HTMLTextAreaElement) return;
       if (!e.composedPath().includes(host) && isTextField(document.activeElement)) return;
       e.preventDefault();
       e.stopPropagation();

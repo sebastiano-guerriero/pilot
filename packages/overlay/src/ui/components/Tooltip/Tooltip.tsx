@@ -8,6 +8,8 @@ interface TooltipProps {
   text: string;
   /** A second line, dimmed, under `text`: what to do about it ("Run /pilot again in its chat"). */
   detail?: string;
+  /** The trigger's keyboard shortcut, as it reads (`⌥C`, from `keyLabel()`): after `text`, dimmed. Not with a `detail`. */
+  shortcut?: string;
   /** Above the trigger (default), or below it when there's no room above. */
   side?: "top" | "bottom";
   /**
@@ -47,6 +49,7 @@ function focusVisible(el: Element): boolean {
 export function Tooltip({
   text,
   detail,
+  shortcut,
   side = "top",
   align = "center",
   gap,
@@ -148,6 +151,11 @@ export function Tooltip({
           <>
             <span class="title">{text}</span>
             <span class="detail">{detail}</span>
+          </>
+        ) : shortcut ? (
+          <>
+            {text}
+            <span class="shortcut">{shortcut}</span>
           </>
         ) : (
           text

@@ -4,6 +4,16 @@ import { cssProperty, LENGTH_UNITS } from "./properties.ts";
 import { bareToken, displayValue, mathResult, parseValue, scrubIncrement, stepSize, stepValue, withVars } from "./values.ts";
 
 describe("parseValue", () => {
+  it("a word that stands for a value: border-radius full is calc(infinity * 1px), shown without calc", () => {
+    expect(parseValue("border-radius", "full")).toBe("calc(infinity * 1px)");
+    expect(parseValue("border-radius", " Full ")).toBe("calc(infinity * 1px)");
+    expect(displayValue("calc(infinity * 1px)", "border-radius")).toBe("infinity * 1px");
+    expect(parseValue("padding", "full")).toBeNull();
+    // Nothing to step from (its computed value is huge), nothing to say it comes to.
+    expect(stepValue("border-radius", "infinity * 1px", -1, "1.67772e+07px")).toBeNull();
+    expect(mathResult("infinity * 1px", "1.67772e+07px")).toBeNull();
+  });
+
   it("idents (will-change): names, comma-separated, joined with a comma and a space", () => {
     expect(parseValue("will-change", "Opacity")).toBe("opacity");
     expect(parseValue("will-change", "opacity,transform")).toBe("opacity, transform");

@@ -54,6 +54,11 @@ export interface CssPropertyInfo {
   /** Negative values are valid (margins, order, grid lines), or not (width, padding). */
   negative: boolean;
   /**
+   * Words that stand for a value, typed in its field: written as that value
+   * (border-radius `full` → `calc(infinity * 1px)`, as Tailwind's rounded-full).
+   */
+  named?: Record<string, string>;
+  /**
    * What the value is (css/values.ts parses, shows and steps each kind):
    * - "length" (the default): `120` is px, units, math (width, padding…);
    * - "integer": a whole number, no unit (order);
@@ -355,7 +360,7 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   position: { initial: "static", keywords: [...POSITION_VALUES], negative: false },
   "z-index": { initial: "auto", keywords: ["auto"], negative: true, kind: "integer" },
   visibility: { initial: "visible", keywords: [...VISIBILITY_VALUES], negative: false },
-  "border-radius": { initial: "0", keywords: [], negative: false },
+  "border-radius": { initial: "0", keywords: [], negative: false, named: { full: "calc(infinity * 1px)" } },
   opacity: { initial: "1", keywords: [], negative: false, kind: "percent" },
   "font-family": { initial: "", keywords: [], negative: false, kind: "font-family" },
   "font-size": {

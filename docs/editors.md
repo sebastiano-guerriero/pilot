@@ -175,7 +175,7 @@ What each one decides beyond the shared pieces. Their order in the list is `LIST
 ### Appearance
 
 - **Background color** (`color/`, labeled `bg-color`, since the full name doesn't fit): found by `background-color`, `background`, `bg-color`; `bg` shows it with bg-blend-mode (the bg- rows). `color` still finds only the text color.
-- **Border radius** (`border-radius/`): one value for every corner, a length or percentage, never negative. Found by `radius` and `rounded`.
+- **Border radius** (`border-radius/`): one value for every corner, a length or percentage, never negative. Found by `radius` and `rounded`. Typing `full` writes `calc(infinity * 1px)`, as Tailwind's `rounded-full` does: a pill at any size, which `9999px` only is up to a point (`named` in `css/properties.ts`, a word that stands for a value; the field then shows `infinity * 1px`). An infinite value doesn't step, scrub or say what it comes to: its computed value (`1.67772e+07px`) means nothing to the designer.
 - **Opacity** (`opacity/`): the percent kind; drags stop at 0 and 100.
 - **Mix blend mode** and **background blend mode** (`blend/`, the second labeled `bg-blend-mode`): the blend modes (mix-blend-mode adds `plus-darker`, `plus-lighter`); Tailwind's `mix-blend`, `bg-blend`. `background` finds both background editors.
 - **Border** is removed while its new component is designed; the old box diagram is gone too.
