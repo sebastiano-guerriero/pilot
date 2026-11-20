@@ -1,0 +1,99 @@
+# Can Pilot run each agent's command-line tool on Windows and Linux? Runs
+# scripts/agent-runs-check.mjs (a job, a resumed follow-up, and the limits:
+# nothing written outside the project, no internet) with each agent installed
+# the way its docs say. Needs the repo secrets ANTHROPIC_API_KEY,
+# OPENAI_API_KEY and CURSOR_API_KEY. Runs on pushes that change how agents are
+# run, or by hand (Actions → Agent runs → Run workflow); each run costs a few
+# agent runs per agent and platform.
+name: Agent runs
+
+on:
+  push:
+    paths:
+      - scripts/agent-runs-check.mjs
+      - .github/workflows/agent-runs.yml
+      - packages/cli/src/agents.ts
+  workflow_dispatch:
+    inputs:
+      agents:
+        description: "Agents to check (comma-separated: claude, codex, cursor)"
+        default: "claude,codex,cursor"
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Claude Code, with its native installer (~/.local/bin).
+      - name: Install Claude Code (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          irm https://claude.ai/install.ps1 | iex
+          "$env:USERPROFILE\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Install Claude Code (Linux)
+        if: runner.os != 'Windows'
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # Codex, from npm, signed in with the API key.
+      - name: Install Codex
+        run: npm install -g @openai/codex
+      - name: Sign in to Codex
+        if: env.OPENAI_API_KEY != ''
+        shell: bash
+        run: printenv OPENAI_API_KEY | codex login --with-api-key
+
+      # Cursor's CLI, with its installer; it reads CURSOR_API_KEY.
+      - name: Install Cursor CLI (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          irm 'https://cursor.com/install?win32=true' | iex
+          $cmd = Get-Command cursor-agent, agent -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($cmd) { Split-Path $cmd.Source | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8 }
+          foreach ($dir in "$env:LOCALAPPDATA\cursor-agent", "$env:USERPROFILE\.local\bin") {
+            if (Test-Path $dir) { $dir | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8 }
+          }
+          Get-ChildItem -Recurse -Depth 3 -ErrorAction SilentlyContinue -Include cursor-agent*, agent.* "$env:LOCALAPPDATA", "$env:USERPROFILE\.local" | Select-Object -First 10 FullName
+      - name: Install Cursor CLI (Linux)
+        if: runner.os != 'Windows'
+        run: |
+          curl https://cursor.com/install -fsS | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # Only the agents whose key is set (the others are listed as skipped).
+      - name: Check the agents
+        env:
+          AGENTS: ${{ inputs.agents || 'claude,codex,cursor' }}
+        shell: bash
+        run: |
+          keep=()
+          for a in ${AGENTS//,/ }; do
+            case $a in
+              claude) key=$ANTHROPIC_API_KEY ;;
+              codex) key=$OPENAI_API_KEY ;;
+              cursor) key=$CURSOR_API_KEY ;;
+              *) key=x ;;
+            esac
+            if [ -n "$key" ]; then keep+=("$a"); else echo "Skipped $a: no API key secret" | tee -a "$GITHUB_STEP_SUMMARY"; fi
+          done
+          if [ ${#keep[@]} -eq 0 ]; then echo "No agent has a key" | tee -a "$GITHUB_STEP_SUMMARY"; exit 1; fi
+          node scripts/agent-runs-check.mjs --agents "$(IFS=,; echo "${keep[*]}")"

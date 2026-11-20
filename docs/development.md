@@ -18,6 +18,7 @@ pnpm dev
 | `pnpm typecheck` | `tsc` in every workspace package |
 | `pnpm dev:experiments` | The overlay's source on :5199 and the CLI rebuilt on change, for linked projects (below) |
 | `pnpm link-experiment <folder>` | Links another project to this checkout (below) |
+| `node scripts/agent-runs-check.mjs` | Checks that Pilot can run each agent's command-line tool here: a job, a resumed follow-up, nothing written outside the project, no internet. `--agents claude,codex,cursor` picks them. The **Agent runs** workflow (`.github/workflows/agent-runs.yml`) runs it on Windows and Linux, with the repo secrets `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and `CURSOR_API_KEY` |
 
 Before finishing a change, run `pnpm typecheck` and `pnpm test`.
 
