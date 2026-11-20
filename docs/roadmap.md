@@ -91,6 +91,7 @@ Next (found testing in Cursor: jobs queued forever while the connected chat had 
 - [x] Copy prompt
 - [x] Launch shortcut (Option+P / Alt+P)
 - [x] `usepilot mcp`: MCP server and localhost hub in one process; several agents share one hub, with takeover
+- [x] Agents always start the latest Pilot (`npx -y usepilot@latest mcp`; `update` and `init` move old registrations), and versions that can't meet say so: `pilot_launch` (the server against the project's Pilot) and the page (an older Pilot's hub answering)
 - [x] `pilot_launch`, `pilot_wait_for_edits`, `pilot_done` and the `/pilot` skill
 - [x] Send as jobs: queued while the agent works, routed by page origin
 - [x] The check after done: what landed settles, what didn't goes back once, then Pilot accepts the code

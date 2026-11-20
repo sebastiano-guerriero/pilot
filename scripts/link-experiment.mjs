@@ -33,7 +33,7 @@ if (!existsSync(project)) {
 }
 
 const cli = join(repo, "packages", "cli", "dist", "index.js");
-const server = unlink ? { command: "npx", args: ["-y", "usepilot", "mcp"] } : { command: "node", args: [cli, "mcp"] };
+const server = unlink ? { command: "npx", args: ["-y", "usepilot@latest", "mcp"] } : { command: "node", args: [cli, "mcp"] };
 
 // .mcp.json: Pilot's entry, everything else kept.
 const mcpFile = join(project, ".mcp.json");
@@ -69,7 +69,7 @@ else symlinkSync(source, skillDir, "dir");
 const rel = (p) => relative(project, p);
 if (unlink) {
   console.log(`${project} uses the published Pilot again:
-  ${rel(mcpFile)}: npx -y usepilot mcp
+  ${rel(mcpFile)}: npx -y usepilot@latest mcp
   ${rel(skillDir)}: a copy of the skill
 
 In the app's loader, import "usepilot/auto" only (drop the http://localhost:5199 import).

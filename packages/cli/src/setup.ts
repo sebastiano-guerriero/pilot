@@ -5,7 +5,14 @@ import { join, relative } from "node:path";
 import skill from "../../../skills/pilot/SKILL.md";
 
 /** How agents start Pilot's MCP server: the published package, through npx. */
-export const MCP_SERVER = { command: "npx", args: ["-y", "usepilot", "mcp"] };
+/**
+ * How agents start Pilot's MCP server. `@latest`, not a bare `usepilot`: for
+ * a bare name npx reuses the copy it downloaded the first time, forever, so
+ * an agent kept an old Pilot (its hub on an older bridge port) after every
+ * update, and never met the page's. `freshenServers()` (init.ts) moves old
+ * registrations to this.
+ */
+export const MCP_SERVER = { command: "npx", args: ["-y", "usepilot@latest", "mcp"] };
 
 export interface SetupOptions {
   /**
@@ -39,7 +46,7 @@ async function setupMachine(home: string): Promise<string> {
 
 Now register Pilot's MCP server with Claude Code, once, for every project:
 
-  claude mcp add --scope user pilot -- npx -y usepilot mcp
+  claude mcp add --scope user pilot -- npx -y usepilot@latest mcp
 
 Then, in any Claude Code chat: /pilot
 (For a repo you share, run \`npx usepilot setup --project\` in it instead.)

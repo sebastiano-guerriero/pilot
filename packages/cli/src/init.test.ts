@@ -48,11 +48,11 @@ describe("usepilot init", () => {
     const out = await init({ env: {}, home, cwd: dir, run, agent: "cursor", scope: "project" });
 
     expect(calls).toEqual(["pnpm add -D usepilot"]);
-    expect((await json(".cursor/mcp.json")).mcpServers.pilot).toEqual({ command: "npx", args: ["-y", "usepilot", "mcp"] });
+    expect((await json(".cursor/mcp.json")).mcpServers.pilot).toEqual({ command: "npx", args: ["-y", "usepilot@latest", "mcp"] });
     expect(existsSync(join(dir, ".cursor/skills/pilot/SKILL.md"))).toBe(true);
     // Claude Code was there already: it gets Pilot too, its other servers kept.
     expect(await json(".mcp.json")).toEqual({
-      mcpServers: { other: { command: "other" }, pilot: { command: "npx", args: ["-y", "usepilot", "mcp"] } },
+      mcpServers: { other: { command: "other" }, pilot: { command: "npx", args: ["-y", "usepilot@latest", "mcp"] } },
     });
     expect(existsSync(join(dir, ".claude/skills/pilot/SKILL.md"))).toBe(true);
     // Nothing for agents the project doesn't use.
@@ -73,7 +73,7 @@ describe("usepilot init", () => {
     const out = await init({ env: {}, home, cwd: dir, install: false, agent: "cursor" });
     expect((await json2(home, ".cursor/mcp.json")).mcpServers).toEqual({
       figma: { url: "https://figma" },
-      pilot: { command: "npx", args: ["-y", "usepilot", "mcp"] },
+      pilot: { command: "npx", args: ["-y", "usepilot@latest", "mcp"] },
     });
     expect(existsSync(join(home, ".cursor/skills/pilot/SKILL.md"))).toBe(true);
     expect((await readdir(dir)).filter((name) => name.startsWith(".") && name !== ".git")).toEqual([]);
@@ -87,9 +87,9 @@ describe("usepilot init", () => {
     await files({ "package.json": { devDependencies: { vite: "^7" } } });
     const { calls, run } = recorder();
     const out = await init({ env: {}, home, cwd: dir, install: false, agent: "claude-code", run });
-    expect(calls).toEqual(["claude mcp add --scope user pilot -- npx -y usepilot mcp"]);
+    expect(calls).toEqual(["claude mcp add --scope user pilot -- npx -y usepilot@latest mcp"]);
     expect(existsSync(join(home, ".claude/skills/pilot/SKILL.md"))).toBe(true);
-    expect(out).toContain("its MCP server (`claude mcp add --scope user pilot -- npx -y usepilot mcp`)");
+    expect(out).toContain("its MCP server (`claude mcp add --scope user pilot -- npx -y usepilot@latest mcp`)");
     // Registered already: not again.
     await files({ ".claude.json": { mcpServers: { pilot: {} } } }, home);
     const again = recorder();
@@ -97,7 +97,7 @@ describe("usepilot init", () => {
     expect(again.calls).toEqual([]);
     // Codex, its CLI missing: the command is left to it.
     const out2 = await init({ env: {}, home, cwd: dir, install: false, agent: "codex", run: recorder(false).run });
-    expect(out2).toContain("**Register Pilot's MCP server with yourself**: run `codex mcp add pilot -- npx -y usepilot mcp`.");
+    expect(out2).toContain("**Register Pilot's MCP server with yourself**: run `codex mcp add pilot -- npx -y usepilot@latest mcp`.");
     expect(existsSync(join(home, ".agents/skills/pilot/SKILL.md"))).toBe(true);
   });
 
@@ -122,7 +122,7 @@ describe("usepilot init", () => {
     const out = await init({ env: {}, home, cwd: dir, install: false, agent: "codex", scope: "project" });
     expect(existsSync(join(dir, ".agents/skills/pilot/SKILL.md"))).toBe(true);
     expect(existsSync(join(dir, ".mcp.json"))).toBe(false);
-    expect(out).toContain("**Register Pilot's MCP server with yourself**: `codex mcp add pilot -- npx -y usepilot mcp`.");
+    expect(out).toContain("**Register Pilot's MCP server with yourself**: `codex mcp add pilot -- npx -y usepilot@latest mcp`.");
     expect(out).toContain("or run `$pilot`");
   });
 

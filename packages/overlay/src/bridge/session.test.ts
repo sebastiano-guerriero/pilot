@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
-import type { Job, PageEvent } from "@pilot/protocol";
+import { BRIDGE_VERSION, type Job, type PageEvent } from "@pilot/protocol";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { uniqueSelector } from "../dom/target.ts";
 import { EditHistory } from "../edits/history.ts";
 import { inlinePreview } from "../test/inlinePreview.ts";
+import { DEFAULT_BRIDGE_URL, olderHub } from "./client.ts";
 import { PilotSession, timings } from "./session.ts";
 
 // The instance's props, as the framework would give them (componentProps reads React's or Vue's internals).
@@ -800,5 +801,32 @@ describe("timings", () => {
       }),
     ).toEqual({ waiting: 0.4, agent: 12.3, check: 0.6, total: 13.3 });
     expect(timings({ createdAt: "2026-11-18T10:00:00.000Z" })).toEqual({ waiting: null, agent: null, check: null, total: null });
+  });
+});
+
+describe("an agent on an older Pilot", () => {
+  it("its own hub not there, an older one answering on its port: said on the toolbar, with no job", async () => {
+    vi.useFakeTimers();
+    const asked: string[] = [];
+    // Only the previous version's port answers (no-cors: the page can't read it, only that it's there).
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      asked.push(url);
+      if (url.endsWith(`:${4747 + BRIDGE_VERSION - 1}/`) && init?.mode === "no-cors") return new Response(null);
+      throw new TypeError("refused");
+    });
+    const s = new PilotSession(history, { bridge: DEFAULT_BRIDGE_URL, onLaunch: () => {} });
+    (s.bridge as unknown as { EventSourceImpl: unknown }).EventSourceImpl = FakeEventSource;
+    s.start();
+    hub().readyState = 2;
+    hub().onerror?.();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(asked[0]).toBe(`http://127.0.0.1:${4747 + BRIDGE_VERSION - 1}/`);
+    expect(s.stuck).toMatchObject({ kind: "older-agent", title: "Your agent runs an older Pilot", jobs: [] });
+    s.destroy();
+    vi.unstubAllGlobals();
+  });
+
+  it("nothing answers: no older Pilot", async () => {
+    expect(await olderHub(async () => Promise.reject(new TypeError("refused")))).toBeNull();
   });
 });

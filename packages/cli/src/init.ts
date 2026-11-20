@@ -198,6 +198,56 @@ export function agentsWithPilot(root: string, home: string, platform: NodeJS.Pla
   }).map((a) => a.id);
 }
 
+/** A registration from before `@latest` (MCP_SERVER): npx with a bare `usepilot`, which keeps its first download forever. */
+export function isStaleServer(entry: unknown): boolean {
+  const e = entry as { command?: unknown; args?: unknown } | null;
+  return !!e && e.command === "npx" && Array.isArray(e.args) && e.args.includes("usepilot");
+}
+
+/**
+ * Moves the agents' old registrations of Pilot's server (`npx -y usepilot
+ * mcp`) to the current one (`usepilot@latest`), on this machine and in the
+ * repo at `root`: JSON configs in place (only Pilot's entry, the rest kept),
+ * Claude Code and Codex through their own CLI. Others (a link to a Pilot
+ * checkout, a pinned version) are left as they are. What it moved, for the
+ * user to read.
+ */
+export async function freshenServers(
+  root: string,
+  home: string,
+  platform: NodeJS.Platform,
+  run: (command: string, args: string[], cwd: string) => boolean,
+): Promise<string[]> {
+  const moved: string[] = [];
+  const files = [
+    ...AGENT_IDS.flatMap((id) => {
+      const m = MACHINE[id].mcp;
+      return m ? [{ file: m.file(home, platform), key: m.key }] : [];
+    }),
+    ...AGENTS.flatMap((a) => (a.mcp ? [{ file: join(root, a.mcp.file), key: a.mcp.key }] : [])),
+  ];
+  for (const { file, key } of files) {
+    const config = readJson<Record<string, Record<string, { args: string[] }>>>(file);
+    const entry = config?.[key]?.pilot;
+    if (!config || !entry || !isStaleServer(entry)) continue;
+    entry.args = entry.args.map((a) => (a === "usepilot" ? "usepilot@latest" : a));
+    await writeFile(file, `${JSON.stringify(config, null, 2)}\n`);
+    moved.push(tilde(file, home));
+  }
+  // Claude Code's user config and Codex's: their CLI rewrites them (remove, then add the current command).
+  const claude = readJson<{ mcpServers?: Record<string, unknown> }>(join(home, ".claude.json"))?.mcpServers?.pilot;
+  const codex = /\[mcp_servers\.pilot\][^[]*"usepilot"/.test(readText(join(home, ".codex", "config.toml")));
+  for (const [id, stale, remove] of [
+    ["claude-code", isStaleServer(claude), ["mcp", "remove", "--scope", "user", "pilot"]],
+    ["codex", codex, ["mcp", "remove", "pilot"]],
+  ] as const) {
+    const command = MACHINE[id].command;
+    if (!stale || !command) continue;
+    if (run(command.cmd, [...remove], home) && run(command.cmd, command.args, home)) moved.push(id === "codex" ? "Codex" : "Claude Code");
+  }
+  return moved;
+}
+
 /** The command that adds `spec` as a dev dependency with `pm`. */
 export function installArgs(pm: "npm" | "pnpm" | "yarn" | "bun", spec = "usepilot"): string[] {
   return pm === "npm" ? ["install", "-D", spec] : pm === "bun" ? ["add", "-d", spec] : ["add", "-D", spec];
@@ -334,6 +384,10 @@ ${cwd} is a monorepo's root, not an app. Run \`npx usepilot@latest init\` again 
       `**Connect yourself:** run \`npx usepilot@latest init --agent <you>\` in ${cwd}, with \`<you>\` the agent you are: ${AGENT_IDS.map((a) => `\`${a}\``).join(", ")}.`,
     );
   }
+
+  // Registrations from before @latest, in any agent (a server registered already is kept as it was above).
+  const moved = await freshenServers(root, home, options.platform ?? process.platform, run);
+  if (moved.length) done.push(`Pilot's server now always starts the latest version (${moved.map((m) => `\`${m}\``).join(", ")}): it used to keep the one it downloaded first.`);
 
   // 3. Loading Pilot in the app: written by the agent.
   if (framework.loads) done.push(`The app already loads Pilot (\`${relative(cwd, framework.loads)}\`).`);

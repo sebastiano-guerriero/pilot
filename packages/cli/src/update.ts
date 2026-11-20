@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { BRIDGE_VERSION } from "@pilot/protocol";
 import { RESTART } from "./clients.ts";
-import { agentsWithPilot, installArgs, installedVersion, packageManager, projectRoot, skillFolders } from "./init.ts";
+import { agentsWithPilot, freshenServers, installArgs, installedVersion, packageManager, projectRoot, skillFolders } from "./init.ts";
 import { writeSkill } from "./setup.ts";
 import { olderThan, VERSION } from "./version.ts";
 
@@ -16,8 +16,9 @@ import { olderThan, VERSION } from "./version.ts";
  *   the repo's), since installing the package doesn't touch those copies.
  *   A skill that's a link (to a Pilot checkout, while developing Pilot) is
  *   left as it is.
- * The MCP server's command doesn't change between versions, so its config
- * isn't touched.
+ * - the agents' registrations of its MCP server, when they're from before
+ *   `@latest` (freshenServers): a bare `npx usepilot` kept its first
+ *   download forever, so the agent never got a new Pilot.
  *
  * It prints what changed and the next steps, plain enough for a designer
  * running it in a terminal, and for an agent to pass on: restart the app
@@ -73,6 +74,9 @@ Run this in your app's folder, the one where Pilot was set up. To set Pilot up i
     skills.push(folder.startsWith(home) ? `~${folder.slice(home.length)}` : folder);
   }
 
+  // 3. The agents' server commands, from before @latest.
+  const servers = installed ? await freshenServers(root, home, options.platform ?? process.platform, run) : [];
+
   if (!installed) {
     return `# Pilot: not updated
 
@@ -84,7 +88,8 @@ ${pm} ${args.join(" ")}
 `;
   }
 
-  const changed = !!before && !!after && olderThan(before, after);
+  // A server moved to @latest is a change too: the agent starts the new one at its next start.
+  const changed = (!!before && !!after && olderThan(before, after)) || servers.length > 0;
   // How each agent with Pilot loads the new one: some need their Pilot server restarted, a new chat isn't enough (clients.ts).
   const agents = agentsWithPilot(root, home, options.platform);
   const steps = [
@@ -97,10 +102,18 @@ ${pm} ${args.join(" ")}
       "Update Pilot in your other projects too (`npx usepilot@latest update` in each): this version can't share its connection with older ones.",
     );
   }
-  const headline = changed ? `# Pilot updated: ${before} → ${after}` : `# Pilot is up to date (${after ?? VERSION})`;
+  const bumped = !!before && !!after && olderThan(before, after);
+  const headline = bumped
+    ? `# Pilot updated: ${before} → ${after}`
+    : servers.length
+      ? `# Pilot is up to date (${after ?? VERSION}); its server is fixed`
+      : `# Pilot is up to date (${after ?? VERSION})`;
   const skillLine = skills.length ? `\nThe \`pilot\` skill is updated too (${skills.map((s) => `\`${s}\``).join(", ")}).\n` : "";
+  const serverLine = servers.length
+    ? `\nPilot's server now always starts the latest version (${servers.map((s) => `\`${s}\``).join(", ")}): it used to keep the one it downloaded first.\n`
+    : "";
   return `${headline}
-${skillLine}
+${skillLine}${serverLine}
 ${changed ? `Next:\n${steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n` : "Nothing else to do.\n"}`;
 }
 

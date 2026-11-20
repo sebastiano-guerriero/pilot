@@ -1,5 +1,5 @@
 import type { AgentInfo, ChangeResult, FileToken, Job, PageEvent, ProjectComponent, WidthCheck } from "@pilot/protocol";
-import { DEFAULT_BRIDGE_PORT } from "@pilot/protocol";
+import { BRIDGE_VERSION, DEFAULT_BRIDGE_PORT } from "@pilot/protocol";
 
 /** Where the hub listens (see packages/cli: `pilot mcp`). */
 export const DEFAULT_BRIDGE_URL = `http://127.0.0.1:${DEFAULT_BRIDGE_PORT}`;
@@ -12,6 +12,37 @@ export interface BridgeState {
   agents: AgentInfo[];
   /** How many of them are waiting for a job right now. */
   waiting: number;
+  /**
+   * Not connected, but an older Pilot's hub answers on its port (each bridge
+   * version has its own): the bridge version found. An agent runs an older
+   * Pilot, and /pilot there can't reach this page (see olderHub).
+   */
+  older?: number;
+}
+
+/** How often the page looks for an older Pilot's hub while it can't reach its own, at most. */
+const OLDER_PROBE_MS = 10_000;
+
+/**
+ * The bridge version of an older Pilot's hub listening on this machine
+ * (newest first), or null. Each version's hub has its port (4747 +
+ * version), so a page and an agent on different versions never meet: an
+ * agent's server kept at an old version (a bare `npx usepilot` keeps its
+ * first download) left /pilot doing nothing, with no clue why. A request
+ * that can't be read (no-cors): it only says something answers there.
+ */
+export async function olderHub(fetchImpl: typeof fetch = globalThis.fetch): Promise<number | null> {
+  if (typeof fetchImpl !== "function") return null;
+  for (let version = BRIDGE_VERSION - 1; version >= 1; version--) {
+    try {
+      const signal = typeof AbortSignal !== "undefined" && "timeout" in AbortSignal ? AbortSignal.timeout(800) : undefined;
+      await fetchImpl(`http://127.0.0.1:${4747 + version}/`, { mode: "no-cors", signal });
+      return version;
+    } catch {
+      // Nothing there.
+    }
+  }
+  return null;
 }
 
 export interface BridgeHandlers {
@@ -45,6 +76,7 @@ export class BridgeClient {
   private source: EventSource | null = null;
   private reconnect: ReturnType<typeof setTimeout> | null = null;
   private failures = 0;
+  private probedAt = 0;
   private listeners = new Set<() => void>();
   private stopped = false;
 
@@ -181,11 +213,22 @@ export class BridgeClient {
       source.close();
       if (this.source === source) this.source = null;
       const wasConnected = this.state.connected;
-      this.setState({ connected: false, agents: [], waiting: 0 });
+      this.setState({ connected: false, agents: [], waiting: 0, older: this.state.older });
+      this.lookForOlder();
       const wait = BACKOFF[Math.min(this.failures, BACKOFF.length - 1)] as number;
       this.failures = wasConnected ? 0 : this.failures + 1;
       this.reconnect = setTimeout(() => this.open(), wasConnected ? 500 : wait);
     };
+  }
+
+  /** Its own hub not there: is an older Pilot's? Only on the default address (a custom one is the project's own setup). */
+  private lookForOlder(): void {
+    if (this.url !== DEFAULT_BRIDGE_URL || Date.now() - this.probedAt < OLDER_PROBE_MS) return;
+    this.probedAt = Date.now();
+    void olderHub().then((older) => {
+      if (this.stopped || this.state.connected || (older ?? undefined) === this.state.older) return;
+      this.setState({ ...this.state, older: older ?? undefined });
+    });
   }
 
   private receive(event: PageEvent): void {

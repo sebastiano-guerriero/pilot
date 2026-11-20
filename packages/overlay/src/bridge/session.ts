@@ -143,7 +143,7 @@ const STUCK_IDLE_MS = 30_000;
  * of the jobs it's about.
  */
 export interface Stuck {
-  kind: "offline" | "no-agent" | "not-listening";
+  kind: "offline" | "older-agent" | "no-agent" | "not-listening";
   title: string;
   detail: string;
   jobs: string[];
@@ -992,6 +992,9 @@ export class PilotSession {
    * for an agent or with one count (not one being checked, nor one whose
    * question waits for the designer: that's the designer's turn):
    * - offline: the page can't reach the hub (every chat running Pilot closed);
+   * - older-agent: it can't, and an older Pilot's hub answers on its port:
+   *   an agent runs an older Pilot (its /pilot can't reach this page), said
+   *   with jobs or without (BridgeClient's olderHub);
    * - no-agent: it can, but no agent works on this page;
    * - not-listening: no agent is waiting for a job, and none is on one: jobs
    *   wait, or none does yet (the next Send would wait; cancelling the stuck
@@ -1003,7 +1006,16 @@ export class PilotSession {
   private stuckNow(): Stuck | null {
     if (!this.bridge) return null;
     const open = this.jobs.filter((j) => j.status === "queued" || j.status === "working");
-    const { connected, agents, waiting } = this.state;
+    const { connected, agents, waiting, older } = this.state;
+    // An agent on an older Pilot: its /pilot can't reach this page, jobs or not.
+    if (!connected && older) {
+      return {
+        kind: "older-agent",
+        title: "Your agent runs an older Pilot",
+        detail: "Run npx usepilot@latest update, then restart Pilot in your agent",
+        jobs: open.map((j) => j.id),
+      };
+    }
     if (!open.length && !(connected && agents.length)) return null;
     const label = agents[0]?.label ?? open.find((j) => j.agent)?.agent?.label;
     const name = label?.split(" · ")[0] || "Your agent";

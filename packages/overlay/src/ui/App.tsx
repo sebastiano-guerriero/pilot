@@ -285,13 +285,13 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   };
   // Jobs not finished yet: waiting, an agent applying, checking the page.
   const pending = (session?.jobs ?? []).filter((j) => j.status === "queued" || j.status === "working" || (j.status === "done" && !j.checked)).length;
-  // The toolbar's alerts. An agent that isn't listening: on Comment and Send both, jobs or not (whatever goes
+  // The toolbar's alerts. An agent that isn't listening, or on an older Pilot: on Comment and Send both, jobs or not (whatever goes
   // next goes to it), so cancelling the stuck jobs doesn't hide it. No agent, or no hub: on Comment for stuck
   // jobs asked in a thread (comments, tasks from the comment box), on Send for the rest.
   const inThread = (id: string) => !!session?.threads.some((t) => t.messages.some((m) => m.jobId === id));
   const toolbarAlerts = !stuck
     ? undefined
-    : stuck.kind === "not-listening"
+    : stuck.kind === "not-listening" || stuck.kind === "older-agent"
       ? { comment: stuckAlert, send: stuckAlert }
       : {
           ...(stuck.jobs.some(inThread) ? { comment: stuckAlert } : {}),

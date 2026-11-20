@@ -18,7 +18,7 @@ describe("usepilot setup", () => {
   it("for this machine: the skill in the home folder, and the command to register the server", async () => {
     const out = await setup({ home: dir });
     expect(await read(".claude", "skills", "pilot", "SKILL.md")).toContain("name: pilot");
-    expect(out).toContain("claude mcp add --scope user pilot -- npx -y usepilot mcp");
+    expect(out).toContain("claude mcp add --scope user pilot -- npx -y usepilot@latest mcp");
     expect(existsSync(join(dir, ".mcp.json"))).toBe(false);
   });
 

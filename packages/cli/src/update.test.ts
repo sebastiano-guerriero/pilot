@@ -77,6 +77,31 @@ describe("usepilot update", () => {
     expect(out).not.toContain("In Claude Code");
   });
 
+  it("an old server command (a bare npx usepilot keeps its first download): moved to @latest, others left", async () => {
+    await files(app(VERSION));
+    await files(
+      {
+        ".cursor/mcp.json": { mcpServers: { figma: { url: "http://x" }, pilot: { command: "npx", args: ["-y", "usepilot", "mcp"] } } },
+        ".claude.json": { mcpServers: { pilot: { type: "stdio", command: "npx", args: ["-y", "usepilot", "mcp"] } } },
+      },
+      home,
+    );
+    // A link to a Pilot checkout (pnpm link-experiment) stays as it is.
+    await files({ ".mcp.json": { mcpServers: { pilot: { command: "node", args: ["/pilot/packages/cli/dist/index.js", "mcp"] } } } });
+    const { calls, run } = installer();
+    const out = await update({ cwd: dir, run, home });
+    expect(JSON.parse(await readFile(join(home, ".cursor/mcp.json"), "utf8")).mcpServers).toEqual({
+      figma: { url: "http://x" },
+      pilot: { command: "npx", args: ["-y", "usepilot@latest", "mcp"] },
+    });
+    expect(calls).toContain("claude mcp remove --scope user pilot");
+    expect(calls).toContain("claude mcp add --scope user pilot -- npx -y usepilot@latest mcp");
+    expect(JSON.parse(await readFile(join(dir, ".mcp.json"), "utf8")).mcpServers.pilot.command).toBe("node");
+    expect(out).toContain("its server is fixed");
+    expect(out).toContain("Pilot's server now always starts the latest version (`~/.cursor/mcp.json`, `Claude Code`)");
+    expect(out).toContain("In Cursor, restart Pilot's server");
+  });
+
   it("no agent found with Pilot: the general way", async () => {
     await files(app("0.6.0"));
     expect(await update({ cwd: dir, run: installer().run, home })).toContain("Restart Pilot's server in your agent");

@@ -225,12 +225,19 @@ describe("the loop, through MCP", () => {
     const stale = await agent.call("pilot_launch", { url: APP, folder: project });
     expect(stale).toContain("older than the project's 99.0.0");
     expect(stale).toContain("In Claude Code, open a new chat");
+    // Restarting alone wouldn't do with an old `npx usepilot` registration: update moves it to @latest first.
+    expect(stale).toContain("run `npx usepilot@latest update` in the app's folder");
 
     // A client sharing its workspace (MCP roots): no folder needed.
     const port2 = nextPort++;
     const rooted = await agentClient(port2, 2000, { cwd: home, roots: [home, project] });
     await new Promise((r) => setTimeout(r, 50));
-    expect(await rooted.call("pilot_launch", { url: APP })).not.toContain("folder");
+    expect(await rooted.call("pilot_launch", { url: APP })).not.toContain("call pilot_launch again with `folder`");
+    // The project's Pilot older than this server, and no page connected: the project needs updating.
+    await writeFile(join(project, "node_modules/usepilot/package.json"), JSON.stringify({ version: "0.0.1" }));
+    const behind = await rooted.call("pilot_launch", { url: APP, folder: project });
+    expect(behind).toContain("The project's Pilot is 0.0.1, older than this server's");
+    expect(behind).toContain("then restart the app's dev server");
   });
 
   it("the page asks for the project's components (the `@` list): read from the agent's folder, which pages never see", async () => {

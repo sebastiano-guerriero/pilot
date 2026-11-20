@@ -324,12 +324,16 @@ export function createPilotServer(options: { port?: number; cwd?: string; waitMs
           pages > 0
             ? `Pilot is open in ${pages === 1 ? "the page" : `${pages} pages`} at ${o}.`
             : `No page at ${o} is connected yet. Ask the designer to open ${url} (with the dev server running): Pilot opens there.`;
-        // This server older than the project's Pilot (a client that keeps its server running, like Cursor, after an update): say how to restart it.
+        // This server and the project's Pilot on different versions: they may not meet (each version's hub has its port).
+        // Older here: a client that keeps its server running (Cursor), or an old `npx usepilot` registration, which
+        // keeps its first download (update moves it to @latest). Older there: the project wasn't updated.
         const installed = searchable(project) ? installedVersion(project, project) : null;
         const stale =
           installed && olderThan(VERSION, installed)
-            ? ` This chat's Pilot server is ${VERSION}, older than the project's ${installed}: tell the user to restart it, so it loads ${installed}. ${RESTART[clientOf(client) ?? "other"]}`
-            : "";
+            ? ` This chat's Pilot server is ${VERSION}, older than the project's ${installed}, so they may not connect. Don't look into ports or processes: tell the user to run \`npx usepilot@latest update\` in the app's folder (it makes the server start the latest Pilot), then restart it. ${RESTART[clientOf(client) ?? "other"]}`
+            : installed && pages === 0 && olderThan(installed, VERSION)
+              ? ` The project's Pilot is ${installed}, older than this server's ${VERSION}, so the page may not connect. Don't look into ports or processes: tell the user to run \`npx usepilot@latest update\` in the app's folder, then restart the app's dev server.`
+              : "";
         return text(`${where} Now call pilot_wait_for_edits and wait for the designer to press Send.${lost}${stale}`);
       } catch (error) {
         return text(`Pilot couldn't start its bridge: ${(error as Error).message}`, true);
