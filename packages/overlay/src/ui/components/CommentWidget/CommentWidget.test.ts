@@ -393,3 +393,17 @@ describe("CommentWidget's Adjust", () => {
     expect(adjust()).toBeUndefined();
   });
 });
+
+describe("CommentWidget's / previews", () => {
+  it("a preview shows in the list, but picking it does nothing (no chip, nothing sent)", () => {
+    const onSend = draw();
+    act(() => field().focus());
+    type("/container");
+    const option = container.querySelector(".action-option") as HTMLElement;
+    expect(option.querySelector(".action-name")?.textContent).toBe("Fit its container");
+    act(() => option.click());
+    press("Enter");
+    expect(container.querySelector(".action-chip")).toBeNull();
+    expect(onSend).not.toHaveBeenCalled();
+  });
+});

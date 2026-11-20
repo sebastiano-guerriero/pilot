@@ -9,13 +9,19 @@ import type { CommentAction } from "@pilot/protocol";
  * the designer's message, with the agent's reply after it.
  */
 export interface Action {
-  id: CommentAction;
+  /** A preview's id isn't a CommentAction: it's never sent. */
+  id: CommentAction | `preview-${string}`;
   /** What's typed after `/` to find it (a word of the name works too); not shown. */
   command: string;
   name: string;
   description: string;
   /** Offered only when the selection is a component's instance (its top-level element). */
   forComponent?: boolean;
+  /**
+   * Listed, not built yet (the roadmap): shown in the menu (the owner's video,
+   * and a look at what's coming), but picking it does nothing.
+   */
+  preview?: boolean;
 }
 
 export const ACTIONS: Action[] = [
@@ -26,10 +32,59 @@ export const ACTIONS: Action[] = [
     description: "Make it work at every screen width",
   },
   {
+    id: "preview-container",
+    command: "container",
+    name: "Fit its container",
+    description: "Adapt to the space it's in, with container queries",
+    preview: true,
+  },
+  {
+    id: "preview-a11y",
+    command: "a11y",
+    name: "Check accessibility",
+    description: "Fix contrast, labels, focus and keyboard use",
+    preview: true,
+  },
+  {
+    id: "preview-variations",
+    command: "variations",
+    name: "Explore variations",
+    description: "Try a few takes on it, to pick from",
+    preview: true,
+  },
+  {
     id: "break-and-fix",
     command: "break",
     name: "Break and fix",
     description: "Try odd content and fix what breaks",
+  },
+  {
+    id: "preview-tokens",
+    command: "tokens",
+    name: "Use design tokens",
+    description: "Swap hardcoded values for the project's tokens",
+    preview: true,
+  },
+  {
+    id: "preview-states",
+    command: "states",
+    name: "Add states",
+    description: "Design its hover, focus and disabled looks",
+    preview: true,
+  },
+  {
+    id: "preview-dark",
+    command: "dark",
+    name: "Support dark mode",
+    description: "Make it work in dark mode",
+    preview: true,
+  },
+  {
+    id: "preview-motion",
+    command: "motion",
+    name: "Add motion",
+    description: "A subtle transition or entrance",
+    preview: true,
   },
   {
     id: "props",

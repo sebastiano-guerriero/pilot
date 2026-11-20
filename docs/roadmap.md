@@ -112,6 +112,7 @@ Next (found testing in Cursor: jobs queued forever while the connected chat had 
 - [x] A comment carries the element's unsent changes (a chip in the box; applied and checked with it)
 - [x] Comment attachments (images, text files, PDFs): picked, previewed, sent with the comment or alone, saved by the hub in the OS temp folder, shown to the agent with the job
 - [ ] Design the file tile for attachments that aren't images (placeholder now)
+- [ ] `/` actions listed as previews, to build: Fit its container (container queries), Check accessibility, Explore variations, Use design tokens, Add states, Support dark mode, Add motion ([handoff.md](handoff.md), *Actions*)
 - [ ] Element markers for unsent changes
 - [x] Comments, phase 2: the agent asks the designer a question in a thread, without waiting (`pilot_done`'s `question`), and the answer sends the job back
 - [x] Faster jobs: Pilot finds each element's code in the project for the agent, the edit guidelines read once, each job's step times recorded

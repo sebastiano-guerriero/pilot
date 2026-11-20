@@ -19,7 +19,7 @@ describe("the comment box's / actions", () => {
   });
 
   it("match by command or by a word of the name", () => {
-    expect(matchActions("").map((a) => a.id)).toEqual(["responsive", "break-and-fix"]);
+    expect(matchActions("").map((a) => a.id)).toEqual(["responsive", "preview-container", "preview-a11y", "preview-variations", "break-and-fix", "preview-tokens", "preview-states", "preview-dark", "preview-motion"]);
     expect(matchActions("resp").map((a) => a.id)).toEqual(["responsive"]);
     expect(matchActions("make").map((a) => a.id)).toEqual(["responsive"]);
     expect(matchActions("break").map((a) => a.id)).toEqual(["break-and-fix"]);
@@ -28,11 +28,19 @@ describe("the comment box's / actions", () => {
     expect(actionName("responsive")).toBe("Make responsive");
   });
 
+  it("the previews (listed, not built yet) are found like the others: by command or a word of the name", () => {
+    expect(matchActions("container").map((a) => a.id)).toEqual(["preview-container"]);
+    expect(matchActions("a11y").map((a) => a.id)).toEqual(["preview-a11y"]);
+    expect(matchActions("access").map((a) => a.id)).toEqual(["preview-a11y"]);
+    expect(matchActions("dark").map((a) => a.id)).toEqual(["preview-dark"]);
+    expect(matchActions("").filter((a) => a.preview).length).toBe(7);
+  });
+
   it("Props only for a component's instance", () => {
     expect(matchActions("").map((a) => a.id)).not.toContain("props");
     expect(matchActions("prop").map((a) => a.id)).toEqual([]);
     // First when a component is selected.
-    expect(matchActions("", { component: true }).map((a) => a.id)).toEqual(["props", "responsive", "break-and-fix"]);
+    expect(matchActions("", { component: true }).map((a) => a.id)).toEqual(["props", ...["responsive", "preview-container", "preview-a11y", "preview-variations", "break-and-fix", "preview-tokens", "preview-states", "preview-dark", "preview-motion"]]);
     expect(matchActions("prop", { component: true }).map((a) => a.id)).toEqual(["props"]);
   });
 });

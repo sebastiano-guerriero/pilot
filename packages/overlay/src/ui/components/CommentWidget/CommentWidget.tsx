@@ -379,8 +379,9 @@ export function CommentWidget({
   useEffect(() => setActive(0), [text]);
   const pick = (index: number) => {
     const chosen = options[index];
-    if (!chosen || !slash) return;
-    setAction(chosen.id);
+    // A preview (listed, not built yet) can't be picked: nothing to send.
+    if (!chosen || !slash || chosen.preview) return;
+    setAction(chosen.id as CommentAction);
     const next = withoutQuery(text, slash);
     nextCaret.current = next.caret;
     setText(next.text);
