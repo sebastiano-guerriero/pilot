@@ -22,7 +22,7 @@ import type { EditHistory, RecordedChange } from "./history.ts";
  * Elements still on the page are described afresh; one that isn't (another
  * page of the app, or re-rendered) keeps the description taken when it was
  * first changed. `unsent`: only the changes not sent to the agent yet (what
- * Send hands over); Copy prompt takes everything in effect. `only`: just the
+ * Send hands over). `only`: just the
  * changes it picks (Send leaves out the ones that wait for a job).
  */
 export function buildChangeSet(

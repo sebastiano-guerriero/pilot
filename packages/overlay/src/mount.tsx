@@ -31,8 +31,8 @@ export interface PilotOptions {
   shortcut?: string | false;
   /**
    * Where Pilot reaches the agents: the bridge's URL (the hub, in `npx
-   * usepilot`, which runs the agent). Default `http://127.0.0.1:` + the bridge's port for this version (DEFAULT_BRIDGE_PORT). `false` turns it off: no
-   * Send, Copy prompt only.
+   * usepilot`, which runs the agent). Default `http://127.0.0.1:` + the bridge's port for this version (DEFAULT_BRIDGE_PORT). `false` turns it off: nothing
+   * can be sent (the editor alone, for developing Pilot).
    */
   bridge?: string | false;
 }

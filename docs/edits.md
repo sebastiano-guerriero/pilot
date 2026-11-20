@@ -91,14 +91,14 @@ Changes record the state pills' `states` the same way, through `history.apply(â€
 - a readable path like `main > section.hero > h1` (classes help the agent find it);
 - a trimmed text snippet the agent can grep for.
 
-**The prompt.** `formatPrompt()` ([protocol/src/format.ts](../packages/protocol/src/format.ts)) turns it into a Markdown brief that tells the agent to map the values to the project's conventions (no inline styles), prefer existing tokens and utilities and report any value it had to approximate, and ask before changing a shared component everywhere. **Copy prompt and a run Pilot starts produce the same text**: both go through `formatPrompt()`, fed by `buildChangeSet()` (a run's in its no-tools form: [handoff.md](handoff.md), *Agent runs*).
+**The prompt.** `formatPrompt()` ([protocol/src/format.ts](../packages/protocol/src/format.ts)) turns it into a Markdown brief that tells the agent to map the values to the project's conventions (no inline styles), prefer existing tokens and utilities and report any value it had to approximate, and ask before changing a shared component everywhere. It's the prompt of the job Pilot runs the agent for ([handoff.md](handoff.md), *Agent runs*): a question or props go in the reply's `pilot` block, and Pilot checks the result after. (Copy prompt, which pasted the same text into any chat, is gone: it handed over edits only.)
 
 ## Edits survive reloads
 
-[edits/persist.ts](../packages/overlay/src/edits/persist.ts). The history (changes, undo and redo) is saved in the tab's `sessionStorage` after every change and restored when Pilot mounts again: after a reload the preview comes back, undo still works, and Copy prompt still has everything. A new tab starts clean.
+[edits/persist.ts](../packages/overlay/src/edits/persist.ts). The history (changes, undo and redo) is saved in the tab's `sessionStorage` after every change and restored when Pilot mounts again: after a reload the preview comes back, undo still works, and unsent changes are still there to send. A new tab starts clean.
 
 - Each change keeps how to find its element (its unique selector, taken at the first change) and the page it was made on. Anything new the history records must be plain data (JSON-safe) apart from the element, and found again from the change's `target` after a reload.
 - On restore, an element found on this page gets its changes back. One that isn't (another page of the app, or not rendered yet) keeps its changes on a detached stand-in, still in the prompt, and finds its element again later (`reattach()`: on launch, on selecting an element, on `popstate`).
 - **Known limit:** an element whose selector changed (a list reordered, classes renamed) can't be found again.
 
-**No Clear changes button.** `EditHistory.clear()` still exists (undoable), but the designed toolbar left the button out: with an agent, Pilot clears what landed by itself; after a copied prompt is applied, undo removes the changes.
+**No Clear changes button.** `EditHistory.clear()` still exists (undoable), but the designed toolbar left the button out: Pilot clears what landed by itself, and undo removes a change.

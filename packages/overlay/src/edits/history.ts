@@ -337,7 +337,7 @@ export class EditHistory {
 
   /**
    * Clear: no change is in effect anymore, so the page shows its own CSS again
-   * (e.g. once the agent has applied the copied prompt). One undo step: undo
+   * (no button calls it now). One undo step: undo
    * brings every change back. Does nothing when there's nothing in effect.
    */
   clear(): void {

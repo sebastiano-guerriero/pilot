@@ -2,42 +2,26 @@ import type { Job } from "@pilot/protocol";
 import { formatPrompt, sharedChoiceMeaning } from "@pilot/protocol";
 
 /**
- * What the agent reads for a job, in two forms:
- * - `tools: true` (default): for an agent with Pilot's MCP tools
- *   (`pilot_wait_for_edits`, `pilot_done`), as the chat loop had until agent
- *   runs: kept for now, unused (the roadmap's *After agent runs*).
- * - `tools: false`: for a run Pilot started itself (run.ts): the guidelines
- *   in full (a fresh session hasn't read them), and the reply is the notes,
- *   with a question or a props list in a `pilot` block at its end (see
- *   replyOf in run.ts).
+ * What the agent reads for a job Pilot runs it for (run.ts): the change
+ * set's prompt (`formatPrompt()`: the
+ * guidelines in full, since a fresh session hasn't read them), or the
+ * follow-up, where its elements' code probably is (`where`, found by Pilot
+ * in the project), then the footer: the reply is the notes, with a question
+ * or a props list in a `pilot` block at its end (see replyOf in run.ts).
  */
-export interface JobPromptOptions {
-  tools?: boolean;
-}
-
-/**
- * A job's prompt: the change set's (or the follow-up), where its elements'
- * code probably is (`where`, found by Pilot in the project), then what to do
- * when done.
- */
-export function jobPrompt(job: Job, where = "", options: JobPromptOptions = {}): string {
-  const tools = options.tools !== false;
+export function jobPrompt(job: Job, where = ""): string {
   const body =
     job.attempt === 2 && job.issues?.length
-      ? taskFollowUp(job, options)
+      ? taskFollowUp(job)
       : job.attempt === 2 && job.differences?.length
         ? followUp(job)
         : job.answer && job.question
-          ? answered(job, options)
-          : formatPrompt(job.changeSet, { guidelines: !tools, tools });
+          ? answered(job)
+          : formatPrompt(job.changeSet);
   return `${body}${where ? `\n${where}\n` : ""}
 ---
-${tools ? toolsFooter(job) : runFooter(job)}
+${runFooter(job)}
 `;
-}
-
-function toolsFooter(job: Job): string {
-  return `Pilot job \`${job.id}\`. When you've applied it, call \`pilot_done\` with \`jobId: "${job.id}"\` and short notes (${notesFor(job)}). Then call \`pilot_wait_for_edits\` again for the next job.`;
 }
 
 /**
@@ -67,8 +51,7 @@ function runFooter(job: Job): string {
  * A job back with the designer's answer to the agent's question: what was
  * asked and answered, then the job for reference.
  */
-export function answered(job: Job, options: JobPromptOptions = {}): string {
-  const tools = options.tools !== false;
+export function answered(job: Job): string {
   // A one-click answer to "all of them, or only this one?": what it asks of the code, spelled out.
   const meaning = job.answer ? sharedChoiceMeaning(job.answer) : null;
   return [
@@ -85,11 +68,11 @@ export function answered(job: Job, options: JobPromptOptions = {}): string {
       .join("\n"),
     "",
     ...(meaning ? [`What that means for the code: ${meaning}`, ""] : []),
-    `Do what's left of the job the way they answered, then ${tools ? "call `pilot_done` again" : "reply with your notes"}. Pilot then checks it like any job. (Don't ask again: say anything still open in your notes.)`,
+    "Do what's left of the job the way they answered, then reply with your notes. Pilot then checks it like any job. (Don't ask again: say anything still open in your notes.)",
     "",
     "The job, for reference:",
     "",
-    formatPrompt(job.changeSet, { guidelines: !tools, tools }),
+    formatPrompt(job.changeSet),
   ].join("\n");
 }
 
@@ -140,8 +123,7 @@ export function notesFor(job: Job): string {
  * width check found once the agent was done, then the task again for
  * reference.
  */
-export function taskFollowUp(job: Job, options: JobPromptOptions = {}): string {
-  const tools = options.tools !== false;
+export function taskFollowUp(job: Job): string {
   const request = job.changeSet.request;
   const target = `\`${request?.target.path ?? "the element"}\``;
   // Props set from the thread: Pilot read the instance again, and these aren't what the designer picked.
@@ -157,7 +139,7 @@ export function taskFollowUp(job: Job, options: JobPromptOptions = {}): string {
       "",
       "The comment, for reference:",
       "",
-      formatPrompt(job.changeSet, { guidelines: !tools, tools }),
+      formatPrompt(job.changeSet),
     ].join("\n");
   const breakFix = request?.kind === "break-and-fix";
   const lines = [
@@ -169,13 +151,11 @@ export function taskFollowUp(job: Job, options: JobPromptOptions = {}): string {
     "",
     ...(job.issues ?? []).map((i) => `- ${i}`),
     "",
-    tools
-      ? "Fix them, then run `pilot_check_widths` to confirm before `pilot_done`. If one is deliberate, keep it and say why in your notes. Pilot takes what the code gives after this."
-      : "Fix them from the code (no browser). If one is deliberate, keep it and say why in your notes. Pilot takes what the code gives after this.",
+    "Fix them from the code (no browser). If one is deliberate, keep it and say why in your notes. Pilot takes what the code gives after this.",
     "",
     "The task, for reference:",
     "",
-    formatPrompt(job.changeSet, { tools }),
+    formatPrompt(job.changeSet),
   ];
   return lines.join("\n");
 }

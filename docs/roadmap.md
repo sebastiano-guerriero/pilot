@@ -12,7 +12,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
   - [x] `npx usepilot`: the runner (agent picked and saved per project, up to 3 jobs at once, Stop kills the run, errors said on the page); threads keep their agent session; Close only closes
   - [x] `init` and `update` for it (check the agent's tool, remove the old chat setup), both READMEs; the MCP loop, `setup` and the `/pilot` skill removed (`usepilot mcp` only says what to do instead)
 - [ ] **After agent runs, before the release:**
-  - [ ] Copy prompt without Pilot's tools: its text still says "Pilot's `pilot_done` takes a question" and "check every width with `pilot_check_widths`" (the prompt's `tools: true` form, made for the MCP chat): a pasted prompt needs a form of its own
+  - [x] Copy prompt removed: it handed over edits only, while comments, tasks, questions and props need Pilot running; without it, Send and Comment say "Pilot isn't running for this site". The prompt has one form, the run's, and names none of Pilot's old MCP tools
   - [ ] Width checks during a run: a run has none of Pilot's tools, so Make responsive and Break and fix work widths out from the code and Pilot measures after (one follow-up); giving runs Pilot's check (an MCP server per run, or a command) would bring back the check mid-job. The hub's check route (`/agents/check`, `/checks/:id`) waits unused until then
   - [ ] Choosing the agent: in the terminal now (asked once, `--agent` changes it); a place in the toolbar is the owner's call
   - [ ] Starting Pilot with the dev server (a Vite plugin, the dev script), so there's no second terminal; sites without an npm dev server keep `npx usepilot`
@@ -62,7 +62,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [x] The page's breakpoints on the ruler, clickable
 - [ ] `from-md` in the search (breakpoint names, where the page exposes them)
 - [x] Undo/redo for every change, drags as one step
-- [x] Change set from the history (`buildChangeSet()`), Copy prompt
+- [x] Change set from the history (`buildChangeSet()`); Copy prompt, until 0.14
 - [x] Edits survive reloads
 - [x] Inline text editing: a text-only element whole, or the text run under the pointer
 - [ ] Change list in the panel (review and undo before handoff)
@@ -103,7 +103,7 @@ Items marked *(chat loop)* were for an agent's chat running Pilot over MCP, up t
 - [x] *(chat loop)* Restarting the server, per client, after an update: now `update` says to restart `npx usepilot`.
 - [x] **What each agent does that Pilot relies on:** a checklist and a smoke test per agent in [development.md](development.md), run before each release, `run.test.ts` with a stand-in agent, and `scripts/agent-runs-check.mjs` on every platform. (Until agent runs, per MCP client, with `stdio.test.ts`.)
 
-- [x] Copy prompt
+- [x] Copy prompt (removed before 0.14: Pilot needs `npx usepilot` running)
 - [x] Launch shortcut (Option+P / Alt+P)
 - [x] The localhost hub, one per machine and version, shared by every project's process, with takeover (in `npx usepilot` now; `usepilot mcp` until agent runs)
 - [x] Versions that can't meet say so: the page, when an older Pilot's hub answers on its port. *(chat loop)* Agents always started the latest Pilot (`npx -y usepilot@latest mcp`), and `pilot_launch` compared the server with the project's Pilot

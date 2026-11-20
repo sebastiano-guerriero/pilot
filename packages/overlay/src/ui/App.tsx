@@ -9,8 +9,6 @@ import { setFileTokens } from "../dom/tokens.ts";
 import { findSimilar } from "../dom/similar.ts";
 import { describeElement, type EditableElement, findTarget, isEditable } from "../dom/target.ts";
 import { isTextOnly, normalizeText, textProperty, textRunAt } from "../dom/text.ts";
-import { formatPrompt } from "@pilot/protocol";
-import { buildChangeSet, copyText } from "../edits/changeSet.ts";
 import { type EditHistory, historyShortcut } from "../edits/history.ts";
 import { clickWidth } from "../edits/widths.ts";
 import type { PilotDevOptions } from "../mount.tsx";
@@ -52,7 +50,7 @@ interface AppProps {
    * outlives quitting and is restored after a reload (edits/persist.ts).
    */
   history: EditHistory;
-  /** The handoff to agents (Send, jobs). None: Copy prompt only. */
+  /** The handoff to agents (Send, jobs). None: nothing can be sent. */
   session?: PilotSession;
   /** Find again the elements of changes that aren't on the page (see EditHistory.reattach). */
   onReattach?(): void;
@@ -212,12 +210,9 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   useEffect(() => setInspect(null), [selected?.key]);
 
   const [, refresh] = useReducer((n: number) => n + 1, 0);
-  // How many changes there are to copy: the toolbar's button follows the history.
-  const [changeCount, setChangeCount] = useState(() => history.changes().length);
+  // How many changes there are: what shows (the comment box's chip, Send's pill) follows the history.
+  const [, setChangeCount] = useState(() => history.changes().length);
   useEffect(() => history.subscribe(() => setChangeCount(history.changes().length)), [history]);
-  // Copy prompt: the change set, as the text the agent gets (the same text the
-  // MCP path will send: formatPrompt), on the clipboard.
-  const copyPrompt = () => copyText(formatPrompt(buildChangeSet(history)));
   // The session's jobs and agents: re-render as they change.
   const [, setSessionTick] = useState(0);
   // Confetti bursts in flight (Mark as solved), each gone once it's over.
@@ -225,12 +220,11 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   const burstKey = useRef(0);
   useEffect(() => session?.subscribe(() => setSessionTick((n) => n + 1)), [session]);
   useEffect(() => history.subscribe(() => setSessionTick((n) => n + 1)), [history]);
-  // With an agent on this page, the button sends the changes not sent yet;
-  // without one, it copies the prompt (everything in effect).
+  // Pilot runs for this site (`npx usepilot`): Send and comments go to the agent. Without it, both
+  // say so (the toolbar's red pills, PilotSession.stuck): there's no other way to hand changes over.
   const sendToAgent = !!session?.canSendToAgent;
-  // What Send would send: the changes not sent yet, less those waiting for a
-  // job on their element; Copy prompt copies everything in effect.
-  const sendCount = sendToAgent ? (session?.unsent ?? 0) - (session?.heldCount ?? 0) : changeCount;
+  // What Send would send: the changes not sent yet, less those waiting for a job on their element.
+  const sendCount = (session?.unsent ?? 0) - (session?.heldCount ?? 0);
   // Send: what went, and what waits for a job still on its element (it goes once that's finished).
   const sendChanges = (): boolean | string => {
     if (!session) return false;
@@ -285,13 +279,13 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   };
   // Jobs not finished yet: waiting, an agent applying, checking the page.
   const pending = (session?.jobs ?? []).filter((j) => j.status === "queued" || j.status === "working" || (j.status === "done" && !j.checked && !j.error)).length;
-  // The toolbar's alerts. An older Pilot running in the way: on Comment and Send both, jobs or not (whatever goes next
-  // can't reach Pilot), so cancelling the stuck jobs doesn't hide it. Pilot not running, or a run that failed: on Comment
+  // The toolbar's alerts. Pilot not running for the site (or an older one in the way): on Comment and Send both, jobs
+  // or not (whatever goes next can't go), so cancelling the stuck jobs doesn't hide it. A run that failed: on Comment
   // for stuck jobs asked in a thread (comments, tasks from the comment box), on Send for the rest.
   const inThread = (id: string) => !!session?.threads.some((t) => t.messages.some((m) => m.jobId === id));
   const toolbarAlerts = !stuck
     ? undefined
-    : stuck.kind === "older-agent"
+    : stuck.kind !== "agent-error"
       ? { comment: stuckAlert, send: stuckAlert }
       : {
           ...(stuck.jobs.some(inThread) ? { comment: stuckAlert } : {}),
@@ -564,7 +558,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   onToolRef.current = onTool;
 
   // Comments: the selected element's thread, where its latest comment
-  // stands, and sending one (to the agent at once; with none, copied).
+  // stands, and sending one (to the agent at once; without Pilot running, the box says so).
   const thread = selected && session ? session.threadFor(selected.element) : null;
   const threadJob = thread && session ? session.threadJob(thread) : null;
   // Comments written while a job was on the element wait for it (see PilotSession.comment).
@@ -594,7 +588,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     session.comment(element, text, attachments, action, othersRef.current, mentions.flatMap(toReference), withEdits, setting);
     return "sent";
   };
-  // How many of them there are, for the chip (changeCount re-renders this as the history changes).
+  // How many of them there are, for the chip (the history's changes re-render this).
   const unsentOnSelection = countChanges(
     selected ? history.changes({ unsent: true }).filter((c) => c.element === selected.element || others.includes(c.element)) : [],
   );
@@ -847,10 +841,9 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
         tool={tool}
         onTool={onTool}
         attention={session?.attention.length ?? 0}
-        mode={sendToAgent ? "send" : "copy"}
         canSend={sendCount > 0}
         sendCount={sendCount}
-        onSend={sendToAgent ? sendChanges : copyPrompt}
+        onSend={sendChanges}
         pending={running}
         alerts={toolbarAlerts}
         onNextJob={nextJob}

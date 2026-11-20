@@ -12,7 +12,7 @@ You're building with an agent. When you want to steer it precisely, you launch P
 │ npx usepilot     │ ──▶ │ select element                    │ ──▶ │ reads the change set     │
 │                  │     │ search "opa" → opacity editor     │     │ translates plain CSS to  │
 │                  │     │ drag → live preview on the page   │     │ Tailwind / modules /     │
-│                  │     │ Send to agent  ·  Copy prompt     │     │ tokens, edits source     │
+│                  │     │ Send to agent                     │     │ tokens, edits source     │
 └──────────────────┘     └───────────────────────────────────┘     └──────────────────────────┘
 ```
 
@@ -20,7 +20,7 @@ You're building with an agent. When you want to steer it precisely, you launch P
 2. **Select** an element with the toolbar's Select tool. Its property dialog opens next to it.
 3. **Search** a property the way you'd type a Tailwind class (`pt`, `w`, `gap-x`) and get a visual editor for exactly that property. See [property-dialog.md](property-dialog.md).
 4. **Tweak.** Each change shows live on the page through a stylesheet Pilot adds. Nothing touches the source yet. Cmd/Ctrl+Z undoes. See [edits.md](edits.md).
-5. **Hand off.** With `npx usepilot` running, **Send** turns the changes not sent yet into a job, Pilot runs the agent for it, and you keep designing meanwhile. Without an agent, the same text is copied as a prompt to paste anywhere. See [handoff.md](handoff.md).
+5. **Hand off.** With `npx usepilot` running, **Send** turns the changes not sent yet into a job, Pilot runs the agent for it, and you keep designing meanwhile. Without it, the toolbar says Pilot isn't running. See [handoff.md](handoff.md).
 6. **Apply and check.** The agent translates the plain-CSS intent into the stack: `border-radius: 12px` becomes `rounded-xl` in a Tailwind project, an existing `--radius-lg` token, or a CSS-module rule. Pilot then checks each change against the page's real CSS.
 
 **As fast as typing Tailwind classes.** Figma makes you hunt for a property in a sidebar. Tailwind is fast to type but gives no visual help. Pilot aims to beat both: you type, and you get a visual editor for exactly that property.

@@ -40,7 +40,7 @@ It uses your agent's plan, as when you use it yourself.
 
 **What the agent may do:** edit your project's files. Nothing else on your machine, and no internet: each agent runs in its own restricted mode or sandbox.
 
-**No agent?** Press **Option+P** (Alt+P on Windows and Linux) in your app, and **Copy prompt** hands your changes to any chat.
+Pilot needs `npx usepilot` running: without it, the toolbar says so. **Option+P** (Alt+P on Windows and Linux) opens or hides Pilot in your app.
 
 ### Updating
 

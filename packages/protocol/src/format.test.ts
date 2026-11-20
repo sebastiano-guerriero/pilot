@@ -118,7 +118,7 @@ describe("formatPrompt", () => {
     expect(text).toContain("- Selector: `section.hero > h1`");
     expect(text).toContain("breakpoints (the widths its media queries test): 640px, 768px, 1024px");
     expect(text).toContain("**Find similar components**");
-    expect(text).toContain("**Check every width with `pilot_check_widths`**");
+    expect(text).toContain("**Check every width from the code**");
     expect(text).toContain("An advanced task");
     expect(text).not.toContain("| Property |");
     // No breakpoints in the page's CSS.
@@ -139,32 +139,29 @@ describe("formatPrompt", () => {
     }
   });
 
-  it("for a run Pilot started (no tools), names none of Pilot's tools: questions and props go in the reply's pilot block", () => {
+  it("names none of Pilot's old MCP tools: a question or props go in the reply's pilot block, widths are measured by Pilot after", () => {
     const target = changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"];
-    const prompts = [
-      formatPrompt(changeSet, { tools: false }),
-      formatPrompt({ ...changeSet, edits: [], request: { kind: "responsive", target, breakpoints: [768] } }, { tools: false }),
-      formatPrompt({ ...changeSet, edits: [], request: { kind: "break-and-fix", target, breakpoints: [] } }, { tools: false }),
-      formatPrompt(
-        {
-          ...changeSet,
-          request: {
-            kind: "comment",
-            target,
-            breakpoints: [],
-            thread: [{ from: "designer", text: "", at: "", props: { component: "Card", usedIn: "src/App.jsx", set: [{ name: "tone", from: "light", to: "dark" }] } }],
-          },
+    const sets: ChangeSet[] = [
+      changeSet,
+      { ...changeSet, edits: [], request: { kind: "responsive", target, breakpoints: [768] } },
+      { ...changeSet, edits: [], request: { kind: "break-and-fix", target, breakpoints: [] } },
+      {
+        ...changeSet,
+        request: {
+          kind: "comment",
+          target,
+          breakpoints: [],
+          thread: [{ from: "designer", text: "", at: "", props: { component: "Card", usedIn: "src/App.jsx", set: [{ name: "tone", from: "light", to: "dark" }] } }],
         },
-        { tools: false },
-      ),
-      formatPrompt({ ...changeSet, edits: [], request: { kind: "props", target, breakpoints: [], component: "Card", current: {} } }, { tools: false }),
+      },
+      { ...changeSet, edits: [], request: { kind: "props", target, breakpoints: [], component: "Card", current: {} } },
     ];
-    for (const text of prompts) expect(text).not.toMatch(/pilot_(done|check_widths|wait_for_edits)/);
-    expect(prompts[0]).toContain("your reply's `pilot` block");
-    expect(prompts[1]).toMatch(/Check every width from the code/);
-    expect(prompts[4]).toContain("as `props` in your reply's `pilot` block");
-    // With tools (the MCP path and Copy prompt), as before.
-    expect(formatPrompt({ ...changeSet, edits: [], request: { kind: "responsive", target, breakpoints: [] } })).toContain("pilot_check_widths");
+    for (const set of sets) expect(formatPrompt(set)).not.toMatch(/pilot_(done|check_widths|wait_for_edits)/);
+    expect(formatPrompt(changeSet)).toContain("your reply's `pilot` block");
+    expect(formatPrompt(sets[1] as ChangeSet)).toMatch(/Check every width from the code/);
+    expect(formatPrompt(sets[1] as ChangeSet)).toContain("Pilot runs the width check once more");
+    expect(formatPrompt(sets[3] as ChangeSet)).toContain("ask (the question in your reply's `pilot` block)");
+    expect(formatPrompt(sets[4] as ChangeSet)).toContain("as `props` in your reply's `pilot` block");
   });
 
   it("break and fix: stress-test one element with odd content, fix it, put the real content back", () => {
@@ -172,8 +169,8 @@ describe("formatPrompt", () => {
     const text = formatPrompt({ ...changeSet, note: "Names can be very long", edits: [], request: { kind: "break-and-fix", target, breakpoints: [768] } });
     expect(text).toContain("# Pilot: break and fix");
     expect(text).toContain("Designer note: Names can be very long");
-    expect(text).toContain("**Break it on purpose, temporarily**");
-    expect(text).toContain("`pilot_check_widths`");
+    expect(text).toContain("put the content in temporarily and take it out again");
+    expect(text).toContain("**Find where it breaks**");
     expect(text).toContain("**Put the real content back.**");
     // Images: tried in odd shapes and failing, fixed with object-fit / background-size and a fallback.
     expect(text).toContain("images (and background images) in odd shapes");
@@ -245,10 +242,10 @@ describe("formatPrompt", () => {
   it("a comment with the designer's edits: they're listed with their values, to apply exactly, as Send's are", () => {
     const target = changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"];
     const thread = [{ from: "designer" as const, text: "Like this, on mobile too", at: "" }];
-    const text = formatPrompt({ ...changeSet, request: { kind: "comment", target, thread, breakpoints: [] } }, { guidelines: false });
+    const text = formatPrompt({ ...changeSet, request: { kind: "comment", target, thread, breakpoints: [] } });
     expect(text).toContain("## The designer's edits, sent with the comment");
     expect(text).toContain("apply them too, exactly, as design edits");
-    expect(text).toContain("Follow Pilot's edit guidelines");
+    expect(text).toContain("Guidelines:");
     expect(text).toContain("### 1. `");
     expect(text).toContain("| `opacity` | `1` | `0.8` |");
     // Without edits, none of it.
@@ -278,7 +275,7 @@ describe("formatPrompt", () => {
     expect(text).toContain("**Don't change any code.**");
     expect(text).toContain("- This instance is written in: `src/App.jsx`");
     expect(text).toContain('- `tone`: `"light"`\n- `count`: `3`\n- `featured`: `false`');
-    expect(text).toContain("Call `pilot_done` with this job's id, the list in `props`");
+    expect(text).toContain("as `props` in your reply's `pilot` block");
   });
 
   it("a comment that sets props: what changed, set where the instance is written", () => {
@@ -312,7 +309,7 @@ describe("formatPrompt", () => {
     const card = formatPrompt({ ...changeSet, edits: [{ ...(changeSet.edits[0] as ChangeSet["edits"][number]), target: { ...target, lookAlikes: 2 } }] });
     expect(card).toContain("- Look-alikes: 2 more on the page (the same part of other copies), not in this job");
     expect(card).toContain("Shared code, only some copies");
-    expect(card).toContain("`pilot_done` takes a `question`");
+    expect(card).toContain("New variant\" (as the question in your reply's `pilot` block)");
     // Found by component (React, Vue): which component, where its code is, and whose instances the look-alikes are.
     const instances = formatPrompt({
       ...changeSet,

@@ -5,8 +5,8 @@ import { clampSpot, type ToolbarSpot } from "../../toolbarSpot.ts";
 import { Icon } from "../Icon/Icon.tsx";
 import { Tooltip } from "../Tooltip/Tooltip.tsx";
 
-/** How long the Send / Copy prompt button says "Sent" / "Copied", in ms. */
-const COPIED_FOR = 1500;
+/** How long the Send button says "Sent" (or "Queued"), in ms. */
+const SENT_FOR = 1500;
 /** How long the jobs button takes to leave (its exit animation, see Toolbar.css). */
 const LEAVE_MS = 200;
 /** Tooltips clear the toolbar: its 8px padding, then the usual 4px. */
@@ -26,19 +26,11 @@ interface ToolbarProps {
   onTool(tool: Exclude<Tool, null>): void;
   /** Comment threads that need the designer (the agent spoke last): a pill on the Comment button. */
   attention?: number;
-  /**
-   * What the Send button does: `send` the changes not sent yet to the agent
-   * running for this page (`npx usepilot`), or `copy` the prompt (no agent).
-   */
-  mode: "send" | "copy";
-  /** There's something to send (or copy): the button lights up. */
+  /** There's something to send: the button lights up. Sent to the agent Pilot runs for this page (`npx usepilot`); without it, `alerts.send` says so. */
   canSend: boolean;
-  /** How many changes Send would send (or Copy prompt copy): a pill on the button. */
+  /** How many changes Send would send: a pill on the button. */
   sendCount?: number;
-  /**
-   * Send or copy; resolves to whether it worked, or to what the tooltip
-   * says instead of "Sent" ("Queued").
-   */
+  /** Send; resolves to whether it worked, or to what the tooltip says instead of "Sent" ("Queued"). */
   onSend(): Promise<boolean | string> | boolean | string | void;
   /** Jobs not finished yet (waiting, an agent applying, checking): the jobs button shows while there are any. */
   pending: number;
@@ -85,7 +77,6 @@ export function Toolbar({
   tool,
   onTool,
   attention = 0,
-  mode,
   canSend,
   sendCount = 0,
   onSend,
@@ -96,16 +87,16 @@ export function Toolbar({
   spot = null,
   onMove,
 }: ToolbarProps) {
-  // After a send or copy, the tooltip says so for a moment.
+  // After a send, the tooltip says so for a moment.
   const [done, setDone] = useState<boolean | string>(false);
   useEffect(() => {
     if (!done) return;
-    const timer = setTimeout(() => setDone(false), COPIED_FOR);
+    const timer = setTimeout(() => setDone(false), SENT_FOR);
     return () => clearTimeout(timer);
   }, [done]);
-  const doneText = typeof done === "string" ? done : mode === "send" ? "Sent" : "Copied";
-  const action = mode === "send" ? "Send to agent" : "Copy prompt";
-  const idle = mode === "send" ? "Nothing to send" : "Nothing to copy";
+  const doneText = typeof done === "string" ? done : "Sent";
+  const action = "Send to agent";
+  const idle = "Nothing to send";
 
   // The jobs button stays through its exit animation, showing the last count.
   const [jobs, setJobs] = useState<{ count: number; leaving: boolean } | null>(pending ? { count: pending, leaving: false } : null);
@@ -219,7 +210,7 @@ export function Toolbar({
           <Icon name="select" />
         </button>
       </Tooltip>
-      {/* After a send or copy, its tooltip says so for a moment, hovered or not. */}
+      {/* After a send, its tooltip says so for a moment, hovered or not. */}
       <Tooltip
         text={done ? doneText : (alerts.send?.title ?? (canSend ? action : idle))}
         detail={done ? undefined : alerts.send?.detail}
@@ -232,9 +223,8 @@ export function Toolbar({
           aria-label={
             done
               ? doneText
-              : `${mode === "send" ? "Send to agent" : "Copy prompt"}${sendCount ? ` (${sendCount} ${sendCount === 1 ? "change" : "changes"})` : ""}${alerts.send ? `. ${alerts.send.title}. ${alerts.send.detail}` : ""}`
+              : `${action}${sendCount ? ` (${sendCount} ${sendCount === 1 ? "change" : "changes"})` : ""}${alerts.send ? `. ${alerts.send.title}. ${alerts.send.detail}` : ""}`
           }
-          data-mode={mode}
           data-ready={canSend || undefined}
           // With an alert it stays hoverable (its tooltip says what's stuck), only its icon dimmed when there's nothing to send.
           data-idle={!canSend && alerts.send ? "" : undefined}
@@ -244,15 +234,7 @@ export function Toolbar({
             if (result !== false) setDone(typeof result === "string" ? result : true);
           }}
         >
-          {mode === "copy" ? (
-            // Copy prompt: the copy icon morphs into a check once it's copied (Toolbar.css).
-            <span class="copy-morph" data-done={!!done || undefined}>
-              <Icon name="copy" class="morph-copy" />
-              <Icon name="copied" class="morph-check" />
-            </span>
-          ) : (
-            <Icon name="send" />
-          )}
+          <Icon name="send" />
           {alerts.send ? (
             <AlertPill />
           ) : (

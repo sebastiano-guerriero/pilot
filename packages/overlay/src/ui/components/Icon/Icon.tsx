@@ -540,7 +540,7 @@ const ICONS = {
       </>
     ),
   },
-  // Toolbar, copy mode (no agent): Copy prompt (Nucleo UI clone-2, filled,
+  // Unused since Copy prompt was removed (kept, the owner's icons). Was: Copy prompt (Nucleo UI clone-2, filled,
   // 18px), which morphs into copied (Nucleo UI check, outline, 12px) once
   // the prompt is on the clipboard. The check's path has pathLength 1, so
   // CSS can draw it in (Toolbar.css).

@@ -1,6 +1,5 @@
 export type { AgentRequest, AgentSession, BreakFixRequest, ChangeSet, AttachmentExtension, CommentAction, CommentAttachment, CommentMessage, CommentReference, CommentRequest, ComponentFile, FileTokenUse, PropChange, PropSpec, PropsRequest, PropValue, ElementEdit, ElementState, ElementTarget, ResponsiveRequest, TaskRequest, StyleChange, StyleSource, TextChange, WidthRange } from "./types.ts";
 export { ATTACHMENT_ACCEPT, ATTACHMENT_ID, ATTACHMENT_TYPES, attachmentKind, attachmentType, mentionText, requestTargets, STATES, sortStates, TASK_KINDS } from "./types.ts";
-export { describeStates, describeWidths, EDIT_GUIDELINES, editGuidelines, formatPrompt, formatWidthCheck, SHARED_CHOICES, sharedChoiceMeaning } from "./format.ts";
-export type { PromptOptions } from "./format.ts";
+export { describeStates, describeWidths, editGuidelines, formatPrompt, formatWidthCheck, SHARED_CHOICES, sharedChoiceMeaning } from "./format.ts";
 export type { AgentInfo, AgentQuestion, ChangeResult, Job, JobError, JobStatus, FileToken, PageEvent, ProjectComponent, WidthCheck, WidthReport } from "./bridge.ts";
 export { BRIDGE_VERSION, DEFAULT_BRIDGE_PORT, isLocalHost, MAX_CHOICES, MAX_PROPS, jobErrorOf, originKey, originOf, propsOf, questionOf, sameOrigin, sessionOf } from "./bridge.ts";

@@ -148,7 +148,7 @@ export interface Stuck {
 }
 
 export interface SessionOptions {
-  /** The hub's URL, or false for no bridge (Send is never offered: Copy prompt only). */
+  /** The hub's URL, or false for no bridge (nothing can be sent). */
   bridge: string | false;
   /** Pilot started running for this site (`npx usepilot`): launch it. */
   onLaunch(agent: AgentInfo): void;
@@ -233,7 +233,7 @@ export class PilotSession {
     return this.bridge?.state ?? { connected: false, agents: [], waiting: 0 };
   }
 
-  /** An agent works on this page: Send is offered (else Copy prompt is the way). */
+  /** Pilot runs for this page's site (`npx usepilot`): Send and comments go to the agent. */
   get canSendToAgent(): boolean {
     return this.state.connected && this.state.agents.length > 0;
   }
@@ -1028,8 +1028,8 @@ export class PilotSession {
    * - offline: the page can't reach the hub (`npx usepilot` isn't running);
    * - no-agent: it can, but Pilot doesn't run for this site (it's running
    *   for another project).
-   * With no job waiting, and Pilot not running, the page is in Copy prompt
-   * mode: nothing's stuck.
+   * Pilot not running is said with jobs or without: there's no other way to
+   * hand changes over (Copy prompt is gone), so whatever goes next can't go.
    */
   private stuckNow(): Stuck | null {
     if (!this.bridge) return null;
@@ -1042,7 +1042,6 @@ export class PilotSession {
     if (!connected && older) {
       return { kind: "older-agent", title: "Pilot isn't running for this site", detail: NOT_RUNNING_OLDER, jobs: ids(open) };
     }
-    if (!open.length && !(connected && agents.length)) return null;
     if (!connected) return { kind: "offline", title: "Pilot isn't running for this site", detail: NOT_RUNNING, jobs: ids(open) };
     if (!agents.length) return { kind: "no-agent", title: "Pilot isn't running for this site", detail: NOT_RUNNING, jobs: ids(open) };
     return null;

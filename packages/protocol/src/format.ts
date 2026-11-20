@@ -20,36 +20,25 @@ import type {
 } from "./types.ts";
 
 /**
- * Turn a change set into instructions a coding agent can follow.
- * Used by "Copy prompt" in the overlay and by the bridge's MCP tools,
- * so both paths hand the agent exactly the same text.
+ * Turn a change set into the instructions Pilot gives the agent it runs for
+ * a job (docs/handoff.md, *Agent runs*): a question or a props list goes in
+ * the reply's `pilot` block (described by the run's own footer, prompt.ts in
+ * the CLI), and widths are worked out from the code, Pilot measuring them
+ * after the run.
  */
-export interface PromptOptions {
-  /** false: the edit guidelines as a one-line reminder (an agent that read them once); in full otherwise. */
-  guidelines?: boolean;
-  /**
-   * false: for a run Pilot started itself (docs/handoff.md, *Agent runs*),
-   * which has none of Pilot's tools: a question or a props list goes in the
-   * reply's `pilot` block (described by the run's own footer), and widths
-   * are worked out from the code, Pilot measuring them after the run.
-   */
-  tools?: boolean;
-}
-
-export function formatPrompt(changeSet: ChangeSet, options: PromptOptions = {}): string {
-  const tools = options.tools !== false;
-  if (changeSet.request?.kind === "responsive") return formatResponsive(changeSet, changeSet.request, tools);
-  if (changeSet.request?.kind === "break-and-fix") return formatBreakFix(changeSet, changeSet.request, tools);
-  if (changeSet.request?.kind === "comment") return formatComment(changeSet, changeSet.request, options);
-  if (changeSet.request?.kind === "props") return formatProps(changeSet, changeSet.request, tools);
+export function formatPrompt(changeSet: ChangeSet): string {
+  if (changeSet.request?.kind === "responsive") return formatResponsive(changeSet, changeSet.request);
+  if (changeSet.request?.kind === "break-and-fix") return formatBreakFix(changeSet, changeSet.request);
+  if (changeSet.request?.kind === "comment") return formatComment(changeSet, changeSet.request);
+  if (changeSet.request?.kind === "props") return formatProps(changeSet, changeSet.request);
   const { page, edits, note } = changeSet;
   const lines: string[] = [
     "# Pilot design edits",
     "",
     "A designer adjusted the UI below in the browser with Pilot. Apply these changes to the source code.",
     "",
-    // In full when pasted; an agent connected to Pilot read them once (pilot_wait_for_edits's description).
-    ...(options.guidelines === false ? [EDIT_GUIDELINES_REMINDER] : ["Guidelines:", ...editGuidelines(options.tools !== false)]),
+    "Guidelines:",
+    ...editGuidelines(),
     "",
     `Page: ${page.url} (${page.title || "untitled"}) at ${page.viewport.width}x${page.viewport.height}`,
   ];
@@ -85,10 +74,8 @@ function fileTokenLines(tokens: ChangeSet["fileTokens"]): string[] {
  * judgment: they say so, and an agent that can hands them to its most
  * capable model.
  */
-function advancedTask(tools: boolean): string {
-  return tools
-    ? "**An advanced task: it needs judgment more than speed.** If you can hand work to a more capable model than the one you run on (a subagent, or another model your agent offers), do: give it this whole prompt (with the job id), have it make the changes and run the width check, and report back; then call `pilot_done` with its notes."
-    : "**An advanced task: it needs judgment more than speed.** If you can hand work to a more capable model than the one you run on (a subagent, or another model your agent offers), do: give it this whole prompt, have it make the changes, and report back with what it did.";
+function advancedTask(): string {
+  return "**An advanced task: it needs judgment more than speed.** If you can hand work to a more capable model than the one you run on (a subagent, or another model your agent offers), do: give it this whole prompt, have it make the changes, and report back with what it did.";
 }
 
 /**
@@ -128,32 +115,24 @@ export function sharedChoiceMeaning(answer: string): string | null {
 
 /**
  * Shared code the designer changed in only some copies: the agent asks
- * (pilot_done's question) rather than guess, unless the designer already
+ * (in its reply, or a run's `pilot` block) rather than guess, unless the designer already
  * said. Every job says it, edits, comments and tasks alike; Pilot counts
  * each element's look-alikes.
  */
-function sharedCode(tools: boolean): string {
+function sharedCode(): string {
   return [
-    `**Shared code, only some copies:** an element's "Look-alikes" line counts the elements like it that this job leaves out (other instances of its component, or the same part of other copies). If they come from the same code (a shared component, a loop over data), and the designer didn't say which they meant, don't guess: do the rest of the job, leave that part, and ask in one short sentence, the component's name in **bold**, with three choices, your suggestion first: "${SHARED_CHOICES.all.label}", "${SHARED_CHOICES.one.label}", "${SHARED_CHOICES.variant.label}" (${tools ? "Pilot's `pilot_done` takes a `question`; without Pilot's tools, ask in your reply" : "as the question in your reply's `pilot` block"}). Their answer comes back to you as this job.`,
+    `**Shared code, only some copies:** an element's "Look-alikes" line counts the elements like it that this job leaves out (other instances of its component, or the same part of other copies). If they come from the same code (a shared component, a loop over data), and the designer didn't say which they meant, don't guess: do the rest of the job, leave that part, and ask in one short sentence, the component's name in **bold**, with three choices, your suggestion first: "${SHARED_CHOICES.all.label}", "${SHARED_CHOICES.one.label}", "${SHARED_CHOICES.variant.label}" (as the question in your reply's \`pilot\` block). Their answer comes back to you as this job.`,
     ...Object.values(SHARED_CHOICES).map((c) => `**${c.label}**: ${c.means}`),
     'Don\'t ask when the designer already said (in the comment or note: "only here", "every card", "as a variant"), when every copy is in the job, or when nothing else uses that code: just change it.',
   ].join(" ");
 }
-/**
- * The edit jobs' guidelines: what every edit asks of the code. In full in a
- * pasted prompt; an agent connected to Pilot reads them once, in
- * `pilot_wait_for_edits`'s description, and each job only reminds it, so the
- * jobs it gets stay short (they're the most frequent ones).
- */
-export const EDIT_GUIDELINES: string[] = editGuidelines(true);
-
-/** The edit guidelines, for an agent with Pilot's tools or (false) for a run Pilot started (see PromptOptions.tools). */
-export function editGuidelines(tools: boolean): string[] {
+/** The edit jobs' guidelines: what every edit asks of the code. */
+export function editGuidelines(): string[] {
   return [
   `- ${DESIGN_INTENT}`,
   `- ${PRODUCTION_CODE} Prefer an existing token or utility when it matches the value (or is within a pixel or two): utility classes take the closest one in the project's scale or theme (\`padding-top: 24px\` → \`pt-6\`), arbitrary values only when nothing fits. Mention any value you had to approximate.`,
   "- Find each element by its selector, DOM path and text, then the component that renders it. Change only the listed elements.",
-  `- ${sharedCode(tools)}`,
+  `- ${sharedCode()}`,
   "- A removed property means the element shouldn't declare it at all: not `0` or `none`, the declaration gone.",
   "- No screenshots, builds or tests for these edits: hot reload shows them, and Pilot checks the page itself.",
   '- Widths are viewport widths in CSS px, both ends included. Use this project\'s breakpoints when one matches (or is within a few pixels), else a custom media query, and say which. "Every width" means no media query: the value holds at every viewport width, and no existing media query should override it.',
@@ -161,10 +140,6 @@ export function editGuidelines(tools: boolean): string[] {
   "- A State is the element state the change is for, all of them together (\"hover, active\": hovered and pressed). Use the project's own form: Tailwind's variants (`hover:`, `focus-visible:`, `hover:active:`), `:hover` and the like in CSS. Without a state, the change is for the element as it is (any state).",
   ];
 }
-
-/** In place of the guidelines, in a job for an agent that read them once. */
-const EDIT_GUIDELINES_REMINDER =
-  "Follow Pilot's edit guidelines (in `pilot_wait_for_edits`'s description): these are design instructions, not code; write production code the way this project already styles things.";
 
 /** For comments and tasks: the same, in one line. */
 const PROJECT_CODE = `**Write production code in the project's own styling system**, whatever it uses (Tailwind, CSS or Sass modules, StyleX, styled-components…), following how this element's component is styled: its tokens and scale, the rule that already styles it. ${PRODUCTION_CODE}`;
@@ -183,10 +158,10 @@ function propValue(value: PropValue | undefined): string {
 
 /**
  * `/props`: the agent reads the component's code and lists the props the
- * designer can set on this instance (pilot_done's `props`), changing
+ * designer can set on this instance (in a run's `pilot` block, `props`), changing
  * nothing. A simple job: any model can read a component's props.
  */
-function formatProps(changeSet: ChangeSet, request: PropsRequest, tools: boolean): string {
+function formatProps(changeSet: ChangeSet, request: PropsRequest): string {
   const { page, note } = changeSet;
   const current = Object.entries(request.current);
   const lines = [
@@ -212,9 +187,7 @@ function formatProps(changeSet: ChangeSet, request: PropsRequest, tools: boolean
     "- **For each:** `name`; `type`: `options` (one of a set of values), `boolean`, `text` or `number`; for `options`, every value it accepts, from its types (a union like `\"primary\" | \"ghost\"`), its variants config (cva, tailwind-variants, a variants object), its prop validation (a Vue `validator`, `PropTypes.oneOf`), or how the component uses it; `default` when it has one; `description` in a few words when the name doesn't say.",
     "- The most useful first (the main variant, then the size, then the rest); 12 at most.",
     "",
-    tools
-      ? "Call `pilot_done` with this job's id, the list in `props`, and notes: one short sentence for the designer, like a chat message (\"Button has 3 props you can change\"). Pilot shows the props in the designer's thread, each with its value on this instance; what they pick comes back to you as a comment, a `name: value` line per prop (`tone: dark`), to set where this instance is written. If none is worth listing, say so in the notes and leave `props` out."
-      : "Reply with one short sentence for the designer, like a chat message (\"Button has 3 props you can change\"), and the list as `props` in your reply's `pilot` block. Pilot shows the props in the designer's thread, each with its value on this instance; what they pick comes back to you as a comment, a `name: value` line per prop (`tone: dark`), to set where this instance is written. If none is worth listing, say so and leave the block out.",
+    "Reply with one short sentence for the designer, like a chat message (\"Button has 3 props you can change\"), and the list as `props` in your reply's `pilot` block. Pilot shows the props in the designer's thread, each with its value on this instance; what they pick comes back to you as a comment, a `name: value` line per prop (`tone: dark`), to set where this instance is written. If none is worth listing, say so and leave the block out.",
   ];
   return `${lines.join("\n")}\n`;
 }
@@ -225,7 +198,7 @@ function formatProps(changeSet: ChangeSet, request: PropsRequest, tools: boolean
  * look, and put the real content back. Pilot's width check measures it, on
  * the agent's temporary content while it works, on the usual content after.
  */
-function formatBreakFix(changeSet: ChangeSet, request: BreakFixRequest, tools: boolean): string {
+function formatBreakFix(changeSet: ChangeSet, request: BreakFixRequest): string {
   const { page, note } = changeSet;
   const { breakpoints } = request;
   const several = requestTargets(request).length;
@@ -242,7 +215,7 @@ function formatBreakFix(changeSet: ChangeSet, request: BreakFixRequest, tools: b
     `Page: ${page.url} (${page.title || "untitled"}), seen at ${page.viewport.width}x${page.viewport.height}`,
     `The page's breakpoints (the widths its media queries test): ${widths}`,
     "",
-    advancedTask(tools),
+    advancedTask(),
   ];
   if (note?.trim()) lines.push("", `Designer note: ${note.trim()}`);
   if (request.attachments?.length)
@@ -256,9 +229,7 @@ function formatBreakFix(changeSet: ChangeSet, request: BreakFixRequest, tools: b
     "",
     "1. **Find the element's component and where its content comes from**: props, data, a CMS or an API, translations. List what can vary: each text, how many repeated items there are, optional parts (an image, a subtitle, a badge), numbers, names, URLs.",
     "2. **Think of the odd but realistic content each can get**: text far longer than the placeholder (a 120-character title, a long person or product name) and much shorter or empty; long words with no spaces (URLs, emails, IDs, compound words); optional parts missing (no image, no subtitle, an empty list) and many repeated items instead of a few; big numbers and prices; the longer strings of other languages; images (and background images) in odd shapes, very wide, very tall, tiny or low-resolution, and images that fail to load.",
-    tools
-      ? "3. **Break it on purpose, temporarily**: put that content in the page (the props, the fixture or data it renders, or the markup), let hot reload show it, and run `pilot_check_widths` with this job's id. It measures the element at every width in the designer's page and reports, as numbers, content sticking out of the viewport, spilling out of its parent, clipped, or overlapping. Read the code too, for what the check can't see: items that shrink when they shouldn't (an icon or avatar squeezed by flex), buttons that stretch, rows that misalign, text wrapping under an icon, images stretched or squashed (a distorted image keeps its box, so the check doesn't report it)."
-      : "3. **Find where it breaks**: for each kind of odd content, read the layout code and work out what it would do: content sticking out of the viewport, spilling out of its parent, clipped, or overlapping; items that shrink when they shouldn't (an icon or avatar squeezed by flex), buttons that stretch, rows that misalign, text wrapping under an icon, images stretched or squashed. If trying it helps, put the content in temporarily and take it out again; no browser or screenshots.",
+    "3. **Find where it breaks**: for each kind of odd content, read the layout code and work out what it would do: content sticking out of the viewport, spilling out of its parent, clipped, or overlapping; items that shrink when they shouldn't (an icon or avatar squeezed by flex), buttons that stretch, rows that misalign, text wrapping under an icon, images stretched or squashed. If trying it helps, put the content in temporarily and take it out again; no browser or screenshots.",
     "4. **Fix what breaks, without changing how it looks with its usual content**, the way this project does it (its utilities, its components):",
     "   - **Long text:** truncate it with an ellipsis (`truncate`, `text-overflow: ellipsis`) where one line matters, or clamp it to a few lines (`line-clamp-*`) where it can wrap; when the full text is lost, show it on hover (`title`, or the project's tooltip).",
     "   - **Flex and grid:** `min-width: 0` (`min-w-0`) on items holding text so they can shrink; `flex-shrink: 0` (`shrink-0`) on icons, avatars and buttons that mustn't; `minmax(0, 1fr)` columns; wrapping rows (`flex-wrap`) instead of overflowing ones.",
@@ -266,13 +237,11 @@ function formatBreakFix(changeSet: ChangeSet, request: BreakFixRequest, tools: b
     "   - **Images:** `object-fit: cover` for photos that should fill their frame, `contain` where cropping would lose something (logos, product shots); for background images, `background-size: cover` (or `contain`) with a sensible `background-position`. A fixed `aspect-ratio` (or size) on the frame, so the layout doesn't jump while an image loads or when its shape is odd, and a fallback when it fails or is missing (a plain background, initials, an icon), never a broken-image box.",
     "   - **Missing parts:** no gap or empty box left behind; a simple empty state only where one is clearly needed.",
     "   In the check, an ellipsis on your deliberately long text is the fix working, not a problem.",
-    tools
-      ? "5. **Put the real content back.** Remove every temporary value you added: nothing of the test may stay in the code. Then run `pilot_check_widths` again: with its usual content, the element must look as it did at the designer's width (the check reports any change there)."
-      : "5. **Put the real content back.** Remove every temporary value you added: nothing of the test may stay in the code. With its usual content, the element must look as it did at the designer's width.",
-    "6. **Report** in your notes, in a line or two, what broke and how you fixed it, and anything for the designer to decide (a content limit to agree on, an empty state to design). When you report it done, Pilot runs the width check once more, with the usual content: problems come back to you once, as a follow-up.",
+    "5. **Put the real content back.** Remove every temporary value you added: nothing of the test may stay in the code. With its usual content, the element must look as it did at the designer's width.",
+    `6. **Report** in your notes, in a line or two, what broke and how you fixed it, and anything for the designer to decide (a content limit to agree on, an empty state to design). When you report it done, Pilot runs the width check once more, with the usual content: problems come back to you once, as a follow-up.`,
     "",
     several > 1
-      ? `Change only these elements and what they need (their children, their containers). If they come from a shared component, fix it there, so every instance gets sturdier, as long as its usual look doesn't change; ask before anything that would. ${firstChecked(tools)}`
+      ? `Change only these elements and what they need (their children, their containers). If they come from a shared component, fix it there, so every instance gets sturdier, as long as its usual look doesn't change; ask before anything that would. ${firstChecked()}`
       : "Change only this element and what it needs (its children, its container). If it's a shared component, fix it there, so every instance gets sturdier, as long as its usual look doesn't change; ask before anything that would.",
     "",
     PROJECT_CODE,
@@ -285,7 +254,7 @@ function formatBreakFix(changeSet: ChangeSet, request: BreakFixRequest, tools: b
  * every viewport width. No values: the agent decides the changes, the way
  * the project already does responsive, and checks them in the browser.
  */
-function formatResponsive(changeSet: ChangeSet, request: ResponsiveRequest, tools: boolean): string {
+function formatResponsive(changeSet: ChangeSet, request: ResponsiveRequest): string {
   const { page, note } = changeSet;
   const { breakpoints } = request;
   const several = requestTargets(request).length;
@@ -302,7 +271,7 @@ function formatResponsive(changeSet: ChangeSet, request: ResponsiveRequest, tool
     `Page: ${page.url} (${page.title || "untitled"}), seen at ${page.viewport.width}x${page.viewport.height}`,
     `The page's breakpoints (the widths its media queries test): ${widths}`,
     "",
-    advancedTask(tools),
+    advancedTask(),
   ];
   if (note?.trim()) lines.push("", `Designer note: ${note.trim()}`);
   if (request.attachments?.length)
@@ -318,16 +287,14 @@ function formatResponsive(changeSet: ChangeSet, request: ResponsiveRequest, tool
     "2. **Learn how this project does responsive**: its breakpoints and their names (Tailwind config or theme, CSS variables, existing media queries), whether components respond to their container instead (container queries, `@container`), and whether it writes mobile-first (min-width) or desktop-first (max-width). Use its breakpoints; don't invent new ones.",
     "3. **Find similar components** that already have responsive rules (other cards, lists, headers, forms in this project) and follow the same patterns, so this one behaves like its siblings.",
     "4. **Make the smallest changes that work**, in the project's conventions (Tailwind variants like `md:`, the media queries it already uses, its tokens): layout first (stacking, wrapping, columns, flex direction), then spacing and type size. Hide content only as a last resort, and say so. Don't change how it looks at the width the designer is working at unless that width has a problem too. Never leave inline styles.",
-    tools
-      ? "5. **Check every width with `pilot_check_widths`** (Pilot's tool, with this job's id). It loads the page at a phone width (375px), each breakpoint and 1px below it, a wide desktop (1440px) and the designer's width, measures the element in each, and reports problems as numbers: sticking out of the viewport, spilling out of its parent, clipped content, overlaps, and anything that changed at the designer's width. No screenshots needed. Fix what it finds and run it again until it finds none. Without that tool (a pasted prompt), check those widths in a browser if you have one, and say which widths you couldn't check."
-      : "5. **Check every width from the code**: work out how the element lays out at a phone width (375px), each breakpoint and 1px below it, and a wide desktop (1440px), and fix what wouldn't fit. No browser or screenshots: when you're done, Pilot loads the page at those widths, measures the element (sticking out of the viewport, spilling out of its parent, clipped content, overlaps, anything changed at the designer's width) and sends back what it finds, once.",
-    "6. **Report** in your notes what changed at which widths, in a line or two, and anything you left for the designer to decide. When you report it done, Pilot runs the width check once more: problems come back to you once, as a follow-up.",
+    "5. **Check every width from the code**: work out how the element lays out at a phone width (375px), each breakpoint and 1px below it, and a wide desktop (1440px), and fix what wouldn't fit. No browser or screenshots: when you're done, Pilot loads the page at those widths, measures the element (sticking out of the viewport, spilling out of its parent, clipped content, overlaps, anything changed at the designer's width) and sends back what it finds, once.",
+    `6. **Report** in your notes what changed at which widths, in a line or two, and anything you left for the designer to decide. When you report it done, Pilot runs the width check once more: problems come back to you once, as a follow-up.`,
     "",
     several > 1
-      ? `Change only these elements and what their layout needs (their containers, their children). ${firstChecked(tools)}`
+      ? `Change only these elements and what their layout needs (their containers, their children). ${firstChecked()}`
       : "Change only this element and what its layout needs (its container, its children).",
     "",
-    sharedCode(tools),
+    sharedCode(),
     "",
     PROJECT_CODE,
   );
@@ -339,8 +306,7 @@ function formatResponsive(changeSet: ChangeSet, request: ResponsiveRequest, tool
  * Simple, specific asks are done right away; open-ended ones are advanced
  * tasks (the stronger model). The agent's notes are its reply in the thread.
  */
-function formatComment(changeSet: ChangeSet, request: CommentRequest, options: PromptOptions = {}): string {
-  const tools = options.tools !== false;
+function formatComment(changeSet: ChangeSet, request: CommentRequest): string {
   const { page, edits } = changeSet;
   const { thread, breakpoints } = request;
   const several = requestTargets(request).length;
@@ -377,7 +343,7 @@ function formatComment(changeSet: ChangeSet, request: CommentRequest, options: P
       "",
       ...set.map((c) => `- \`${c.name}\`: ${propValue(c.from)} → ${propValue(c.to)}`),
       "",
-      `Set them where this instance is written${usedIn ? ` (\`${usedIn}\`, its \`<${component} …>\`)` : ` (its \`<${component} …>\`)`}, not in the component itself: only this instance changes. If that line renders several instances (a loop over data) or the value comes from data or a variable, ask${tools ? " with \`pilot_done\`'s question and choices" : " (the question in your reply's \`pilot\` block)"} before changing it for all of them. Pilot reads the instance's props on the page when you're done.`,
+      `Set them where this instance is written${usedIn ? ` (\`${usedIn}\`, its \`<${component} …>\`)` : ` (its \`<${component} …>\`)`}, not in the component itself: only this instance changes. If that line renders several instances (a loop over data) or the value comes from data or a variable, ask (the question in your reply's \`pilot\` block) before changing it for all of them. Pilot reads the instance's props on the page when you're done.`,
     );
   }
   // The designer's edits on these elements, sent with the comment: exact values, applied as Send's are (and checked by Pilot after).
@@ -388,7 +354,8 @@ function formatComment(changeSet: ChangeSet, request: CommentRequest, options: P
       "",
       "Before writing it, the designer changed these in Pilot's editor: apply them too, exactly, as design edits. The comment may be about them (\"like this, on mobile too\"). Pilot checks them on the page when you're done.",
       "",
-      ...(options.guidelines === false ? [EDIT_GUIDELINES_REMINDER] : ["Guidelines:", ...editGuidelines(tools)]),
+      "Guidelines:",
+      ...editGuidelines(),
     );
     edits.forEach((edit, index) => lines.push("", ...formatEdit(edit, index + 1).map((l) => (l.startsWith("## ") ? `#${l}` : l))));
     lines.push(...fileTokenLines(changeSet.fileTokens));
@@ -410,7 +377,7 @@ function formatComment(changeSet: ChangeSet, request: CommentRequest, options: P
     `- The designer was looking at the page ${page.viewport.width}px wide. If the comment is about how it looks at that width only, scope the change with the project's breakpoints; otherwise it's for every width.`,
     `- ${PROJECT_CODE}`,
     several > 1 ? "- Change only what the comment is about, on each of these elements." : "- Change only what the comment is about.",
-    `- ${sharedCode(tools)}`,
+    `- ${sharedCode()}`,
     "- **A question, not a change:** answer it, and change nothing.",
     "- **Your notes are your reply in the designer's thread, a small chat box for quick design back-and-forth:** keep it to one short sentence, like a chat message (about 120 characters at most): what you changed, or your answer, or the one thing you need from them. No lists, headings or code blocks; inline `code` for a value or a file name at most. Not a report: the designer sees the result on the page.",
   );
@@ -513,10 +480,8 @@ function quote(text: string): string {
 }
 
 /** Pilot's width check, on a task about several elements. */
-function firstChecked(tools: boolean): string {
-  return tools
-    ? "Pilot's width check (`pilot_check_widths`, and the one after you're done) measures the first of them; read the code for the others."
-    : "Pilot's width check after you're done measures the first of them; read the code for the others.";
+function firstChecked(): string {
+  return "Pilot's width check after you're done measures the first of them; read the code for the others.";
 }
 
 /** The element a request is about, or each of the elements selected together. */
@@ -614,8 +579,8 @@ function removalNote(c: StyleChange): string {
 }
 
 /**
- * A width check as the agent reads it (`pilot_check_widths`, and a task's
- * follow-up): each width's size and layout, its problems and notes, then
+ * A width check as text (for a check during a run, not built yet: the
+ * roadmap's *After agent runs*): each width's size and layout, its problems and notes, then
  * what changed at the designer's width.
  */
 export function formatWidthCheck(check: WidthCheck): string {

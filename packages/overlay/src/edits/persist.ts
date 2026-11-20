@@ -8,7 +8,7 @@ import { EditHistory, type SavedHistory } from "./history.ts";
  * changes made so far would make Pilot useless. So the history is saved in
  * the tab's sessionStorage after every change, undo and redo, and restored
  * when Pilot mounts again: the preview comes back, undo and redo still work,
- * and Copy prompt still has everything.
+ * and unsent changes are still there to send.
  *
  * Each change keeps how to find its element (`target.selector`, unique when
  * it was taken) and the page it was made on. On restore, an element found on

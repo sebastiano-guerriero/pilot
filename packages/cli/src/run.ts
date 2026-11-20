@@ -247,12 +247,12 @@ async function runAgent(ctx: RunContext, prompt: string, options: { resume?: str
   return parsed;
 }
 
-/** The prompt of a run: the job's (no tools), where its code probably is, and the text files attached. */
+/** The prompt of a run: the job's, where its code probably is, and the text files attached. */
 async function promptFor(job: Job, project: string): Promise<string> {
   const j = withComponentFiles(job, project);
   const where = j.attempt === 2 ? "" : whereSection(j, project);
   const texts = (await attachmentBlocks(j)).flatMap((b) => (b.type === "text" ? [b.text] : []));
-  return [jobPrompt(j, where, { tools: false }), ...texts].join("\n\n");
+  return [jobPrompt(j, where), ...texts].join("\n\n");
 }
 
 /** The session to resume: the job's own (its follow-up, an answer), else its comment thread's; only this agent's. */

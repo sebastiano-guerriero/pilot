@@ -654,7 +654,14 @@ describe("PilotSession", () => {
     s.destroy();
   });
 
-  it("with no agent, a comment is kept and its prompt is there to copy; threads survive a reload", () => {
+  it("Pilot not running: said after a moment even with nothing sent (nothing else can hand changes over); a comment is kept; threads survive a reload", async () => {
+    vi.useFakeTimers();
+    const s0 = session();
+    hub().emit({ type: "agents", agents: [], waiting: 0 });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(s0.stuck).toMatchObject({ kind: "no-agent", title: "Pilot isn't running for this site", jobs: [] });
+    s0.destroy();
+    vi.useRealTimers();
     const s = session();
     const { job: sent, changeSet } = s.comment(el, "Swap these two");
     expect(sent).toBeNull();

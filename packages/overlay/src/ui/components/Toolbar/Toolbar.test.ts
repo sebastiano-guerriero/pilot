@@ -9,7 +9,6 @@ let container: HTMLElement;
 const props = {
   tool: null as "select" | "comment" | null,
   onTool: () => {},
-  mode: "send" as "send" | "copy",
   canSend: false,
   onSend: () => true,
   pending: 0,
@@ -98,16 +97,17 @@ describe("Toolbar", () => {
     expect(jobs()).toBeNull();
   });
 
-  it("without an agent, the same button copies the prompt, its icon turning into a check once copied", async () => {
-    draw({ mode: "copy", canSend: true });
-    expect(tip(send())?.textContent).toBe("Copy prompt");
-    const morph = () => send().querySelector(".copy-morph");
-    expect(morph()?.hasAttribute("data-done")).toBe(false);
+  it("without Pilot running, Send says so instead of sending: no other way to hand changes over", async () => {
+    let sent = 0;
+    const alert = { title: "Pilot isn't running for this site", detail: "Run npx usepilot in your project's folder" };
+    draw({ canSend: true, alerts: { send: alert, comment: alert }, onSend: () => (sent++, false) } as Partial<typeof props>);
+    expect(tip(send())?.textContent).toBe("Pilot isn't running for this siteRun npx usepilot in your project's folder");
+    expect(send().querySelector(".copy-morph")).toBeNull();
     await act(async () => {
       send().click();
     });
-    expect(morph()?.hasAttribute("data-done")).toBe(true);
-    expect(tip(send())?.textContent).toBe("Copied");
+    // The click reaches Send, which can't go: nothing says "Sent".
+    expect(tip(send())?.textContent).not.toBe("Sent");
   });
 
   it("after a send, its tooltip shows Sent for a moment, hovered or not", async () => {
