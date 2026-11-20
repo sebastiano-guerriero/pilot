@@ -58,7 +58,8 @@ const AGENTS = {
   cursor: {
     label: "Cursor",
     bins: ["cursor-agent", "agent"],
-    status: { args: ["status"], ok: (out) => /logged in/i.test(out) && !/not logged in/i.test(out) },
+    // Its status says "Not logged in" with an API key, which runs use: the key counts.
+    status: { args: ["status"], ok: (out) => /logged in/i.test(out) && !/not logged in/i.test(out) || !!process.env.CURSOR_API_KEY },
     args: (resume) => [
       "-p", "--output-format", "json", "--trust", "--sandbox", "enabled",
       ...(resume ? ["--resume", resume] : []),

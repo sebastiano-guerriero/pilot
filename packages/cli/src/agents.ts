@@ -44,6 +44,8 @@ export interface AgentCli {
   signIn: string;
   /** The sign-in check: its arguments, and whether its output says signed in. */
   status: { args: string[]; ok(output: string, code: number | null): boolean };
+  /** An API key in this environment variable signs it in too (its sign-in check may not know: Cursor's says "Not logged in"). */
+  keyEnv?: string;
   /** The arguments of a run (the prompt goes on stdin). */
   args(options: RunOptions): string[];
   /** Reads what a run printed. */
@@ -147,6 +149,7 @@ export const AGENTS: Record<AgentKind, AgentCli> = {
     install: "curl https://cursor.com/install -fsS | bash",
     signIn: "cursor-agent login",
     status: { args: ["status"], ok: (out) => /logged in/i.test(out) && !/not logged in/i.test(out) },
+    keyEnv: "CURSOR_API_KEY",
     // Its sandbox: commands run with writes only in the project, no network.
     args: ({ resume }) => ["-p", "--output-format", "stream-json", "--trust", "--sandbox", "enabled", ...(resume ? ["--resume", resume] : [])],
     parse: parseStream,
@@ -199,6 +202,7 @@ export async function detectAgents(kinds: readonly AgentKind[] = AGENT_KINDS): P
       const cli = AGENTS[kind];
       const bin = findBin(cli.bins);
       if (!bin) return null;
+      if (cli.keyEnv && process.env[cli.keyEnv]) return { kind, bin, signedIn: true };
       const { stdout, stderr, code } = await exec(bin, cli.status.args, { timeoutMs: 15_000 });
       return { kind, bin, signedIn: cli.status.ok(stdout + stderr, code) };
     }),
