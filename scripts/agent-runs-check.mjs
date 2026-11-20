@@ -34,9 +34,12 @@ const AGENTS = {
     label: "Codex",
     bins: ["codex"],
     status: { args: ["login", "status"], ok: (_out, code) => code === 0 },
+    // On Windows, Codex's sandbox needs a mode, or a headless run is read-only
+    // (every command "blocked by policy"). "unelevated" needs no admin rights.
     // CODEX_CONFIG adds `-c` settings, `;`-separated (e.g. windows.sandbox="elevated").
     args: (resume) => [
       "exec", "--json", "-s", "workspace-write", "-c", 'web_search="disabled"',
+      ...(WIN ? ["-c", 'windows.sandbox="unelevated"'] : []),
       ...(process.env.CODEX_CONFIG ?? "").split(";").filter(Boolean).flatMap((c) => ["-c", c]),
       ...(resume ? ["resume", resume] : []), "-",
     ],
