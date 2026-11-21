@@ -14,7 +14,9 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [ ] **After agent runs, before the release:**
   - [x] Copy prompt removed: it handed over edits only, while comments, tasks, questions and props need Pilot running; without it, Send and Comment say "Pilot isn't running for this site". The prompt has one form, the run's, and names none of Pilot's old MCP tools
   - [ ] Width checks during a run: a run has none of Pilot's tools, so Make responsive and Break and fix work widths out from the code and Pilot measures after (one follow-up); giving runs Pilot's check (an MCP server per run, or a command) would bring back the check mid-job. The hub's check route (`/agents/check`, `/checks/:id`) waits unused until then
-  - [ ] Choosing the agent: in the terminal now (asked once, `--agent` changes it); a place in the toolbar is the owner's call
+  - [x] Choosing the agent: `init` saves the agent whose chat runs it; otherwise the only one signed in, or asked once in the terminal (`--agent` changes it)
+  - [x] The page names its project (`mountPilot({ project })`, written by `init`): `npx usepilot` runs for its own project's pages only, and says why it leaves the others (found on nucleo-2: it took the playground's page)
+  - [ ] The same project open on two addresses at once (a proxy's and the server's): `npx usepilot` runs for the first it finds
   - [ ] Starting Pilot with the dev server (a Vite plugin, the dev script), so there's no second terminal; sites without an npm dev server keep `npx usepilot`
   - [ ] More agents with the same three abilities (one task and exit, a session id, resume by id): Gemini (`gemini -p`), Copilot (`copilot -p`), opencode (`opencode run`)
   - [x] Released in 0.14.0 (bridge 7)

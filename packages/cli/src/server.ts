@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AgentInfo, ChangeResult, PageEvent, WidthCheck } from "@pilot/protocol";
-import { BRIDGE_VERSION, jobErrorOf, originKey, propsOf, questionOf, sessionOf } from "@pilot/protocol";
+import { BRIDGE_VERSION, jobErrorOf, originKey, projectNameOf, propsOf, questionOf, sessionOf } from "@pilot/protocol";
 import { attachmentsDir, extensionOf, MAX_ATTACHMENT_BYTES, saveAttachment, sweepAttachments, withAttachmentPaths } from "./attachments.ts";
 import { projectComponents } from "./components.ts";
 import { findSkills } from "./skills.ts";
@@ -11,7 +11,7 @@ import { Hub, type JobPost } from "./hub.ts";
  * The hub's HTTP server, on 127.0.0.1 only.
  *
  * Pages (the overlay, a browser page on another origin):
- * - GET  /events                SSE: agents, launch, job updates for the page's origin
+ * - GET  /events                SSE: agents, launch, job updates for the page's origin (`?project=`: the project its loader names)
  * - POST /jobs                  a job (JobPost)
  * - POST /jobs/:id/cancel       take a job back
  * - POST /jobs/:id/retry        a done job's changes that didn't come out right (or a task's problems): one follow-up
@@ -28,7 +28,7 @@ import { Hub, type JobPost } from "./hub.ts";
  * Pilot's processes (`npx usepilot` ones that aren't the hub, see agent.ts):
  * - POST /agents/register | /agents/launch | /agents/wait | /agents/done | /agents/check | /agents/leave
  * - POST /agents/job            a job as the hub has it (a run polls it, to stop when it's cancelled)
- * - POST /agents/pages          the sites with Pilot open (the connected pages' origins)
+ * - POST /agents/pages          the pages with Pilot open: each site and the project its loader names, but sites Pilot runs for
  * Refused for any request with an `Origin` (browsers send one; Node doesn't).
  *
  * GET /health tells an `npx usepilot` that the port is Pilot's.
@@ -102,7 +102,7 @@ async function handle(hub: Hub, req: IncomingMessage, res: ServerResponse, attac
     return;
   }
 
-  if (path === "/events" && req.method === "GET") return events(hub, origin, req, res);
+  if (path === "/events" && req.method === "GET") return events(hub, origin, req, res, projectNameOf(url.searchParams.get("project")));
   // Quitting reaches only the page's own site (its Origin): no agent needed, nothing taken from it.
   if (path === "/quit" && req.method === "POST") {
     hub.quit(origin);
@@ -163,7 +163,7 @@ async function handle(hub: Hub, req: IncomingMessage, res: ServerResponse, attac
   return json(res, 404, { error: "not found" });
 }
 
-function events(hub: Hub, origin: string, req: IncomingMessage, res: ServerResponse): void {
+function events(hub: Hub, origin: string, req: IncomingMessage, res: ServerResponse, project?: string): void {
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
@@ -173,7 +173,7 @@ function events(hub: Hub, origin: string, req: IncomingMessage, res: ServerRespo
   // for a takeover by another `npx usepilot`.
   res.write("retry: 2000\n\n");
   const send = (event: PageEvent) => res.write(`data: ${JSON.stringify(event)}\n\n`);
-  const remove = hub.addPage({ origin, send });
+  const remove = hub.addPage({ origin, project, send });
   const ping = setInterval(() => res.write(": ping\n\n"), 15_000);
   req.on("close", () => {
     clearInterval(ping);
@@ -190,7 +190,7 @@ async function handleAgent(hub: Hub, action: string, data: unknown, req: Incomin
       hub.register(d.agent, d.origin);
       return json(res, 200, { ok: true });
     case "pages":
-      return json(res, 200, { origins: hub.pageOrigins() });
+      return json(res, 200, { pages: hub.openPages() });
     case "launch":
       if (!d.origin) return json(res, 400, { error: "origin needed" });
       return json(res, 200, { pages: hub.launch(d.agent, d.origin) });

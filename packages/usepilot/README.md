@@ -12,31 +12,31 @@ Pilot turns the page you're building into a design surface for your agents. You 
 
 ## Install
 
-Pilot runs your coding agent for each change you send: **Claude Code**, **Codex** or **Cursor**. It needs the agent's command-line tool, installed and signed in (once per machine; skip it if you already use it in a terminal):
+Pilot works with **Claude Code**, **Codex** or **Cursor**, on your agent's usual plan.
 
-| Agent | Install | Sign in |
-| --- | --- | --- |
-| Claude Code | `curl -fsSL https://claude.ai/install.sh \| bash` | `claude auth login` |
-| Codex | `npm install -g @openai/codex` | `codex login` |
-| Cursor | `curl https://cursor.com/install -fsS \| bash` | `cursor-agent login` |
+1. **Sign in to your agent in a terminal**, once per computer. Pilot uses your agent's terminal app, not its chat window. Open a terminal and run the two lines for your agent: the first installs it, the second opens your browser to sign in.
 
-It uses your agent's plan, as when you use it yourself.
+   - **Claude Code:** `curl -fsSL https://claude.ai/install.sh | bash`, then `claude auth login`
+   - **Codex:** `npm install -g @openai/codex`, then `codex login`
+   - **Cursor:** `curl https://cursor.com/install -fsS | bash`, then `cursor-agent login`
 
-1. **Add Pilot to your project.** Paste this into your agent, in the project:
+   Already using your agent in a terminal? Skip this step.
+
+2. **Add Pilot to your project.** Paste this into your agent's chat, in the project:
 
    ```
    Set up Pilot in this project: run `npx usepilot@latest init` and follow what it prints.
    ```
 
-   It installs Pilot, loads it in your app in development only, and checks your agent's command-line tool.
+   It adds Pilot to your app, only while you develop: it never ships to your live site.
 
-2. **Run Pilot**, in the project's folder, in a terminal beside your dev server:
+3. **Start Pilot** each time you design. In a terminal, in your project's folder:
 
    ```bash
    npx usepilot
    ```
 
-   Open your app: Pilot opens on every page. Design and press Send, or comment on an element: Pilot runs your agent for each job, and the terminal shows what it does. No chat needs to stay open. The first time, if several agents are signed in, it asks which to use; `npx usepilot --agent codex` changes it.
+   Keep it open next to your app, and open your app: Pilot appears on every page. Edit and press Send, or leave a comment: Pilot asks your agent to make the change, and the terminal shows its progress. It uses the agent you set Pilot up with (`npx usepilot --agent codex` switches).
 
 **What the agent may do:** what you allow it in its own chat, and edit your project's files. Pilot never skips your agent's permissions: what it would ask you about there is refused, since no one is there to answer, and its reply says so.
 
@@ -55,7 +55,7 @@ Then restart your app's dev server and `npx usepilot`. Updating from 0.13 or ear
 ### If something doesn't work
 
 - **The toolbar doesn't appear.** Pilot only loads in development, in the browser. Ask your agent to check where `usepilot/auto` is imported. The shortcut is ignored while you're typing in a text field.
-- **The toolbar says "Pilot isn't running for this site".** Run `npx usepilot` in your project's folder, and keep it running.
+- **The toolbar says "Pilot isn't running for …".** Run `npx usepilot` in your project's folder, and keep it running. If it is running, its terminal says why it left the page: another project's page, or a page set up before 0.15 (ask your agent to run `npx usepilot@latest update`).
 - **The toolbar says your agent isn't signed in**, or couldn't do a job. Sign in with the command above; the terminal running `npx usepilot` shows what the agent said.
 
 ## Using Pilot
@@ -81,6 +81,7 @@ mountPilot({
   shortcut: "alt+p",              // or "ctrl+shift+e", or false
   launch: false,                  // true: open on load
   nameAttributes: ["data-block"], // attributes your project names elements with
+  project: "my-app",              // your package.json's name: npx usepilot runs for its own project's pages
 });
 ```
 

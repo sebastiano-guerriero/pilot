@@ -2,7 +2,7 @@
 export interface PilotOptions {
   /**
    * Launch Pilot as soon as it mounts. Default: false: Pilot stays dormant
-   * until the shortcut launches it. A launch or quit in the current browser
+   * until the shortcut launches it. A launch or close in the current browser
    * tab takes precedence, so reloads keep what the user chose.
    */
   launch?: boolean;
@@ -17,12 +17,17 @@ export interface PilotOptions {
    * `["data-block"]`), tried first when Pilot labels an element.
    */
   nameAttributes?: string[];
+  /**
+   * The project this page belongs to: its package.json's name, written by
+   * `npx usepilot init`. `npx usepilot` runs for its own project's pages only.
+   */
+  project?: string;
 }
 
 export interface PilotInstance {
   /** Show Pilot's toolbar. No-op if it's already running. */
   launch(): void;
-  /** Hide Pilot. Same as the toolbar's Quit button. */
+  /** Close Pilot. Same as the toolbar's Close button. */
   quit(): void;
   readonly running: boolean;
   /** Remove Pilot from the page completely. */

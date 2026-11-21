@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentQuestion, Job, PropSpec, WidthCheck } from "@pilot/protocol";
+import type { AgentInfo, AgentQuestion, Job, OpenPage, PropSpec, WidthCheck } from "@pilot/protocol";
 import type { DoneExtra } from "./hub.ts";
 import { BRIDGE_VERSION } from "@pilot/protocol";
 import type { Hub, WaitResult } from "./hub.ts";
@@ -16,7 +16,7 @@ export interface HubApi {
   register(agent: AgentInfo, origin: string): Promise<void>;
   launch(agent: AgentInfo, origin: string): Promise<number>;
   /** The sites with Pilot open in a browser (their origins). */
-  pages(): Promise<string[]>;
+  pages(): Promise<OpenPage[]>;
   wait(agent: AgentInfo, origin: string, timeoutMs: number, signal?: AbortSignal): Promise<WaitResult>;
   done(agent: AgentInfo, jobId: string, notes?: string, question?: AgentQuestion, props?: PropSpec[], extra?: DoneExtra): Promise<Job | null>;
   /** A job as the hub has it (null: it doesn't know it). */
@@ -37,7 +37,7 @@ class LocalApi implements HubApi {
     return this.hub.launch(agent, origin);
   }
   async pages() {
-    return this.hub.pageOrigins();
+    return this.hub.openPages();
   }
   wait(agent: AgentInfo, origin: string, timeoutMs: number, signal?: AbortSignal) {
     localAgents.add(agent.id);
@@ -80,7 +80,7 @@ class RemoteApi implements HubApi {
   async pages() {
     // A hub from before this route (same bridge version): it can't say.
     try {
-      return (await this.post<{ origins: string[] }>("pages", {})).origins;
+      return (await this.post<{ pages?: OpenPage[] }>("pages", {})).pages ?? [];
     } catch (error) {
       if (isConnectionError(error)) throw error;
       return [];
@@ -132,7 +132,7 @@ export class Bridge {
   }
 
   /** The sites with Pilot open in a browser (their origins). */
-  pages(): Promise<string[]> {
+  pages(): Promise<OpenPage[]> {
     return this.call((api) => api.pages());
   }
 

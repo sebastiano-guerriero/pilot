@@ -108,7 +108,7 @@ describe("usepilot update", () => {
   it("init on a project with an older Pilot leaves its version alone, and says update updates it", async () => {
     await files(app("0.6.0"));
     const { calls, run } = installer();
-    const out = await init({ detect: async () => [], home, cwd: dir, run });
+    const out = await init({ detect: async () => [], env: {}, home, cwd: dir, run });
     expect(calls).toEqual([]);
     expect(out).toContain(`Pilot 0.6.0 is installed here, and ${VERSION} is out: \`npx usepilot@latest update\``);
   });
