@@ -133,7 +133,7 @@ describe("npx usepilot: Pilot runs the agent for each job", () => {
     expect(run?.prompt).toContain("padding-top");
     expect(run?.prompt).toContain("Guidelines:");
     expect(run?.prompt).not.toMatch(/pilot_(done|wait_for_edits|check_widths)/);
-    expect(run?.args).toContain("--restricted");
+    expect(run?.args.join(" ")).toContain("--permission-mode acceptEdits");
     expect(lines.some((l) => l.startsWith("✓"))).toBe(true);
   });
 

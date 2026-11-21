@@ -18,6 +18,8 @@ One line per item. Tick it when it ships; the details go in the doc for its area
   - [ ] Starting Pilot with the dev server (a Vite plugin, the dev script), so there's no second terminal; sites without an npm dev server keep `npx usepilot`
   - [ ] More agents with the same three abilities (one task and exit, a session id, resume by id): Gemini (`gemini -p`), Copilot (`copilot -p`), opencode (`opencode run`)
   - [x] Released in 0.14.0 (bridge 7)
+  - [x] Runs have the agent's own permissions, as in its chat: what the designer allowed runs, what it would ask about is refused, never skipped (until then Pilot's own limits: the project's files only, no shell, no internet) ([handoff.md](handoff.md), *Agent runs*)
+  - [ ] The agent's permission requests asked in the thread (Allow, Deny), for the agents that have a way (Claude Code's `--permission-prompt-tool`)
 - [ ] **Speed, after agent runs:** a comment took 15–17s with the right code location and 21–34s with Pilot's real prompt on nucleo-2, where the search found the wrong file (`app/modules/modal-pro.php`, part of whose text matched "Web app"; the heading is in `web-3/routes/home.php`). To do: exact text matches first, and the site folder that serves the page; send the look-alikes' locations, where a value comes from (inherited from a parent's class), and the project's scale for that property (14–18s in a test). Each agent step costs 3–4s, so about 15s is the floor for a comment; faster models gave wrong answers.
 
 ## Foundation
@@ -129,6 +131,9 @@ Items marked *(chat loop)* were for an agent's chat running Pilot over MCP, up t
 - [x] Comment attachments (images, text files, PDFs): picked, previewed, sent with the comment or alone, saved by the hub in the OS temp folder, shown to the agent with the job
 - [ ] Design the file tile for attachments that aren't images (placeholder now)
 - [ ] `/` actions listed as previews, to build: Fit its container (container queries), Check accessibility, Explore variations, Use design tokens, Add states, Support dark mode, Add motion ([handoff.md](handoff.md), *Actions*)
+- [x] Skills in the `/` menu: the agent's own skills (its project and home folders), picked as a chip, and the run starts with it as the agent's chat does (`/name`, `$name`) ([handoff.md](handoff.md), *Skills*)
+  - [x] Replies: concise for comments (no longer one sentence), as the skill says with a skill; the skills group in the `@` list's design, the chip an action's
+  - [ ] A Claude Code plugin's skills (`plugin:skill`), if designers ask
 - [ ] Element markers for unsent changes
 - [x] Comments, phase 2: the agent asks the designer a question in a thread, without waiting (in its reply's `pilot` block; `pilot_done`'s `question` in the chat loop), and the answer sends the job back to the same session
 - [x] Faster jobs: Pilot finds each element's code in the project for the agent, each job's step times recorded (*(chat loop)*: the edit guidelines read once)

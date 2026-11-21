@@ -141,6 +141,31 @@ describe("the bridge between Pilot's processes and the page", () => {
     expect(JSON.stringify(app.events)).not.toContain(project);
   });
 
+  it("the page asks for the agent's skills (the `/` list): names and descriptions from its folders, which pages never see", async () => {
+    const project = await mkdtemp(join(tmpdir(), "pilot-app-"));
+    cleanup.push(() => rm(project, { recursive: true, force: true }));
+    await writeFile(join(project, "package.json"), "{}");
+    await mkdir(join(project, ".agents/skills/better-ui"), { recursive: true });
+    await writeFile(join(project, ".agents/skills/better-ui/SKILL.md"), "---\nname: better-ui\ndescription: Polishes surfaces.\n---\n");
+    // A Claude Code skill: not Cursor's, so not listed.
+    await mkdir(join(project, ".claude/skills/only-claude"), { recursive: true });
+    await writeFile(join(project, ".claude/skills/only-claude/SKILL.md"), "---\nname: only-claude\n---\n");
+    const port = nextPort++;
+    const bridge = new Bridge({ id: `a${Math.random()}`, label: "Cursor · app", folder: project, kind: "cursor" }, port);
+    cleanup.push(() => bridge.close());
+    await bridge.launch(APP);
+    const app = fakePage(port);
+    await app.ready;
+    // The user's own (this machine's home folder) may be listed too.
+    const { skills } = (await (await app.post("/skills", {})).json()) as { skills: Array<{ name: string }> };
+    expect(skills).toContainEqual({ name: "better-ui", description: "Polishes surfaces." });
+    expect(skills.map((s) => s.name)).not.toContain("only-claude");
+    expect((await fakePage(port, "https://evil.example").post("/skills", {})).status).toBe(403);
+    await until(() => app.events.some((e) => e.type === "agents" && e.agents.length > 0));
+    expect(JSON.stringify(app.events)).not.toContain(project);
+    expect(JSON.stringify(app.events)).not.toContain('"kind"');
+  });
+
   it("launch opens Pilot in the pages already open, and closing it closes the site's other tabs", async () => {
     const port = nextPort++;
     const runner = agentOn(port);

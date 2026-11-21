@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { actionAt, actionName, matchActions, withoutQuery } from "./actions.ts";
+import { actionAt, actionName, matchActions, matchSkills, withoutQuery } from "./actions.ts";
 
 describe("the comment box's / actions", () => {
   it("open with / at the start of any word, up to the caret; not inside a word (and/or, URLs, paths in a word)", () => {
@@ -42,5 +42,14 @@ describe("the comment box's / actions", () => {
     // First when a component is selected.
     expect(matchActions("", { component: true }).map((a) => a.id)).toEqual(["props", ...["responsive", "preview-container", "preview-a11y", "preview-variations", "break-and-fix", "preview-tokens", "preview-states", "preview-dark", "preview-motion"]]);
     expect(matchActions("prop", { component: true }).map((a) => a.id)).toEqual(["props"]);
+  });
+
+  it("the agent's skills: by name or a word of it, those that start with it first; not by description", () => {
+    const skills = [{ name: "better-ui", description: "Polishes surfaces" }, { name: "build-design" }, { name: "variant", description: "Builds UI variants" }];
+    expect(matchSkills(skills, "").map((s) => s.name)).toEqual(["better-ui", "build-design", "variant"]);
+    expect(matchSkills(skills, "ui").map((s) => s.name)).toEqual(["better-ui", "build-design"]);
+    expect(matchSkills(skills, "b").map((s) => s.name)).toEqual(["better-ui", "build-design"]);
+    expect(matchSkills(skills, "ant").map((s) => s.name)).toEqual(["variant"]);
+    expect(matchSkills(skills, "polish")).toEqual([]);
   });
 });

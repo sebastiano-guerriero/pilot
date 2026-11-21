@@ -4,6 +4,7 @@ import {
   attachmentType,
   type CommentAction,
   type ProjectComponent,
+  type ProjectSkill,
   type PropChange,
   type PropValue,
 } from "@pilot/protocol";
@@ -17,7 +18,7 @@ import { type ChangeCounts, changesLabel } from "../../changesLabel.ts";
 import { PropsList } from "../PropsList/PropsList.tsx";
 import { ScrollThumb } from "../ScrollThumb/ScrollThumb.tsx";
 import { Tooltip } from "../Tooltip/Tooltip.tsx";
-import { actionAt, actionCommand, actionName, matchActions, withoutQuery } from "./actions.ts";
+import { actionAt, actionCommand, actionName, matchActions, matchSkills, withoutQuery } from "./actions.ts";
 import { renderMarkdown } from "./markdown.tsx";
 import { propsInText, withPropLine } from "./propLines.ts";
 import { insertMention, matchMentions, type MentionOption, mentionAt, mentionsIn, projectOptions, splitMentions } from "./mentions.ts";
@@ -74,9 +75,9 @@ interface CommentWidgetProps {
   onAdjust?(): void;
   /**
    * Sends the comment: its words, the files attached, and the action picked
-   * from the `/` menu (Make responsive); any of them may be missing, but
-   * not all; and what it mentions with `@` (see mentionsIn: picked from
-   * the list, or typed).
+   * from the `/` menu (Make responsive) or the agent's skill picked there;
+   * any of them may be missing, but not all; and what it mentions with `@`
+   * (see mentionsIn: picked from the list, or typed).
    */
   onSend(
     text: string,
@@ -85,6 +86,7 @@ interface CommentWidgetProps {
     mentions?: MentionOption[],
     withEdits?: boolean,
     props?: PropChange[],
+    skill?: string,
   ): Promise<CommentOutcome> | CommentOutcome;
   /**
    * The selected elements' edits not sent yet (the editor's): they go with
@@ -101,6 +103,8 @@ interface CommentWidgetProps {
   mentions?(): MentionOption[];
   /** The project's components, from Pilot's server (with an agent on the page), asked for each time the list opens: listed after the page's. */
   projectComponents?(): Promise<ProjectComponent[]>;
+  /** The agent's skills, from Pilot's server (with an agent on the page), asked for when the box opens and each time the `/` list does: listed after the actions. */
+  skills?(): Promise<ProjectSkill[]>;
   /** The designer is done with the thread: it goes. `from` is Mark as solved's box (for its confetti). */
   onResolve?(from?: DOMRect): void;
   onClose(): void;
@@ -141,6 +145,9 @@ function placeholder(withAction: boolean, reply: boolean, mentions: boolean): st
   return mentions ? `${lead}, / for actions, @ to mention` : `${lead}, or / for actions`;
 }
 
+/** Skills the `/` list shows at once, the best matches first (as the `@` list's few per group): typing narrows them. */
+const SKILLS_SHOWN = 6;
+
 /** The longest the field grows to before it scrolls, in px. */
 const FIELD_MAX = 120;
 
@@ -172,6 +179,7 @@ export function CommentWidget({
   agentOn = true,
   mentions,
   projectComponents,
+  skills,
   edits = { styles: 0, texts: 0 },
   component,
   currentProps,
@@ -367,21 +375,44 @@ export function CommentWidget({
   // closes it, leaving the text as typed. With nothing matching it doesn't
   // show: a `/about` is just text, and Enter sends it. Backspace at the
   // start of the field removes the chip.
+  // The agent's skills come after the actions, in a group of their own: a
+  // pick is a chip too, and the comment goes as usual, for the agent to use
+  // that skill. Asked for when the box opens (so Enter right after `/x`
+  // finds them) and again each time the list opens (a skill installed meanwhile).
   const [action, setAction] = useState<CommentAction | null>(null);
-  const slash = action ? null : actionAt(text, caret);
+  const [skill, setSkill] = useState<string | null>(null);
+  const slash = action || skill ? null : actionAt(text, caret);
   const [slashDismissed, setSlashDismissed] = useState<number | null>(null);
   useEffect(() => {
     if (!slash) setSlashDismissed(null);
   }, [slash?.start]);
-  const options = slash && slashDismissed !== slash.start ? matchActions(slash.query, { component: !!component }) : [];
-  const menuOpen = options.length > 0;
+  const [skillList, setSkillList] = useState<ProjectSkill[]>([]);
+  const slashOpen = !!slash && slashDismissed !== slash.start;
+  useEffect(() => {
+    if (!skills || (slash && !slashOpen)) return;
+    let current = true;
+    skills().then(
+      (list) => current && setSkillList(list),
+      () => {},
+    );
+    return () => {
+      current = false;
+    };
+  }, [slashOpen]);
+  const options = slash && slashOpen ? matchActions(slash.query, { component: !!component }) : [];
+  const skillOptions = slash && slashOpen ? matchSkills(skillList, slash.query).slice(0, SKILLS_SHOWN) : [];
+  const menuCount = options.length + skillOptions.length;
+  const menuOpen = menuCount > 0;
   const [active, setActive] = useState(0);
   useEffect(() => setActive(0), [text]);
   const pick = (index: number) => {
+    if (!slash) return;
     const chosen = options[index];
+    const chosenSkill = chosen ? undefined : skillOptions[index - options.length];
     // A preview (listed, not built yet) can't be picked: nothing to send.
-    if (!chosen || !slash || chosen.preview) return;
-    setAction(chosen.id as CommentAction);
+    if ((!chosen && !chosenSkill) || chosen?.preview) return;
+    if (chosen) setAction(chosen.id as CommentAction);
+    else if (chosenSkill) setSkill(chosenSkill.name);
     const next = withoutQuery(text, slash);
     nextCaret.current = next.caret;
     setText(next.text);
@@ -468,7 +499,7 @@ export function CommentWidget({
         .filter(([name, to]) => String(to) !== String(pageProps[name]))
         .map(([name, to]) => ({ name, ...(name in pageProps ? { from: pageProps[name] } : {}), to }));
 
-  const canSend = agentOn && !sending && (!!text.trim() || attachments.length > 0 || !!action);
+  const canSend = agentOn && !sending && (!!text.trim() || attachments.length > 0 || !!action || !!skill);
   const send = async () => {
     if (!canSend) return;
     setSending(true);
@@ -480,6 +511,8 @@ export function CommentWidget({
       /@|--/.test(text) ? mentionsIn(text, picked, pool ?? withProject(mentions?.() ?? [])) : [],
       editsGo,
       pendingProps,
+      // Only with one: a comment without stays as it was.
+      ...((skill ? [skill] : []) as [string?]),
     );
     setSending(false);
     if (outcome === false) return;
@@ -488,10 +521,13 @@ export function CommentWidget({
     setFailed(null);
     setText("");
     setAction(null);
+    setSkill(null);
     setPicked([]);
     setWithEdits(true);
     for (const a of attachments) if (a.url) URL.revokeObjectURL(a.url);
     setAttachments([]);
+    // The draft goes now: the box closes before its text change would reach App (onTextChange runs after the render).
+    onTextChange?.("");
     // Sent: the box closes; the element's loader says it's with the agent, and its reply comes back to the thread.
     onClose();
   };
@@ -504,7 +540,7 @@ export function CommentWidget({
     setSending(true);
     const outcome = await onSend(choice, []);
     setSending(false);
-    if (outcome === "sent" && !text.trim() && !attachments.length && !action) onClose();
+    if (outcome === "sent" && !text.trim() && !attachments.length && !action && !skill) onClose();
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
@@ -530,10 +566,10 @@ export function CommentWidget({
     if (menuOpen && e.target === fieldRef.current) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
-        if (options.length) setActive((i) => (i + (e.key === "ArrowDown" ? 1 : -1) + options.length) % options.length);
+        if (menuCount) setActive((i) => (i + (e.key === "ArrowDown" ? 1 : -1) + menuCount) % menuCount);
         return;
       }
-      if ((e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) && !e.isComposing && options.length) {
+      if ((e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) && !e.isComposing && menuCount) {
         e.preventDefault();
         pick(active);
         return;
@@ -546,9 +582,10 @@ export function CommentWidget({
       }
     }
     const field = fieldRef.current;
-    if (e.key === "Backspace" && action && e.target === field && field?.selectionStart === 0 && field.selectionEnd === 0) {
+    if (e.key === "Backspace" && (action || skill) && e.target === field && field?.selectionStart === 0 && field.selectionEnd === 0) {
       e.preventDefault();
       setAction(null);
+      setSkill(null);
       return;
     }
     if (e.key === "Escape") {
@@ -628,17 +665,18 @@ export function CommentWidget({
                       ))}
                     </ul>
                   ) : null}
-                  {/* Chips are for writing: sent, an action reads as typed (`/responsive`), and the edits that went with it as words, in green. */}
-                  {(m.text || m.action || m.edits) && (
+                  {/* Chips are for writing: sent, an action or a skill reads as typed (`/responsive`, `/better-ui`), and the edits that went with it as words, in green. */}
+                  {(m.text || m.action || m.skill || m.edits) && (
                     <p>
                       {m.action && <span class="mention">/{actionCommand(m.action)}</span>}
+                      {!m.action && m.skill && <span class="mention">/{m.skill}</span>}
                       {m.edits ? (
                         <span class="mention">
-                          {m.action ? " " : ""}
+                          {m.action || m.skill ? " " : ""}
                           {changesLabel(m.edits)}
                         </span>
                       ) : null}
-                      {(m.action || m.edits) && m.text ? " " : null}
+                      {(m.action || m.skill || m.edits) && m.text ? " " : null}
                       {splitMentions(m.text, m.references).map((part, j) =>
                         part.mention ? (
                           <span key={j} class="mention">
@@ -708,7 +746,7 @@ export function CommentWidget({
         </div>
       )}
       <div class="composer">
-        {(action || (editsCount > 0 && withEdits)) && (
+        {(action || skill || (editsCount > 0 && withEdits)) && (
           <div class="action-chip-row">
             {/* The editor's changes on the selection go with the comment (not with an action: they wait for Send). */}
             {editsCount > 0 && withEdits && !action && (
@@ -743,6 +781,23 @@ export function CommentWidget({
                 </button>
               </span>
             )}
+            {/* A skill of the agent's, picked from the `/` list: its name, as the agent calls it, in an action's chip. */}
+            {skill && (
+              <span class="action-chip" data-kind="skill" title="Your agent uses this skill for the comment">
+                {skill}
+                <button
+                  type="button"
+                  class="action-remove"
+                  aria-label={`Remove ${skill}`}
+                  onClick={() => {
+                    setSkill(null);
+                    fieldRef.current?.focus();
+                  }}
+                >
+                  <Icon name="close-small" />
+                </button>
+              </span>
+            )}
           </div>
         )}
         {attachments.length > 0 && (
@@ -765,7 +820,7 @@ export function CommentWidget({
             data-reply={count > 0 || undefined}
             rows={1}
             value={text}
-            placeholder={placeholder(!!action, count > 0, !!mentions)}
+            placeholder={placeholder(!!action || !!skill, count > 0, !!mentions)}
             aria-label="Comment"
             onInput={(e) => {
               const field = e.currentTarget as HTMLTextAreaElement;
@@ -780,7 +835,9 @@ export function CommentWidget({
             aria-activedescendant={
               menuOpen && options[active]
                 ? `pilot-action-${options[active].id}`
-                : mentionOpen && mentionMatches[active]
+                : menuOpen && skillOptions[active - options.length]
+                  ? `pilot-skill-${active - options.length}`
+                  : mentionOpen && mentionMatches[active]
                   ? `pilot-mention-${active}`
                   : undefined
             }
@@ -836,6 +893,30 @@ export function CommentWidget({
               >
                 <span class="action-name">{a.name}</span>
                 <span class="action-description">{a.description}</span>
+              </div>
+            ))}
+            {/* The agent's skills, after Pilot's actions: a group of their own, in the `@` list's design (its heading, and rows on one line: the name, the description cut at its right). */}
+            {skillOptions.length > 0 && (
+              <div class="mention-group" role="presentation">
+                Skills
+              </div>
+            )}
+            {skillOptions.map((s, i) => (
+              <div
+                key={`skill-${s.name}`}
+                id={`pilot-skill-${i}`}
+                class="action-option mention-option"
+                data-kind="skill"
+                role="option"
+                aria-selected={options.length + i === active}
+                data-active={options.length + i === active || undefined}
+                onPointerEnter={() => setActive(options.length + i)}
+                // Keep focus in the field.
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pick(options.length + i)}
+              >
+                <span class="action-name">{s.name}</span>
+                {s.description && <span class="action-description">{s.description}</span>}
               </div>
             ))}
           </div>

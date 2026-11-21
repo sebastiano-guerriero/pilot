@@ -252,6 +252,12 @@ export interface CommentMessage {
   attachments?: CommentAttachment[];
   /** The designer's message asked for an action (Make responsive), sent as a task: see CommentAction. */
   action?: CommentAction;
+  /**
+   * The designer picked one of their agent's skills from the `/` list (its
+   * name, see ProjectSkill): the comment goes as usual, and the agent uses
+   * that skill for it.
+   */
+  skill?: string;
   /** What the designer mentioned with `@` (a token, a component, an element), picked from Pilot's list: exact, for the agent to use as is. */
   references?: CommentReference[];
   /** The props the designer set on the instance, from the agent's `/props` list: where it's written, not in the component. */

@@ -566,7 +566,8 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   const threadStatus = threadWaits ? "Queued" : threadJob && !awaitsAnswer(threadJob) && !(thread && needsYou(thread)) ? threadJobStatus(threadJob) : undefined;
   // Comments go to an agent only: without one on the page, the widget's send is disabled.
   // Attached files go to the hub first (it saves them for the agent); nothing is sent if one fails.
-  // An action picked from the `/` menu (Make responsive) goes as that task, the words as its note.
+  // An action picked from the `/` menu (Make responsive) goes as that task, the words as its note;
+  // a skill picked there goes with the comment, for the agent to use.
   // What `@` mentioned goes as exact references: a token with its value, a
   // component or an element described as the page shows it now.
   // The selected elements' edits not sent yet go with the comment, unless the designer took its chip off (`withEdits`).
@@ -578,6 +579,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     mentions: MentionOption[] = [],
     withEdits = false,
     props: PropChange[] = [],
+    skill?: string,
   ): Promise<CommentOutcome> => {
     if (!session || !sendToAgent) return false;
     const attachments = files.length ? await session.uploadFiles(files, thumbnail) : [];
@@ -585,7 +587,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     // Props picked from the agent's `/props` list: set on this instance, where it's written.
     const instance = props.length ? componentProps(element) : null;
     const setting = instance ? { component: instance.component, ...(instance.usedIn ? { usedIn: instance.usedIn } : {}), set: props } : undefined;
-    session.comment(element, text, attachments, action, othersRef.current, mentions.flatMap(toReference), withEdits, setting);
+    session.comment(element, text, attachments, action, othersRef.current, mentions.flatMap(toReference), withEdits, setting, skill);
     return "sent";
   };
   // How many of them there are, for the chip (the history's changes re-render this).
@@ -707,13 +709,14 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
             onStop={threadJob && session?.canCancel(threadJob) ? () => session.cancel(threadJob.id) : undefined}
             agentName={agentName(threadJob?.agent?.label ?? session?.state.agents[0]?.label)}
             agentOn={sendToAgent}
-            onSend={(text, files, action, mentions, withEdits, props) => sendComment(selected.element, text, files, action, mentions, withEdits, props)}
+            onSend={(text, files, action, mentions, withEdits, props, skill) => sendComment(selected.element, text, files, action, mentions, withEdits, props, skill)}
             edits={unsentOnSelection}
             // `/props` for one component instance, alone (a list for several would mix their props).
             component={others.length ? undefined : (componentName(selected.element) ?? undefined)}
             currentProps={() => componentProps(selected.element)?.props ?? {}}
             mentions={() => mentionOptions(mentionables(nameAttributes))}
             projectComponents={session ? () => session.projectComponents() : undefined}
+            skills={session ? () => session.projectSkills() : undefined}
             // Resolved: the thread goes, and the widget closes (the next one is the Comment button's click away).
             onResolve={
               thread

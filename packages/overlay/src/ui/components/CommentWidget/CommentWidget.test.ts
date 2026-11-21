@@ -51,6 +51,20 @@ describe("CommentWidget's send", () => {
     expect(container.querySelector(".stop")).toBeNull();
   });
 
+  it("sent, its draft goes too, though the box closes before its text change would reach App", async () => {
+    const onTextChange = vi.fn();
+    const onClose = vi.fn();
+    act(() =>
+      render(h(CommentWidget, { element, anchor: new DOMRect(0, 0, 100, 40), thread: null, onSend: () => "sent" as const, onClose, onTextChange, agentOn: true }), container),
+    );
+    await type("Bigger");
+    await act(async () => {
+      field().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    });
+    expect(onClose).toHaveBeenCalled();
+    expect(onTextChange).toHaveBeenLastCalledWith("");
+  });
+
   it("sent, the box closes; not sent (an upload failed), it stays with the draft and says why", async () => {
     const onClose = vi.fn();
     let outcome: "sent" | { title: string; detail: string } = { title: "The file couldn't be attached", detail: "Try again" };
@@ -98,6 +112,72 @@ describe("CommentWidget's / actions", () => {
     await press("Enter");
     await press("Enter");
     expect(onSend).toHaveBeenCalledWith("", [], "responsive", [], false, []);
+  });
+});
+
+describe("CommentWidget's skills", () => {
+  it("/ lists the agent's skills after the actions; a pick is a chip, sent with the comment (its edits too), and shown as /name", async () => {
+    const onSend = vi.fn(() => "sent" as const);
+    const skills = vi.fn(async () => [
+      { name: "better-ui", description: "Polishes surfaces and icons" },
+      { name: "variant", description: "Builds variants" },
+    ]);
+    await act(async () => {
+      render(
+        h(CommentWidget, { element, anchor: new DOMRect(0, 0, 100, 40), thread: null, onSend, onClose: () => {}, agentOn: true, skills, edits: { styles: 2, texts: 0 } }),
+        container,
+      );
+    });
+    // Asked for when the box opens, so they're there for the first `/`.
+    expect(skills).toHaveBeenCalled();
+    await act(async () => {
+      field().value = "/ui";
+      field().dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect([...container.querySelectorAll(".action-option[data-kind=skill] .action-name")].map((e) => e.textContent)).toEqual(["better-ui"]);
+    expect(container.querySelector(".mention-group")?.textContent).toBe("Skills");
+    await press("Enter");
+    expect(container.querySelector(".composer .action-chip[data-kind=skill]")?.textContent).toBe("better-ui");
+    expect(field().value).toBe("");
+    // Not an action: the edits chip stays, and goes with it.
+    expect(container.querySelector(".composer .action-chip[data-kind=edits]")).not.toBeNull();
+    await type("Softer shadow");
+    await press("Enter");
+    expect(onSend).toHaveBeenCalledWith("Softer shadow", [], undefined, [], true, [], "better-ui");
+  });
+
+  it("a /word matching no action but a skill opens the list; Backspace at the start removes the chip", async () => {
+    const onSend = vi.fn(() => "sent" as const);
+    const skills = async () => [{ name: "stress-test" }];
+    await act(async () => {
+      render(h(CommentWidget, { element, anchor: new DOMRect(0, 0, 100, 40), thread: null, onSend, onClose: () => {}, agentOn: true, skills }), container);
+    });
+    await type("/stress");
+    expect([...container.querySelectorAll(".action-option .action-name")].map((e) => e.textContent)).toEqual(["stress-test"]);
+    await press("Tab");
+    await press("Backspace");
+    expect(container.querySelector(".composer .action-chip")).toBeNull();
+    await type("/stress");
+    await press("Enter");
+    await press("Enter");
+    expect(onSend).toHaveBeenCalledWith("", [], undefined, [], false, [], "stress-test");
+  });
+
+  it("a sent message with a skill reads as typed, /name before the words", () => {
+    act(() =>
+      render(
+        h(CommentWidget, {
+          element,
+          anchor: new DOMRect(0, 0, 100, 40),
+          thread: { id: "t", target: { selector: "button", path: "button", tag: "button", classes: [] }, messages: [{ from: "designer", text: "Softer", at: "1", skill: "better-ui" }] },
+          onSend: () => "sent" as const,
+          onClose: () => {},
+          agentOn: true,
+        }),
+        container,
+      ),
+    );
+    expect(container.querySelector(".messages .message p")?.textContent).toBe("/better-ui Softer");
   });
 });
 

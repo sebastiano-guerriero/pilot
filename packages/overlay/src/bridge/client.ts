@@ -1,4 +1,4 @@
-import type { AgentInfo, ChangeResult, FileToken, Job, PageEvent, ProjectComponent, WidthCheck } from "@pilot/protocol";
+import type { AgentInfo, ChangeResult, FileToken, Job, PageEvent, ProjectComponent, ProjectSkill, WidthCheck } from "@pilot/protocol";
 import { BRIDGE_VERSION, DEFAULT_BRIDGE_PORT } from "@pilot/protocol";
 
 /** Where the hub listens (see packages/cli: `npx usepilot`). */
@@ -136,6 +136,22 @@ export class BridgeClient {
       const { components } = (await res.json()) as { components?: unknown };
       return Array.isArray(components)
         ? components.filter((c): c is ProjectComponent => typeof c?.name === "string" && typeof c?.file === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /** The skills of the agent Pilot runs for this page (for the `/` list), names and descriptions; none when the hub can't say (as for components). */
+  async skills(): Promise<ProjectSkill[]> {
+    try {
+      const res = await fetch(`${this.url}/skills`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+      if (!res.ok) return [];
+      const { skills } = (await res.json()) as { skills?: unknown };
+      return Array.isArray(skills)
+        ? skills
+            .filter((s): s is ProjectSkill => typeof s?.name === "string" && (s.description === undefined || typeof s.description === "string"))
+            .map(({ name, description }) => ({ name, ...(description ? { description } : {}) }))
         : [];
     } catch {
       return [];

@@ -1,5 +1,5 @@
 import type { Job } from "@pilot/protocol";
-import { formatPrompt, sharedChoiceMeaning } from "@pilot/protocol";
+import { formatPrompt, sharedChoiceMeaning, SKILL_NAME } from "@pilot/protocol";
 
 /**
  * What the agent reads for a job Pilot runs it for (run.ts): the change
@@ -32,7 +32,9 @@ ${runFooter(job)}
 function runFooter(job: Job): string {
   const props = job.changeSet.request?.kind === "props";
   return [
-    `When you're done, reply with your notes for the designer: ${notesFor(job)}. Plain text, a sentence or two at most, no headings or lists ("Done." when there's nothing to add): Pilot shows them to the designer in a small box, and checks the page itself, so don't open a browser, start a dev server, or run builds or tests.`,
+    skillOf(job)
+      ? `When you're done, reply with your notes for the designer: ${notesFor(job)}. Pilot shows them to the designer in the element's thread.`
+      : `When you're done, reply with your notes for the designer: ${notesFor(job)}. Concise, no headings ("Done." when there's nothing to add): Pilot shows them to the designer in a small box, and checks the page itself, so don't open a browser, start a dev server, or run builds or tests.`,
     "",
     props
       ? "Put the props in a block at the very end of your reply, after your notes, as JSON:"
@@ -106,7 +108,9 @@ export function followUp(job: Job): string {
 export function notesFor(job: Job): string {
   switch (job.changeSet.request?.kind) {
     case "comment":
-      return "your reply in the designer's comment thread, a small chat box: one short sentence, about 120 characters at most, with what you changed or your answer; no lists or code blocks";
+      return skillOf(job)
+        ? "your reply in the designer's comment thread, as the skill you used says to report (as long as it needs to be; Markdown shows)"
+        : "your reply in the designer's comment thread, a small chat box: concise, like a chat message, a few short sentences at most, with what you changed or your answer";
     case "responsive":
       return "what changed at which widths, anything left for the designer";
     case "break-and-fix":
@@ -158,4 +162,17 @@ export function taskFollowUp(job: Job): string {
     formatPrompt(job.changeSet),
   ];
   return lines.join("\n");
+}
+
+/**
+ * The skill a job's run starts with: the one the designer picked for the
+ * comment it carries (its latest message). Not for its follow-up or an
+ * answer: the session that used it is resumed. Only a skill's name (it's
+ * the prompt's first line).
+ */
+export function skillOf(job: Job): string | undefined {
+  const request = job.changeSet.request;
+  if (request?.kind !== "comment" || job.attempt === 2 || job.answer) return undefined;
+  const skill = request.thread.at(-1)?.skill;
+  return skill && SKILL_NAME.test(skill) ? skill : undefined;
 }
