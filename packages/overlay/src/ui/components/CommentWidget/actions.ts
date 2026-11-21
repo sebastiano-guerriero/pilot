@@ -136,3 +136,18 @@ export function actionCommand(id: CommentAction): string {
 export function actionName(id: CommentAction): string {
   return ACTIONS.find((a) => a.id === id)?.name ?? id;
 }
+
+/**
+ * The agent's skills for what's typed after `/`, listed after Pilot's
+ * actions: by name, those whose name (or a word of it: `ui` finds
+ * `better-ui`) starts with it first. Names only: a description says what a
+ * skill is for, not what it's called.
+ */
+export function matchSkills<T extends { name: string }>(skills: readonly T[], typed: string): T[] {
+  const query = typed.toLowerCase();
+  if (!query) return [...skills];
+  const words = (name: string) => [name.toLowerCase(), ...name.toLowerCase().split(/[-_:.\s]+/)];
+  const starts = skills.filter((s) => words(s.name).some((w) => w.startsWith(query)));
+  const contains = skills.filter((s) => !starts.includes(s) && s.name.toLowerCase().includes(query));
+  return [...starts, ...contains];
+}

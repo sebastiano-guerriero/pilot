@@ -207,9 +207,48 @@ describe("formatPrompt", () => {
     expect(text).toContain("- **You:** Done: text-brand.");
     expect(text).toContain("seen at 1440x900");
     expect(text).toContain("Your notes are your reply in the designer's thread");
+    // Concise, like a chat message: not one sentence.
+    expect(text).toContain("keep it concise, like a chat message");
+    expect(text).not.toMatch(/keep it to one short sentence|120 characters/);
     // The first comment has no thread before it.
     const first = formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, thread: thread.slice(0, 1), breakpoints: [] } });
     expect(first).not.toContain("The thread so far");
+  });
+
+  it("a comment with a skill the designer picked: use it, it wins over the guidelines, say so when a step can't be done", () => {
+    const target = changeSet.edits[0]?.target as ChangeSet["edits"][number]["target"];
+    const text = formatPrompt({
+      ...changeSet,
+      edits: [],
+      request: { kind: "comment", target, breakpoints: [], thread: [{ from: "designer", text: "Polish the shadow", at: "", skill: "better-ui" }] },
+    });
+    expect(text).toContain("> Polish the shadow");
+    expect(text).toContain("## The skill to use");
+    expect(text).toContain("use their skill `better-ui`");
+    expect(text).toContain("the skill wins");
+    // Its reply is the skill's: as long as it needs.
+    expect(text).toContain("reply as the skill says");
+    expect(text).not.toContain("keep it concise");
+    // Picked with no words: the skill is the comment.
+    const alone = formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, breakpoints: [], thread: [{ from: "designer", text: "", at: "", skill: "variant" }] } });
+    expect(alone).toContain("picked the skill `variant` (below), with no words");
+    // Earlier in the thread: said with the message.
+    const later = formatPrompt({
+      ...changeSet,
+      edits: [],
+      request: {
+        kind: "comment",
+        target,
+        breakpoints: [],
+        thread: [
+          { from: "designer", text: "Polish", at: "", skill: "better-ui" },
+          { from: "agent", text: "Done.", at: "" },
+          { from: "designer", text: "More", at: "" },
+        ],
+      },
+    });
+    expect(later).toContain("- **Designer:** (with the skill `better-ui`) Polish");
+    expect(later).not.toContain("## The skill to use");
   });
 
   it("what the comment mentions with @: each as it reads in the comment, then what it is and where to find it", () => {

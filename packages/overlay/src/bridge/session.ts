@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentQuestion, AgentRequest, AgentSession, ChangeResult, ChangeSet, CommentAction, CommentAttachment, CommentMessage, CommentReference, ElementTarget, FileToken, Job, JobError, JobStatus, ProjectComponent, PropChange, PropSpec, WidthCheck } from "@pilot/protocol";
+import type { AgentInfo, AgentQuestion, AgentRequest, AgentSession, ChangeResult, ChangeSet, CommentAction, CommentAttachment, CommentMessage, CommentReference, ElementTarget, FileToken, Job, JobError, JobStatus, ProjectComponent, ProjectSkill, PropChange, PropSpec, WidthCheck } from "@pilot/protocol";
 import { attachmentType, requestTargets } from "@pilot/protocol";
 import { checkWidths, problemLines, snapshotAt, type StyleSnapshot, widthsToCheck } from "../checks/widths.ts";
 import { componentProps } from "../dom/component.ts";
@@ -428,6 +428,7 @@ export class PilotSession {
     references: CommentReference[] = [],
     takesEdits = false,
     props?: CommentMessage["props"],
+    skill?: string,
   ): { thread: CommentThread; job: JobRecord | null; changeSet: ChangeSet; waiting: boolean } {
     let thread = this.threadFor(element);
     // The agent asked something here: this message is the answer, and goes with its job.
@@ -452,6 +453,8 @@ export class PilotSession {
     const message: ThreadMessage = { from: "designer", text: text.trim(), at: new Date().toISOString() };
     if (attachments.length) message.attachments = attachments;
     if (action) message.action = action;
+    // A skill goes with a comment (an action is a task of its own instead).
+    else if (skill) message.skill = skill;
     if (references.length) message.references = references;
     // Not with an action: a task goes apart from the changes (see request), which wait for Send.
     if (takesEdits && !action) message.takesEdits = true;
@@ -468,13 +471,14 @@ export class PilotSession {
   /** A comment job's change set: the thread so far, as the agent reads it. */
   private commentSet(element: Element, messages: ThreadMessage[], others: Element[], id?: string, session?: AgentSession): ChangeSet {
     // Attachments go by id (the hub adds where it saved them); their previews stay here.
-    const thread = messages.map(({ from, text, at, attachments, action, references, props, stopped }) => ({
+    const thread = messages.map(({ from, text, at, attachments, action, skill, references, props, stopped }) => ({
       from,
       // Pilot's note, not the agent's words: what it means for the work.
       text: stopped ? STOPPED_FOR_AGENT : text,
       at,
       ...(attachments?.length ? { attachments: attachments.map(({ id, name }) => ({ id, name })) } : {}),
       ...(action ? { action } : {}),
+      ...(skill ? { skill } : {}),
       ...(references?.length ? { references } : {}),
       ...(props ? { props } : {}),
     }));
@@ -493,6 +497,11 @@ export class PilotSession {
   /** The project's components, for the `@` list (see BridgeClient.components); none without an agent on the page. */
   projectComponents(): Promise<ProjectComponent[]> {
     return this.bridge && this.canSendToAgent ? this.bridge.components() : Promise.resolve([]);
+  }
+
+  /** The agent's skills, for the `/` list (see BridgeClient.skills); none without an agent on the page. */
+  projectSkills(): Promise<ProjectSkill[]> {
+    return this.bridge && this.canSendToAgent ? this.bridge.skills() : Promise.resolve([]);
   }
 
   /** The project's file tokens (see BridgeClient.tokens); none without an agent on the page. */

@@ -1,6 +1,6 @@
 # Can Pilot run each agent's command-line tool on Windows and Linux? Runs
-# scripts/agent-runs-check.mjs (a job, a resumed follow-up, and the limits:
-# nothing written outside the project, no internet) with each agent installed
+# scripts/agent-runs-check.mjs (a job, a resumed follow-up, and what its chat
+# would ask about refused without hanging) with each agent installed
 # the way its docs say. Needs the repo secrets ANTHROPIC_API_KEY,
 # OPENAI_API_KEY and CURSOR_API_KEY. Runs on pushes that change how agents are
 # run, or by hand (Actions → Agent runs → Run workflow); each run costs a few

@@ -61,16 +61,29 @@ describe("reading a run's output", () => {
 });
 
 describe("a run's arguments", () => {
-  it("keeps every agent inside the project, off the network", () => {
-    const claude = AGENTS.claude.args({});
-    expect(claude).toContain("--restricted");
-    expect(claude.join(" ")).toContain("--tools Read,Edit,Write,Glob,Grep");
-    const codex = AGENTS.codex.args({});
-    expect(codex.join(" ")).toContain("-s workspace-write");
-    expect(codex).toContain('web_search="disabled"');
-    // Allowlist mode (its sandbox isn't on Windows), and never --force: what isn't allowed is refused.
+  it("runs every agent with the designer's own permissions, never skipping them", () => {
+    const claude = AGENTS.claude.args({}).join(" ");
+    expect(claude).toContain("--permission-mode acceptEdits");
+    // Their own settings: nothing that drops them, or narrows the tools to Pilot's pick.
+    expect(claude).not.toMatch(/--restricted|--tools |--strict-mcp-config|--safe-mode|--bare/);
+    const codex = AGENTS.codex.args({}).join(" ");
+    expect(codex).toContain("-s workspace-write");
+    expect(codex).not.toContain("web_search");
+    // Allowlist mode (its sandbox isn't on Windows): what the allowlist doesn't allow is refused.
     expect(AGENTS.cursor.args({}).join(" ")).toContain("--sandbox disabled");
-    expect(AGENTS.cursor.args({})).not.toContain("--force");
+    for (const cli of Object.values(AGENTS))
+      expect(cli.args({}).join(" ")).not.toMatch(/--force|--yolo|bypass|dangerously|danger-full-access/i);
+  });
+
+  it("lets Claude Code read the user's skills, read-only (its chat would ask, a run can't answer)", () => {
+    const claude = AGENTS.claude.args({});
+    expect(claude[claude.indexOf("--allowedTools") + 1]).toBe("Read(~/.claude/skills/**)");
+  });
+
+  it("starts a skill the designer picked as each agent's chat does", () => {
+    expect(AGENTS.claude.invokeSkill("variant")).toBe("/variant");
+    expect(AGENTS.cursor.invokeSkill("variant")).toBe("/variant");
+    expect(AGENTS.codex.invokeSkill("variant")).toBe("$variant");
   });
 
   it("never takes the prompt as an argument (it goes on stdin)", () => {

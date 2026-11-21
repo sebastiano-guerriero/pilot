@@ -8,7 +8,7 @@ import { Bridge } from "./agent.ts";
 import { attachmentBlocks, attachmentsDir, newAttachments } from "./attachments.ts";
 import { saveAgent, savedAgent } from "./config.ts";
 import { searchable, whereSection, withComponentFiles } from "./locate.ts";
-import { jobPrompt } from "./prompt.ts";
+import { jobPrompt, skillOf } from "./prompt.ts";
 
 /**
  * `npx usepilot`: Pilot for this project, in a terminal beside the dev
@@ -65,7 +65,7 @@ export async function startRunner(options: RunnerOptions): Promise<Runner> {
   }
 
   const { cli, bin } = await pickAgent(options, choose, out);
-  const agent: AgentInfo = { id: randomUUID(), label: `${cli.label} · ${basename(project)}`, folder: project };
+  const agent: AgentInfo = { id: randomUUID(), label: `${cli.label} · ${basename(project)}`, folder: project, kind: cli.kind };
   const bridge = new Bridge(agent, options.port ?? (Number(process.env.PILOT_PORT) || DEFAULT_BRIDGE_PORT));
 
   const origin = await pickSite(bridge, options, choose, out);
@@ -195,7 +195,7 @@ export async function runJob(job: Job, ctx: RunContext): Promise<void> {
       .catch(() => {});
   }, CANCEL_POLL_MS);
   try {
-    const prompt = await promptFor(job, ctx.project);
+    const prompt = await promptFor(job, ctx.project, cli);
     const resume = sessionToResume(job, cli.kind);
     const images = newAttachments(job)
       .map((f) => f.path as string)
@@ -247,13 +247,19 @@ async function runAgent(ctx: RunContext, prompt: string, options: { resume?: str
   return parsed;
 }
 
-/** The prompt of a run: the job's, where its code probably is, and the text files attached. */
-async function promptFor(job: Job, project: string): Promise<string> {
+/**
+ * The prompt of a run: the job's, where its code probably is, and the text
+ * files attached; first, the skill the designer picked, started the way the
+ * agent's chat starts one (`invokeSkill`).
+ */
+export async function promptFor(job: Job, project: string, cli: AgentCli): Promise<string> {
   const j = withComponentFiles(job, project);
   const where = j.attempt === 2 ? "" : whereSection(j, project);
   const texts = (await attachmentBlocks(j)).flatMap((b) => (b.type === "text" ? [b.text] : []));
-  return [jobPrompt(j, where), ...texts].join("\n\n");
+  const skill = skillOf(j);
+  return [...(skill ? [cli.invokeSkill(skill)] : []), jobPrompt(j, where), ...texts].join("\n\n");
 }
+
 
 /** The session to resume: the job's own (its follow-up, an answer), else its comment thread's; only this agent's. */
 export function sessionToResume(job: Job, agent: AgentKind): string | undefined {

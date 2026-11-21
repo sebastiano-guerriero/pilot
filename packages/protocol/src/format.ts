@@ -330,8 +330,21 @@ function formatComment(changeSet: ChangeSet, request: CommentRequest): string {
     "## The comment",
     "",
     // Props set from the thread, with no words: the props are the comment.
-    ...(latest?.props && !latest.text.trim() && !latest.attachments?.length ? ["The designer set props on this instance (below), with no words."] : commentLines(latest)),
+    ...(latest?.props && !latest.text.trim() && !latest.attachments?.length
+      ? ["The designer set props on this instance (below), with no words."]
+      : latest?.skill && !latest.text.trim() && !latest.attachments?.length
+        ? [`The designer picked the skill \`${latest.skill}\` (below), with no words: use it on ${several > 1 ? "these elements" : "this element"}.`]
+        : commentLines(latest)),
   ];
+  // A skill the designer picked from the `/` list: theirs, installed for their agent; the agent runs it as it would in its chat.
+  if (latest?.skill) {
+    lines.push(
+      "",
+      "## The skill to use",
+      "",
+      `The designer asked you to use their skill \`${latest.skill}\` for this comment: load it the way you load skills, and follow it for ${several > 1 ? "these elements" : "this element"}. Where it and the guidelines below differ, the skill wins; what it doesn't say, they cover. If a step needs something you can't do in this run (a permission you don't have, a tool that isn't there), skip it and say so in your reply. If there's no skill by that name, say so and don't guess what it does.`,
+    );
+  }
   // Props the designer picked from the agent's `/props` list: set where this instance is written.
   if (latest?.props?.set.length) {
     const { component, usedIn, set } = latest.props;
@@ -364,7 +377,7 @@ function formatComment(changeSet: ChangeSet, request: CommentRequest): string {
     lines.push("", "## The thread so far (you already did what it asked)", "");
     for (const m of earlier) {
       const files = m.attachments?.length ? ` (${countFiles(m.attachments.length)})` : "";
-      const action = m.action ? ` (${ACTION_ASKED[m.action]})` : "";
+      const action = m.action ? ` (${ACTION_ASKED[m.action]})` : m.skill ? ` (with the skill \`${m.skill}\`)` : "";
       lines.push(`- **${m.from === "designer" ? "Designer" : "You"}:**${action}${files} ${m.text.replace(/\s*\n\s*/g, " ")}`.trimEnd());
     }
   }
@@ -379,7 +392,9 @@ function formatComment(changeSet: ChangeSet, request: CommentRequest): string {
     several > 1 ? "- Change only what the comment is about, on each of these elements." : "- Change only what the comment is about.",
     `- ${sharedCode()}`,
     "- **A question, not a change:** answer it, and change nothing.",
-    "- **Your notes are your reply in the designer's thread, a small chat box for quick design back-and-forth:** keep it to one short sentence, like a chat message (about 120 characters at most): what you changed, or your answer, or the one thing you need from them. No lists, headings or code blocks; inline `code` for a value or a file name at most. Not a report: the designer sees the result on the page.",
+    latest?.skill
+      ? "- **Your notes are your reply in the designer's thread:** reply as the skill says (findings, a report, options to pick from), as long as it needs to be. Markdown shows (lists, bold, inline `code`, code blocks); headings show as bold lines."
+      : "- **Your notes are your reply in the designer's thread, a small chat box for quick design back-and-forth:** keep it concise, like a chat message: what you changed, or your answer, or what you need from them, in a few short sentences at most. No headings, and not a report: the designer sees the result on the page.",
   );
   return `${lines.join("\n")}\n`;
 }

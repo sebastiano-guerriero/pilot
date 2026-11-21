@@ -18,7 +18,7 @@ pnpm dev
 | `pnpm typecheck` | `tsc` in every workspace package |
 | `pnpm dev:experiments` | The overlay's source on :5199 and the CLI rebuilt on change, for linked projects (below) |
 | `pnpm link-experiment <folder>` | Links another project to this checkout (below) |
-| `node scripts/agent-runs-check.mjs` | Checks that Pilot can run each agent's command-line tool here: a job, a resumed follow-up, nothing written outside the project, no internet. `--agents claude,codex,cursor` picks them. The **Agent runs** workflow (`.github/workflows/agent-runs.yml`) runs it on Windows and Linux, with the repo secrets `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and `CURSOR_API_KEY` |
+| `node scripts/agent-runs-check.mjs` | Checks that Pilot can run each agent's command-line tool here: a job, a resumed follow-up, what its chat would ask about (a file written outside the project) refused without the run hanging, and a skill picked from the `/` list used; the internet and shell commands shown, as the agent's settings say. `--agents claude,codex,cursor` picks them. The **Agent runs** workflow (`.github/workflows/agent-runs.yml`) runs it on Windows and Linux, with the repo secrets `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and `CURSOR_API_KEY` |
 
 Before finishing a change, run `pnpm typecheck` and `pnpm test`.
 
@@ -75,13 +75,13 @@ To use the Pilot you're working on in another project without publishing a versi
 Pilot runs other people's command-line tools, and an update of one can change how it behaves. Two checks keep that in view:
 
 - **Pilot's side, automatically:** [run.test.ts](../packages/cli/src/run.test.ts) (part of `pnpm test`) drives the runner with a stand-in agent through a real hub and a page: a job and its reply, a thread's session resumed, a question from the `pilot` block, a retry, a sign-in error, Stop, two jobs at once. [agents.test.ts](../packages/cli/src/agents.test.ts) reads output recorded from the real tools.
-- **The agents' side, on every platform:** `node scripts/agent-runs-check.mjs` here, and the **Agent runs** workflow on Windows and Linux: a job, a resumed follow-up, nothing written outside the project, no internet. A tool that behaves differently gets its entry in `AGENTS` ([agents.ts](../packages/cli/src/agents.ts)) changed.
+- **The agents' side, on every platform:** `node scripts/agent-runs-check.mjs` here, and the **Agent runs** workflow on Windows and Linux: a job, a resumed follow-up, and what its chat would ask about refused without hanging. A tool that behaves differently gets its entry in `AGENTS` ([agents.ts](../packages/cli/src/agents.ts)) changed.
 
 | What the tool does | Agent | What depends on it |
 | --- | --- | --- |
 | One task and exit, the prompt on stdin, JSON lines out | `claude -p --output-format stream-json --verbose`; `codex exec --json -`; `cursor-agent -p --output-format stream-json` | `args` and `parse` per agent |
 | A session id in its output, resumed by id | `session_id`; `thread.started`'s `thread_id`, `codex exec resume <id>`; `session_id` | thread sessions (`sessionToResume`) |
-| Limits: no writes outside the project, no internet | `--restricted --tools Read,Edit,Write,Glob,Grep`; `-s workspace-write`, `web_search="disabled"`, on Windows `windows.sandbox="unelevated"`; `--sandbox disabled` (allowlist mode, never `--force`: its sandbox isn't on Windows) | the README's promise |
+| The agent's own permissions; what would ask is refused, never skipped | `--permission-mode acceptEdits` (`-p` refuses what would prompt); `-s workspace-write`, on Windows `windows.sandbox="unelevated"`; `--sandbox disabled` (allowlist mode, never `--force`: its sandbox isn't on Windows) | the README's promise |
 | Its sign-in check | `claude auth status` (`loggedIn`); `codex login status` (exit code); `cursor-agent status` | `detectAgents`, `init` |
 | Runs outside a git repository | yes; only with `--skip-git-repo-check`; yes | Codex's flags |
 | Its last message is the reply | the last `assistant` message; the last `agent_message`; the last `assistant` message (its `result` joins them all) | the notes |

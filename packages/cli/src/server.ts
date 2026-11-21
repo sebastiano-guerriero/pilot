@@ -3,6 +3,7 @@ import type { AgentInfo, ChangeResult, PageEvent, WidthCheck } from "@pilot/prot
 import { BRIDGE_VERSION, jobErrorOf, originKey, propsOf, questionOf, sessionOf } from "@pilot/protocol";
 import { attachmentsDir, extensionOf, MAX_ATTACHMENT_BYTES, saveAttachment, sweepAttachments, withAttachmentPaths } from "./attachments.ts";
 import { projectComponents } from "./components.ts";
+import { findSkills } from "./skills.ts";
 import { fileTokens } from "./tokenFiles.ts";
 import { Hub, type JobPost } from "./hub.ts";
 
@@ -115,6 +116,8 @@ async function handle(hub: Hub, req: IncomingMessage, res: ServerResponse, attac
   if (path === "/components") return json(res, 200, { components: projectComponents(hub.folders(origin)) });
   // The project's tokens that only live in files, for the page's variables (tokenFiles.ts).
   if (path === "/tokens") return json(res, 200, { tokens: fileTokens(hub.folders(origin)) });
+  // The skills of the agent Pilot runs for the page, for the comment box's `/` list (skills.ts): names and descriptions, never where they are.
+  if (path === "/skills") return json(res, 200, { skills: findSkills(hub.skillFolders(origin)) });
 
   if (path === "/attachments") {
     const type = req.headers["content-type"] ?? "";

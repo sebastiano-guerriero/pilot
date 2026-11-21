@@ -67,7 +67,27 @@ export interface AgentInfo {
    * itself: what it sends pages never has it.
    */
   folder?: string;
+  /**
+   * Which agent's command-line tool runs the jobs (`claude`, `codex`,
+   * `cursor`), for the hub to list that agent's skills from its folders
+   * (`POST /skills`). Kept to the hub, like `folder`; a hub that doesn't
+   * know it passes it on, harmless (no path in it).
+   */
+  kind?: string;
 }
+
+/**
+ * A skill of the agent Pilot runs for the page (`POST /skills`, for the
+ * comment box's `/` list): its name and description, from its `SKILL.md`.
+ * Where it is stays with the hub.
+ */
+export interface ProjectSkill {
+  name: string;
+  description?: string;
+}
+
+/** A skill's name, as agents name them (`better-ui`, `ui:polish`): what may go into a prompt's first line. */
+export const SKILL_NAME = /^[A-Za-z0-9][\w.:-]{0,63}$/;
 
 /** One Send: a change set for an agent to apply. */
 export interface Job {

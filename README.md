@@ -6,7 +6,7 @@ Pilot turns the page you're building into a design surface for your agents. You 
 
 - **Edit.** Select an element, type a property the way you'd type a Tailwind class (`pt`, `w`, `gap-x`), and set it with a visual control.
 - **Ask for a change.** Click an element with the comment tool and say what you want, in your own words, with a screenshot or a file if it helps. The agent makes the change and tells you in a line what it did.
-- **Run a task.** Type `/` in the comment box and pick one: **Make responsive** makes the element work at every screen width, and **Break and fix** tries it with odd content (very long text, missing or odd-shaped images) and fixes what breaks.
+- **Run a task.** Type `/` in the comment box and pick one: **Make responsive** makes the element work at every screen width, and **Break and fix** tries it with odd content (very long text, missing or odd-shaped images) and fixes what breaks. Your agent's own skills are there too: pick one and the agent uses it for your comment.
 
 > **Early preview (0.x).** It works, and things will change between versions.
 
@@ -38,7 +38,7 @@ It uses your agent's plan, as when you use it yourself.
 
    Open your app: Pilot opens on every page. Design and press Send, or comment on an element: Pilot runs your agent for each job, and the terminal shows what it does. No chat needs to stay open. The first time, if several agents are signed in, it asks which to use; `npx usepilot --agent codex` changes it.
 
-**What the agent may do:** edit your project's files. Nothing else on your machine, and no internet: each agent runs in its own restricted mode or sandbox.
+**What the agent may do:** what you allow it in its own chat, and edit your project's files. Pilot never skips your agent's permissions: what it would ask you about there is refused, since no one is there to answer, and its reply says so.
 
 Pilot needs `npx usepilot` running: without it, the toolbar says so. **Option+P** (Alt+P on Windows and Linux) opens or hides Pilot in your app.
 

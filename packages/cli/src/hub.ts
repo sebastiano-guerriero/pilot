@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { AgentInfo, AgentQuestion, AgentSession, ChangeResult, ChangeSet, Job, JobError, PageEvent, PropSpec, WidthCheck } from "@pilot/protocol";
 import { originKey } from "@pilot/protocol";
+import { AGENTS, type AgentKind, isAgentKind } from "./agents.ts";
+import { skillFolders } from "./skills.ts";
 
 /**
  * The hub's state: agents, the pages connected to it, and the jobs between
@@ -57,6 +59,8 @@ interface Agent {
   origin: string;
   seen: number;
   folder?: string;
+  /** The agent's tool, for its skills' folders (see skillFolders). */
+  kind?: AgentKind;
 }
 
 interface Waiter {
@@ -86,8 +90,14 @@ export class Hub {
   register(info: AgentInfo, origin: string): void {
     const key = originKey(origin);
     const known = this.agents.get(info.id);
-    const { folder, ...shown } = info;
-    this.agents.set(info.id, { info: shown, origin: key, seen: this.now(), folder: folder ?? known?.folder });
+    const { folder, kind, ...shown } = info;
+    this.agents.set(info.id, {
+      info: shown,
+      origin: key,
+      seen: this.now(),
+      folder: folder ?? known?.folder,
+      kind: isAgentKind(kind) ? kind : known?.kind,
+    });
     if (!known || known.origin !== key) {
       if (known) this.notifyAgents(known.origin);
       this.notifyAgents(key);
@@ -120,6 +130,13 @@ export class Hub {
   folders(origin: string): string[] {
     const key = originKey(origin);
     return [...new Set([...this.agents.values()].filter((a) => a.origin === key && a.folder).map((a) => a.folder as string))];
+  }
+
+  /** Where the agents working on pages of `origin` read their skills from (each agent's own folders, skills.ts): for the `/` list. */
+  skillFolders(origin: string): string[] {
+    const key = originKey(origin);
+    const agents = [...this.agents.values()].filter((a) => a.origin === key && a.folder && a.kind);
+    return [...new Set(agents.flatMap((a) => skillFolders(AGENTS[a.kind as AgentKind], a.folder as string)))];
   }
 
   /** Drops agents not heard from in AGENT_TTL (`keep`: the ones in this process, always alive). */

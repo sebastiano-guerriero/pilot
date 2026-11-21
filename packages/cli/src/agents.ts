@@ -6,10 +6,12 @@ import { delimiter, join } from "node:path";
 /**
  * The coding agents Pilot runs for a job: each one's command-line tool, run
  * once per job in the project's folder, the prompt on stdin. A comment thread
- * resumes its session, so the agent remembers the thread. The flags keep every
- * run inside the limits Pilot promises: it edits the project's files and
- * nothing else on the machine, and can't reach the internet. Checked on macOS,
- * Linux and Windows by scripts/agent-runs-check.mjs (docs/handoff.md, *Agent runs*).
+ * resumes its session, so the agent remembers the thread. A run has the
+ * permissions the designer gave that agent, as in its chat, with no one there
+ * to answer: what they allowed runs, the project's files can be edited (the
+ * job), and what the chat would ask about is refused. Never a flag that skips
+ * permissions. Checked on macOS, Linux and Windows by
+ * scripts/agent-runs-check.mjs (docs/handoff.md, *Agent runs*).
  */
 
 export type AgentKind = "claude" | "codex" | "cursor";
@@ -50,6 +52,18 @@ export interface AgentCli {
   args(options: RunOptions): string[];
   /** Reads what a run printed. */
   parse(stdout: string): RunOutput;
+  /**
+   * Where it reads skills from (each a folder of `<name>/SKILL.md`): in the
+   * project (its folder and each above it, up to the repository's root) and
+   * in the user's home folder. Pilot lists what's there (skills.ts).
+   */
+  skills: { project: string[]; home: string[] };
+  /**
+   * How a run starts with a skill the designer picked: the first line of its
+   * prompt, as the designer would type it in the agent's chat. Explicit, so
+   * a skill only its user may start (`disable-model-invocation`) starts too.
+   */
+  invokeSkill(name: string): string;
 }
 
 /**
@@ -106,19 +120,22 @@ export const AGENTS: Record<AgentKind, AgentCli> = {
     install: "curl -fsSL https://claude.ai/install.sh | bash",
     signIn: "claude auth login",
     status: { args: ["auth", "status"], ok: (out) => /"loggedIn"\s*:\s*true/.test(out) },
-    // Restricted: no tool that runs commands or reaches the web, file tools confined to the project.
+    // The designer's own settings (allow rules, MCP servers, skills), edits in the project accepted.
+    // A run can't prompt: `-p` refuses what would ask (checked; `--permission-prompts none` says the
+    // same, but older versions don't know it). Reading the user's skills is allowed, read-only: its
+    // chat would ask before a skill reads its other files there, and a run can't answer.
     args: ({ resume, readDirs = [] }) => [
       "-p",
       "--output-format", "stream-json",
       "--verbose",
-      "--restricted",
-      "--strict-mcp-config",
-      "--tools", "Read,Edit,Write,Glob,Grep",
       "--permission-mode", "acceptEdits",
+      "--allowedTools", "Read(~/.claude/skills/**)",
       ...readDirs.flatMap((d) => ["--add-dir", d]),
       ...(resume ? ["--resume", resume] : []),
     ],
     parse: parseStream,
+    skills: { project: [".claude/skills"], home: [".claude/skills"] },
+    invokeSkill: (name) => `/${name}`,
   },
   codex: {
     kind: "codex",
@@ -127,13 +144,13 @@ export const AGENTS: Record<AgentKind, AgentCli> = {
     install: "npm install -g @openai/codex",
     signIn: "codex login",
     status: { args: ["login", "status"], ok: (_out, code) => code === 0 },
-    // Its sandbox: writes only in the project, no network; no web search (it runs outside the sandbox).
+    // Its sandbox in the mode its chat uses for a project (writes in the project), with the designer's
+    // own settings for the rest (network, web search, rules). `exec` never asks: what would is refused.
     // On Windows the sandbox needs a mode, or a run is read-only; "unelevated" needs no admin rights.
     args: ({ resume, images = [], platform = process.platform }) => [
       "exec",
       "--json",
       "-s", "workspace-write",
-      "-c", 'web_search="disabled"',
       ...(platform === "win32" ? ["-c", 'windows.sandbox="unelevated"'] : []),
       "--skip-git-repo-check",
       ...images.flatMap((i) => ["-i", i]),
@@ -141,6 +158,8 @@ export const AGENTS: Record<AgentKind, AgentCli> = {
       "-",
     ],
     parse: parseCodex,
+    skills: { project: [".agents/skills"], home: [".agents/skills", ".codex/skills"] },
+    invokeSkill: (name) => "$" + name,
   },
   cursor: {
     kind: "cursor",
@@ -155,6 +174,8 @@ export const AGENTS: Record<AgentKind, AgentCli> = {
     // allow (it can't ask): writes outside the project, web fetches, shell commands. Checked on all three.
     args: ({ resume }) => ["-p", "--output-format", "stream-json", "--trust", "--sandbox", "disabled", ...(resume ? ["--resume", resume] : [])],
     parse: parseStream,
+    skills: { project: [".agents/skills", ".cursor/skills"], home: [".cursor/skills"] },
+    invokeSkill: (name) => `/${name}`,
   },
 };
 
