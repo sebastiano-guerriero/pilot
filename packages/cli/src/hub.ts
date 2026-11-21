@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AgentInfo, AgentQuestion, AgentSession, ChangeResult, ChangeSet, Job, JobError, PageEvent, PropSpec, WidthCheck } from "@pilot/protocol";
+import type { AgentInfo, AgentQuestion, AgentSession, ChangeResult, ChangeSet, Job, JobError, OpenPage, PageEvent, PropSpec, WidthCheck } from "@pilot/protocol";
 import { originKey } from "@pilot/protocol";
 import { AGENTS, type AgentKind, isAgentKind } from "./agents.ts";
 import { skillFolders } from "./skills.ts";
@@ -20,6 +20,8 @@ export const AGENT_TTL = 30_000;
 /** How the hub talks to one connected page. */
 export interface PageConnection {
   origin: string;
+  /** The project its loader names (`mountPilot({ project })`); none from a loader before 0.15. */
+  project?: string;
   send(event: PageEvent): void;
 }
 
@@ -157,11 +159,17 @@ export class Hub {
   }
 
   /**
-   * The sites with Pilot open in a browser now (the origins of the connected
-   * pages, each once): where `npx usepilot` can launch without being told a URL.
+   * The pages with Pilot open in a browser now, each site and project once,
+   * leaving out the sites Pilot already runs for: where `npx usepilot` looks
+   * for its own project's pages (by their project's name), without a URL.
    */
-  pageOrigins(): string[] {
-    return [...new Set([...this.pages].map((p) => p.origin))];
+  openPages(): OpenPage[] {
+    const seen = new Map<string, OpenPage>();
+    for (const page of this.pages) {
+      if (this.hasAgents(page.origin)) continue;
+      seen.set(`${page.origin} ${page.project ?? ""}`, { origin: page.origin, ...(page.project ? { project: page.project } : {}) });
+    }
+    return [...seen.values()];
   }
 
   /** Pilot started for a site (`npx usepilot`): registers it and tells the open pages of `origin` to launch Pilot. Returns how many pages got it. */

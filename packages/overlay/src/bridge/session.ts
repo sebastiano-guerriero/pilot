@@ -150,6 +150,8 @@ export interface Stuck {
 export interface SessionOptions {
   /** The hub's URL, or false for no bridge (nothing can be sent). */
   bridge: string | false;
+  /** The page's project (`mountPilot({ project })`): how `npx usepilot` finds its own pages, and what the stuck messages name. */
+  project?: string;
   /** Pilot started running for this site (`npx usepilot`): launch it. */
   onLaunch(agent: AgentInfo): void;
   /**
@@ -165,6 +167,8 @@ export class PilotSession {
   jobs: JobRecord[] = [];
   threads: CommentThread[] = loadThreads();
   readonly bridge: BridgeClient | null;
+  /** The page's project (`mountPilot({ project })`), if its loader names it. */
+  private project?: string;
   private listeners = new Set<() => void>();
   private watching = new Map<string, () => void>();
   /**
@@ -196,8 +200,9 @@ export class PilotSession {
           onAgentsArrived: options.onAgentsArrived,
           onCheck: (requestId, jobId) => void this.answerCheck(requestId, jobId),
           onQuit: options.onQuit,
-        })
+        }, undefined, options.project)
       : null;
+    this.project = options.project;
     // An agent arrived: changes held for want of one can go.
     this.bridge?.subscribe(() => {
       this.release();
@@ -1047,12 +1052,15 @@ export class PilotSession {
     if (last) return { kind: "agent-error", title: last.title, detail: last.detail, jobs: failed.map((j) => j.id) };
     const open = this.jobs.filter((j) => j.status === "queued" || j.status === "working");
     const { connected, agents, older } = this.state;
+    const notRunning = `Pilot isn't running for ${this.project ?? "this site"}`;
     const ids = (jobs: JobRecord[]) => jobs.map((j) => j.id);
     if (!connected && older) {
-      return { kind: "older-agent", title: "Pilot isn't running for this site", detail: NOT_RUNNING_OLDER, jobs: ids(open) };
+      return { kind: "older-agent", title: notRunning, detail: NOT_RUNNING_OLDER, jobs: ids(open) };
     }
-    if (!connected) return { kind: "offline", title: "Pilot isn't running for this site", detail: NOT_RUNNING, jobs: ids(open) };
-    if (!agents.length) return { kind: "no-agent", title: "Pilot isn't running for this site", detail: NOT_RUNNING, jobs: ids(open) };
+    // A page whose loader doesn't name its project: `npx usepilot` can't tell it's this project's (see mountPilot's `project`).
+    const detail = this.project ? NOT_RUNNING : NOT_NAMED;
+    if (!connected) return { kind: "offline", title: notRunning, detail, jobs: ids(open) };
+    if (!agents.length) return { kind: "no-agent", title: notRunning, detail, jobs: ids(open) };
     return null;
   }
 
@@ -1092,6 +1100,7 @@ function stuckAfter(stuck: Stuck): number {
 /** What to do when Pilot isn't running for the site. */
 const NOT_RUNNING = "Run npx usepilot in your project's folder";
 const NOT_RUNNING_OLDER = "Run npx usepilot in your project's folder (an older Pilot is running, and can't reach this page)";
+const NOT_NAMED = "Its loader doesn't say which project this is: ask your agent to run npx usepilot@latest update, then run npx usepilot";
 
 /** Done, with a question for the designer not answered yet (see PilotSession.ask). */
 export function awaitsAnswer(job: Pick<JobRecord, "status" | "question" | "answer" | "checked">): boolean {

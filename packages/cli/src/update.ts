@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { BRIDGE_VERSION } from "@pilot/protocol";
-import { installArgs, installedVersion, packageManager, projectRoot } from "./init.ts";
+import { detectFramework, installArgs, installedVersion, namingStep, packageManager, projectRoot } from "./init.ts";
 import { removeOldSetup } from "./legacy.ts";
 import { olderThan, VERSION } from "./version.ts";
 
@@ -74,9 +74,15 @@ ${pm} ${args.join(" ")}
 `;
   }
 
+  // A loader that doesn't name this project yet (from before 0.15): `npx usepilot` wouldn't take its pages.
+  const loader = detectFramework(cwd, deps).loads;
+  const unnamed = loader ? !!namingStep(loader, cwd) : oldBridge !== null && oldBridge < 8;
   const bumped = !!before && !!after && olderThan(before, after);
-  const changed = bumped || removed.length > 0;
+  const changed = bumped || removed.length > 0 || unnamed;
   const steps = [
+    ...(unnamed
+      ? ["Ask your agent to run `npx usepilot@latest init` in the app's folder: it names this project in Pilot's loader, so `npx usepilot` knows the app's pages are this project's (new in 0.15)."]
+      : []),
     "Restart your app's dev server, so the page loads the new Pilot.",
     "Restart `npx usepilot` in the app's folder (Ctrl+C, then run it again), so Pilot runs the new version.",
   ];

@@ -54,10 +54,10 @@ afterEach(async () => {
   for (const fn of cleanup.splice(0).reverse()) await fn();
 });
 
-function fakePage(port: number, origin = APP) {
+function fakePage(port: number, origin = APP, project?: string) {
   const events: PageEvent[] = [];
   const abort = new AbortController();
-  const ready = fetch(`http://127.0.0.1:${port}/events`, { headers: { origin }, signal: abort.signal }).then(async (res) => {
+  const ready = fetch(`http://127.0.0.1:${port}/events${project ? `?project=${encodeURIComponent(project)}` : ""}`, { headers: { origin }, signal: abort.signal }).then(async (res) => {
     const reader = (res.body as ReadableStream<Uint8Array>).getReader();
     const decoder = new TextDecoder();
     let buffer = "";
@@ -208,6 +208,30 @@ describe("npx usepilot: Pilot runs the agent for each job", () => {
     await page.post("/jobs", { id: "quick", changeSet: changeSet("quick") });
     await until(() => page.job("quick")?.status === "done");
     expect(page.job("slow")?.status).toBe("working");
+  });
+});
+
+describe("which site it runs for", () => {
+  it("its own project's pages only, by the name their loader carries; it says why it leaves the others", async () => {
+    const port = nextPort++;
+    const dir = mkdtempSync(join(tmpdir(), "pilot-site-"));
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "shop" }));
+    const lines: string[] = [];
+    const starting = startRunner({ cwd: dir, port, agent: "claude", bin: process.execPath, configFile: join(dir, "c.json"), out: (l) => lines.push(l) });
+    await until(() => lines.some((l) => l.startsWith("Waiting for a page of shop")));
+    // Another project's page, and one whose loader names none (from before 0.15): left, each said once.
+    const other = fakePage(port, "http://localhost:5180", "playground");
+    const unnamed = fakePage(port, "http://localhost:3003");
+    await other.ready;
+    await unnamed.ready;
+    await until(() => lines.some((l) => l.includes("for playground, not shop")) && lines.some((l) => l.includes("doesn't say which project")));
+    // This project's page: taken.
+    const mine = fakePage(port, APP, "shop");
+    await mine.ready;
+    const runner = await starting;
+    cleanup.push(() => runner.close());
+    expect(runner.origin).toBe(APP);
+    expect(lines.filter((l) => l.includes("for playground, not shop"))).toHaveLength(1);
   });
 });
 

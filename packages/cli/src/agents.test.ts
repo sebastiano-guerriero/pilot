@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { AGENTS, childEnv, exec, findBin } from "./agents.ts";
+import { AGENTS, agentFromEnv, childEnv, exec, findBin } from "./agents.ts";
 
 // What each tool printed in real runs (2026-11), trimmed.
 const CLAUDE_STREAM = [
@@ -149,5 +149,14 @@ describe("running an agent", () => {
 
   it("doesn't pass on what marks a process as inside Claude Code", () => {
     expect(childEnv({ CLAUDECODE: "1", PATH: "/bin" })).toEqual({ PATH: "/bin" });
+  });
+});
+
+describe("the agent running Pilot's setup", () => {
+  it("is told from its environment", () => {
+    expect(agentFromEnv({ CLAUDECODE: "1" })).toBe("claude");
+    expect(agentFromEnv({ CURSOR_TRACE_ID: "x" })).toBe("cursor");
+    expect(agentFromEnv({ CODEX_SANDBOX: "seatbelt" })).toBe("codex");
+    expect(agentFromEnv({ PATH: "/bin" })).toBeNull();
   });
 });

@@ -35,6 +35,14 @@ export interface PilotOptions {
    * can be sent (the editor alone, for developing Pilot).
    */
   bridge?: string | false;
+  /**
+   * The project this page belongs to: its package.json's name, written by
+   * `npx usepilot init`. `npx usepilot` runs for its own project's pages only,
+   * so with several projects open (or another app with Pilot), each goes to
+   * its own. Without it (a loader from before 0.15), Pilot runs for this page
+   * only when started with its address (`--url`).
+   */
+  project?: string;
 }
 
 export interface PilotDevOptions {
@@ -108,6 +116,7 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
   // The handoff to agents: Send, the jobs, and `npx usepilot` launching Pilot.
   const session = new PilotSession(history, {
     bridge: options.bridge ?? DEFAULT_BRIDGE_URL,
+    project: options.project,
     onLaunch: () => instance.launch(),
     // A page opened while Pilot runs for the site: it opens by itself, unless closed in this tab.
     onAgentsArrived: () => {

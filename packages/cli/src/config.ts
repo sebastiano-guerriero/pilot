@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
+import { projectNameOf } from "@pilot/protocol";
 import { type AgentKind, isAgentKind } from "./agents.ts";
 
 /**
@@ -37,4 +38,19 @@ export function saveAgent(folder: string, agent: AgentKind, file = configFile())
   projects[resolve(folder)] = { ...projects[resolve(folder)], agent };
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, `${JSON.stringify(projects, null, 2)}\n`);
+}
+
+/**
+ * A project's name, the tag its pages carry (`mountPilot({ project })`,
+ * written by `init`) so `npx usepilot` in its folder runs for its pages only:
+ * its package.json's `name`, else its folder's name.
+ */
+export function projectName(folder: string): string {
+  try {
+    const name = projectNameOf((JSON.parse(readFileSync(join(folder, "package.json"), "utf8")) as { name?: unknown }).name);
+    if (name) return name;
+  } catch {
+    // No package.json, or not JSON.
+  }
+  return projectNameOf(basename(resolve(folder))) ?? "project";
 }

@@ -10,8 +10,8 @@
  */
 import type { AgentSession, ChangeSet, PropSpec, PropValue } from "./types.ts";
 
-/** Bumped when the hub's HTTP API changes incompatibly. 2: width checks (`/agents/check`, `/checks/:id`). 3: comment images (`/attachments`). 4: the agent's questions (`question` on `/agents/done`, `/jobs/:id/answer`). 5: the project's components (`/components`, the agent's `folder`) and `/props` (`props` on `/agents/done`). 6: the project's token files (`/tokens`, and what they stand for in the prompt: `fileTokens`). 7: Pilot runs the agent (`npx usepilot`): a job's agent `session` and `error`, `/agents/job`, and quit closes pages only. */
-export const BRIDGE_VERSION = 7;
+/** Bumped when the hub's HTTP API changes incompatibly. 2: width checks (`/agents/check`, `/checks/:id`). 3: comment images (`/attachments`). 4: the agent's questions (`question` on `/agents/done`, `/jobs/:id/answer`). 5: the project's components (`/components`, the agent's `folder`) and `/props` (`props` on `/agents/done`). 6: the project's token files (`/tokens`, and what they stand for in the prompt: `fileTokens`). 7: Pilot runs the agent (`npx usepilot`): a job's agent `session` and `error`, `/agents/job`, and quit closes pages only. 8: pages say their project (`/events?project=`), `/agents/pages` lists them with it. */
+export const BRIDGE_VERSION = 8;
 
 /**
  * The hub's port: one per bridge version (4747 + the version, so 4750 for
@@ -285,6 +285,21 @@ export type PageEvent =
   | { type: "check"; requestId: string; jobId: string }
   /** The designer closed Pilot on this site (in this tab or another): close it here too. */
   | { type: "quit" };
+
+/**
+ * A page with Pilot open, as the hub lists it for `npx usepilot`: its site,
+ * and the project its loader names (`mountPilot({ project })`), so Pilot runs
+ * for its own project's pages only. No `project`: a loader from before 0.15.
+ */
+export interface OpenPage {
+  origin: string;
+  project?: string;
+}
+
+/** A project's name as a page or a folder gives it (its package.json name): checked, at most 120 plain characters. */
+export function projectNameOf(value: unknown): string | undefined {
+  return typeof value === "string" && /^[\w@./-]{1,120}$/.test(value.trim()) ? value.trim() : undefined;
+}
 
 /** `{ origin }` an agent works on, from a URL: `http://localhost:5173/about` → `http://localhost:5173`. */
 export function originOf(url: string): string | null {

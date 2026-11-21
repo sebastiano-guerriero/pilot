@@ -64,8 +64,8 @@ let posts: Array<{ url: string; body: Record<string, unknown> }>;
 let launched: number;
 const agent = { id: "a", label: "Claude Code · app" };
 
-function session() {
-  const s = new PilotSession(history, { bridge: "http://hub", onLaunch: () => launched++ });
+function session(project?: string) {
+  const s = new PilotSession(history, { bridge: "http://hub", onLaunch: () => launched++, project });
   (s.bridge as unknown as { EventSourceImpl: unknown }).EventSourceImpl = FakeEventSource;
   s.start();
   return s;
@@ -611,7 +611,8 @@ describe("PilotSession", () => {
     hub().emit({ type: "agents", agents: [], waiting: 0 });
     expect(s.stuck).toBeNull(); // not yet: it may be restarting
     await vi.advanceTimersByTimeAsync(5_000);
-    expect(s.stuck).toMatchObject({ kind: "no-agent", title: "Pilot isn't running for this site", detail: "Run npx usepilot in your project's folder", jobs: [sent.id] });
+    // A page whose loader doesn't name its project: what to do about that.
+    expect(s.stuck).toMatchObject({ kind: "no-agent", title: "Pilot isn't running for this site", detail: "Its loader doesn't say which project this is: ask your agent to run npx usepilot@latest update, then run npx usepilot", jobs: [sent.id] });
     expect(s.isStuck(s.jobs[0] as never)).toBe(true);
     // The hub is gone.
     hub().readyState = 2;
@@ -835,6 +836,18 @@ describe("an agent on an older Pilot", () => {
 
   it("nothing answers: no older Pilot", async () => {
     expect(await olderHub(async () => Promise.reject(new TypeError("refused")))).toBeNull();
+  });
+});
+
+describe("the page's project", () => {
+  it("goes to the hub with the page (npx usepilot runs for its own project's pages), and the toolbar names it", async () => {
+    vi.useFakeTimers();
+    const s = session("shop");
+    expect(hub().url).toBe("http://hub/events?project=shop");
+    hub().emit({ type: "agents", agents: [], waiting: 0 });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(s.stuck).toMatchObject({ title: "Pilot isn't running for shop", detail: "Run npx usepilot in your project's folder" });
+    s.destroy();
   });
 });
 

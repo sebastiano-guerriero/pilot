@@ -6,7 +6,7 @@ import { DEFAULT_BRIDGE_PORT, isLocalHost, originKey, originOf, propsOf, questio
 import { AGENTS, type AgentCli, type AgentKind, detectAgents, exec, type FoundAgent, type RunOutput } from "./agents.ts";
 import { Bridge } from "./agent.ts";
 import { attachmentBlocks, attachmentsDir, newAttachments } from "./attachments.ts";
-import { saveAgent, savedAgent } from "./config.ts";
+import { projectName, saveAgent, savedAgent } from "./config.ts";
 import { searchable, whereSection, withComponentFiles } from "./locate.ts";
 import { jobPrompt, skillOf } from "./prompt.ts";
 
@@ -68,7 +68,7 @@ export async function startRunner(options: RunnerOptions): Promise<Runner> {
   const agent: AgentInfo = { id: randomUUID(), label: `${cli.label} · ${basename(project)}`, folder: project, kind: cli.kind };
   const bridge = new Bridge(agent, options.port ?? (Number(process.env.PILOT_PORT) || DEFAULT_BRIDGE_PORT));
 
-  const origin = await pickSite(bridge, options, choose, out);
+  const origin = await pickSite(bridge, options, out);
   await bridge.launch(origin);
   out(`Pilot is on ${origin}, every page, with ${cli.label}. Send from the toolbar; jobs show here. Ctrl+C stops.`);
 
@@ -141,29 +141,46 @@ async function pickAgent(
   return { cli: AGENTS[picked.kind], bin: options.bin ?? picked.bin };
 }
 
-/** The site: given, else the one local site with Pilot open (asked when several, waited for when none). */
-async function pickSite(bridge: Bridge, options: RunnerOptions, choose: NonNullable<RunnerOptions["choose"]>, out: (line: string) => void): Promise<string> {
+/**
+ * The site: given (`--url`), else the one where Pilot is open on a page of
+ * this project, told by the name its loader carries (`mountPilot({ project })`,
+ * see projectName). Never another project's page: each one Pilot sees and
+ * leaves is said once, with why, and it waits for this project's.
+ */
+async function pickSite(bridge: Bridge, options: RunnerOptions, out: (line: string) => void): Promise<string> {
   if (options.url) {
     const origin = originOf(options.url);
     if (!origin) throw new RunnerError(`"${options.url}" isn't a page address. Pass your dev server's, e.g. http://localhost:5173.`);
     return originKey(origin);
   }
-  let told = false;
+  const name = projectName(options.cwd);
+  const told = new Set<string>();
+  const say = (key: string, line: string) => {
+    if (told.has(key)) return;
+    told.add(key);
+    out(line);
+  };
   for (;;) {
     // Pages connect to the hub as they load: a moment for them to (re)connect to a new one.
-    const local = (await bridge.pages()).filter((o) => {
+    const local = (await bridge.pages()).filter((p) => {
       try {
-        return isLocalHost(new URL(o).hostname);
+        return isLocalHost(new URL(p.origin).hostname);
       } catch {
         return false;
       }
     });
-    if (local.length === 1) return local[0] as string;
-    if (local.length > 1) return local[await choose("Pilot is open on several sites. Which one is this project's?", local)] ?? (local[0] as string);
-    if (!told) {
-      out("Open your app in the browser, any page (with its dev server running): Pilot loads there in development. Or pass its address: npx usepilot --url http://localhost:5173");
-      told = true;
+    const mine = local.find((p) => p.project === name);
+    if (mine) return mine.origin;
+    for (const page of local) {
+      if (page.project)
+        say(`${page.origin} ${page.project}`, `Pilot is open on ${page.origin} for ${page.project}, not ${name}: run npx usepilot in that project's folder for it.`);
+      else
+        say(
+          page.origin,
+          `Pilot is open on ${page.origin}, but its loader doesn't say which project it is (set up before 0.15). If it's this one, ask your agent to run npx usepilot@latest update here, or start with npx usepilot --url ${page.origin}.`,
+        );
     }
+    say("none", `Waiting for a page of ${name}: open your app in the browser (with its dev server running).`);
     await sleep(1_000);
   }
 }

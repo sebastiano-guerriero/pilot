@@ -1,6 +1,8 @@
 import { mountPilot } from "@pilot/overlay";
 
 const pilot = mountPilot({
+  // Its project's name (package.json): `npx usepilot` in apps/playground runs for this page.
+  project: "playground",
   // Designing the property dialog: keep it open on every reload, anchored to
   // the "Get started" button, with an empty search. Add `query: "padding"` to
   // open an editor directly; remove `dev` to get the real flow back (Pilot

@@ -87,6 +87,8 @@ export class BridgeClient {
     private readonly url: string,
     private readonly handlers: BridgeHandlers,
     private readonly EventSourceImpl: typeof EventSource | undefined = globalThis.EventSource,
+    /** The page's project (`mountPilot({ project })`): the hub lists the page with it, for `npx usepilot` to find its own. */
+    private readonly project?: string,
   ) {}
 
   subscribe(listener: () => void): () => void {
@@ -221,7 +223,7 @@ export class BridgeClient {
     if (this.stopped || !this.EventSourceImpl) return;
     // EventSource retries by itself on a drop, but gives up on a refused
     // connection in some browsers: reconnect by hand, with a backoff.
-    const source = new this.EventSourceImpl(`${this.url}/events`);
+    const source = new this.EventSourceImpl(`${this.url}/events${this.project ? `?project=${encodeURIComponent(this.project)}` : ""}`);
     this.source = source;
     source.onmessage = (e) => {
       let event: PageEvent;

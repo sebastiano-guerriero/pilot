@@ -2,8 +2,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, relative } from "node:path";
-import { AGENTS as AGENT_CLIS, type AgentKind, detectAgents, type FoundAgent, isAgentKind } from "./agents.ts";
-import { saveAgent } from "./config.ts";
+import { AGENTS as AGENT_CLIS, type AgentKind, agentFromEnv, detectAgents, type FoundAgent, isAgentKind } from "./agents.ts";
+import { projectName, saveAgent } from "./config.ts";
 import { removeOldSetup } from "./legacy.ts";
 import { olderThan, VERSION } from "./version.ts";
 
@@ -13,7 +13,9 @@ import { olderThan, VERSION } from "./version.ts";
  * prints"); this does the mechanical part and prints the rest for the agent:
  * - installs `usepilot` as a dev dependency, with the project's package manager;
  * - checks the agents' command-line tools Pilot runs for each job (`npx
- *   usepilot`, run.ts): installed, signed in, and says what's missing;
+ *   usepilot`, run.ts): installed, signed in, and says what's missing; the
+ *   agent whose chat runs it (told from its environment) is saved for the
+ *   project, so `npx usepilot` doesn't ask;
  * - removes Pilot's old setup (its MCP server and `/pilot` skill, from
  *   before agent runs: legacy.ts);
  * - detects the framework and prints where and how to load Pilot in the
@@ -28,8 +30,10 @@ export interface InitOptions {
   install?: boolean;
   /** Runs a command in a folder; true when it succeeded. Injected by tests. */
   run?: (command: string, args: string[], cwd: string) => boolean;
-  /** The agent Pilot should run for this project (`--agent`): saved when it's ready. */
+  /** The agent Pilot should run for this project (`--agent`), else the one running init (its environment): saved when it's ready. */
   agent?: string;
+  /** The environment, to tell which agent runs init. Injected by tests. */
+  env?: NodeJS.ProcessEnv;
   /** The user's home folder, by default the real one. Injected by tests. */
   home?: string;
   /** The OS, for where VS Code keeps its user config (the old setup). Injected by tests. */
@@ -152,7 +156,8 @@ ${cwd} is a monorepo's root, not an app. Run \`npx usepilot@latest init\` again 
   else todo.push(`Install Pilot as a dev dependency: run \`${install}\` in ${cwd}.`);
 
   // 2. The agent Pilot runs for each job: its command-line tool, installed and signed in.
-  const wanted = agentKindOf(options.agent);
+  // The agent: given, else the one whose chat runs this (the setup prompt), so `npx usepilot` needn't ask.
+  const wanted = agentKindOf(options.agent) ?? agentFromEnv(options.env ?? process.env) ?? undefined;
   const found = await (options.detect ?? detectAgents)();
   const agents = agentLines(found, wanted);
   done.push(...agents.done);
@@ -165,8 +170,11 @@ ${cwd} is a monorepo's root, not an app. Run \`npx usepilot@latest init\` again 
   if (removed.length) done.push(`Removed Pilot's old chat setup (its MCP server and \`/pilot\` skill): ${removed.map((r) => `\`${r}\``).join(", ")}. Pilot runs the agent itself now.`);
 
   // 4. Loading Pilot in the app: written by the agent.
-  if (framework.loads) done.push(`The app already loads Pilot (\`${relative(cwd, framework.loads)}\`).`);
-  else todo.push(loadStep(framework, cwd));
+  if (framework.loads) {
+    const naming = namingStep(framework.loads, cwd);
+    if (naming) todo.push(naming);
+    else done.push(`The app already loads Pilot (\`${relative(cwd, framework.loads)}\`).`);
+  } else todo.push(loadStep(framework, cwd));
 
   todo.push(
     `**Tell the user**, in a few lines: Pilot is set up. To use it, run \`npx usepilot\` in ${cwd}, in a terminal beside the app's dev server, and open the app: Pilot opens on every page. They design and press Send (or comment on an element), Pilot runs their agent for each job, and the terminal shows what it does. No chat needs to stay open; without \`npx usepilot\` running, the toolbar says so.`,
@@ -342,7 +350,7 @@ function workspaceApps(cwd: string): string[] {
 // ── What the agent writes ────────────────────────────────────────────────
 
 /** Where and how to load Pilot in this app: in the browser, in development only. */
-function loadStep(framework: Framework, cwd: string): string {
+function baseLoadStep(framework: Framework, cwd: string): string {
   // The file when it was found; otherwise what to look for, never a path that may not exist.
   const at = (file: string | undefined, otherwise: string) => (file ? `\`${relative(cwd, file)}\`` : otherwise);
   const code = (lang: string, text: string) => `\n\n   \`\`\`${lang}\n${text.replace(/^(?=.)/gm, "   ")}\n   \`\`\``;
@@ -411,6 +419,47 @@ export function Pilot() {
       )}
    With a bundler, import \`usepilot/auto\` from the browser code, only in development (\`import.meta.env.DEV\` with Vite, \`process.env.NODE_ENV === "development"\` with webpack). Either way Pilot itself won't run on a public address.`;
   }
+}
+
+/** How a loader mounts Pilot naming its project (`mountPilot({ project })`): what `npx usepilot` in the project's folder looks for. */
+export function loaderCall(name: string): string {
+  return `import("usepilot").then((p) => p.mountPilot({ project: ${JSON.stringify(name)} }))`;
+}
+
+/**
+ * The loading step, every snippet naming the project (see loaderCall): with
+ * several projects open, or another app with Pilot, `npx usepilot` runs only
+ * for its own project's pages.
+ */
+function loadStep(framework: Framework, cwd: string): string {
+  const name = projectName(cwd);
+  const json = JSON.stringify(name);
+  return (
+    baseLoadStep(framework, cwd)
+      .replaceAll('import("usepilot/auto")', loaderCall(name))
+      .replaceAll(
+        '<script type="module" src="/node_modules/usepilot/dist/pilot-auto.js"></script>',
+        `<script type="module">import { mountPilot } from "/node_modules/usepilot/dist/pilot.js"; mountPilot({ project: ${json} });</script>`,
+      )
+      .replaceAll(
+        '`<script type="module" src="…/node_modules/usepilot/dist/pilot-auto.js"></script>`',
+        `\`<script type="module">import { mountPilot } from "…/node_modules/usepilot/dist/pilot.js"; mountPilot({ project: ${json} });</script>\``,
+      )
+      .replaceAll("import \`usepilot/auto\` from the browser code", `call \`${loaderCall(name)}\` from the browser code`) +
+    `\n\n   The \`project\` (${json}, this package's name) tells \`npx usepilot\` which pages are this project's: keep it as it is.`
+  );
+}
+
+/**
+ * A loader found in the app that doesn't name this project (from before
+ * 0.15, or another name): the step that names it, for the agent; null when
+ * it's right.
+ */
+export function namingStep(file: string, cwd: string): string | null {
+  const name = projectName(cwd);
+  const text = readText(file);
+  if (new RegExp(`project:\\s*["'\`]${name.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}["'\`]`).test(text)) return null;
+  return `**Name this project in Pilot's loader** (\`${relative(cwd, file)}\`): \`npx usepilot\` runs only for pages that say which project they are. Replace \`import("usepilot/auto")\` with \`${loaderCall(name)}\` (keep its development-only check), or set \`project: ${JSON.stringify(name)}\` where it calls \`mountPilot\`.`;
 }
 
 // ── Files ────────────────────────────────────────────────────────────────

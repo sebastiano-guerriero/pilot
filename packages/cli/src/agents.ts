@@ -211,6 +211,18 @@ export function findBin(
   return null;
 }
 
+/**
+ * The agent running this process, from what it sets in its shell: `init`
+ * runs inside the agent's own chat (the setup prompt), so the agent the
+ * designer set Pilot up with is the one Pilot runs. Null when it can't be told.
+ */
+export function agentFromEnv(env: NodeJS.ProcessEnv = process.env): AgentKind | null {
+  if (env.CLAUDECODE || env.CLAUDE_CODE_ENTRYPOINT) return "claude";
+  if (env.CURSOR_AGENT || env.CURSOR_TRACE_ID) return "cursor";
+  if (env.CODEX_SANDBOX || env.CODEX_SANDBOX_NETWORK_DISABLED || env.CODEX_MANAGED_BY_NPM || env.CODEX_THREAD_ID) return "codex";
+  return null;
+}
+
 /** An agent found on this machine: its executable, and whether it's signed in. */
 export interface FoundAgent {
   kind: AgentKind;
