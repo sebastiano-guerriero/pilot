@@ -38,7 +38,7 @@ Pilot works with **Claude Code**, **Codex** or **Cursor**, on your agent's usual
 
    Keep it open next to your app, and open your app: Pilot appears on every page. Edit and press Send, or leave a comment: Pilot asks your agent to make the change, and the terminal shows its progress. It uses the agent you set Pilot up with (`npx usepilot --agent codex` switches).
 
-**What the agent may do:** what you allow it in its own chat, and edit your project's files. Pilot never skips your agent's permissions: what it would ask you about there is refused, since no one is there to answer, and its reply says so.
+**What your agent can do:** edit your project's files, and anything you've already set it to always allow. Anything it would normally ask your permission for is refused, since no one is there to answer: its reply tells you.
 
 Pilot needs `npx usepilot` running: without it, the toolbar says so. **Option+P** (Alt+P on Windows and Linux) opens or hides Pilot in your app.
 
