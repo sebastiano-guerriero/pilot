@@ -168,6 +168,12 @@ export type StyleSource =
       elements?: number;
       /** The `@media` conditions the rule sits in, e.g. `(min-width: 768px)`, when any. */
       media?: string;
+      /**
+       * For a removal: other rules on the element declaring the very same
+       * value (a utility framework composing it from several classes,
+       * Tailwind's `shadow-card` and `ring-1`): removed with it.
+       */
+      also?: string[];
     };
 
 /**

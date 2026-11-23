@@ -174,6 +174,13 @@ describe("box-shadow", () => {
     pickType("inset");
     expect(changes.at(-1)?.[1].startsWith("inset ")).toBe(true);
     expect(panel()?.querySelector('[aria-label="shadow mode"]')?.textContent).toBe("smooth");
+    // And back to manual: its outermost layer, one shadow, which stays manual (read back, it isn't smooth).
+    act(() => (container.querySelector('[role="combobox"][aria-label="shadow mode"]') as HTMLButtonElement).click());
+    act(() => ([...container.querySelectorAll('[role="option"]')].find((o) => o.textContent === "manual") as HTMLElement).click());
+    expect(changes.at(-1)?.[1].split(", ")).toHaveLength(1);
+    expect(panel()?.querySelector('[aria-label="shadow mode"]')?.textContent).toBe("manual");
+    expect(chips()[0]?.startsWith("inset ")).toBe(true);
+    expect(chips()[0]).not.toContain("smooth");
   });
 
   it("smooth stays smooth at distance 0, and keeps the direction set for when it grows again", () => {

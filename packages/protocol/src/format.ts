@@ -132,7 +132,7 @@ export function sharedChoiceMeaning(answer: string): string | null {
  */
 function sharedCode(): string {
   return [
-    `**Shared code, only some copies:** an element's "Look-alikes" line counts the elements like it that this job leaves out (other instances of its component, or the same part of other copies). If they come from the same code (a shared component, a loop over data), and the designer didn't say which they meant, don't guess: do the rest of the job, leave that part, and ask in one short sentence, the component's name in **bold**, with three choices, your suggestion first: "${SHARED_CHOICES.all.label}", "${SHARED_CHOICES.one.label}", "${SHARED_CHOICES.variant.label}" (as the question in your reply's \`pilot\` block). Their answer comes back to you as this job.`,
+    `**Shared code, only some copies:** an element's "Look-alikes" line counts the elements like it that this job leaves out (other instances of its component, or the same part of other copies). If they come from the same code (a shared component, a loop over data), and the designer didn't say which they meant, don't guess: do the rest of the job, leave that part, and ask in one short sentence, the component's name in **bold**, with three choices, your suggestion first: "${SHARED_CHOICES.all.label}", "${SHARED_CHOICES.one.label}", "${SHARED_CHOICES.variant.label}" (as the question in your reply's \`pilot\` block). Their answer comes back to you as this job. You can ask once per job: when it changes some copies of several components (or several parts that repeat), ask one question naming each in **bold** ("Every **PlanCard** and **FeatureCard**, or only the ones you changed?"), leave all those parts until the answer, and apply it to each.`,
     ...Object.values(SHARED_CHOICES).map((c) => `**${c.label}**: ${c.means}`),
     'Don\'t ask when the designer already said (in the comment or note: "only here", "every card", "as a variant"), when every copy is in the job, or when nothing else uses that code: just change it.',
   ].join(" ");
@@ -629,7 +629,8 @@ function removalNote(c: StyleChange): string {
     source.elements && source.elements > 1
       ? `, which matches ${source.elements} elements on the page: remove it for this element only, unless the designer's note says otherwise`
       : "";
-  return `${note} It comes from \`${source.selector}\`${shared}.`;
+  const also = source.also?.length ? `, and from ${source.also.map((s) => `\`${s}\``).join(", ")}, which declare${source.also.length > 1 ? "" : "s"} the same value: remove it from ${source.also.length > 1 ? "them" : "it"} too` : "";
+  return `${note} It comes from \`${source.selector}\`${shared}${also}.`;
 }
 
 /**

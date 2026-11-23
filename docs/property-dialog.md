@@ -82,7 +82,7 @@ Picked, `var(--name)` goes in (just the name inside a `var(` already); ↑/↓ a
 
 **Hovering a field says what it can't show** (a tooltip, at the field's right edge; not while it's being edited, when what's typed hasn't been applied):
 - **Cut** (an ellipsis): the whole value. Measured as the pointer comes, since the variable button then takes room.
-- **Math** (`100% - 20px`, `var(--space-2) * 3`, `clamp(…)`): what it comes to, `= 180px` (`mathResult()`), from the moment it's applied, with the pointer still on it; both when it's cut too (`100% - 20px = 180px`). Not for a lone token: its list shows its value.
+- **Math or a token** (`100% - 20px`, `var(--space-2) * 3`, `clamp(…)`, `--container-6xl`): what it comes to, `= 180px` (`mathResult()`), from the moment it's applied, with the pointer still on it; both when it's cut too (`100% - 20px = 180px`). A lone token too, since the owner's review (before, only its list said its value: hovering a field showed nothing).
 
 Fields show declared values, never computed ones; the tooltip is the one place a computed value shows, beside the declared one, never in its place. Every field sits in a tooltip, empty when there's nothing to say, so the input is never made anew (and loses focus) when there comes to be.
 

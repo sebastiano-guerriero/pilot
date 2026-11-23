@@ -15,6 +15,12 @@ import type { EditHistory } from "./history.ts";
  *   `revert` when nothing else declares it (the browser's own style, like a
  *   list's padding, else the inherited value or the default). That's only
  *   for the preview: the agent is told "don't declare it here", not a value.
+ *   A rule after it in the cascade declaring the very same value is the same
+ *   declaration repeated (a utility framework composing it from several
+ *   classes: Tailwind's `shadow-card` and `ring-1` both declare
+ *   `box-shadow: var(--tw-inset-shadow), …`), so it goes too: the preview
+ *   shows the next different value, and the removal names those rules as well
+ *   (`also`), for the agent to stop them all.
  *   The field shows nothing either way.
  *
  * Declared values are the page's own (Pilot's preview sheet is left out), and
@@ -40,14 +46,23 @@ export function clearProperty(
   // when nothing's left: the page's stylesheets can't see the browser's own
   // styles (declared.ts), and revert falls back to them.
   const rule = page.source !== "inline" ? page.rule : undefined;
-  const next = rule
-    ? declaredWithout(element, property, { inline: false, skip: [rule] }, states)
+  const skip = rule ? [rule] : [];
+  const also: string[] = [];
+  let next = rule
+    ? declaredWithout(element, property, { inline: false, skip }, states)
     : declaredWithout(element, property, { inline: true }, states);
+  // The same value declared again by another rule: the same declaration, gone with it.
+  while (rule && next?.rule && next.source !== "inline" && next.value.trim() === page.value.trim() && !skip.includes(next.rule)) {
+    skip.push(next.rule);
+    also.push(next.source.selector);
+    next = declaredWithout(element, property, { inline: false, skip }, states);
+  }
+  const source = sourceOf(element, page);
   // For a state, nothing left for it means the element's own value: `revert-layer`
   // lets the element's rules (and Pilot's for it) show through.
   const fallback = states?.length ? "revert-layer" : "revert";
   history.apply(element, property, next?.value ?? fallback, gesture, {
-    removal: { from: page.value, source: sourceOf(element, page) },
+    removal: { from: page.value, source: source.kind === "rule" && also.length ? { ...source, also } : source },
     widths,
     states,
   });

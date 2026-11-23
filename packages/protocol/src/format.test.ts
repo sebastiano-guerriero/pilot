@@ -35,6 +35,8 @@ describe("formatPrompt", () => {
     expect(prompt).toContain("whatever it uses (Tailwind, CSS or Sass modules, StyleX");
     expect(prompt).toContain("First look at how each element's component is styled");
     expect(prompt).toContain("no `!important`");
+    // One question per job: several shared components with some copies changed are asked about together.
+    expect(prompt).toContain("ask one question naming each in **bold** (\"Every **PlanCard** and **FeatureCard**, or only the ones you changed?\")");
   });
 
   it("spells out a removal: not a new value, and where the page sets it", () => {
@@ -54,6 +56,21 @@ describe("formatPrompt", () => {
     expect(prompt).toContain("`gap` is removed: this element shouldn't set it (not `0` or `none`)");
     expect(prompt).toContain("It comes from `.cards`, which matches 3 elements on the page: remove it for this element only");
     expect(prompt).toContain("It's set in the element's own `style` attribute.");
+  });
+
+  it("a removal of a value several rules declare the same way: each named, to remove from all", () => {
+    const prompt = formatPrompt({
+      ...changeSet,
+      edits: [
+        {
+          target: changeSet.edits[0]!.target,
+          changes: [{ property: "box-shadow", from: "var(--tw-ring-shadow), var(--tw-shadow)", to: "", removed: true, source: { kind: "rule", selector: ".shadow-card", elements: 6, also: [".ring-1"] } }],
+        },
+      ],
+    });
+    expect(prompt).toContain(
+      "It comes from `.shadow-card`, which matches 6 elements on the page: remove it for this element only, unless the designer's note says otherwise, and from `.ring-1`, which declares the same value: remove it from it too.",
+    );
   });
 
   it("what already gives a new value on the page: its tokens and classes, a fluid token's caveat", () => {

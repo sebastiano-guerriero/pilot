@@ -213,7 +213,7 @@ export function PropertySelect({
         {iconFor && <span class="option-icon">{iconFor(value)}</span>}
         {value ? (
           <span class="value">
-            {value}
+            <span class="text">{value}</span>
             {hintFor?.(value) && <span class="hint">{hintFor(value)}</span>}
           </span>
         ) : (
@@ -250,7 +250,7 @@ export function PropertySelect({
               <span class="content">
                 {iconFor && <span class="option-icon">{iconFor(option)}</span>}
                 <span class={option ? "label" : "label placeholder"}>
-                  {option || "Select"}
+                  <span class="text">{option || "Select"}</span>
                   {option && hintFor?.(option) && <span class="hint">{hintFor(option)}</span>}
                 </span>
               </span>

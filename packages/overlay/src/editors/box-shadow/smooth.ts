@@ -34,6 +34,13 @@ export interface Smooth {
 export const SPREAD_RATIO = 0.3;
 /** Most layers: more add little and cost a draw each. */
 export const MAX_LAYERS = 10;
+/**
+ * A smooth shadow is a stack: at least two layers. One layer is any plain
+ * shadow, read back as manual: smooth → manual writes exactly such a layer
+ * (the outermost, its spread pulled in like a smooth one's), and it must stay
+ * manual, not turn smooth again.
+ */
+export const MIN_LAYERS = 2;
 
 /** What switching to smooth starts from, when there's nothing to keep. */
 export const NEW_SMOOTH: Smooth = { distance: 10, direction: 180, elevation: 10, layers: 4, color: "#00000040" };
@@ -104,14 +111,12 @@ export function pxOf(text: string): number | null {
  * the opacities add up to the color's; then the stack is drawn again from
  * that and compared, within rounding. At distance 0 (no offset in any layer)
  * the direction can't be read: 180deg, unless the editor remembers it. One
- * layer without blur isn't (it's any plain shadow). Null when they aren't.
+ * layer isn't (MIN_LAYERS: it's any plain shadow). Null when they aren't.
  */
 export function readSmooth(layers: LayerNumbers[]): Smooth | null {
   const n = layers.length;
   const last = layers[n - 1];
-  if (!last || n > MAX_LAYERS || last.blur < 0) return null;
-  // One layer without blur is any plain shadow (`0 1px 0 red`): manual.
-  if (n === 1 && last.blur === 0) return null;
+  if (!last || n < MIN_LAYERS || n > MAX_LAYERS || last.blur < 0) return null;
   const first = layers[0] as LayerNumbers;
   if (layers.some((l) => l.inset !== first.inset || l.base.toLowerCase() !== first.base.toLowerCase())) return null;
   const distance = round2(Math.hypot(last.x, last.y));

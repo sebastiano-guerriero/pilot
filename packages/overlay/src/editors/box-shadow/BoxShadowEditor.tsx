@@ -26,7 +26,7 @@ import {
   TYPE_HINTS,
   TYPE_TAKES,
 } from "./boxShadow.ts";
-import { MAX_LAYERS, NEW_SMOOTH, type Smooth, SPREAD_RATIO, pxOf } from "./smooth.ts";
+import { MAX_LAYERS, MIN_LAYERS, NEW_SMOOTH, type Smooth, SPREAD_RATIO, pxOf } from "./smooth.ts";
 
 const PROPERTY = "box-shadow";
 
@@ -343,11 +343,11 @@ function SmoothRows({
           value={String(smooth.layers)}
           label="shadow layers"
           onCommit={(text) => {
-            const n = /^\d+$/.test(text.trim()) ? Math.min(MAX_LAYERS, Math.max(1, Number(text.trim()))) : null;
+            const n = /^\d+$/.test(text.trim()) ? Math.min(MAX_LAYERS, Math.max(MIN_LAYERS, Number(text.trim()))) : null;
             if (n !== null && n !== smooth.layers) set({ layers: n });
           }}
-          onStep={(delta, text, gesture) => set({ layers: stepNumber(text, Math.sign(delta), smooth.layers, 1, MAX_LAYERS) }, gesture)}
-          onScrub={drag((steps, start, gesture) => set({ layers: Math.round(stepNumber(start, steps / 4, smooth.layers, 1, MAX_LAYERS)) }, gesture))}
+          onStep={(delta, text, gesture) => set({ layers: stepNumber(text, Math.sign(delta), smooth.layers, MIN_LAYERS, MAX_LAYERS) }, gesture)}
+          onScrub={drag((steps, start, gesture) => set({ layers: Math.round(stepNumber(start, steps / 4, smooth.layers, MIN_LAYERS, MAX_LAYERS)) }, gesture))}
         />
       </PropertyRow>
       <ShadowRows

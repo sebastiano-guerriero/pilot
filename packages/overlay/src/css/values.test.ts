@@ -330,11 +330,14 @@ describe("percent (opacity)", () => {
 });
 
 describe("what math comes to", () => {
-  it("a field holding math shows its computed value, rounded; anything else nothing", () => {
+  it("a field holding math or a token shows its computed value, rounded; anything else nothing", () => {
     expect(mathResult("100% - 20px", "180px")).toBe("180px");
     expect(mathResult("var(--space-2) * 3", "24px")).toBe("24px");
     expect(mathResult("clamp(1rem, 2vw, 2rem)", "21.3333px")).toBe("21.33px");
-    expect(mathResult("var(--space-2)", "8px")).toBeNull();
+    // A token, by its name or in its var().
+    expect(mathResult("--container-6xl", "1152px")).toBe("1152px");
+    expect(mathResult("var(--space-2)", "8px")).toBe("8px");
+    expect(mathResult("--space-2", undefined)).toBeNull();
     expect(mathResult("12px", "12px")).toBeNull();
     expect(mathResult("100% - 20px", undefined)).toBeNull();
   });

@@ -71,6 +71,12 @@ describe("smooth shadows", () => {
     expect(parseBoxShadow(flat)).toEqual([{ type: "outer", mode: "smooth", smooth: { ...smooth, distance: 0, elevation: 0 } }]);
   });
 
+  it("one layer is always manual, though it's what a smooth shadow's outermost layer is (smooth → manual writes it)", () => {
+    expect(parseBoxShadow("0px 12px 16px -4.8px #00000040")).toEqual([
+      { type: "outer", mode: "manual", x: "0px", y: "12px", blur: "16px", spread: "-4.8px", color: "#00000040" },
+    ]);
+  });
+
   it("layers that don't follow the pattern stay manual", () => {
     const shadows = parseBoxShadow("0 1px 1px #0000000a, 0 3px 6px #0000001a") as BoxShadow[];
     expect(shadows.every((s) => s.type !== "custom" && s.mode === "manual")).toBe(true);

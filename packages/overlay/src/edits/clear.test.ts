@@ -41,6 +41,22 @@ describe("clearProperty", () => {
     });
   });
 
+  it("rules declaring the very same value (Tailwind composing box-shadow from several classes) go with it, all named", async () => {
+    await nextTask();
+    element.className = "card shadow-card ring-1";
+    style.textContent = `
+      .ring-1 { --tw-ring-shadow: 0 0 0 1px #e2e8f0; box-shadow: var(--tw-ring-shadow), var(--tw-shadow); }
+      .shadow-card { --tw-shadow: 0 4px 16px #0000000f; box-shadow: var(--tw-ring-shadow), var(--tw-shadow); }
+      div { box-shadow: 0 1px 2px red; }`;
+    clearProperty(history, element, "box-shadow");
+    // Not the ring's same composite again: the next different value.
+    expect(history.valueOf(element, "box-shadow")).toBe("0 1px 2px red");
+    expect(history.removalOf(element, "box-shadow")).toEqual({
+      from: "var(--tw-ring-shadow), var(--tw-shadow)",
+      source: { kind: "rule", selector: ".shadow-card", elements: 1, also: [".ring-1"] },
+    });
+  });
+
   it("previews the next rule in the cascade when there is one", async () => {
     style.textContent = "div { gap: 8px; } .card { gap: 16px; }";
     await nextTask();

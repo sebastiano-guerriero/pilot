@@ -407,15 +407,16 @@ function unwrapCalc(value: string): string | null {
 }
 
 /**
- * What a field holding math shows on hover: the value it comes to, `computed`
- * (`100% - 20px` → `180px`), its numbers to 2 decimals. Null for anything
- * else, a lone token included (its list shows its value), and when it comes
- * to nothing else (`computed` the same as the text).
+ * What a field holding math or a token shows on hover: the value it comes
+ * to, `computed` (`100% - 20px` → `180px`, `--container-6xl` → `1152px`),
+ * its numbers to 2 decimals. Null for anything else, and when it comes to
+ * nothing else (`computed` the same as the text).
  */
 export function mathResult(text: string, computed: string | undefined): string | null {
   const t = text.trim();
+  const token = /^--[\w-]+$/.test(t) || /^var\(\s*--[\w-]+\s*\)$/.test(t);
   // Infinite: its computed value (1.67772e+07px) says nothing the text doesn't.
-  if (!computed || /\binfinity\b/i.test(t) || !(/\b(calc|min|max|clamp)\(/i.test(t) || isMath(t))) return null;
+  if (!computed || /\binfinity\b/i.test(t) || !(token || /\b(calc|min|max|clamp)\(/i.test(t) || isMath(t))) return null;
   const shown = computed.trim().replace(/-?\d*\.\d+/g, (n) => String(Math.round(Number(n) * 100) / 100));
   return shown && shown !== t ? shown : null;
 }

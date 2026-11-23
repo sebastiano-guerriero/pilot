@@ -13,6 +13,13 @@ import { inWidths } from "./widths.ts";
  * changes previewed (what the designer saw). Both are measured in the same
  * task, so nothing flickers (EditHistory.probe).
  *
+ * Values are compared as they look: a shadow's layers that draw nothing
+ * (fully transparent, or no offset, blur or spread) don't count. Tailwind
+ * composes `box-shadow` from five layers, the unused ones `0 0 #0000`, so its
+ * `shadow-md` computes to four empty layers and then the designer's two: by
+ * text, a shadow the agent got right never matched, and each such change
+ * cost a full SETTLE_TIME and a pointless follow-up (`sameLook()`).
+ *
  * A text change is checked by the element's text: the page's own (Pilot's
  * text preview left out) against the designer's, whitespace runs as one space.
  *
@@ -49,7 +56,7 @@ export function checkJob(history: EditHistory, jobId: string, width = window.inn
     if (i < 0) {
       check.unchecked.push(c);
       check.results.push({ ...base, outcome: "unchecked" });
-    } else if (actual[i] === expected[i]) {
+    } else if (isText(c) ? actual[i] === expected[i] : sameLook(c.property, actual[i] as string, expected[i] as string)) {
       check.landed.push(c);
       check.results.push({ ...base, outcome: "landed" });
     } else {
@@ -58,6 +65,39 @@ export function checkJob(history: EditHistory, jobId: string, width = window.inn
     }
   }
   return check;
+}
+
+/** Two computed values that look the same: equal, or the same shadows once the layers that draw nothing are left out. */
+export function sameLook(property: string, a: string, b: string): boolean {
+  if (a === b) return true;
+  if (property !== "box-shadow" && property !== "text-shadow") return false;
+  return visibleShadows(a) === visibleShadows(b);
+}
+
+/** A computed shadow list without its layers that draw nothing; `none` when none's left. */
+function visibleShadows(value: string): string {
+  const layers: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i <= value.length; i++) {
+    const ch = value[i];
+    if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    else if ((ch === "," && depth === 0) || i === value.length) {
+      layers.push(value.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  const visible = layers.filter((layer) => {
+    if (!layer || layer === "none") return false;
+    // Fully transparent: `rgba(0, 0, 0, 0)`, `transparent`, `#0000`.
+    // (Only an alpha of 0: `rgb(0, 0, 0)` is opaque black, its last 0 the blue.)
+    if (/rgba\((?:[^,)]*,){3}\s*0\s*\)|rgba?\([^)]*\/\s*0%?\s*\)|\btransparent\b|#0000(?:00)?\b/i.test(layer)) return false;
+    // No offset, blur or spread (`0px 0px 0px 0px`): nothing drawn, whatever its color.
+    const lengths = layer.replace(/\b(inset|rgba?\([^)]*\)|hsla?\([^)]*\)|#[0-9a-f]+|[a-z]+\([^)]*\))/gi, "").match(/-?[\d.]+px/g) ?? [];
+    return lengths.some((l) => Number.parseFloat(l) !== 0);
+  });
+  return visible.length ? visible.join(", ") : "none";
 }
 
 function computed(element: Element, property: string): string {

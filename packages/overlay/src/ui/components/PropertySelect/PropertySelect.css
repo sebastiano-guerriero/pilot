@@ -21,17 +21,32 @@
   }
 
   /* Too long for the trigger (a 60px select): an ellipsis. min-width: 0 lets
-     it shrink inside the flex trigger instead of running under the chevron. */
-  .value {
+     it shrink inside the flex trigger instead of running under the chevron.
+     The value and its hint each end in an ellipsis of their own, in their own
+     color (a cut hint's dots dimmed, as the box-shadow chips'): the hint gives
+     way first, the value only when it alone is too long. */
+  .value,
+  .label {
+    display: flex;
+    align-items: baseline;
     min-width: 0;
-    overflow: hidden;
     white-space: nowrap;
+  }
+
+  .text {
+    flex: none;
+    max-width: 100%;
+    overflow: hidden;
     text-overflow: ellipsis;
   }
 
   /* A value's word (font-weight's 700 → bold): dimmed, 4px after it. */
   .hint {
+    flex: 0 1 auto;
+    min-width: 0;
     margin-left: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
     color: var(--plt-color-contrast-low);
   }
 
@@ -125,9 +140,4 @@
     width: 8px;
   }
 
-  .label {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
 }
