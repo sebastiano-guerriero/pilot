@@ -1,5 +1,5 @@
-/* A tooltip over its trigger (Tooltip.tsx): 22px tall, 6px padding, 11px
-   text, 5px radius, in the background color, with a 1px white ring at 15%
+/* A tooltip over its trigger (Tooltip.tsx): 24px tall, 8px padding, 11px
+   text, 6px radius, in the background color, with a 1px white ring at 15%
    and the large shadow. 4px from the trigger, centered on it. */
 @scope (.tooltip-anchor) {
   :scope {
@@ -19,10 +19,10 @@
     bottom: 100%;
     margin-bottom: 4px;
     translate: -50% 0;
-    height: 22px;
-    padding-inline: 6px;
-    line-height: 22px;
-    border-radius: 5px;
+    height: 24px;
+    padding-inline: 8px;
+    line-height: 24px;
+    border-radius: 6px;
     background: var(--plt-color-background);
     color: var(--plt-color-contrast-high);
     font-size: 11px;
