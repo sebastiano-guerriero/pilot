@@ -1,0 +1,134 @@
+/* A list of things as chips (LayerList.tsx; the owner's design, from
+   mask-image): the chips, a + under them, in the value area; the label at the
+   top. The panel (PropertyPanel) renders inside it but owns its look. */
+@scope (.layer-list-row) to (.property-panel) {
+  :scope {
+    align-items: flex-start;
+  }
+
+  /* The label, on the first chip's line. */
+  :scope > :first-child {
+    min-height: 24px;
+    display: flex;
+    align-items: center;
+  }
+
+  .layer-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  /* An item: its preview, its name and value (it opens the panel), and × (takes it off). */
+  .layer-chip {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .layer-chip[data-open] {
+    background: var(--plt-color-background-light);
+    box-shadow: inset 0 0 0 1px hsl(from var(--plt-color-contrast-high) h s l / 0.2);
+  }
+
+  .layer-chip-open {
+    all: unset;
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-left: 6px;
+    color: var(--plt-color-contrast-high);
+    cursor: pointer;
+  }
+
+  /* With a tooltip (a manual shadow's whole value), its anchor takes the button's place. */
+  .layer-chip > .tooltip-anchor {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+
+    .layer-chip-open {
+      box-sizing: border-box;
+      width: 100%;
+    }
+  }
+
+  /* The name, then the value: the value gives way, ending in an ellipsis of
+     its own (dimmed, as it is). Names are short: they don't. */
+  .layer-chip-name {
+    display: flex;
+    align-items: baseline;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Its value, dimmed, 4px after the name (as PropertySelect's hints), in
+     tabular figures as in the fields, so it doesn't jitter while it changes. */
+  .layer-chip-hint {
+    flex: 0 1 auto;
+    min-width: 0;
+    margin-left: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--plt-color-contrast-low);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* The ×: its 8px icon 8px from the chip's right edge, where a select's
+     chevron sits (PropertySelect.css), so the two line up. */
+  .layer-chip-remove {
+    all: unset;
+    box-sizing: border-box;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    width: 20px;
+    height: 100%;
+    padding-right: 8px;
+    color: var(--plt-color-contrast-high);
+    cursor: pointer;
+
+    &:hover .icon {
+      opacity: 0.7;
+    }
+  }
+
+  .layer-chip-open:focus-visible,
+  .layer-chip-remove:focus-visible,
+  .layer-add:focus-visible {
+    outline: 2px solid var(--plt-color-accent);
+    outline-offset: -2px;
+    border-radius: 6px;
+  }
+
+  .layer-mixed {
+    display: flex;
+    align-items: center;
+    padding-inline: 6px;
+    color: var(--plt-color-contrast-low);
+  }
+
+  /* Add one: the field's size, on the darkest background with a 1px ring at 20%, a plus in contrast-low. */
+  .layer-add {
+    all: unset;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border-radius: 6px;
+    background: var(--plt-color-background-dark);
+    box-shadow: inset 0 0 0 1px hsl(from var(--plt-color-contrast-high) h s l / 0.2);
+    color: var(--plt-color-contrast-low);
+    cursor: pointer;
+
+    &:hover {
+      color: var(--plt-color-contrast-high);
+    }
+  }
+}

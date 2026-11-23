@@ -46,8 +46,8 @@ afterEach(() => {
   element.remove();
 });
 
-const add = () => act(() => (container.querySelector(".mask-add") as HTMLButtonElement).click());
-const chips = () => [...container.querySelectorAll(".mask-chip-name")].map((e) => e.textContent);
+const add = () => act(() => (container.querySelector(".layer-add") as HTMLButtonElement).click());
+const chips = () => [...container.querySelectorAll(".layer-chip-name")].map((e) => e.textContent);
 const panel = () => container.querySelector(".property-panel");
 
 describe("mask-image", () => {
@@ -74,7 +74,7 @@ describe("mask-image", () => {
     add();
     expect(changes.at(-1)?.[1]).toBe("linear-gradient(to bottom, black 50%, transparent), linear-gradient(to bottom, black 50%, transparent)");
     expect(chips()).toEqual(["linear", "linear"]);
-    const remove = () => act(() => (container.querySelector(".mask-chip-remove") as HTMLButtonElement).click());
+    const remove = () => act(() => (container.querySelector(".layer-chip-remove") as HTMLButtonElement).click());
     remove();
     remove();
     expect(changes.slice(-2)).toEqual([

@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { mathResult } from "../../../css/values.ts";
 import { allTokens, type Token, type TokenKind } from "../../../dom/tokens.ts";
 import { Icon } from "../Icon/Icon.tsx";
-import { ScrubHandle } from "../ScrubHandle/ScrubHandle.tsx";
+import { degreesOf, ScrubHandle } from "../ScrubHandle/ScrubHandle.tsx";
 import { TokenMenu } from "../TokenMenu/TokenMenu.tsx";
 import { Tooltip } from "../Tooltip/Tooltip.tsx";
 import { currentToken, insertToken, matchTokens, tokenAt } from "../TokenMenu/tokens.ts";
@@ -403,11 +403,14 @@ export function PropertyInputText({
   const withTokens = !!tokens?.kinds.length;
   const needsWrap = !!onScrub || !!icon || drawnSelection || withTokens;
 
+  // An angle (`200deg`): the scrub handle is a dial, turned to it.
+  const dial = !!onScrub && degreesOf(value) !== null;
   // With an icon, a scrub handle, a drawn selection or variables: a wrapper
   // the input fills, with them on top.
   const wrapped = (
     <span
       class={onScrub ? "input-wrap scrub-field" : "input-wrap"}
+      data-dial={dial ? "" : undefined}
       data-disabled={disabled ? "" : undefined}
       data-tokens={withTokens ? "" : undefined}
       data-tokens-open={menu ? "" : undefined}
@@ -427,6 +430,7 @@ export function PropertyInputText({
             return true;
           }}
           onScrub={(steps, gesture) => onScrub(steps, scrubStart.current, gesture)}
+          degrees={dial ? degreesOf(value) : null}
         />
       )}
       {withTokens && (

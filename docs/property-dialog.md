@@ -17,7 +17,7 @@ The dialog is never taller than the window: the properties scroll inside it, the
 
 ## With nothing typed
 
-The dialog **lists the editors for every property the element has a value for** (from any source), in the order kept in [editors/listOrder.ts](../packages/overlay/src/editors/listOrder.ts) (`LIST_ORDER`), by group: Layout, Position, Appearance, Typography, Interactivity, SVG, Visibility. The project owner keeps that order; every editor that writes properties needs a place there, and `listOrder.test.ts` fails without it.
+The dialog **lists the editors for every property the element has a value for** (from any source), in the order kept in [editors/listOrder.ts](../packages/overlay/src/editors/listOrder.ts) (`LIST_ORDER`), by group: Layout, Position, Appearance, Effects, Typography, Interactivity, SVG, Visibility. The project owner keeps that order; every editor that writes properties needs a place there, and `listOrder.test.ts` fails without it.
 
 - The list (and only this one: searching shows the matches alone) is **grouped**: each group starts with its label, and a dotted line separates groups (`groupOf()`).
 - Rows a revealing editor shows are set in `LIST_ORDER` too, per value (`rowsOf()`): display's grid and flex rows, position's inset. An editor another one shows as a row (gap under `display: grid`) is left to that one. A row that shows on its own (gap on an element that isn't a grid) is listed right after display.
@@ -46,7 +46,7 @@ Only three things: the editor's **label**, the **CSS property names** it writes 
 1. an exact **alias**;
 2. an exact label or property name;
 3. a prefix (`pad`);
-4. a Tailwind class whose first word starts with the query (`items` → `items-center`, align-items; `self` → align-self): it beats a name that only has the word later (justify-items). The first word only, so `cols` isn't `col-start`;
+4. a Tailwind class that starts with the query, within its first word or by whole words (`items` → `items-center`, align-items; `self` → align-self; `hue-rotate` → `hue-rotate-90`, filter): it beats a name that only has the word later (justify-items). Not into a later word, so `cols` isn't `col-start`;
 5. a later word starting with the query (`spa` → the "span" in col-span, `ite` → align-items, `cols` → `grid-cols`): a word being typed counts;
 6. a substring;
 7. an **abbreviation**, only when nothing better matches: the query's letters in order in a property name, starting at a word start (`wdt` → width, `mxw` → max-width, `pdg` → the padding rows). Requiring a word start keeps it sensible (`dt` won't match width through its middle letters). Starting at a later word (the "width" in `min-width`) counts as one more skipped letter, so `wdt` prefers width itself. Among several, the fewest skipped letters win, then the shortest name.
@@ -63,7 +63,7 @@ Padding shows how far this goes without extra logic: its four sides each carry t
 
 ## Variables
 
-A field can take the page's tokens (its CSS variables, [dom/tokens.ts](../packages/overlay/src/dom/tokens.ts)) where a value goes, the ones that fit it: lengths in a padding or a radius, colors in a color, fonts in font-family, numbers in opacity ([TokenMenu/tokens.ts](../packages/overlay/src/ui/components/TokenMenu/tokens.ts)). Two ways to the same list ([TokenMenu](../packages/overlay/src/ui/components/TokenMenu/TokenMenu.tsx)), under the field:
+A field can take the page's tokens (its CSS variables, [dom/tokens.ts](../packages/overlay/src/dom/tokens.ts)) where a value goes, the ones that fit it: lengths in a padding or a radius, colors in a color, fonts in font-family, numbers in opacity, shadows in box-shadow's custom field (a value that reads as one: 2–4 lengths, a color, `inset`, each layer; Tailwind's `--shadow-md`) ([TokenMenu/tokens.ts](../packages/overlay/src/ui/components/TokenMenu/tokens.ts)). Two ways to the same list ([TokenMenu](../packages/overlay/src/ui/components/TokenMenu/TokenMenu.tsx)), under the field:
 
 - **Typing `--`** at the start of a field or after a space, `(` or `,`: the list at the caret, filtered as you type, by name or by value (`inter` finds `--font-sans`). The way for anyone who knows the names, and inside a value: `calc(--sp` → `calc(var(--space-4)`, and the typing goes on.
 - **The variable button** on the field's right edge (Nucleo's nut-2, filled, drawn at 8px in a 16px target, while the field is hovered or edited; the text then ends 4px before it, with an ellipsis when it's cut, except while being edited, when it scrolls): the same list, to browse without knowing a name. Picked, the token goes where the caret is, in place of the selection: the whole value when the field wasn't being edited.

@@ -246,6 +246,25 @@ const align = (y: number, tallY: number, h = 2, tallH = 4) =>
  */
 const objectAt = (x: 2 | 5 | 8, y: 2 | 5 | 8) => layout([{ x, y }]);
 
+/** border-radius's corners: the frame, and an accent bracket on each corner given. */
+const CORNER_PATHS = {
+  "top-left": "M5 0V1H1V5H0V0H5Z",
+  "top-right": "M7 0V1H11V5H12V0H7Z",
+  "bottom-right": "M7 12V11H11V7H12V12H7Z",
+  "bottom-left": "M5 12V11H1V7H0V12H5Z",
+} as const;
+const corners = (which: Array<keyof typeof CORNER_PATHS>) => ({
+  size: 12,
+  body: (
+    <>
+      <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+      {which.map((c) => (
+        <path key={c} d={CORNER_PATHS[c]} fill="var(--plt-color-accent)" />
+      ))}
+    </>
+  ),
+});
+
 /** text-transform's "Ag" (capitalize, and none in contrast-low): an A, then a g. */
 const capitalizeAg = (stroke: string) => ({
   size: 12,
@@ -733,6 +752,59 @@ const ICONS = {
   },
   "text-transform-capitalize": capitalizeAg("var(--plt-color-accent)"),
   "text-transform-none": capitalizeAg("var(--plt-color-contrast-low)"),
+  // border-radius: every corner is the designed icon; each corner alone is derived from it.
+  "corners-all": corners(["top-left", "top-right", "bottom-right", "bottom-left"]),
+  "corner-top-left": corners(["top-left"]),
+  "corner-top-right": corners(["top-right"]),
+  "corner-bottom-right": corners(["bottom-right"]),
+  "corner-bottom-left": corners(["bottom-left"]),
+  // box-shadow: the designed icons. Outer and custom are 12×14 (the shadow
+  // hangs below the 12px frame), the outer ring 14×14 (it rings the frame).
+  "shadow-outer": {
+    size: [12, 14],
+    body: (
+      <>
+        <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+        <rect y="12" width="12" height="2" fill="var(--plt-color-accent)" fill-opacity="0.4" />
+      </>
+    ),
+  },
+  "shadow-outer-ring": {
+    size: 14,
+    body: (
+      <>
+        <path d="M13 1V13H1V1H13ZM2 12H12V2H2V12Z" fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+        <path d="M14 14H0V0H14V14ZM1 1V13H13V1H1Z" fill="var(--plt-color-accent)" fill-opacity="0.4" />
+      </>
+    ),
+  },
+  "shadow-inset": {
+    size: 12,
+    body: (
+      <>
+        <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+        <rect x="1" y="1" width="10" height="2" fill="var(--plt-color-accent)" fill-opacity="0.4" />
+      </>
+    ),
+  },
+  "shadow-inset-ring": {
+    size: 12,
+    body: (
+      <>
+        <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+        <path d="M11 11H1V1H11V11ZM2 2V10H10V2H2Z" fill="var(--plt-color-accent)" fill-opacity="0.4" />
+      </>
+    ),
+  },
+  "shadow-custom": {
+    size: [12, 14],
+    body: (
+      <>
+        <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+        <rect y="12" width="12" height="2" fill="var(--plt-color-background-dark)" fill-opacity="0.12" />
+      </>
+    ),
+  },
   // object-fit: the designed icons (fill stretches the picture, none shows it at its own size, cropped).
   "object-fit-cover": {
     size: 12,

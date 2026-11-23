@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { BoxArea } from "../../dom/boxModel.ts";
 import { EditHistory } from "../../edits/history.ts";
 import { inlinePreview } from "../../test/inlinePreview.ts";
+import { borderRadiusEditor } from "../border-radius/BorderRadiusEditor.tsx";
 import { gapEditor } from "../gap/GapEditor.tsx";
 import { marginEditor } from "../margin/MarginEditor.tsx";
 import { paddingEditor } from "../padding/PaddingEditor.tsx";
@@ -333,6 +334,63 @@ describe("gap", () => {
     act(() => toggle().click());
     act(() => inputs()[1]?.focus());
     expect(inspects.at(-1)).toEqual(["gap-column"]);
+  });
+});
+
+describe("border-radius", () => {
+  beforeEach(() => {
+    editor = borderRadiusEditor;
+  });
+  const icons = () => [...container.querySelectorAll(".split-toggle svg")].length;
+
+  it("four corners, in border-radius's order; corners that differ open split", () => {
+    element.style.borderRadius = "8px 4px";
+    mount();
+    expect(view()).toBe("parts");
+    expect(inputs().map((i) => i.getAttribute("aria-label"))).toEqual([
+      "border-radius top left",
+      "border-radius top right",
+      "border-radius bottom right",
+      "border-radius bottom left",
+    ]);
+    expect(inputs().map((i) => i.value)).toEqual(["8px", "4px", "8px", "4px"]);
+    expect(icons()).toBe(4);
+  });
+
+  it("one value writes the shorthand; full is Tailwind's rounded-full", () => {
+    mount();
+    expect(view()).toBe("all");
+    commit(inputs()[0] as HTMLInputElement, "full");
+    expect(changes).toEqual([["border-radius", "calc(infinity * 1px)"]]);
+  });
+
+  it("from the search: rounded and its sizes → one value, rounded-tl → that corner, rounded-t → both top corners", () => {
+    mount();
+    act(() => requestFocus({ query: "rounded-tl" }));
+    expect(view()).toBe("parts");
+    expect(document.activeElement).toBe(inputs()[0]);
+    act(() => requestFocus({ query: "rounded-lg" }));
+    expect(view()).toBe("all");
+    act(() => requestFocus({ query: "rounded-t" }));
+    expect(document.activeElement).toBe(inputs()[0]);
+    commit(inputs()[0] as HTMLInputElement, "6");
+    expect(changes).toEqual([
+      ["border-top-left-radius", "6px"],
+      ["border-top-right-radius", "6px"],
+    ]);
+    expect(gestures[0]).toBe(gestures[1]);
+  });
+
+  it("logical names land on their corner (left-to-right): rounded-ee, border-end-end-radius → bottom right; rounded-s → the left corners", () => {
+    mount();
+    act(() => requestFocus({ query: "rounded-ee" }));
+    expect(document.activeElement).toBe(inputs()[2]);
+    act(() => requestFocus({ query: "border-end-end-radius" }));
+    expect(document.activeElement).toBe(inputs()[2]);
+    act(() => requestFocus({ query: "rounded-s" }));
+    expect(document.activeElement).toBe(inputs()[0]);
+    commit(inputs()[0] as HTMLInputElement, "3");
+    expect(changes.map(([p]) => p)).toEqual(["border-top-left-radius", "border-bottom-left-radius"]);
   });
 });
 

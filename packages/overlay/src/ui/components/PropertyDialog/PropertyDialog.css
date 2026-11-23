@@ -95,7 +95,7 @@
      the dialog's background, going transparent toward the list. Separate
      elements, not a mask on the list, so what opens out of it (a select's
      menu) isn't cut off. 12px is the list's own padding, so nothing fades
-     when it doesn't scroll. Above the rows, below a menu (z-index 1). */
+     when it doesn't scroll. Above the rows, below a menu (z-index 10). */
   .fade {
     position: absolute;
     /* 1px in from each side: the panel's inset ring stays drawn over. */

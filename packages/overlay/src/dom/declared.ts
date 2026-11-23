@@ -136,6 +136,16 @@ export function sourcesOf(property: string): Source[] {
   if (property === "row-gap" || property === "column-gap") {
     return [{ property }, { property: "gap", side: { of: "pair", index: property === "row-gap" ? 0 : 1 } }];
   }
+  // A corner of border-radius: its logical name (top left is start-start),
+  // then the shorthand, whose values fill the corners as a box's sides do
+  // (top-left, top-right, bottom-right, bottom-left).
+  const corner = property.match(/^border-(top|bottom)-(left|right)-radius$/);
+  if (corner) {
+    const [, v, h] = corner as unknown as [string, "top" | "bottom", "left" | "right"];
+    const index = ["top-left", "top-right", "bottom-right", "bottom-left"].indexOf(`${v}-${h}`);
+    const logical = `border-${v === "top" ? "start" : "end"}-${h === "left" ? "start" : "end"}-radius`;
+    return [{ property }, { property: logical }, { property: "border-radius", side: { of: "box", index } }];
+  }
   const border = property.match(/^border-(top|right|bottom|left)-width$/);
   if (border) {
     const side = border[1] as Side;
@@ -152,6 +162,8 @@ export function sourcesOf(property: string): Source[] {
  * can't be split (a var() standing for several values, or too many parts).
  */
 export function pickSide(text: string, side: { of: "box" | "pair"; index: number }): string | null {
+  // A radius's elliptical form (`10px / 20px`): not one value per corner.
+  if (text.includes("/")) return null;
   const parts = splitTopLevel(text, " ");
   if (parts.length === 1) return parts[0] as string;
   if (side.of === "pair") return parts.length === 2 ? (parts[side.index] as string) : null;

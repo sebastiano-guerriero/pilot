@@ -31,5 +31,16 @@
       display: block;
     }
 
+    /* An angle: the dial (16×16), 4px from the field's right edge, so its
+       ring lines up with the other icons; its target reaches the edge. */
+    &[data-dial] {
+      right: 4px;
+      width: 16px;
+
+      &::before {
+        inset: -4px -4px -4px -4px;
+      }
+    }
+
   }
 }

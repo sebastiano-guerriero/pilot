@@ -59,6 +59,11 @@
 /* A field with an icon or a scrub handle: the input fills the wrapper, and
    they sit on top of it (the scrub handle's own styles are in ScrubHandle.css). */
 @scope (.input-wrap) {
+  /* An angle's dial is 16px wide, 4px from the edge (ScrubHandle.css): 4px more room than the wheel. */
+  :scope[data-dial] .property-input-text {
+    padding-right: 26px;
+  }
+
   :scope {
     position: relative;
     display: block;
@@ -130,6 +135,11 @@
     right: 20px;
   }
 
+  /* An angle's dial is 4px wider than the wheel (ScrubHandle.css): its variables button moves 4px too. */
+  :scope[data-dial] .token-button {
+    right: 24px;
+  }
+
   :scope:is(:hover, :focus-within, [data-tokens-open]) {
     .token-button {
       opacity: 1;
@@ -141,6 +151,10 @@
 
     &.scrub-field .property-input-text {
       padding-right: 36px;
+    }
+
+    &[data-dial] .property-input-text {
+      padding-right: 40px;
     }
   }
 

@@ -462,3 +462,22 @@ export function scrubIncrement(text: string): number {
   const unit = displayValue(text.trim().toLowerCase()).match(/^-?\d*\.?\d+([a-z%]*)$/)?.[1] ?? "";
   return FINE_UNITS.includes(unit) ? 0.1 : 1;
 }
+
+/**
+ * `text` with the parentheses it leaves open closed at the end
+ * (`var(--shadow-card` → `var(--shadow-card)`). The browser accepts an
+ * unclosed value (CSS closes it while parsing) but it mustn't be written so.
+ * Quotes are skipped.
+ */
+export function closeParens(text: string): string {
+  let depth = 0;
+  let quote = "";
+  for (const c of text) {
+    if (quote) {
+      if (c === quote) quote = "";
+    } else if (c === '"' || c === "'") quote = c;
+    else if (c === "(") depth++;
+    else if (c === ")" && depth > 0) depth--;
+  }
+  return text + ")".repeat(depth);
+}

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
 import { cssProperty, LENGTH_UNITS } from "./properties.ts";
-import { bareToken, displayValue, mathResult, parseValue, scrubIncrement, stepSize, stepValue, withVars } from "./values.ts";
+import { bareToken, closeParens, displayValue, mathResult, parseValue, scrubIncrement, stepSize, stepValue, withVars } from "./values.ts";
 
 describe("parseValue", () => {
   it("a word that stands for a value: border-radius full is calc(infinity * 1px), shown without calc", () => {
@@ -45,6 +45,13 @@ describe("parseValue", () => {
     expect(parseValue("vertical-align", "middle")).toBe("middle");
     expect(parseValue("vertical-align", "-2")).toBe("-2px");
     expect(parseValue("vertical-align", "10%")).toBe("10%");
+  });
+
+  it("closeParens: closes what's left open, not what's in quotes", () => {
+    expect(closeParens("var(--shadow-card")).toBe("var(--shadow-card)");
+    expect(closeParens("calc(1px + min(2px, 3px")).toBe("calc(1px + min(2px, 3px))");
+    expect(closeParens('url("a(b")')).toBe('url("a(b")');
+    expect(closeParens("0 1px red")).toBe("0 1px red");
   });
 
   it("takes a bare number as px", () => {
