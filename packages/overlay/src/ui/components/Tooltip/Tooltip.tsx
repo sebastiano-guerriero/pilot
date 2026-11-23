@@ -31,6 +31,25 @@ interface TooltipProps {
 
 /** How close a tooltip may come to the window's edges, in px: one that would go past moves along (a long stuck message on a loader near the edge). */
 const EDGE = 8;
+/** Space between the trigger and the tooltip, in px, unless the trigger says (`gap`). */
+const GAP = 4;
+
+/**
+ * Where an open tooltip goes, in the window: above its trigger (or below),
+ * centered on it (or its left or right edge on the trigger's), `gap` away;
+ * then moved along to stay EDGE inside the window.
+ */
+export function placeTooltip(
+  trigger: { left: number; right: number; top: number; bottom: number },
+  size: { width: number; height: number },
+  { side, align, gap }: { side: "top" | "bottom"; align: "center" | "start" | "end"; gap: number },
+  window_ = { width: window.innerWidth, height: window.innerHeight },
+): { left: number; top: number } {
+  const left = align === "start" ? trigger.left : align === "end" ? trigger.right - size.width : (trigger.left + trigger.right) / 2 - size.width / 2;
+  const top = side === "top" ? trigger.top - gap - size.height : trigger.bottom + gap;
+  const clamp = (v: number, max: number) => Math.max(EDGE, Math.min(v, max - EDGE));
+  return { left: clamp(left, window_.width - size.width), top: clamp(top, window_.height - size.height) };
+}
 
 /** `:focus-visible`, where the environment knows it (it doesn't in some test DOMs). */
 function focusVisible(el: Element): boolean {
@@ -46,9 +65,10 @@ function focusVisible(el: Element): boolean {
  * has keyboard focus. 24px tall, 8px padding, 11px text, with the large
  * shadow (Tooltip.css). On hover, the
  * first one waits a moment; moving straight on to another opens it at once
- * (delay.ts). Keyboard focus opens it at once. One that would go past the
- * window's edge moves along to stay inside it (EDGE). Use it instead of
- * `title` in Pilot's own UI.
+ * (delay.ts). Keyboard focus opens it at once. Open, it's placed in the
+ * window (`position: fixed`, placeTooltip), so a panel's scrolling list or
+ * `overflow: hidden` never cuts it, and kept inside the window (EDGE). Use it
+ * instead of `title` in Pilot's own UI.
  */
 export function Tooltip({
   text,
@@ -100,23 +120,31 @@ export function Tooltip({
   });
   useEffect(() => onSwitch(dropFade.current), []);
 
-  // Kept in the window: open, it moves along just enough not to go past an edge (its look and anchor as they are).
+  // Open, it's placed in the window (fixed), from its trigger: a panel's scrolling list or its
+  // `overflow: hidden` can't cut it (a field's long value at the dialog's left edge). Kept
+  // inside the window, and following the trigger while the page or its list scrolls. Kept
+  // where it was while it fades out.
+  const anchor = useRef<HTMLSpanElement>(null);
   const bubble = useRef<HTMLSpanElement>(null);
-  const [shift, setShift] = useState(0);
+  const [spot, setSpot] = useState<{ left: number; top: number } | null>(null);
   const shown = (open || forceOpen) && !!text;
   useLayoutEffect(() => {
-    const el = bubble.current;
-    if (!shown || !el) {
-      if (shift) setShift(0);
-      return;
-    }
-    const r = el.getBoundingClientRect();
-    const left = r.left - shift;
-    const right = left + r.width;
-    const width = window.innerWidth;
-    const next = left < EDGE ? EDGE - left : right > width - EDGE ? Math.max(EDGE - left, width - EDGE - right) : 0;
-    if (Math.abs(next - shift) > 0.5) setShift(next);
-  }, [shown, text, detail]);
+    if (!shown) return;
+    const place = () => {
+      const a = anchor.current?.getBoundingClientRect();
+      const b = bubble.current;
+      if (!a || !b) return;
+      const next = placeTooltip(a, { width: b.offsetWidth, height: b.offsetHeight }, { side, align, gap: gap ?? GAP });
+      setSpot((s) => (s && Math.abs(s.left - next.left) < 0.5 && Math.abs(s.top - next.top) < 0.5 ? s : next));
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [shown, text, detail, side, align, gap]);
 
   // Something to say now, with the pointer already on the trigger (a field's
   // value just turned into math): it opens as if the pointer had just come.
@@ -135,6 +163,7 @@ export function Tooltip({
 
   return (
     <span
+      ref={anchor}
       class="tooltip-anchor"
       data-block={block || undefined}
       onPointerEnter={(e) => {
@@ -167,10 +196,15 @@ export function Tooltip({
         data-open={((open || forceOpen) && !!text) || undefined}
         data-instant={instant || undefined}
         data-detail={detail ? "" : undefined}
-        style={{
-          ...(gap === undefined ? {} : side === "top" ? { marginBottom: px(gap) } : { marginTop: px(gap) }),
-          ...(shift ? { transform: `translateX(${px(shift)})` } : {}),
-        }}
+        style={
+          spot
+            ? { position: "fixed", left: px(spot.left), top: px(spot.top), right: "auto", bottom: "auto", margin: "0", translate: "none" }
+            : gap === undefined
+              ? undefined
+              : side === "top"
+                ? { marginBottom: px(gap) }
+                : { marginTop: px(gap) }
+        }
         aria-hidden="true"
       >
         {detail ? (

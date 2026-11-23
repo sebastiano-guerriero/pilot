@@ -714,7 +714,7 @@ export function CommentWidget({
                     {onAdjust && i === count - 1 && !m.choices?.length && !m.propList && !m.early && !m.stopped ? (
                       <div class="choices">
                         <button type="button" class="choice" data-secondary onMouseDown={(e) => e.preventDefault()} onClick={onAdjust}>
-                          Adjust
+                          Edit manually
                         </button>
                       </div>
                     ) : null}

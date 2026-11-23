@@ -3,7 +3,7 @@ import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OPEN_DELAY, WARM_FOR, resetTooltipDelay } from "./delay.ts";
-import { Tooltip } from "./Tooltip.tsx";
+import { placeTooltip, Tooltip } from "./Tooltip.tsx";
 
 let container: HTMLElement;
 
@@ -109,20 +109,31 @@ describe("Tooltip", () => {
   });
 });
 
-describe("kept in the window", () => {
-  it("one that would go past an edge moves along just enough; back in place when closed", () => {
-    // It would open 152px past the left edge (a long stuck message on a loader near the edge).
-    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
-      const shift = Number.parseFloat(/translateX\((-?[\d.]+)px\)/.exec(this.style.transform)?.[1] ?? "0");
-      return { left: -152 + shift, right: 378 + shift, width: 530, top: 0, bottom: 24, height: 24, x: -152 + shift, y: 0, toJSON: () => ({}) } as DOMRect;
-    });
+describe("placed in the window", () => {
+  it("open, it's fixed in the window, from its trigger: a panel's scrolling list can't cut it", () => {
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      left: 300, right: 400, top: 200, bottom: 224, width: 100, height: 24, x: 300, y: 200, toJSON: () => ({}),
+    } as DOMRect);
     pointer(0, "pointerenter");
     wait(OPEN_DELAY);
     const bubble = anchors()[0]?.querySelector(".tooltip") as HTMLElement;
-    expect(bubble.style.transform).toBe("translateX(160px)");
-    pointer(0, "pointerleave");
-    wait(WARM_FOR);
-    expect(bubble.style.transform).toBe("");
+    expect(bubble.style.position).toBe("fixed");
+    // Above the trigger, 4px away (happy-dom measures it 0 × 0): centered on it.
+    expect(bubble.style.top).toBe("196px");
+    expect(bubble.style.left).toBe("350px");
     rect.mockRestore();
+  });
+
+  it("above or below, centered or at an edge, kept 8px inside the window", () => {
+    const trigger = { left: 300, right: 400, top: 200, bottom: 224 };
+    const size = { width: 120, height: 24 };
+    const win = { width: 1000, height: 800 };
+    expect(placeTooltip(trigger, size, { side: "top", align: "center", gap: 4 }, win)).toEqual({ left: 290, top: 172 });
+    expect(placeTooltip(trigger, size, { side: "bottom", align: "end", gap: 4 }, win)).toEqual({ left: 280, top: 228 });
+    expect(placeTooltip(trigger, size, { side: "top", align: "start", gap: 4 }, win)).toEqual({ left: 300, top: 172 });
+    // A long one at the left edge (a field's value at the dialog's edge): moved along.
+    expect(placeTooltip({ left: 10, right: 110, top: 200, bottom: 224 }, { width: 530, height: 24 }, { side: "top", align: "end", gap: 4 }, win)).toEqual({ left: 8, top: 172 });
+    // At the top: kept inside too.
+    expect(placeTooltip({ left: 300, right: 400, top: 10, bottom: 34 }, size, { side: "top", align: "center", gap: 4 }, win).top).toBe(8);
   });
 });

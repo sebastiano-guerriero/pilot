@@ -433,7 +433,7 @@ describe("CommentWidget's @ mentions", () => {
   });
 });
 
-describe("CommentWidget's Adjust", () => {
+describe("CommentWidget's Edit manually", () => {
   const target = { selector: "button", path: "button", tag: "button", classes: [] };
   const drawMessages = (messages: object[], onAdjust = vi.fn()) => {
     act(() =>
@@ -452,7 +452,7 @@ describe("CommentWidget's Adjust", () => {
     );
     return onAdjust;
   };
-  const adjust = () => [...container.querySelectorAll(".choice")].find((b) => b.textContent === "Adjust") as HTMLButtonElement | undefined;
+  const adjust = () => [...container.querySelectorAll(".choice")].find((b) => b.textContent === "Edit manually") as HTMLButtonElement | undefined;
   const asked = { from: "designer", text: "Make the text bigger", at: "1" };
 
   it("on the latest reply to a job: a secondary button that adjusts it by hand", () => {
