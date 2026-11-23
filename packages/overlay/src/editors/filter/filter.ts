@@ -1,5 +1,6 @@
 import { splitTopLevel } from "../../dom/declared.ts";
 import { angleText } from "../mask/mask.ts";
+import { splitShadow } from "../shadow/shadow.ts";
 
 /**
  * filter as a list of functions the panel edits, and back (FilterEditor).
@@ -184,29 +185,16 @@ export interface Shadow {
   color: string;
 }
 
-/** A length, or math that makes one: `4px`, `0`, `-2px`, `calc(…)`. */
-const LENGTH = /^(-?\d*\.?\d+([a-z]+|%)?|(calc|min|max|clamp)\(.*\))$/i;
-const VAR = /^var\(.*\)$/i;
-
 /**
- * A drop-shadow's value as its parts: two or three lengths, and a color
- * before or after them. A var() is a length, unless it comes last after two
- * or three others (then it's the color: `0 4px 4px var(--shadow)`). Null when it doesn't split that way
- * (a var() for the whole shadow): it's then edited as text.
+ * A drop-shadow's value as its parts: two or three lengths and a color
+ * (splitShadow). Null when it doesn't split that way (a var() for the whole
+ * shadow): it's then edited as text.
  */
 export function parseShadow(value: string): Shadow | null {
-  const parts = splitTopLevel(value.trim(), " ").filter(Boolean);
-  const lengths: string[] = [];
-  let color = "";
-  for (const [i, part] of parts.entries()) {
-    const last = i === parts.length - 1;
-    const isColor = !LENGTH.test(part) && (!VAR.test(part) || (last && !color && lengths.length >= 2));
-    if (!isColor) lengths.push(part);
-    else if (!color) color = part;
-    else return null;
-  }
-  if (lengths.length < 2 || lengths.length > 3) return null;
-  return { x: lengths[0] as string, y: lengths[1] as string, blur: lengths[2] ?? "", color };
+  const parts = splitShadow(value, 3);
+  if (!parts || parts.inset) return null;
+  const [x, y, blur = ""] = parts.lengths as [string, string, string?];
+  return { x, y, blur, color: parts.color };
 }
 
 /** The parts as drop-shadow's value: `0 4px 4px #00000040`. */

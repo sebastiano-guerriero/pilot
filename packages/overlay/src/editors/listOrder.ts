@@ -73,9 +73,9 @@ export const LIST_ORDER: ReadonlyArray<{ group: string; entries: readonly ListEn
     entries: ["background-color", "border-radius", "opacity"],
   },
   {
-    // What's applied on top of how it looks (box-shadow… will join it).
+    // What's applied on top of how it looks.
     group: "Effects",
-    entries: ["mix-blend-mode", "background-blend-mode", "filter", "backdrop-filter"],
+    entries: ["box-shadow", "mix-blend-mode", "background-blend-mode", "filter", "backdrop-filter"],
   },
   {
     group: "Typography",

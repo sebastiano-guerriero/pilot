@@ -1,14 +1,10 @@
 import { useState } from "preact/hooks";
-import { parseValue } from "../../css/values.ts";
 import { LayerList } from "../../ui/components/LayerList/LayerList.tsx";
 import { PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { PropertySelect } from "../../ui/components/PropertySelect/PropertySelect.tsx";
-import { tokensFor } from "../../ui/components/TokenMenu/tokens.ts";
-import { colorEditor } from "../color/ColorEditor.tsx";
 import { declaredOf, isMixed } from "../declared.ts";
-import { useScrub } from "../length/useScrub.ts";
-import { stepField } from "../step.ts";
+import { BLUR, OFFSET, ShadowRows } from "../shadow/ShadowRows.tsx";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
 import {
   CUSTOM_HINT,
@@ -129,14 +125,11 @@ function FilterEditor({ config, ...props }: PropertyEditorProps & { config: Filt
   );
 }
 
-/** The shadow's color row: the dialog's color editor (swatch, opacity, tokens), on the shadow's color instead of a property. */
-const shadowColorEditor = colorEditor({ property: "color", name: "color", label: "Shadow color" });
-
-/** The shadow's length rows, and the property whose kind each one's value is (parse, steps, drag): offsets can be negative, the blur can't. */
-const SHADOW_LENGTHS = [
-  { part: "x", kind: "text-indent" },
-  { part: "y", kind: "text-indent" },
-  { part: "blur", kind: "stroke-width" },
+/** A drop-shadow's length rows. */
+const DROP_SHADOW_LENGTHS = [
+  { part: "x", kind: OFFSET },
+  { part: "y", kind: OFFSET },
+  { part: "blur", kind: BLUR },
 ] as const;
 
 /** The panel's rows for one filter: its function, its value (a drop-shadow's parts, each a row), and what the value means. */
@@ -154,11 +147,6 @@ function FilterRows(
   const setPart = (part: keyof Shadow, next: string, gesture?: object) => {
     if (shadow && filter !== "none" && filter.fn === "drop-shadow") onUpdate({ ...filter, value: formatShadow({ ...shadow, [part]: next }) }, gesture);
   };
-  // The shadow's lengths drag like any length (useScrub), into the shadow.
-  const scrub = useScrub({
-    onChange: (part, next, options) => setPart(part as keyof Shadow, next, options?.gesture),
-    onRevert: (_part, gesture) => onRevert?.(PROPERTY, gesture),
-  });
 
   /** A filter's CSS as text: a custom one, or a drop-shadow that doesn't split into parts. */
   const textRow = (text: string, check: (t: string) => string | null, write: (t: string) => void) => (
@@ -211,33 +199,13 @@ function FilterRows(
           />
         </PropertyRow>
       )}
-      {shadow &&
-        SHADOW_LENGTHS.map(({ part, kind }) => (
-          <PropertyRow key={part} label={part}>
-            <PropertyInputText
-              value={shadow[part]}
-              label={`shadow ${part}`}
-              placeholder="0"
-              tokens={tokensFor(kind)}
-              onCommit={(text) => {
-                const next = text.trim() ? parseValue(kind, text) : "";
-                if (next !== null && next !== shadow[part]) setPart(part, next);
-              }}
-              onStep={(delta, text, gesture) => {
-                const next = stepField(kind, text || "0px", delta, "0px");
-                if (next) setPart(part, next, gesture);
-              }}
-              onScrub={(steps, startText, gesture) => scrub({ property: kind, writes: part, base: () => "0px" }, steps, startText || "0px", gesture)}
-            />
-          </PropertyRow>
-        ))}
       {shadow && (
-        <shadowColorEditor.component
+        <ShadowRows
           element={props.element}
-          values={{ color: shadow.color }}
-          declared={{ color: shadow.color }}
-          onChange={(_property, next, options) => setPart("color", next, options?.gesture)}
-          onRevert={(_property, gesture) => onRevert?.(PROPERTY, gesture)}
+          lengths={DROP_SHADOW_LENGTHS}
+          values={{ ...shadow }}
+          onChange={(part, next, gesture) => setPart(part as keyof Shadow, next, gesture)}
+          onRevert={(gesture) => onRevert?.(PROPERTY, gesture)}
         />
       )}
       {filter !== "none" && filter.fn === "drop-shadow" && !shadow &&
