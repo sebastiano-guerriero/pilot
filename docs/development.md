@@ -102,6 +102,8 @@ Pilot runs other people's command-line tools, and an update of one can change ho
 
 The pages are saved HTML, rendered from a copy of the project whose every tag carries its file and line (`data-src=<file>:<line>`, unquoted so PHP strings stay valid). The test removes the labels before Pilot describes the elements, so the search never sees them, and checks each answer against them. A PHP site renders from the command line (`php` with `$_GET` set and the site's `index.php` included); a static site's labeled HTML file is the page. Never label the project itself: copy it first.
 
+`styles.accuracy.test.ts` (in the CLI) scores where Pilot finds a value's rule in the project's stylesheets (`styles.ts`), on a project whose compiled CSS sits beside its Sass (`css/X.css` from `scss/X.scss`): each compiled rule should be found in a Sass file of the same folder, never in the compiled CSS or another site's copy. It runs when `STYLES_ROOT` names the project, with the report in `STYLES_OUT`.
+
 ## Releasing `usepilot`
 
 The published package is [packages/usepilot](../packages/usepilot). Publishing builds it first (`prepack` runs the build and copies `dist/`, `cli/` and the license in).

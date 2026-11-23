@@ -50,6 +50,8 @@ const EXTENSIONS = new Set([
   ".liquid",
   ".twig",
 ]);
+/** Stylesheets, listed apart (styles.ts and facts.ts read them). */
+const STYLESHEETS = new Set([".css", ".scss", ".sass", ".less", ".styl"]);
 /** A sanity bound, far above any project's own files. */
 const MAX_FILES = 50_000;
 const MAX_FILE_BYTES = 512_000;
@@ -80,7 +82,7 @@ class Index {
   entries = new Map<string, Entry>();
   /** Every walked file, markup or not (componentFile looks at all scripts). */
   paths: string[] = [];
-  /** Every stylesheet walked (not read): where facts.ts looks for the project's Tailwind. */
+  /** Every stylesheet walked (not read): CSS, Sass, Less, Stylus. */
   styles: string[] = [];
   /** How many lines of the markup files hold each word, and how many lines they have. */
   counts = new Map<string, number>();
@@ -120,7 +122,7 @@ class Index {
           walk(path);
           continue;
         }
-        if (extname(name) === ".css" && stat.size <= MAX_FILE_BYTES) styles.push(path);
+        if (STYLESHEETS.has(extname(name)) && stat.size <= MAX_FILE_BYTES) styles.push(path);
         if (!EXTENSIONS.has(extname(name)) || stat.size > MAX_FILE_BYTES) continue;
         paths.push(path);
         seen.add(path);

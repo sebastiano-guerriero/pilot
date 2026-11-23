@@ -9,7 +9,7 @@ When a project has tokens (colors, a type scale, spacing…), Pilot should know 
 - **Fields offer tokens.** Typing in a color or font-size field suggests matching tokens, the way `from-` suggests the window width in the search. Picking one writes `var(--color-primary)`.
 - **Steps and drags follow the scale.** ↑/↓ and scrubbing a spacing field move along the token scale (4 → 8 → 12 → 16), not 1px at a time.
 - **Fields name what they show.** Declared values already keep `var(--space-4)` as written. With the token list, a raw `16px` can also show which token it matches.
-- **The agent gets names, not guesses.** Today `formatPrompt()` says "prefer a token within a pixel or two". With tokens, the change set says `--color-primary` directly, which the agent translates to the project's form (`bg-primary` in Tailwind).
+- **The agent gets names, not guesses.** Built for a raw value: the change set lists the page's tokens and single-purpose classes that come to exactly the new value now (`equivalents`, [handoff.md](handoff.md), *Finding the code, and the time*), and the agent writes them the project's way (`bg-primary` in Tailwind). A token picked in the field is said as is.
 - **The preview needs nothing new.** `var(--…)` resolves on the page, in the preview stylesheet too, including under the page's own dark mode.
 
 ## Where tokens come from

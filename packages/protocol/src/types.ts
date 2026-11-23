@@ -98,6 +98,13 @@ export interface StyleChange {
    * hovered and pressed), in STATES order. Absent: the element as it is.
    */
   states?: ElementState[];
+  /**
+   * What already gives `to` on the page now: its tokens (`var(--space-md)`)
+   * and its single-purpose classes (`.padding-md`), compared as the browser
+   * computes them. `fluid`: some tokens change with the viewport, equal at
+   * this width only. Absent: none, or `to` is a token already.
+   */
+  equivalents?: { tokens: string[]; classes: string[]; fluid?: boolean };
 }
 
 /** The element states a change can be for: CSS's pseudo-classes, Tailwind's variants. */

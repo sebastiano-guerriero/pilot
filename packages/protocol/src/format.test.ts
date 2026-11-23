@@ -56,6 +56,25 @@ describe("formatPrompt", () => {
     expect(prompt).toContain("It's set in the element's own `style` attribute.");
   });
 
+  it("what already gives a new value on the page: its tokens and classes, a fluid token's caveat", () => {
+    const prompt = formatPrompt({
+      ...changeSet,
+      edits: [
+        {
+          target: changeSet.edits[0]!.target,
+          changes: [
+            { property: "padding", from: "16px", to: "26.73px", equivalents: { tokens: ["var(--space-md)"], classes: [".padding-md"], fluid: true } },
+            { property: "color", from: "red", to: "#7553fd", equivalents: { tokens: ["var(--color-primary)", "var(--brand)"], classes: [] } },
+          ],
+        },
+      ],
+    });
+    expect(prompt).toContain(
+      "- `padding: 26.73px` is the page's token `var(--space-md)` (fluid: equal at the page's current width only, so check it's the one meant), and the class `.padding-md`, which sets just `padding`: use one where it fits, as this project writes it.",
+    );
+    expect(prompt).toContain("- `color: #7553fd` is the page's tokens `var(--color-primary)`, `var(--brand)`: use one where it fits");
+  });
+
   it("a property the page didn't set reads not set", () => {
     const prompt = formatPrompt({
       ...changeSet,

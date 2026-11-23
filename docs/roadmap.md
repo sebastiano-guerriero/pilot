@@ -26,7 +26,8 @@ One line per item. Tick it when it ships; the details go in the doc for its area
   - [x] The code search finds each element by many details together, and says nothing (or two places) rather than a wrong one: measured on labeled copies of nucleo-2 and four static sites, no wrong answers ([handoff.md](handoff.md), *Finding the code, and the time*). The nav gap edit: 10–12.5s, 2 tool calls (read, edit), with Cursor
   - [ ] The same measure on a React project (labeled JSX), and following a page's own file and what it includes or imports (copies of a module the page doesn't use)
   - [x] The project's facts in the prompt: the Tailwind 4 class for each value in the project's theme, and its CSS rebuilt on save, so the agent doesn't work them out ([handoff.md](handoff.md), *Finding the code, and the time*)
-  - [ ] The same facts for Tailwind 3 (its config is code), CSS variables' tokens, and other styling (CSS modules, Sass)
+  - [x] Facts for every project: where each changed value is set in its own stylesheets (Sass, Less, CSS modules, `<style>` blocks), the page's tokens and single-purpose classes that give the new value, how changes reach the page on save (measured on CodyHouse's Sass: 92.8% found, none wrong)
+  - [ ] Still to read: Tailwind 3 (its config is code), CSS-in-JS (styled-components, Emotion: their classes carry no rule in a stylesheet), and the same measures on a CSS-modules or React project
   - [ ] Editor jobs to one session per project (more only for jobs at once), marked as the editor's, so the guidelines are read once
   - [ ] Send the look-alikes' locations, and where a value comes from (inherited from a parent's class)
 

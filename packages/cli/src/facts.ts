@@ -2,16 +2,17 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import type { Job, StyleChange, WidthRange } from "@pilot/protocol";
 import { styleFiles } from "./sources.ts";
+import { type RuleSource, ruleSource } from "./styles.ts";
 
 /**
  * What the agent would otherwise work out about the project before an edit,
- * found by Pilot and put in the job's prompt ("The project"): which Tailwind
- * it uses and where its theme is, the class for each changed value in the
- * project's own scale (`gap: 48px` → `gap-12`), and that its CSS is rebuilt
- * on save (so the agent doesn't check the compiled file). Each saves the
- * agent a step or two: reading the theme, the scale's math, a look at the
- * build. Tailwind 4 only (its theme is CSS Pilot can read; a Tailwind 3
- * config is code); nothing is said for other projects.
+ * found by Pilot and put in the job's prompt ("The project"), each a step or
+ * two saved. For any project: where each changed value is set in its own
+ * stylesheets (styles.ts), and how changes reach the page on save (so the
+ * agent doesn't build or check the output). For Tailwind 4: its theme and the
+ * class for each value in the project's scale (`gap: 48px` → `gap-12`). The
+ * page adds what already gives each value (its tokens and classes:
+ * equivalents.ts in the overlay).
  */
 
 /** A root font size: rem values in px. */
@@ -78,8 +79,7 @@ export interface Tailwind {
   version?: string;
   /** Its theme: Tailwind's defaults, then the project's `@theme`, by variable name without `--`. */
   theme: Map<string, string>;
-  /** How its CSS gets rebuilt on save: `npm run dev`, a dev server's plugin. */
-  rebuild?: string;
+
 }
 
 /** The project's Tailwind 4 for a job: the entry nearest the job's files (where its code probably is), else the page's folder's, else the first. */
@@ -106,8 +106,7 @@ export function tailwindOf(root: string, near: string[] = [], url?: string): Tai
   if (defaults) readTheme(defaults, theme, 0);
   else for (const [k, v] of DEFAULTS) theme.set(k, v); // Not installed yet: Tailwind 4's own scales (its colors left out).
   readTheme(entry, theme, 0);
-  const rebuild = rebuildOf(pkg, root);
-  return { entry: relative(root, entry), ...(version ? { version } : {}), theme, ...(rebuild ? { rebuild } : {}) };
+  return { entry: relative(root, entry), ...(version ? { version } : {}), theme };
 }
 
 function importsTailwind(file: string): boolean {
@@ -197,34 +196,48 @@ function themeBlocks(css: string): string[] {
   return blocks;
 }
 
-/** How the project's CSS is rebuilt on save: its script that watches Tailwind (and the one that runs it), or its dev server's Tailwind plugin. */
-function rebuildOf(pkg: string | null, root: string): string | undefined {
-  const scriptsOf = (file: string | null) => {
+/**
+ * How the project's changes reach the page on save, from its scripts: a
+ * watcher that rebuilds its CSS (Tailwind's CLI, Sass, PostCSS, Less, a gulp
+ * watch), or a dev server that updates the page itself (Vite, Next, Astro…).
+ * Said so the agent doesn't build or check the output. Undefined when the
+ * scripts don't say.
+ */
+export function rebuildOf(pkg: string | null, root: string): { by: string; css: boolean } | undefined {
+  const read = (file: string | null) => {
     try {
-      return file ? ((JSON.parse(readFileSync(file, "utf8")) as { scripts?: Record<string, string> }).scripts ?? {}) : {};
+      return file ? (JSON.parse(readFileSync(file, "utf8")) as { scripts?: Record<string, string>; dependencies?: Record<string, string>; devDependencies?: Record<string, string> }) : {};
     } catch {
       return {};
     }
   };
-  const depsOf = (file: string | null) => {
-    try {
-      const p = file ? (JSON.parse(readFileSync(file, "utf8")) as Record<string, Record<string, string> | undefined>) : {};
-      return { ...p.dependencies, ...p.devDependencies };
-    } catch {
-      return {};
-    }
-  };
-  for (const file of [pkg, join(root, "package.json")]) {
-    const scripts = scriptsOf(file);
-    const watch = Object.entries(scripts).find(([, cmd]) => /\btailwindcss\b/.test(cmd) && /(--watch|\s-w)\b/.test(cmd));
-    if (watch) {
-      const [name] = watch;
-      const runner = Object.entries(scripts).find(([, cmd]) => new RegExp(`(npm run|pnpm( run)?|yarn|bun run|npm:)\\s*${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(cmd));
-      const where = file === pkg && pkg && dirname(pkg) !== resolve(root) ? ` in \`${relative(root, dirname(pkg))}\`` : "";
-      return runner ? `\`npm run ${runner[0]}\`${where} (its \`${name}\`)` : `\`npm run ${name}\`${where}`;
-    }
-    const deps = depsOf(file);
-    if (deps["@tailwindcss/vite"] || deps["@tailwindcss/postcss"]) return "the dev server";
+  const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  for (const file of [...new Set([pkg, join(root, "package.json")])]) {
+    const p = read(file);
+    const scripts = p.scripts ?? {};
+    const where = file && file !== join(root, "package.json") ? ` in \`${relative(root, dirname(file))}\`` : "";
+    // The script that runs `name`, when another does (`dev` runs `css:watch`).
+    const runner = (name: string) =>
+      Object.entries(scripts).find(([other, cmd]) => other !== name && new RegExp(`(npm run|pnpm( run)?|yarn|bun run|npm:)\\s*${escape(name)}\\b`).test(cmd))?.[0];
+    const said = (name: string) => {
+      const by = runner(name);
+      return by ? `\`npm run ${by}\`${where} (its \`${name}\`)` : `\`npm run ${name}\`${where}`;
+    };
+    const gulpWatches = (() => {
+      try {
+        return /\bwatch\s*\(/.test(readFileSync(join(file ? dirname(file) : root, "gulpfile.js"), "utf8"));
+      } catch {
+        return false;
+      }
+    })();
+    const watch = Object.entries(scripts).find(
+      ([, cmd]) => (/\b(tailwindcss|sass|node-sass|postcss|lessc|stylus)\b/.test(cmd) && /(--watch|\s-w)\b/.test(cmd)) || (/\bgulp\b/.test(cmd) && (/\bwatch\b/.test(cmd) || gulpWatches)),
+    );
+    if (watch) return { by: said(watch[0]), css: true };
+    const server = Object.entries(scripts).find(([, cmd]) => /\b(vite|next dev|nuxt|astro dev|svelte-kit|remix|react-router dev|webpack serve|webpack-dev-server|parcel|eleventy --serve|ng serve|vue-cli-service serve)\b/.test(cmd));
+    if (server) return { by: `its dev server (${said(server[0])})`, css: false };
+    const deps = { ...p.dependencies, ...p.devDependencies };
+    if (deps["@tailwindcss/vite"] || deps["@tailwindcss/postcss"]) return { by: "its dev server", css: false };
   }
   return undefined;
 }
@@ -482,35 +495,64 @@ export function prefixFor(change: Pick<StyleChange, "widths" | "states">, theme:
 }
 
 /**
- * The job's "The project" section, for its prompt: the project's Tailwind,
- * the class for each of its changes, and how its CSS is rebuilt; empty when
- * the project doesn't use Tailwind 4 (or the job changes nothing it maps).
- * `near`: the files where the job's code probably is.
+ * The job's "The project" section, for its prompt: for any project, where
+ * each changed value is set in its stylesheets (styles.ts) and how changes
+ * reach the page on save; for a Tailwind 4 project, its theme and the class
+ * for each change. Empty when Pilot found none of it. `near`: the files where
+ * the job's code probably is.
  */
 export function factsSection(job: Job, root: string, near: string[] = []): string {
-  let tw: Tailwind | null;
+  const lines: string[] = [];
+  const seen = new Set<string>();
+  const add = (line: string) => {
+    if (!seen.has(line)) lines.push(line);
+    seen.add(line);
+  };
+  let tw: Tailwind | null = null;
   try {
     tw = tailwindOf(root, near, job.changeSet.page?.url);
   } catch {
-    return "";
+    // Unreadable: no Tailwind facts.
   }
-  if (!tw) return "";
-  const step = toPx(tw.theme.get("spacing") ?? "0.25rem", tw.theme);
-  const lines = [
-    `- Tailwind CSS ${tw.version?.replace(/^[^\d]*/, "") ?? "4"}, its theme in \`${tw.entry}\` (\`@theme\`) and Tailwind's defaults; spacing steps of ${step ? px(step) : "0.25rem"} (\`--spacing\`).`,
-  ];
-  const seen = new Set<string>();
+  if (tw) {
+    const step = toPx(tw.theme.get("spacing") ?? "0.25rem", tw.theme);
+    add(`- Tailwind CSS ${tw.version?.replace(/^[^\d]*/, "") ?? "4"}, its theme in \`${tw.entry}\` (\`@theme\`) and Tailwind's defaults; spacing steps of ${step ? px(step) : "0.25rem"} (\`--spacing\`).`);
+  }
   for (const edit of job.changeSet.edits) {
     for (const change of edit.changes) {
-      if (change.removed) continue;
-      const cls = classFor(change.property, change.to, tw.theme);
-      if (!cls) continue;
-      const prefix = prefixFor(change, tw.theme);
-      const line = `- \`${change.property}: ${change.to}\`${prefix ? ` (${prefix.slice(0, -1).replaceAll(":", ", ")})` : ""} is \`${prefix}${cls.exact}\`${cls.closest ? `, no step of the scale; its closest is \`${prefix}${cls.closest.cls}\` (${px(cls.closest.px)})` : ""}${cls.note ? ` (${cls.note})` : ""}.`;
-      if (!seen.has(line)) lines.push(line);
-      seen.add(line);
+      if (tw && !change.removed) {
+        const cls = classFor(change.property, change.to, tw.theme);
+        if (cls) {
+          const prefix = prefixFor(change, tw.theme);
+          add(
+            `- \`${change.property}: ${change.to}\`${prefix ? ` (${prefix.slice(0, -1).replaceAll(":", ", ")})` : ""} is \`${prefix}${cls.exact}\`${cls.closest ? `, no step of the scale; its closest is \`${prefix}${cls.closest.cls}\` (${px(cls.closest.px)})` : ""}${cls.note ? ` (${cls.note})` : ""}.`,
+          );
+        }
+      }
+      const source = change.source;
+      if (source?.kind !== "rule") continue;
+      let at: RuleSource | null = null;
+      try {
+        at = ruleSource(source.selector, change.property, root, near, source.media);
+      } catch {
+        // Unreadable stylesheets: nothing said.
+      }
+      if (!at) continue;
+      const d = at.declaration;
+      add(
+        d
+          ? `- \`${change.property}\` is set by \`${source.selector}\` in \`${at.rule.file}:${d.line}\`: \`${d.property}: ${d.value};\`.`
+          : `- \`${change.property}\` is set by \`${source.selector}\`, the rule at \`${at.rule.file}:${at.rule.line}\` (not written in it as is: a mixin or an include gives it).`,
+      );
     }
   }
-  if (tw.rebuild) lines.push(`- Its CSS is rebuilt on save by ${tw.rebuild}, so a new class works at once: don't build it or check the compiled CSS.`);
-  return ["## The project", "", ...lines].join("\n");
+  const pkg = near.length ? nearestPackage(dirname(join(root, near[0] as string)), root) : null;
+  const rebuild = rebuildOf(pkg ?? (tw ? nearestPackage(dirname(join(root, tw.entry)), root) : null), root);
+  if (rebuild)
+    add(
+      rebuild.css
+        ? `- Its CSS is rebuilt on save by ${rebuild.by}, so a change works at once: don't build it or check the compiled CSS.`
+        : `- ${rebuild.by[0]?.toUpperCase()}${rebuild.by.slice(1)} updates the page on save: don't build it or check the compiled output.`,
+    );
+  return lines.length ? ["## The project", "", ...lines].join("\n") : "";
 }

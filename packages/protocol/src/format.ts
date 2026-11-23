@@ -542,7 +542,7 @@ function formatEdit(edit: ElementEdit, n: number): string[] {
     const widths = c.widths ? describeWidths(c.widths) : "every width";
     out.push(`| \`${c.property}\` | ${from} | ${to} | ${widths} |${withStates ? ` ${describeStates(c.states)} |` : ""}`);
   }
-  const notes = changes.flatMap((c) => [c.removed && removalNote(c), mediaNote(c)].filter((n): n is string => !!n));
+  const notes = changes.flatMap((c) => [c.removed && removalNote(c), mediaNote(c), equivalentsNote(c)].filter((n): n is string => !!n));
   if (notes.length) out.push("", ...notes.map((n) => `- ${n}`));
   return out;
 }
@@ -575,6 +575,22 @@ function mediaNote(c: StyleChange): string | null {
   return c.widths
     ? `${today} The change is for ${describeWidths(c.widths)}.`
     : `${today} The change is for every width, so that media query shouldn't override it.`;
+}
+
+/**
+ * What already gives the new value on the page: its tokens and classes, to
+ * use rather than the raw value (in the project's form: Sass's `$space-md`
+ * for a token the project writes so).
+ */
+function equivalentsNote(c: StyleChange): string | null {
+  const e = c.equivalents;
+  if (!e || (!e.tokens.length && !e.classes.length)) return null;
+  const code = (list: string[]) => list.map((x) => `\`${x}\``).join(", ");
+  const parts = [
+    e.tokens.length ? `the page's ${e.tokens.length > 1 ? "tokens" : "token"} ${code(e.tokens)}${e.fluid ? " (fluid: equal at the page's current width only, so check it's the one meant)" : ""}` : "",
+    e.classes.length ? `${e.classes.length > 1 ? "the classes" : "the class"} ${code(e.classes)}, which set${e.classes.length > 1 ? "" : "s"} just \`${c.property}\`` : "",
+  ].filter(Boolean);
+  return `\`${c.property}: ${c.to}\` is ${parts.join(", and ")}: use one where it fits, as this project writes it.`;
 }
 
 /**
