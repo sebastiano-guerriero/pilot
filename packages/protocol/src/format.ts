@@ -532,7 +532,7 @@ function targetLines(target: ElementTarget): string[] {
     const of = target.lookAlikesOf ? `other instances of \`${target.lookAlikesOf}\`, the same part of each` : "the same part of other copies";
     out.push(`- Look-alikes: ${target.lookAlikes} more on the page (${of}), not in this job`);
   }
-  if (target.style?.length) out.push("- Its style now (the page's CSS; what each comes to after `=`):", ...target.style.map((st) => `  - ${styleLine(st)}`));
+  if (target.style?.length) out.push("- Its style now, as the page has it (no need to look it up; what each comes to after `=`):", ...target.style.map((st) => `  - ${styleLine(st)}`));
   return out;
 }
 

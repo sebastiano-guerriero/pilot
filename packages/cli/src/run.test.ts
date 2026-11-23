@@ -129,6 +129,8 @@ describe("npx usepilot: Pilot runs the agent for each job", () => {
     const [first, second] = runs();
     expect(first?.args).not.toContain("--resume");
     expect(first?.prompt).toContain("- **These are design instructions, not code**");
+    // Pilot checks the page: the agent doesn't check its own edit (a git diff, a script).
+    expect(first?.prompt).toContain("don't check your edit afterwards (no git diff, script or second read of the file): Pilot does.");
     expect(second?.args).toEqual(expect.arrayContaining(["--resume", "aaaaaaaa-0000-0000-0000-000000000001"]));
     expect(second?.prompt).toContain("Guidelines: the same as for the earlier edits in this session");
     expect(second?.prompt).not.toContain("These are design instructions, not code");

@@ -34,7 +34,7 @@ function runFooter(job: Job): string {
   return [
     skillOf(job)
       ? `When you're done, reply with your notes for the designer: ${notesFor(job)}. Pilot shows them to the designer in the element's thread.`
-      : `When you're done, reply with your notes for the designer: ${notesFor(job)}. Concise, no headings ("Done." when there's nothing to add): Pilot shows them to the designer in a small box, and checks the page itself, so don't open a browser, start a dev server, or run builds or tests.`,
+      : `When you're done, reply with your notes for the designer: ${notesFor(job)}. Concise, no headings ("Done." when there's nothing to add): Pilot shows them to the designer in a small box, and checks the page itself, so don't open a browser, start a dev server, or run builds or tests, and don't check your edit afterwards (no git diff, script or second read of the file): Pilot does.`,
     "",
     props
       ? "Put the props in a block at the very end of your reply, after your notes, as JSON:"

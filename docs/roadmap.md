@@ -30,6 +30,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
   - [ ] Still to read: Tailwind 3 (its config is code), CSS-in-JS (styled-components, Emotion: their classes carry no rule in a stylesheet), and the same measures on a CSS-modules or React project
   - [x] Editor jobs resume a session kept for them per project (more only for jobs at once), the guidelines in one line ([handoff.md](handoff.md), *Agent runs*)
   - [x] Comments and tasks get their elements' style now (where each value is set) and the theme's scales or the page's tokens: a comment 10–35s → about 10s with Cursor, one round of tool calls ([handoff.md](handoff.md), *Finding the code, and the time*)
+  - [x] Measured with Claude Code and Codex too (2026-11-23): every edit right; resumed edits 6.5–7.4s (Claude Code), 8.7–9.6s (Codex), comments about 10–16s. Codex checked its own edits (`git diff`, a script): the prompt now says Pilot checks the page, and its first edits went from 18–21s to 11–13s
   - [ ] Send the look-alikes' locations (the agent still greps for them before "only this or all?"), and which parent an inherited value comes from
 
 ## Foundation

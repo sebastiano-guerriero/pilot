@@ -93,7 +93,7 @@ describe("formatPrompt", () => {
         },
       },
     });
-    expect(prompt).toContain("- Its style now (the page's CSS; what each comes to after `=`):");
+    expect(prompt).toContain("- Its style now, as the page has it (no need to look it up; what each comes to after `=`):");
     expect(prompt).toContain("  - `font-family: Geist, sans-serif`, inherited");
     expect(prompt).toContain("  - `letter-spacing: var(--tracking-tight)` = `-0.475px`, from `.tracking-tight`, which matches 6 elements");
     expect(prompt).toContain("  - `margin-top: 4px`, in its `style` attribute");
