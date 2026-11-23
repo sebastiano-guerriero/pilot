@@ -21,6 +21,7 @@ import {
 import { listStylePositionEditor, listStyleTypeEditor } from "./list-style/ListStyleEditors.tsx";
 import { overscrollEditor } from "./overscroll/OverscrollEditor.tsx";
 import { fillEditor, strokeEditor, strokeWidthEditor } from "./svg/SvgEditors.tsx";
+import { filterEditor } from "./filter/FilterEditor.tsx";
 import { aspectRatioEditor } from "./aspect-ratio/AspectRatioEditor.tsx";
 import { borderRadiusEditor } from "./border-radius/BorderRadiusEditor.tsx";
 import { displayEditor } from "./display/DisplayEditor.tsx";
@@ -129,6 +130,7 @@ export const editors: PropertyEditor[] = [
   opacityEditor,
   mixBlendModeEditor,
   backgroundBlendModeEditor,
+  filterEditor,
   visibilityEditor,
   maskImageEditor,
   maskCompositeEditor,
@@ -233,10 +235,11 @@ function rank(q: string, list: PropertyEditor[]): Array<{ editor: PropertyEditor
     const names = [e.label, ...e.properties].map(normalizeQuery);
     if (names.some((n) => n === q)) return 3;
     if (names.some((n) => n.startsWith(q))) return 2;
-    // A Tailwind class whose first word starts with it (`items` →
-    // items-center: align-items, not justify-items, whose name only has the
-    // word later). The first word only: `cols` isn't col-start.
-    if (e.aliases?.some((a) => a.toLowerCase().split(/[\s-]+/)[0]?.startsWith(q))) return 1.75;
+    // A Tailwind class that starts with it, by whole words, or the first
+    // word's start (`items` → items-center: align-items, not justify-items,
+    // whose name only has the word later; `hue-rotate` → hue-rotate-90).
+    // Not into a later word: `cols` isn't col-start.
+    if (e.aliases?.some((a) => startsByWords(a, q))) return 1.75;
     const laterWords = [e.label, ...e.properties, ...(e.aliases ?? [])].flatMap((n) => n.toLowerCase().split(/[\s-]+/).slice(1));
     if (laterWords.some((w) => w.startsWith(q))) return 1.5;
     if (names.some((n) => n.includes(q))) return 1;
@@ -263,6 +266,19 @@ function rank(q: string, list: PropertyEditor[]): Array<{ editor: PropertyEditor
 }
 
 const SEPARATOR = /[\s-]/;
+
+/** Whether `alias` starts with the normalized query `q`: within its first word, or as whole words. */
+function startsByWords(alias: string, q: string): boolean {
+  const words = alias.toLowerCase().split(/[\s-]+/);
+  if (words[0]?.startsWith(q)) return true;
+  let joined = "";
+  for (const word of words) {
+    joined += word;
+    if (joined === q) return true;
+    if (joined.length >= q.length) return false;
+  }
+  return false;
+}
 
 /**
  * How many letters of `name` are skipped to find the query's letters in order,

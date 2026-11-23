@@ -37,6 +37,7 @@
 @import "../components/PropsList/PropsList.css" layer(components);
 @import "../components/Confetti/Confetti.css" layer(components);
 @import "../components/ViewportWidth/ViewportWidth.css" layer(components);
+@import "../components/LayerList/LayerList.css" layer(components);
 
 /* Property editors */
 @import "../../editors/split/SplitEditor.css" layer(components);

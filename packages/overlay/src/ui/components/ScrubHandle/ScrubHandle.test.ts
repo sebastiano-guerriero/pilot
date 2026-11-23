@@ -2,7 +2,7 @@
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ScrubHandle, recoil } from "./ScrubHandle.tsx";
+import { degreesOf, ScrubHandle, recoil } from "./ScrubHandle.tsx";
 
 const DEG_PER_PX = 22 / 3;
 
@@ -79,10 +79,61 @@ describe("ScrubHandle past a limit", () => {
     near(angle(), Math.round(target / 22) * 22);
   });
 
-  it("let go before the limit: no spring, the nearest line", async () => {
+  it("let go before the limit: no spring; it settles on the nearest line in a short ease, not at once", async () => {
     pointer("pointerdown", 100);
     pointer("pointermove", 104);
+    const shown = angle();
     pointer("pointerup", 104);
+    // Still on its way the moment it's let go…
+    expect(Math.abs(angle() - shown)).toBeLessThan(0.01);
+    await new Promise((r) => setTimeout(r, 200));
+    // …then on the line.
     near(angle(), 0);
+  });
+});
+
+describe("the dial, for an angle", () => {
+  let container: HTMLElement;
+  const mount = (degrees: number | null) =>
+    act(() => render(h(ScrubHandle, { onStart: () => true, onScrub: () => 0, degrees }), container));
+  const handle = () => container.querySelector(".scrub-handle") as HTMLElement;
+  /** The accent arc's path, or the whole ring's circle. */
+  const fill = () => container.querySelector('[stroke="var(--plt-color-accent)"]');
+  const tick = () => container.querySelector('path[d="M8 6V4.5"]')?.getAttribute("transform");
+
+  beforeEach(() => {
+    container = document.createElement("div");
+    document.body.append(container);
+  });
+  afterEach(() => {
+    render(null, container);
+    container.remove();
+  });
+
+  it("reads angles in any unit as degrees, and nothing else", () => {
+    expect(degreesOf("200deg")).toBe(200);
+    expect(degreesOf("-45deg")).toBe(-45);
+    expect(degreesOf("0.5turn")).toBe(180);
+    expect(degreesOf("100grad")).toBe(90);
+    expect(degreesOf("4px")).toBeNull();
+    expect(degreesOf("")).toBeNull();
+  });
+
+  it("an angle shows the dial, turned to it, with the accent filling to it; anything else, the wheel", () => {
+    mount(0);
+    expect(handle().hasAttribute("data-dial")).toBe(true);
+    expect(fill()).toBeNull();
+    expect(tick()).toBe("rotate(0 8 8)");
+    mount(90);
+    expect(tick()).toBe("rotate(90 8 8)");
+    // A quarter, clockwise from the top: to the ring's right edge.
+    expect(fill()?.getAttribute("d")).toBe("M8 2.5A5.5 5.5 0 0 1 13.5 8");
+    mount(-90);
+    // Back the other way.
+    expect(fill()?.getAttribute("d")).toMatch(/^M8 2\.5A5\.5 5\.5 0 0 0 2\.5 8/);
+    mount(400);
+    expect(fill()?.tagName.toLowerCase()).toBe("circle");
+    mount(null);
+    expect(handle().hasAttribute("data-dial")).toBe(false);
   });
 });

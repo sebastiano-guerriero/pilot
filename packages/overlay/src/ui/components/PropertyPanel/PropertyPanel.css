@@ -89,4 +89,23 @@
     flex-direction: column;
     gap: 8px;
   }
+
+  /* Help under the rows: the property dialog's footer (PropertyDialog.css),
+     dimmed text under a dotted line inset 16px. */
+  .footer {
+    flex: none;
+    position: relative;
+    padding: 12px 16px;
+    line-height: 16px;
+    color: var(--plt-color-contrast-low);
+
+    &:after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 16px;
+      width: calc(100% - 32px);
+      border-top: 1px dotted var(--plt-color-border);
+    }
+  }
 }

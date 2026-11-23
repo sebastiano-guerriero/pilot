@@ -17,7 +17,7 @@ The dialog is never taller than the window: the properties scroll inside it, the
 
 ## With nothing typed
 
-The dialog **lists the editors for every property the element has a value for** (from any source), in the order kept in [editors/listOrder.ts](../packages/overlay/src/editors/listOrder.ts) (`LIST_ORDER`), by group: Layout, Position, Appearance, Typography, Interactivity, SVG, Visibility. The project owner keeps that order; every editor that writes properties needs a place there, and `listOrder.test.ts` fails without it.
+The dialog **lists the editors for every property the element has a value for** (from any source), in the order kept in [editors/listOrder.ts](../packages/overlay/src/editors/listOrder.ts) (`LIST_ORDER`), by group: Layout, Position, Appearance, Effects, Typography, Interactivity, SVG, Visibility. The project owner keeps that order; every editor that writes properties needs a place there, and `listOrder.test.ts` fails without it.
 
 - The list (and only this one: searching shows the matches alone) is **grouped**: each group starts with its label, and a dotted line separates groups (`groupOf()`).
 - Rows a revealing editor shows are set in `LIST_ORDER` too, per value (`rowsOf()`): display's grid and flex rows, position's inset. An editor another one shows as a row (gap under `display: grid`) is left to that one. A row that shows on its own (gap on an element that isn't a grid) is listed right after display.
@@ -46,7 +46,7 @@ Only three things: the editor's **label**, the **CSS property names** it writes 
 1. an exact **alias**;
 2. an exact label or property name;
 3. a prefix (`pad`);
-4. a Tailwind class whose first word starts with the query (`items` → `items-center`, align-items; `self` → align-self): it beats a name that only has the word later (justify-items). The first word only, so `cols` isn't `col-start`;
+4. a Tailwind class that starts with the query, within its first word or by whole words (`items` → `items-center`, align-items; `self` → align-self; `hue-rotate` → `hue-rotate-90`, filter): it beats a name that only has the word later (justify-items). Not into a later word, so `cols` isn't `col-start`;
 5. a later word starting with the query (`spa` → the "span" in col-span, `ite` → align-items, `cols` → `grid-cols`): a word being typed counts;
 6. a substring;
 7. an **abbreviation**, only when nothing better matches: the query's letters in order in a property name, starting at a word start (`wdt` → width, `mxw` → max-width, `pdg` → the padding rows). Requiring a word start keeps it sensible (`dt` won't match width through its middle letters). Starting at a later word (the "width" in `min-width`) counts as one more skipped letter, so `wdt` prefers width itself. Among several, the fewest skipped letters win, then the shortest name.

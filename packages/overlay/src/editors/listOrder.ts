@@ -70,7 +70,12 @@ export const LIST_ORDER: ReadonlyArray<{ group: string; entries: readonly ListEn
   },
   {
     group: "Appearance",
-    entries: ["background-color", "border-radius", "opacity", "mix-blend-mode", "background-blend-mode"],
+    entries: ["background-color", "border-radius", "opacity"],
+  },
+  {
+    // What's applied on top of how it looks (box-shadow, backdrop-filter… will join it).
+    group: "Effects",
+    entries: ["mix-blend-mode", "background-blend-mode", "filter"],
   },
   {
     group: "Typography",
@@ -145,7 +150,7 @@ const position = new Map(listedIds().map((id, i) => [id, i]));
  * (outline, dots, grid lines and numbers, the hover), so the element shows
  * clear, as it will be. The owner's call, per group.
  */
-const CLEAR_VIEW_GROUPS = new Set(["Appearance"]);
+const CLEAR_VIEW_GROUPS = new Set(["Appearance", "Effects"]);
 /** Editors that do too, outside those groups: the mask's (in Visibility, which `visibility` itself shares). */
 const CLEAR_VIEW_EDITORS = new Set(["mask-image", "mask-composite"]);
 

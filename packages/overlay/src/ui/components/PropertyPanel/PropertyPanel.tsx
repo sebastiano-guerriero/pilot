@@ -12,6 +12,8 @@ interface PropertyPanelProps {
   onClose(): void;
   /** The rows (PropertyRow), first focused when it opens. */
   children: ComponentChildren;
+  /** A line of help under the rows, in the property dialog's footer (a dotted line above, dimmed text). */
+  footer?: ComponentChildren;
 }
 
 /** Space between the dialog and the panel, and the closest the panel gets to the window's edges. */
@@ -30,7 +32,7 @@ const FOCUSABLE = 'button:not([tabindex="-1"]):not(:disabled), input:not(:disabl
  * page's scroll), and can be dragged by the strip along its top edge.
  * Esc closes it (only it), Tab stays in it.
  */
-export function PropertyPanel({ title, beside, onClose, children }: PropertyPanelProps) {
+export function PropertyPanel({ title, beside, onClose, children, footer }: PropertyPanelProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(0);
   // Dragged this far from where it opens.
@@ -138,6 +140,11 @@ export function PropertyPanel({ title, beside, onClose, children }: PropertyPane
         </button>
       </div>
       <div class="panel-rows">{children}</div>
+      {footer && (
+        <footer class="footer" aria-live="polite">
+          {footer}
+        </footer>
+      )}
     </div>
   );
 }

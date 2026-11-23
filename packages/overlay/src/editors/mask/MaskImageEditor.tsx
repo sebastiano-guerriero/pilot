@@ -1,12 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import { parseValue } from "../../css/values.ts";
 import { Icon, type IconName } from "../../ui/components/Icon/Icon.tsx";
 import { PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
-import { PropertyPanel } from "../../ui/components/PropertyPanel/PropertyPanel.tsx";
+import { LayerList } from "../../ui/components/LayerList/LayerList.tsx";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { PropertySelect } from "../../ui/components/PropertySelect/PropertySelect.tsx";
 import { tokensFor } from "../../ui/components/TokenMenu/tokens.ts";
-import { declaredOf, isMixed, MIXED } from "../declared.ts";
+import { declaredOf, isMixed } from "../declared.ts";
 import { useScrub } from "../length/useScrub.ts";
 import { stepField } from "../step.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
@@ -93,8 +93,8 @@ function asType(mask: Mask | "none", type: MaskType): Mask | "none" {
 
 /**
  * mask-image (the owner's design): the row lists the element's masks as
- * chips (a preview, the type's name, × to take it off) and a + that adds
- * one. A mask is edited in a panel beside the dialog (PropertyPanel):
+ * chips (LayerList: a preview, the type's name, × to take it off) and a +
+ * that adds one. A mask is edited in a panel beside the dialog (PropertyPanel):
  * type first (linear, radial, custom, none), which decides the rows under
  * it. × clears the property (the element declares no mask); `none` declares
  * mask-image: none (to take a mask off at a width) and is the whole value.
@@ -102,17 +102,11 @@ function asType(mask: Mask | "none", type: MaskType): Mask | "none" {
  * line-clamp writes its companions (maskChanges).
  */
 function MaskImageEditor(props: PropertyEditorProps) {
-  const { focusRequest } = props;
   const value = declaredOf(props, PROPERTY);
   const mixed = isMixed(props, PROPERTY);
   const masks = mixed ? null : parseMask(value);
   const list: Array<Mask | "none"> = masks === "none" ? ["none"] : (masks ?? []);
   const [open, setOpen] = useState<number | null>(null);
-  const rowRef = useRef<HTMLDivElement>(null);
-  const firstRef = useRef<HTMLButtonElement>(null);
-  useLayoutEffect(() => {
-    if (focusRequest) firstRef.current?.focus();
-  }, [focusRequest]);
 
   // Every write is the whole value, with its mask-composite, as one undo step.
   const write = (next: Array<Mask | "none">, gesture: object = {}) => {
@@ -135,50 +129,24 @@ function MaskImageEditor(props: PropertyEditorProps) {
     if (mask === "none") return write(["none"], gesture);
     write(list.map((m, i) => (i === index ? mask : m)).filter((m) => m !== "none"), gesture);
   };
-  const close = () => {
-    const at = open;
-    setOpen(null);
-    // Focus back where the panel was opened from.
-    requestAnimationFrame(() => rowRef.current?.querySelectorAll<HTMLElement>(".mask-chip-open")[at ?? 0]?.focus());
-  };
 
   const current = open !== null ? list[open] : undefined;
-  // Its mask undone away (or taken off elsewhere): the panel closes.
-  useEffect(() => {
-    if (open !== null && !current) setOpen(null);
-  }, [open, !current]);
-
   return (
-    <PropertyRow label="mask-image" class="mask-image-editor">
-      <div class="mask-list" ref={rowRef}>
-        {mixed && <span class="mask-mixed field-box">{MIXED}</span>}
-        {list.map((mask, i) => (
-          <div key={i} class="mask-chip field-box" data-open={open === i || undefined}>
-            <button
-              type="button"
-              class="mask-chip-open"
-              ref={i === 0 ? firstRef : undefined}
-              aria-label={`Edit mask: ${typeOf(mask)}`}
-              onClick={() => setOpen(open === i ? null : i)}
-            >
-              <MaskSwatch mask={mask} />
-              <span class="mask-chip-name">{typeOf(mask)}</span>
-            </button>
-            <button type="button" class="mask-chip-remove" aria-label="Remove mask" onClick={() => remove(i)}>
-              <Icon name="close-small" />
-            </button>
-          </div>
-        ))}
-        <button type="button" class="mask-add" ref={list.length || mixed ? undefined : firstRef} aria-label="Add a mask" onClick={add}>
-          <Icon name="plus" />
-        </button>
-      </div>
-      {open !== null && current && (
-        <PropertyPanel title="Mask Image" beside={() => rowRef.current?.closest(".property-dialog")?.getBoundingClientRect() ?? null} onClose={close}>
-          <MaskRows {...props} mask={current} onUpdate={(mask, gesture) => update(open, mask, gesture)} />
-        </PropertyPanel>
-      )}
-    </PropertyRow>
+    <LayerList
+      label="mask-image"
+      class="mask-image-editor"
+      items={list.map((mask) => ({ name: typeOf(mask), swatch: <MaskSwatch mask={mask} /> }))}
+      mixed={mixed}
+      open={open}
+      onOpen={setOpen}
+      onAdd={add}
+      onRemove={remove}
+      noun="mask"
+      panelTitle="Mask Image"
+      focusRequest={props.focusRequest}
+    >
+      {open !== null && current && <MaskRows {...props} mask={current} onUpdate={(mask, gesture) => update(open, mask, gesture)} />}
+    </LayerList>
   );
 }
 

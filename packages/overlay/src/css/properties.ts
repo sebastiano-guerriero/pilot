@@ -364,6 +364,7 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   "z-index": { initial: "auto", keywords: ["auto"], negative: true, kind: "integer" },
   visibility: { initial: "visible", keywords: [...VISIBILITY_VALUES], negative: false },
   "mask-image": { initial: "none", keywords: ["none"], negative: false },
+  filter: { initial: "none", keywords: ["none"], negative: false },
   "mask-composite": { initial: "add", keywords: [...MASK_COMPOSITE_VALUES], negative: false },
   "border-radius": { initial: "0", keywords: [], negative: false, named: { full: "calc(infinity * 1px)" } },
   opacity: { initial: "1", keywords: [], negative: false, kind: "percent" },
