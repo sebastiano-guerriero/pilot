@@ -5,19 +5,21 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EditHistory } from "../../edits/history.ts";
 import { clearsView, groupOf } from "../listOrder.ts";
 import { matchEditors } from "../registry.ts";
-import { filterEditor } from "./FilterEditor.tsx";
+import { backdropFilterEditor, filterEditor } from "./FilterEditor.tsx";
+import type { PropertyEditor } from "../types.ts";
 
 let element: HTMLElement;
 let container: HTMLElement;
 let history: EditHistory;
 let declared: Record<string, string>;
 let changes: Array<[string, string]>;
+let editor: PropertyEditor;
 
 // The editor reads what the element declares from `declared` (the dialog's job).
 const mount = () =>
   act(() => {
     render(
-      h(filterEditor.component, {
+      h(editor.component, {
         element,
         values: {},
         declared: { ...declared },
@@ -33,6 +35,7 @@ const mount = () =>
   });
 
 beforeEach(() => {
+  editor = filterEditor;
   history = new EditHistory();
   declared = {};
   changes = [];
@@ -150,5 +153,40 @@ describe("filter", () => {
       expect(clearsView(id), id).toBe(true);
     }
     expect(groupOf("opacity")).toBe("Appearance");
+  });
+});
+
+describe("backdrop-filter", () => {
+  beforeEach(() => {
+    editor = backdropFilterEditor;
+  });
+
+  it("is filter's editor on backdrop-filter: + adds a blur, its own panel title and none", () => {
+    mount();
+    expect(container.querySelector(".property-label")?.textContent).toBe("backdrop-filter");
+    add();
+    expect(changes).toEqual([["backdrop-filter", "blur(4px)"]]);
+    expect(panel()?.getAttribute("aria-label")).toBe("Backdrop Filter");
+    // The footer says what it applies to, then what the value means.
+    expect(container.querySelector(".property-panel .footer")?.textContent).toMatch(/^On what's behind.*0 is sharp/);
+    pickFunction("none");
+    expect(changes.at(-1)).toEqual(["backdrop-filter", "none"]);
+  });
+
+  it("offers every function but drop-shadow", () => {
+    mount();
+    add();
+    act(() => (container.querySelector('[role="combobox"][aria-label="filter function"]') as HTMLButtonElement).click());
+    const options = [...container.querySelectorAll('[role="option"] .label')].map((o) => o.firstChild?.textContent);
+    expect(options).toContain("blur");
+    expect(options).not.toContain("drop-shadow");
+  });
+
+  it("is found by backdrop-filter, backdrop and Tailwind's backdrop classes; in Effects, hiding the highlights", () => {
+    for (const q of ["backdrop-filter", "backdrop", "backdrop-blur", "backdrop-grayscale", "backdrop-opacity"]) {
+      expect(matchEditors(q).map((e) => e.id), q).toContain("backdrop-filter");
+    }
+    expect(groupOf("backdrop-filter")).toBe("Effects");
+    expect(clearsView("backdrop-filter")).toBe(true);
   });
 });

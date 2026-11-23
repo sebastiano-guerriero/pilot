@@ -65,7 +65,10 @@ export type FilterType = (typeof FILTER_TYPES)[number] | "custom";
 export const OTHER_TAKES: Record<"custom" | "none", string> = { custom: "as written", none: "no filter" };
 
 export const CUSTOM_HINT = "A filter the page writes that isn't one of these (url(#noise)), as CSS writes it.";
-export const NONE_HINT = "Declares filter: none, taking off a filter the page sets (at a width, say). × on the chip declares nothing instead.";
+/** none's help in the footer, for `property` (filter, backdrop-filter). */
+export function noneHint(property: string): string {
+  return `Declares ${property}: none, taking off one the page sets (at a width, say). × on the chip declares nothing instead.`;
+}
 
 export type Filter = { fn: FilterFunction; value: string } | { fn: "custom"; text: string };
 

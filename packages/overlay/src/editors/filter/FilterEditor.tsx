@@ -13,14 +13,13 @@ import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
 import {
   CUSTOM_HINT,
   type Filter,
-  FILTER_TYPES,
   type FilterFunction,
   FILTERS,
   type FilterType,
   formatFilter,
   formatShadow,
   NEW_FILTER,
-  NONE_HINT,
+  noneHint,
   OTHER_TAKES,
   parseFilter,
   parseFilterValue,
@@ -30,7 +29,23 @@ import {
   supportedFilter,
 } from "./filter.ts";
 
-const PROPERTY = "filter";
+/** What a filter editor edits: filter, backdrop-filter. */
+interface FilterConfig {
+  /** The property it writes, also the row's label. */
+  property: string;
+  /** Search label: "Backdrop filter". */
+  label: string;
+  /** The panel's title: "Backdrop Filter". */
+  title: string;
+  /** What one is called, for screen readers: "backdrop filter". */
+  noun: string;
+  /** The functions its select offers, in menu order (then none). */
+  functions: readonly FilterFunction[];
+  /** Tailwind's class names. */
+  aliases: string[];
+  /** A line before each function's own help in the footer: what the property applies to. */
+  note?: string;
+}
 
 const typeOf = (filter: Filter | "none"): FilterType => (filter === "none" ? "none" : filter.fn);
 
@@ -40,8 +55,10 @@ function asType(type: Exclude<FilterType, "custom">): Filter | "none" {
 }
 
 /** What a filter's value means: the panel's footer. */
-function hintOf(type: FilterType): string {
-  return type === "none" ? NONE_HINT : type === "custom" ? CUSTOM_HINT : FILTERS[type].hint;
+function hintOf(config: FilterConfig, type: FilterType): string {
+  if (type === "none") return noneHint(config.property);
+  const own = type === "custom" ? CUSTOM_HINT : FILTERS[type].hint;
+  return config.note ? `${config.note} ${own}` : own;
 }
 
 /** A chip: the function's name, its value dimmed after it. */
@@ -52,7 +69,7 @@ function chipOf(filter: Filter | "none") {
 }
 
 /**
- * filter, mask-image's way (LayerList): the row lists the element's filters
+ * filter (and backdrop-filter, `config`), mask-image's way (LayerList): the row lists the element's filters
  * as chips (the function, its value dimmed, × to take it off) and a + that
  * adds one; several are applied in order. A filter is edited in a panel
  * beside the dialog: its function, then its value, with what the value takes
@@ -60,7 +77,8 @@ function chipOf(filter: Filter | "none") {
  * panel's footer). A drop-shadow's value is split into rows: x, y, blur, color. × on the last chip clears the property (the element declares no
  * filter); `none` declares filter: none and is the whole value.
  */
-function FilterEditor(props: PropertyEditorProps) {
+function FilterEditor({ config, ...props }: PropertyEditorProps & { config: FilterConfig }) {
+  const PROPERTY = config.property;
   const value = declaredOf(props, PROPERTY);
   const mixed = isMixed(props, PROPERTY);
   const filters = mixed ? null : parseFilter(value);
@@ -91,7 +109,7 @@ function FilterEditor(props: PropertyEditorProps) {
   const current = open !== null ? list[open] : undefined;
   return (
     <LayerList
-      label="filter"
+      label={PROPERTY}
       class="filter-editor"
       items={list.map(chipOf)}
       mixed={mixed}
@@ -99,13 +117,13 @@ function FilterEditor(props: PropertyEditorProps) {
       onOpen={setOpen}
       onAdd={add}
       onRemove={remove}
-      noun="filter"
-      panelTitle="Filter"
+      noun={config.noun}
+      panelTitle={config.title}
       focusRequest={props.focusRequest}
-      footer={current && hintOf(typeOf(current))}
+      footer={current && hintOf(config, typeOf(current))}
     >
       {open !== null && current && (
-        <FilterRows {...props} filter={current} onUpdate={(filter, gesture) => update(open, filter, gesture)} />
+        <FilterRows {...props} config={config} filter={current} onUpdate={(filter, gesture) => update(open, filter, gesture)} />
       )}
     </LayerList>
   );
@@ -123,9 +141,14 @@ const SHADOW_LENGTHS = [
 
 /** The panel's rows for one filter: its function, its value (a drop-shadow's parts, each a row), and what the value means. */
 function FilterRows(
-  props: PropertyEditorProps & { filter: Filter | "none"; onUpdate(filter: Filter | "none", gesture?: object): void },
+  props: PropertyEditorProps & {
+    config: FilterConfig;
+    filter: Filter | "none";
+    onUpdate(filter: Filter | "none", gesture?: object): void;
+  },
 ) {
-  const { filter, onUpdate, onRevert } = props;
+  const { config, filter, onUpdate, onRevert } = props;
+  const PROPERTY = config.property;
   const type = typeOf(filter);
   const shadow = filter !== "none" && filter.fn === "drop-shadow" ? parseShadow(filter.value || FILTERS["drop-shadow"].start) : null;
   const setPart = (part: keyof Shadow, next: string, gesture?: object) => {
@@ -158,7 +181,7 @@ function FilterRows(
       <PropertyRow label="function">
         <PropertySelect
           value={type}
-          options={FILTER_TYPES}
+          options={[...config.functions, "none"]}
           label="filter function"
           clearable={false}
           hintFor={(t) => (t === "custom" || t === "none" ? OTHER_TAKES[t] : FILTERS[t as FilterFunction]?.takes)}
@@ -225,10 +248,25 @@ function FilterRows(
   );
 }
 
-export const filterEditor: PropertyEditor = {
-  id: PROPERTY,
+/** Define a filter editor (see FilterEditor). */
+function filterEditorFor(config: FilterConfig): PropertyEditor {
+  return {
+    id: config.property,
+    label: config.label,
+    properties: [config.property],
+    aliases: config.aliases,
+    component: (props: PropertyEditorProps) => <FilterEditor {...props} config={config} />,
+  };
+}
+
+const FUNCTIONS = Object.keys(FILTERS) as FilterFunction[];
+
+export const filterEditor = filterEditorFor({
+  property: "filter",
   label: "Filter",
-  properties: [PROPERTY],
+  title: "Filter",
+  noun: "filter",
+  functions: FUNCTIONS,
   // Tailwind's filter utilities: the classes that exist on their own, and one of each scale.
   aliases: [
     "blur",
@@ -242,5 +280,32 @@ export const filterEditor: PropertyEditor = {
     "sepia",
     "filter-none",
   ],
-  component: FilterEditor,
-};
+});
+
+/**
+ * backdrop-filter: the same editor, on what's behind the element (seen
+ * through its background, so the background needs to be see-through). The
+ * same functions but drop-shadow, which Tailwind has no backdrop version of
+ * (a shadow of what's behind means little).
+ */
+export const backdropFilterEditor = filterEditorFor({
+  property: "backdrop-filter",
+  label: "Backdrop filter",
+  title: "Backdrop Filter",
+  noun: "backdrop filter",
+  functions: FUNCTIONS.filter((f) => f !== "drop-shadow"),
+  note: "On what's behind, seen through a see-through background.",
+  // Tailwind's backdrop-* utilities: the classes that exist on their own, and one of each scale.
+  aliases: [
+    "backdrop-blur",
+    "backdrop-brightness-150",
+    "backdrop-contrast-150",
+    "backdrop-grayscale",
+    "backdrop-hue-rotate-90",
+    "backdrop-invert",
+    "backdrop-opacity-50",
+    "backdrop-saturate-150",
+    "backdrop-sepia",
+    "backdrop-filter-none",
+  ],
+});
