@@ -5,7 +5,7 @@ import { uniqueSelector } from "../dom/target.ts";
 import { EditHistory } from "../edits/history.ts";
 import { inlinePreview } from "../test/inlinePreview.ts";
 import { DEFAULT_BRIDGE_URL, olderHub } from "./client.ts";
-import { PilotSession, timings } from "./session.ts";
+import { PilotSession, QUIET_MS, timings } from "./session.ts";
 
 // The instance's props, as the framework would give them (componentProps reads React's or Vue's internals).
 const instance = vi.hoisted(() => ({ props: null as Record<string, string | number | boolean> | null }));
@@ -638,6 +638,67 @@ describe("PilotSession", () => {
     s.send();
     expect(s.stuck).toBeNull();
     expect(s.jobs.map((j) => j.id)).not.toContain(sent.id);
+    s.destroy();
+  });
+
+  it("a run that failed doesn't hide Pilot not running: the jobs still open are said stuck", async () => {
+    vi.useFakeTimers();
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 0 });
+    const failed = s.comment(el, "Bolder (fails)").job as { id: string };
+    const error = { title: "Claude Code couldn't do this job", detail: "Send again to retry." };
+    hub().emit({ type: "job", job: job({ id: failed.id, status: "done", agent, error }) });
+    expect(s.stuck).toMatchObject({ kind: "agent-error", jobs: [failed.id] });
+    history.apply(el, "padding-top", "20px");
+    const open = s.send() as { id: string };
+    // Then Pilot stops running for the site: the open job would spin with nothing said.
+    hub().emit({ type: "agents", agents: [], waiting: 0 });
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(s.stuck).toMatchObject({ kind: "no-agent", title: "Pilot isn't running for this site", jobs: [open.id] });
+    expect(s.isStuck(s.jobs.find((j) => j.id === open.id) as never)).toBe(true);
+    s.destroy();
+  });
+
+  it("a run that has gone quiet (its agent's service stalled): stuck after 2 minutes with no sign of work, until work shows again", async () => {
+    vi.useFakeTimers();
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 0 });
+    history.apply(el, "padding-top", "20px");
+    const sent = s.send() as { id: string };
+    const at = (ms: number) => new Date(Date.now() + ms).toISOString();
+    hub().emit({ type: "job", job: job({ id: sent.id, status: "working", agent, activeAt: at(0) }) });
+    await vi.advanceTimersByTimeAsync(QUIET_MS - 1_000);
+    expect(s.stuck).toBeNull();
+    // Work shows: counted from then.
+    hub().emit({ type: "job", job: job({ id: sent.id, status: "working", agent, activeAt: at(0) }) });
+    await vi.advanceTimersByTimeAsync(QUIET_MS - 1_000);
+    expect(s.stuck).toBeNull();
+    let heard = 0;
+    s.subscribe(() => heard++);
+    await vi.advanceTimersByTimeAsync(1_000);
+    // Said by itself (a timer), without another event from the hub.
+    expect(heard).toBeGreaterThan(0);
+    expect(s.stuck).toEqual({
+      kind: "quiet",
+      title: "Claude Code has gone quiet",
+      detail: "No sign of work for 2 minutes. Click to stop it, then send again.",
+      jobs: [sent.id],
+    });
+    // Back at work: no longer stuck.
+    hub().emit({ type: "job", job: job({ id: sent.id, status: "working", agent, activeAt: at(0) }) });
+    expect(s.stuck).toBeNull();
+    s.destroy();
+  });
+
+  it("a run from a runner that doesn't say when its agent works (an older one) is never said quiet", async () => {
+    vi.useFakeTimers();
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 0 });
+    history.apply(el, "padding-top", "20px");
+    const sent = s.send() as { id: string };
+    hub().emit({ type: "job", job: job({ id: sent.id, status: "working", agent }) });
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(s.stuck).toBeNull();
     s.destroy();
   });
 

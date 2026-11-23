@@ -1,5 +1,5 @@
 import type { ComponentChildren } from "preact";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { px } from "../../px.ts";
 import { onSwitch, openDelay, switched, tooltipClosed, tooltipOpened } from "./delay.ts";
 
@@ -29,6 +29,9 @@ interface TooltipProps {
   children: ComponentChildren;
 }
 
+/** How close a tooltip may come to the window's edges, in px: one that would go past moves along (a long stuck message on a loader near the edge). */
+const EDGE = 8;
+
 /** `:focus-visible`, where the environment knows it (it doesn't in some test DOMs). */
 function focusVisible(el: Element): boolean {
   try {
@@ -43,8 +46,9 @@ function focusVisible(el: Element): boolean {
  * has keyboard focus. 24px tall, 8px padding, 11px text, with the large
  * shadow (Tooltip.css). On hover, the
  * first one waits a moment; moving straight on to another opens it at once
- * (delay.ts). Keyboard focus opens it at once. Use it instead of `title` in
- * Pilot's own UI.
+ * (delay.ts). Keyboard focus opens it at once. One that would go past the
+ * window's edge moves along to stay inside it (EDGE). Use it instead of
+ * `title` in Pilot's own UI.
  */
 export function Tooltip({
   text,
@@ -96,6 +100,24 @@ export function Tooltip({
   });
   useEffect(() => onSwitch(dropFade.current), []);
 
+  // Kept in the window: open, it moves along just enough not to go past an edge (its look and anchor as they are).
+  const bubble = useRef<HTMLSpanElement>(null);
+  const [shift, setShift] = useState(0);
+  const shown = (open || forceOpen) && !!text;
+  useLayoutEffect(() => {
+    const el = bubble.current;
+    if (!shown || !el) {
+      if (shift) setShift(0);
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    const left = r.left - shift;
+    const right = left + r.width;
+    const width = window.innerWidth;
+    const next = left < EDGE ? EDGE - left : right > width - EDGE ? Math.max(EDGE - left, width - EDGE - right) : 0;
+    if (Math.abs(next - shift) > 0.5) setShift(next);
+  }, [shown, text, detail]);
+
   // Something to say now, with the pointer already on the trigger (a field's
   // value just turned into math): it opens as if the pointer had just come.
   useEffect(() => {
@@ -138,13 +160,17 @@ export function Tooltip({
     >
       {children}
       <span
+        ref={bubble}
         class="tooltip"
         data-side={side}
         data-align={align === "center" ? undefined : align}
         data-open={((open || forceOpen) && !!text) || undefined}
         data-instant={instant || undefined}
         data-detail={detail ? "" : undefined}
-        style={gap === undefined ? undefined : side === "top" ? { marginBottom: px(gap) } : { marginTop: px(gap) }}
+        style={{
+          ...(gap === undefined ? {} : side === "top" ? { marginBottom: px(gap) } : { marginTop: px(gap) }),
+          ...(shift ? { transform: `translateX(${px(shift)})` } : {}),
+        }}
         aria-hidden="true"
       >
         {detail ? (

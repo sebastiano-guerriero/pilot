@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { ChangeSet, Job, PageEvent } from "@pilot/protocol";
 import { afterEach, describe, expect, it } from "vitest";
 import { AGENTS } from "./agents.ts";
-import { errorFor, replyOf, sessionToResume, startRunner } from "./run.ts";
+import { activityOf, errorFor, replyOf, sessionToResume, startRunner } from "./run.ts";
 
 const APP = "http://localhost:5173";
 const changeSet = (id: string, extra: Partial<ChangeSet> = {}): ChangeSet => ({
@@ -120,6 +120,28 @@ async function setup() {
 }
 
 describe("npx usepilot: Pilot runs the agent for each job", () => {
+  it("says when the agent is at work, as its output comes, for the page to tell a run that went quiet", async () => {
+    const { page } = await setup();
+    await page.post("/jobs", { id: "q1", changeSet: changeSet("q1", { note: "SLOW" }) });
+    await until(() => page.job("q1")?.status === "working" && !!page.job("q1")?.activeAt);
+    expect(Date.parse(page.job("q1")?.activeAt as string)).toBeGreaterThan(Date.now() - 10_000);
+  });
+
+  it("tells the hub at once, then at most every 15 seconds", () => {
+    let t = 0;
+    const calls: string[] = [];
+    const active = activityOf({ activity: async (id: string) => void calls.push(id) }, "j", 15_000, () => t);
+    active();
+    t = 5_000;
+    active();
+    t = 15_000;
+    active();
+    t = 20_000;
+    active();
+    expect(calls).toEqual(["j", "j"]);
+  });
+
+
   it("the editor's jobs resume a session kept for them, the guidelines in one line; jobs at once take their own", async () => {
     const { page, runs } = await setup();
     await page.post("/jobs", { id: "e1", changeSet: changeSet("e1") });

@@ -26,7 +26,7 @@ import { Hub, type JobPost } from "./hub.ts";
  * website can't hand prompts to the agent.
  *
  * Pilot's processes (`npx usepilot` ones that aren't the hub, see agent.ts):
- * - POST /agents/register | /agents/launch | /agents/wait | /agents/done | /agents/check | /agents/leave
+ * - POST /agents/register | /agents/launch | /agents/wait | /agents/done | /agents/activity | /agents/check | /agents/leave
  * - POST /agents/job            a job as the hub has it (a run polls it, to stop when it's cancelled)
  * - POST /agents/pages          the pages with Pilot open: each site and the project its loader names, but sites Pilot runs for
  * Refused for any request with an `Origin` (browsers send one; Node doesn't).
@@ -208,6 +208,10 @@ async function handleAgent(hub: Hub, action: string, data: unknown, req: Incomin
       return json(res, 200, {
         job: hub.done(d.agent.id, d.jobId, d.notes, questionOf(d.question), propsOf(d.props), { session: sessionOf(d.session), error: jobErrorOf(d.error) }),
       });
+    case "activity":
+      if (!d.jobId) return json(res, 400, { error: "jobId needed" });
+      hub.activity(d.agent.id, d.jobId);
+      return json(res, 200, {});
     case "job":
       if (!d.jobId) return json(res, 400, { error: "jobId needed" });
       return json(res, 200, { job: hub.job(d.jobId) ?? null });

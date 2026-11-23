@@ -124,10 +124,12 @@ export const AGENTS: Record<AgentKind, AgentCli> = {
     // A run can't prompt: `-p` refuses what would ask (checked; `--permission-prompts none` says the
     // same, but older versions don't know it). Reading the user's skills is allowed, read-only: its
     // chat would ask before a skill reads its other files there, and a run can't answer.
+    // Partial messages: its output comes while it thinks too, so Pilot sees a long think isn't a stalled run (Job.activeAt).
     args: ({ resume, readDirs = [] }) => [
       "-p",
       "--output-format", "stream-json",
       "--verbose",
+      "--include-partial-messages",
       "--permission-mode", "acceptEdits",
       "--allowedTools", "Read(~/.claude/skills/**)",
       ...readDirs.flatMap((d) => ["--add-dir", d]),

@@ -118,6 +118,13 @@ export interface Job {
   takenAt?: string;
   doneAt?: string;
   /**
+   * When the agent last showed it's working on it (its output), while it
+   * runs: Pilot's runner says so as the agent's output comes. A run that has
+   * gone quiet is stuck, and the page says so (PilotSession.stuck). Absent
+   * from a runner that doesn't report it: such a run is never said quiet.
+   */
+  activeAt?: string;
+  /**
    * The agent asked the designer something instead of guessing (pilot_done's
    * `question`): the job is done but waits for the answer, which Pilot asks
    * in a comment thread on the job's first element. Pilot doesn't check it

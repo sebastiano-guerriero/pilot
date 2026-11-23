@@ -47,6 +47,8 @@ export interface JobRecord {
   takenAt?: string;
   doneAt?: string;
   checkedAt?: string;
+  /** When the agent last showed it's at work on it, while it runs (Job.activeAt): a run quiet too long is stuck. */
+  activeAt?: string;
   /** For a task's follow-up: what Pilot's width check found (see Job.issues). */
   issues?: string[];
   /** A task: its element's styles at the designer's width before the job, to tell what the agent changed there. */
@@ -133,6 +135,13 @@ const PROPS_RECHECK = 400;
  * (the hub's process restarting). A run that failed is said at once.
  */
 const STUCK_OFFLINE_MS = 5_000;
+/**
+ * How long an agent's run may go without a sign of work (Job.activeAt)
+ * before it's said stuck: its service stalled. Agents print as they work
+ * (each tool call; Claude Code as it thinks), every few seconds; a long
+ * think stays well under this.
+ */
+export const QUIET_MS = 2 * 60_000;
 
 /**
  * Jobs nothing will move by themselves, and why: the page says so (the
@@ -141,7 +150,7 @@ const STUCK_OFFLINE_MS = 5_000;
  * of the jobs it's about.
  */
 export interface Stuck {
-  kind: "offline" | "older-agent" | "no-agent" | "agent-error";
+  kind: "offline" | "older-agent" | "no-agent" | "quiet" | "agent-error";
   title: string;
   detail: string;
   jobs: string[];
@@ -227,6 +236,7 @@ export class PilotSession {
     for (const stop of this.watching.values()) stop();
     for (const t of this.timers) clearTimeout(t);
     clearTimeout(this.stuckTimer);
+    clearTimeout(this.quietTimer);
   }
 
   subscribe(listener: () => void): () => void {
@@ -744,6 +754,7 @@ export class PilotSession {
       notes: job.notes,
       takenAt: job.takenAt,
       doneAt: job.doneAt,
+      activeAt: job.activeAt,
       question: job.question ?? mine.question,
       answer: job.answer ?? mine.answer,
       ...(job.props ? { props: job.props } : {}),
@@ -1027,6 +1038,7 @@ export class PilotSession {
 
   private stuckSince: { kind: Stuck["kind"]; at: number; shown?: boolean } | null = null;
   private stuckTimer: ReturnType<typeof setTimeout> | undefined;
+  private quietTimer: ReturnType<typeof setTimeout> | undefined;
 
   /**
    * What would be stuck right now, before it has lasted. Only jobs waiting
@@ -1047,9 +1059,6 @@ export class PilotSession {
    */
   private stuckNow(): Stuck | null {
     if (!this.bridge) return null;
-    const failed = this.jobs.filter((j) => j.error && j.status === "done");
-    const last = failed.at(-1)?.error;
-    if (last) return { kind: "agent-error", title: last.title, detail: last.detail, jobs: failed.map((j) => j.id) };
     const open = this.jobs.filter((j) => j.status === "queued" || j.status === "working");
     const { connected, agents, older } = this.state;
     const notRunning = `Pilot isn't running for ${this.project ?? "this site"}`;
@@ -1061,11 +1070,31 @@ export class PilotSession {
     const detail = this.project ? NOT_RUNNING : NOT_NAMED;
     if (!connected) return { kind: "offline", title: notRunning, detail, jobs: ids(open) };
     if (!agents.length) return { kind: "no-agent", title: notRunning, detail, jobs: ids(open) };
+    // A run that has gone quiet (its agent's service stalled): said instead of a loader spinning for ever.
+    const quiet = this.quietJobs();
+    if (quiet.length) {
+      const name = quiet[0]?.agent?.label?.split(" · ")[0] || "The agent";
+      return { kind: "quiet", title: `${name} has gone quiet`, detail: QUIET_DETAIL, jobs: ids(quiet) };
+    }
+    // A run that failed: said after Pilot not running, which stops every job (an earlier failure
+    // mustn't hide it: the jobs still open would spin with nothing said). Its thread says it either way.
+    const failed = this.jobs.filter((j) => j.error && j.status === "done");
+    const last = failed.at(-1)?.error;
+    if (last) return { kind: "agent-error", title: last.title, detail: last.detail, jobs: failed.map((j) => j.id) };
     return null;
+  }
+
+  /** The runs whose agent hasn't shown any work for QUIET_MS (only those that report it: Job.activeAt). */
+  private quietJobs(now = Date.now()): JobRecord[] {
+    return this.jobs.filter((j) => j.status === "working" && j.activeAt && now - Date.parse(j.activeAt) >= QUIET_MS);
   }
 
   /** Keeps `stuckSince` in step, and tells the listeners when a stuck state has lasted long enough to show. */
   private watchStuck(): void {
+    // A run going quiet is a matter of time: look again when the next one would be.
+    clearTimeout(this.quietTimer);
+    const next = Math.min(...this.jobs.filter((j) => j.status === "working" && j.activeAt).map((j) => Date.parse(j.activeAt as string) + QUIET_MS));
+    if (Number.isFinite(next) && next > Date.now()) this.quietTimer = setTimeout(() => this.notify(), next - Date.now());
     const now = this.stuckNow();
     if (!now) {
       this.stuckSince = null;
@@ -1094,8 +1123,12 @@ export function needsYou(thread: CommentThread): boolean {
 
 /** How long a stuck state lasts before the page says so (see STUCK_OFFLINE_MS). */
 function stuckAfter(stuck: Stuck): number {
-  return stuck.kind === "agent-error" ? 0 : STUCK_OFFLINE_MS;
+  // A failed run is said at once; a quiet one has lasted already (QUIET_MS).
+  return stuck.kind === "agent-error" || stuck.kind === "quiet" ? 0 : STUCK_OFFLINE_MS;
 }
+
+/** What to do about a run that has gone quiet. */
+const QUIET_DETAIL = "No sign of work for 2 minutes. Click to stop it, then send again.";
 
 /** What to do when Pilot isn't running for the site. */
 const NOT_RUNNING = "Run npx usepilot in your project's folder";

@@ -117,7 +117,7 @@ export class Hub {
     this.agents.delete(agentId);
     for (const w of this.waiters.filter((w) => w.agentId === agentId)) this.endWait(w, null);
     for (const job of this.jobs.values()) {
-      if (job.status === "working" && job.agent?.id === agentId) this.update(job, { status: "queued", takenAt: undefined });
+      if (job.status === "working" && job.agent?.id === agentId) this.update(job, { status: "queued", takenAt: undefined, activeAt: undefined });
     }
     this.notifyAgents(agent.origin);
     this.dispatch(agent.origin);
@@ -364,8 +364,15 @@ export class Hub {
   }
 
   private take(job: Job, agent: AgentInfo): Job {
-    this.update(job, { status: "working", agent, takenAt: new Date(this.now()).toISOString() });
+    this.update(job, { status: "working", agent, takenAt: new Date(this.now()).toISOString(), activeAt: undefined });
     return job;
+  }
+
+  /** The agent running `jobId` is at work (its output came): the page sees the run isn't quiet. Ignored for another agent's job, or one not running. */
+  activity(agentId: string, jobId: string): void {
+    const job = this.jobs.get(jobId);
+    if (!job || job.status !== "working" || job.agent?.id !== agentId) return;
+    this.update(job, { activeAt: new Date(this.now()).toISOString() });
   }
 
   /**

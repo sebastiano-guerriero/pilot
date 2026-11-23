@@ -280,12 +280,12 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // Jobs not finished yet: waiting, an agent applying, checking the page.
   const pending = (session?.jobs ?? []).filter((j) => j.status === "queued" || j.status === "working" || (j.status === "done" && !j.checked && !j.error)).length;
   // The toolbar's alerts. Pilot not running for the site (or an older one in the way): on Comment and Send both, jobs
-  // or not (whatever goes next can't go), so cancelling the stuck jobs doesn't hide it. A run that failed: on Comment
-  // for stuck jobs asked in a thread (comments, tasks from the comment box), on Send for the rest.
+  // or not (whatever goes next can't go), so cancelling the stuck jobs doesn't hide it. A run that failed or went
+  // quiet: on Comment for stuck jobs asked in a thread (comments, tasks from the comment box), on Send for the rest.
   const inThread = (id: string) => !!session?.threads.some((t) => t.messages.some((m) => m.jobId === id));
   const toolbarAlerts = !stuck
     ? undefined
-    : stuck.kind !== "agent-error"
+    : stuck.kind !== "agent-error" && stuck.kind !== "quiet"
       ? { comment: stuckAlert, send: stuckAlert }
       : {
           ...(stuck.jobs.some(inThread) ? { comment: stuckAlert } : {}),

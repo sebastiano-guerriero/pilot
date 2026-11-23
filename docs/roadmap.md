@@ -31,6 +31,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
   - [x] Editor jobs resume a session kept for them per project (more only for jobs at once), the guidelines in one line ([handoff.md](handoff.md), *Agent runs*)
   - [x] Comments and tasks get their elements' style now (where each value is set) and the theme's scales or the page's tokens: a comment 10–35s → about 10s with Cursor, one round of tool calls ([handoff.md](handoff.md), *Finding the code, and the time*)
   - [x] Measured with Claude Code and Codex too (2026-11-23): every edit right; resumed edits 6.5–7.4s (Claude Code), 8.7–9.6s (Codex), comments about 10–16s. Codex checked its own edits (`git diff`, a script): the prompt now says Pilot checks the page, and its first edits went from 18–21s to 11–13s
+  - [x] A run that has gone quiet (no output from the agent for 2 minutes) is stuck, said on its loader, the toolbar and the thread; and Pilot not running is no longer hidden by an earlier failed run ([handoff.md](handoff.md), *When something's stuck*)
   - [ ] Send the look-alikes' locations (the agent still greps for them before "only this or all?"), and which parent an inherited value comes from
 
 ## Foundation

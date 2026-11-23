@@ -48,6 +48,8 @@ mountPilot({ dev: { select: ".button--primary" } });
 
 On every load this launches Pilot (even after a Close), turns on select mode, and selects the first element matching `select`. Add `query: "padding"` to pre-fill the search and open that editor. Remove `dev` for the real flow. In the playground, `?select=<selector>` in the URL selects another element instead (`/?select=.review-props`), and stays across reloads.
 
+**A hub of its own.** `?bridge=http://127.0.0.1:4790` points the playground at a hub on another port, for a runner of this branch's code (`startRunner({ port: 4790 })`) beside an installed Pilot that holds the usual one (another project's `npx usepilot`). Runner options for trying states by hand: `bin`, a stand-in for the agent's command-line tool (as in `run.test.ts`: one that never answers shows a run going quiet after 2 minutes, one that fails a failed run), and `configFile`, so the editor's sessions aren't saved in your own settings.
+
 ## Trying Pilot in your own projects, unreleased
 
 To use the Pilot you're working on in another project without publishing a version:

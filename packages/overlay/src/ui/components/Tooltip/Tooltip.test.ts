@@ -108,3 +108,21 @@ describe("Tooltip", () => {
     expect(isOpen(0)).toBe(false);
   });
 });
+
+describe("kept in the window", () => {
+  it("one that would go past an edge moves along just enough; back in place when closed", () => {
+    // It would open 152px past the left edge (a long stuck message on a loader near the edge).
+    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      const shift = Number.parseFloat(/translateX\((-?[\d.]+)px\)/.exec(this.style.transform)?.[1] ?? "0");
+      return { left: -152 + shift, right: 378 + shift, width: 530, top: 0, bottom: 24, height: 24, x: -152 + shift, y: 0, toJSON: () => ({}) } as DOMRect;
+    });
+    pointer(0, "pointerenter");
+    wait(OPEN_DELAY);
+    const bubble = anchors()[0]?.querySelector(".tooltip") as HTMLElement;
+    expect(bubble.style.transform).toBe("translateX(160px)");
+    pointer(0, "pointerleave");
+    wait(WARM_FOR);
+    expect(bubble.style.transform).toBe("");
+    rect.mockRestore();
+  });
+});

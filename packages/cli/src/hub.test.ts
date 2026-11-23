@@ -55,6 +55,27 @@ describe("Hub", () => {
     expect(Date.parse(done?.doneAt as string)).toBeGreaterThan(Date.parse(job?.takenAt as string));
   });
 
+  it("the agent at work: its job's last activity, for the page to tell a quiet run; only its own running job's", async () => {
+    let t = 1_000;
+    const hub = new Hub(() => (t += 1_000));
+    const p = page(hub);
+    hub.register(a, APP);
+    hub.postJob(APP, { id: "j1", changeSet: changeSet("j1") });
+    const { job } = await hub.wait(a, APP, 10);
+    expect(job?.activeAt).toBeUndefined();
+    hub.activity("a", "j1");
+    const first = hub.job("j1")?.activeAt;
+    expect(first).toBeDefined();
+    const last = p.events.filter((e) => e.type === "job").at(-1);
+    expect(last?.type === "job" && last.job.activeAt).toBe(first);
+    // Another agent's word changes nothing; nor does a job done.
+    hub.activity("b", "j1");
+    expect(hub.job("j1")?.activeAt).toBe(first);
+    hub.done("a", "j1", "ok");
+    hub.activity("a", "j1");
+    expect(hub.job("j1")?.activeAt).toBe(first);
+  });
+
   it("jobs queue up: an agent that comes back takes the oldest", async () => {
     let t = 0;
     const hub = new Hub(() => ++t);

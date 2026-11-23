@@ -12,6 +12,9 @@ const pilot = mountPilot({
   // This project names its blocks with data-block (the CTA row): the
   // selection label tries it before data-testid, data-slot…
   nameAttributes: ["data-block"],
+  // `?bridge=http://127.0.0.1:4790` talks to a hub on another port: a runner of this branch's code
+  // (`startRunner({ port })`) beside an installed Pilot that holds the usual one.
+  ...(new URLSearchParams(location.search).get("bridge") ? { bridge: new URLSearchParams(location.search).get("bridge") as string } : {}),
 });
 
 // Playground-only: opens Pilot, as `npx usepilot` starting for the site does.

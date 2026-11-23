@@ -21,6 +21,8 @@ export interface HubApi {
   done(agent: AgentInfo, jobId: string, notes?: string, question?: AgentQuestion, props?: PropSpec[], extra?: DoneExtra): Promise<Job | null>;
   /** A job as the hub has it (null: it doesn't know it). */
   job(agent: AgentInfo, jobId: string): Promise<Job | null>;
+  /** The agent is at work on `jobId` (its output came). */
+  activity(agent: AgentInfo, jobId: string): Promise<void>;
   check(agent: AgentInfo, jobId: string, timeoutMs: number): Promise<WidthCheck | null>;
   leave(agent: AgentInfo): Promise<void>;
 }
@@ -48,6 +50,9 @@ class LocalApi implements HubApi {
   }
   async job(_agent: AgentInfo, jobId: string) {
     return this.hub.job(jobId) ?? null;
+  }
+  async activity(agent: AgentInfo, jobId: string) {
+    this.hub.activity(agent.id, jobId);
   }
   check(_agent: AgentInfo, jobId: string, timeoutMs: number) {
     return this.hub.check(jobId, timeoutMs);
@@ -94,6 +99,14 @@ class RemoteApi implements HubApi {
   }
   async job(agent: AgentInfo, jobId: string) {
     return (await this.post<{ job: Job | null }>("job", { agent, jobId })).job;
+  }
+  async activity(agent: AgentInfo, jobId: string) {
+    // A hub from before this route (same bridge version): it can't say, and its pages never call a run quiet.
+    try {
+      await this.post("activity", { agent, jobId });
+    } catch (error) {
+      if (isConnectionError(error)) throw error;
+    }
   }
   async check(agent: AgentInfo, jobId: string, timeoutMs: number) {
     return (await this.post<{ check: WidthCheck | null }>("check", { agent, jobId, timeoutMs })).check;
@@ -159,6 +172,11 @@ export class Bridge {
   /** A job as the hub has it now (null: it doesn't know it). */
   job(jobId: string): Promise<Job | null> {
     return this.call((api) => api.job(this.agent, jobId));
+  }
+
+  /** The agent is at work on `jobId`: its output came (see Job.activeAt). */
+  activity(jobId: string): Promise<void> {
+    return this.call((api) => api.activity(this.agent, jobId));
   }
 
   /** Pilot's width check of a task's element, measured by the page (null: no page answered). */

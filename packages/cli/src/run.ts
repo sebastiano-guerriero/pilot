@@ -26,6 +26,8 @@ import { warmStyles } from "./styles.ts";
 export const SLOTS = 3;
 /** How often a run checks that its job wasn't cancelled. */
 const CANCEL_POLL_MS = 2_000;
+/** How often, at most, the runner tells the hub the agent is at work (Job.activeAt): well under the page's quiet time. */
+const ACTIVITY_EVERY_MS = 15_000;
 /** A run longer than this is stopped: something's stuck. */
 const RUN_TIMEOUT_MS = 20 * 60_000;
 /** How long one wait for a job lasts before the next (the hub caps it at 15 min). */
@@ -244,10 +246,11 @@ export async function runJob(job: Job, ctx: RunContext): Promise<void> {
     const images = newAttachments(job)
       .map((f) => f.path as string)
       .filter((p) => /\.(png|jpe?g|gif|webp)$/i.test(p));
-    let result = await runAgent(ctx, prompt, { resume, images, signal: stop.signal });
+    const active = activityOf(bridge, job.id);
+    let result = await runAgent(ctx, prompt, { resume, images, signal: stop.signal, onOutput: active });
     // A run that failed with no reply: once more (a session gone, a hiccup), without the session, the guidelines in full.
     if (!stop.signal.aborted && !result.reply && !signInProblem(result.error)) {
-      result = await runAgent(ctx, known ? await promptFor(job, ctx.project, cli) : prompt, { images, signal: stop.signal });
+      result = await runAgent(ctx, known ? await promptFor(job, ctx.project, cli) : prompt, { images, signal: stop.signal, onOutput: active });
     }
     if (stop.signal.aborted) {
       ended = lease?.resume;
@@ -279,14 +282,34 @@ export async function runJob(job: Job, ctx: RunContext): Promise<void> {
   }
 }
 
-async function runAgent(ctx: RunContext, prompt: string, options: { resume?: string; images: string[]; signal: AbortSignal }): Promise<RunOutput> {
+/**
+ * What a run's output calls: tells the hub the agent is at work on `jobId`
+ * (Job.activeAt), at once, then at most every ACTIVITY_EVERY_MS. The page
+ * says a run that has gone quiet is stuck (PilotSession.stuck).
+ */
+export function activityOf(bridge: Pick<Bridge, "activity">, jobId: string, every = ACTIVITY_EVERY_MS, now = Date.now): () => void {
+  let last = Number.NEGATIVE_INFINITY;
+  return () => {
+    if (now() - last < every) return;
+    last = now();
+    bridge.activity(jobId).catch(() => {});
+  };
+}
+
+async function runAgent(
+  ctx: RunContext,
+  prompt: string,
+  options: { resume?: string; images: string[]; signal: AbortSignal; onOutput?: () => void },
+): Promise<RunOutput> {
   const { cli } = ctx;
   if (!existsSync(ctx.bin)) return { error: `${cli.label}'s command-line tool isn't installed any more.` };
+  options.onOutput?.(); // Started: the run's quiet time counts from here.
   const run = await exec(ctx.bin, cli.args({ resume: options.resume, readDirs: [attachmentsDir()], images: options.images }), {
     cwd: ctx.project,
     input: prompt,
     signal: options.signal,
     timeoutMs: RUN_TIMEOUT_MS,
+    ...(options.onOutput ? { onStdout: options.onOutput } : {}),
   });
   const parsed = cli.parse(run.stdout);
   if (!parsed.reply && !parsed.error) parsed.error = run.stderr.trim().split("\n").slice(-3).join("\n") || `exit code ${run.code}`;

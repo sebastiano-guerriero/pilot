@@ -43,9 +43,13 @@
       scale 0.1s ease-in 40ms,
       visibility 0.1s 40ms;
 
-    /* Two lines (an alert: what's wrong, then what to do): the second one dimmed. */
+    /* Two lines (an alert: what's wrong, then what to do): the second one dimmed. A long one
+       wraps at 240px (an agent's error can be any length); as wide as its text below that. */
     &[data-detail] {
       height: auto;
+      width: max-content;
+      max-width: 240px;
+      white-space: normal;
       padding: 6px 8px;
       line-height: 14px;
       border-radius: 6px;
