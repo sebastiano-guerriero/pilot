@@ -22,7 +22,12 @@ One line per item. Tick it when it ships; the details go in the doc for its area
   - [x] Released in 0.14.0 (bridge 7)
   - [x] Runs have the agent's own permissions, as in its chat: what the designer allowed runs, what it would ask about is refused, never skipped (until then Pilot's own limits: the project's files only, no shell, no internet) ([handoff.md](handoff.md), *Agent runs*)
   - [ ] The agent's permission requests asked in the thread (Allow, Deny), for the agents that have a way (Claude Code's `--permission-prompt-tool`)
-- [ ] **Speed, after agent runs:** a comment took 15–17s with the right code location and 21–34s with Pilot's real prompt on nucleo-2, where the search found the wrong file (`app/modules/modal-pro.php`, part of whose text matched "Web app"; the heading is in `web-3/routes/home.php`). To do: exact text matches first, and the site folder that serves the page; send the look-alikes' locations, where a value comes from (inherited from a parent's class), and the project's scale for that property (14–18s in a test). Each agent step costs 3–4s, so about 15s is the floor for a comment; faster models gave wrong answers.
+- [ ] **Speed, after agent runs:** the goal is 10s for an edit, 15s at most. A comment took 15–17s with the right code location and 21–34s with Pilot's real prompt on nucleo-2, where the search found the wrong file; an edit 14–17s from the toolbar (Cursor, nav gap), 7s with the right file and the project's facts. Each agent step costs 3–4s; faster models gave wrong answers.
+  - [x] The code search finds each element by many details together, and says nothing (or two places) rather than a wrong one: measured on labeled copies of nucleo-2 and four static sites, no wrong answers ([handoff.md](handoff.md), *Finding the code, and the time*). The nav gap edit: 10–12.5s, 2 tool calls (read, edit), with Cursor
+  - [ ] The same measure on a React project (labeled JSX), and following a page's own file and what it includes or imports (copies of a module the page doesn't use)
+  - [ ] The project's facts in the prompt: the Tailwind class for each value (its `--spacing` and other scales), classes compiled on save, so the agent doesn't work them out
+  - [ ] Editor jobs to one session per project (more only for jobs at once), marked as the editor's, so the guidelines are read once
+  - [ ] Send the look-alikes' locations, and where a value comes from (inherited from a parent's class)
 
 ## Foundation
 

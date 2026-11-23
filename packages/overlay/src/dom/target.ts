@@ -27,7 +27,107 @@ export function describeElement(el: Element): ElementTarget {
   if (text) target.text = text;
   const source = componentSource(el);
   if (source) target.source = source;
+  const context = elementContext(el);
+  if (context) target.context = context;
   return target;
+}
+
+/** Texts, attribute values and parents at most (see ElementContext): enough to tell, small to send. */
+const CONTEXT_TEXTS = 8;
+const CONTEXT_ATTRS = 8;
+const CONTEXT_PARENTS = 3;
+/** Attributes that say what an element is (never `class`, `id`: sent apart; `style` is the page's own, never Pilot's: it doesn't touch it). */
+const NAMING_ATTRS = ["href", "src", "alt", "aria-label", "title", "name", "placeholder", "for", "style"];
+
+/**
+ * What Pilot's code search finds the element by, besides its own tag,
+ * classes, id and text (ElementTarget.context): the texts inside it, each on
+ * its own (a nav's text is its links' labels, never one string in the code),
+ * attribute values that say what it is (an `href`, an `alt`), its own and its
+ * descendants', and its parents' tags and classes. No one detail is enough
+ * (classes repeat across a project, text comes from data); several together are.
+ */
+export function elementContext(el: Element): ElementTarget["context"] | undefined {
+  const texts: string[] = [];
+  const attrs: string[] = [];
+  const addText = (t: string) => {
+    const text = t.replace(/\s+/g, " ").trim();
+    if (text.length >= 2 && text.length <= 80 && !texts.includes(text) && texts.length < CONTEXT_TEXTS) texts.push(text);
+  };
+  const addAttrs = (node: Element) => {
+    for (const a of [...node.attributes]) {
+      if (attrs.length >= CONTEXT_ATTRS) return;
+      const named = NAMING_ATTRS.includes(a.name) || (a.name.startsWith("data-") && !a.name.startsWith("data-pilot"));
+      const value = a.value.trim();
+      if (named && value.length >= 2 && value.length <= 80 && !/^(#|\/|true|false|null|undefined|\d+)$/.test(value) && !attrs.includes(value)) attrs.push(value);
+    }
+  };
+  // In page order: the element, then its descendants (its own text nodes, each element's direct text).
+  const walk = (node: Element, depth: number) => {
+    addAttrs(node);
+    for (const child of node.childNodes) {
+      if (child.nodeType === Node.TEXT_NODE) addText(child.textContent ?? "");
+      else if (child instanceof Element && depth < 4 && texts.length < CONTEXT_TEXTS) walk(child, depth + 1);
+    }
+  };
+  walk(el, 0);
+  const parents: Array<{ tag: string; id?: string; classes: string[] }> = [];
+  for (let p = el.parentElement; p && parents.length < CONTEXT_PARENTS && p !== el.ownerDocument.body; p = p.parentElement) {
+    parents.push({ tag: p.tagName.toLowerCase(), ...(p.id ? { id: p.id } : {}), classes: [...p.classList].slice(0, 12) });
+  }
+  const before = textBeside(el, false);
+  const after = textBeside(el, true);
+  const heading = headingAbove(el);
+  if (!texts.length && !attrs.length && !parents.length && !before && !after && !heading) return undefined;
+  return {
+    ...(texts.length ? { texts } : {}),
+    ...(attrs.length ? { attrs } : {}),
+    ...(parents.length ? { parents } : {}),
+    ...(before ? { before } : {}),
+    ...(after ? { after } : {}),
+    ...(heading ? { heading } : {}),
+  };
+}
+
+/** The text of the nearest heading before `el` on the page, outside it (2 to 80 characters). */
+function headingAbove(el: Element): string | undefined {
+  const headings = el.ownerDocument.querySelectorAll("h1, h2, h3, h4, h5, h6");
+  for (let i = headings.length - 1; i >= 0; i--) {
+    const h = headings[i] as Element;
+    if (h.contains(el) || !(h.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+    const text = (h.textContent ?? "").replace(/\s+/g, " ").trim();
+    return text.length >= 2 && text.length <= 80 ? text : undefined;
+  }
+  return undefined;
+}
+
+/** How many text nodes Pilot looks through for the texts beside an element. */
+const BESIDE_STEPS = 50;
+
+/** The page's nearest text before `el` (or after it, `forward`), outside it: 2 to 80 characters, not a script's or a style's. */
+function textBeside(el: Element, forward: boolean): string | undefined {
+  const doc = el.ownerDocument;
+  if (!doc.body?.contains(el)) return undefined;
+  const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+  if (forward) {
+    // The first node after `el` and all it holds.
+    let node: Node | null = el;
+    while (node && node !== doc.body && !node.nextSibling) node = node.parentNode;
+    if (!node || node === doc.body || !node.nextSibling) return undefined;
+    walker.currentNode = node.nextSibling;
+    if (node.nextSibling.nodeType !== Node.TEXT_NODE && !walker.nextNode()) return undefined;
+  } else {
+    walker.currentNode = el;
+    if (!walker.previousNode()) return undefined;
+  }
+  for (let i = 0; i < BESIDE_STEPS; i++) {
+    const node = walker.currentNode;
+    const parent = node.parentElement;
+    const text = (node.textContent ?? "").replace(/\s+/g, " ").trim();
+    if (parent && !parent.closest("script, style, noscript, template") && text.length >= 2 && text.length <= 80) return text;
+    if (!(forward ? walker.nextNode() : walker.previousNode())) return undefined;
+  }
+  return undefined;
 }
 
 /** Short label for the selection overlay, e.g. `button.button--primary`. */

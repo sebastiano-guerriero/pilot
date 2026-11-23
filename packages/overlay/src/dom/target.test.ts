@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from "vitest";
-import { describeElement, domPath, findTarget, shortName, structuralSelector, uniqueSelector } from "./target.ts";
+import { describeElement, domPath, elementContext, findTarget, shortName, structuralSelector, uniqueSelector } from "./target.ts";
 
 const $ = (s: string) => document.querySelector(s) as Element;
 
@@ -46,6 +46,37 @@ describe("describeElement", () => {
     expect(target.path).toBe("main > section.hero > div.actions > a.button");
     expect(target.text).toBe("Get started");
     expect(describeElement($("h1")).text).toBe("Ship the design you meant");
+  });
+});
+
+describe("what the code search finds an element by", () => {
+  it("its texts, naming attributes, parents, the texts beside it and its section's heading", () => {
+    document.body.innerHTML = `
+      <section class="pricing">
+        <h2>Plans</h2>
+        <p>Pick one</p>
+        <ul class="list">
+          <li><a class="link" href="/pro" style="--bg: #111111" data-pilot-x="no">Pro <em>plan</em></a></li>
+          <li>Team</li>
+        </ul>
+        <script>var x = 1;</script>
+      </section>`;
+    expect(elementContext($("a.link"))).toEqual({
+      texts: ["Pro", "plan"],
+      attrs: ["/pro", "--bg: #111111"],
+      parents: [
+        { tag: "li", classes: [] },
+        { tag: "ul", classes: ["list"] },
+        { tag: "section", classes: ["pricing"] },
+      ],
+      before: "Pick one",
+      after: "Team",
+      heading: "Plans",
+    });
+    // Nothing beside it but a script: no text after.
+    expect(elementContext($("ul.list"))?.after).toBeUndefined();
+    // Its own heading isn't the heading above it.
+    expect(elementContext($("h2"))?.heading).toBeUndefined();
   });
 });
 

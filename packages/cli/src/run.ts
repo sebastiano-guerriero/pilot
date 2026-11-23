@@ -9,6 +9,7 @@ import { attachmentBlocks, attachmentsDir, newAttachments } from "./attachments.
 import { projectName, saveAgent, savedAgent } from "./config.ts";
 import { searchable, whereSection, withComponentFiles } from "./locate.ts";
 import { jobPrompt, skillOf } from "./prompt.ts";
+import { warmSources } from "./sources.ts";
 
 /**
  * `npx usepilot`: Pilot for this project, in a terminal beside the dev
@@ -71,6 +72,8 @@ export async function startRunner(options: RunnerOptions): Promise<Runner> {
   const origin = await pickSite(bridge, options, out);
   await bridge.launch(origin);
   out(`Pilot is on ${origin}, every page, with ${cli.label}. Send from the toolbar; jobs show here. Ctrl+C stops.`);
+  // Reads the project's files for the code search now, not when the first job is waiting for it.
+  setImmediate(() => warmSources(project));
 
   const stop = new AbortController();
   const runs = new Set<Promise<void>>();

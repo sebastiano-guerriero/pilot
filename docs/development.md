@@ -96,6 +96,12 @@ Pilot runs other people's command-line tools, and an update of one can change ho
 6. Stop a job from its loader: the terminal says it stopped.
 7. Sign the agent out (or pass an agent that isn't installed): the toolbar says what to run.
 
+## Measuring the code search
+
+`locate.accuracy.test.ts` (in the overlay's `dom/`) scores Pilot's code search ([handoff.md](handoff.md), *Finding the code, and the time*) on real pages: right, one of two, wrong, or silent, and how long each search takes. It's skipped in `pnpm test`; it runs when `LOCATE_PAGES` names the pages, `"<project folder>|<page.html>@<its url>,…;<another project>|…"`, with the report in the file `LOCATE_OUT` names (each wrong answer, and a sample of silent ones). `LOCATE_DEBUG=<part of a class list>` adds the best places for those elements and what each matched.
+
+The pages are saved HTML, rendered from a copy of the project whose every tag carries its file and line (`data-src=<file>:<line>`, unquoted so PHP strings stay valid). The test removes the labels before Pilot describes the elements, so the search never sees them, and checks each answer against them. A PHP site renders from the command line (`php` with `$_GET` set and the site's `index.php` included); a static site's labeled HTML file is the page. Never label the project itself: copy it first.
+
 ## Releasing `usepilot`
 
 The published package is [packages/usepilot](../packages/usepilot). Publishing builds it first (`prepack` runs the build and copies `dist/`, `cli/` and the license in).

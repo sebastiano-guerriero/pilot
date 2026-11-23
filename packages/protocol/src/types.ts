@@ -46,6 +46,27 @@ export interface ElementTarget {
     file?: string;
     line?: number;
   };
+  /**
+   * What Pilot's code search finds the element by, besides its own tag,
+   * classes, id and text (the CLI's locate.ts): no one detail is reliable
+   * (classes repeat, text comes from data), several together are.
+   */
+  context?: ElementContext;
+}
+
+/** See ElementTarget.context. Each list short and capped: a few strings each. */
+export interface ElementContext {
+  /** The texts inside it, each on its own: its own text nodes and its descendants' (a nav's link labels), trimmed, in page order. */
+  texts?: string[];
+  /** Attribute values that say what it is, its own and its descendants': `href`, `src`, `alt`, `aria-label`, `title`, `name`, `placeholder`, `for`, `style`, `data-*`. */
+  attrs?: string[];
+  /** Its parent, grandparent and great-grandparent, nearest first. */
+  parents?: Array<{ tag: string; id?: string; classes: string[] }>;
+  /** The page's texts right before and right after it (outside it): which of several copies of the same markup it is (the `#` beside each heading). */
+  before?: string;
+  after?: string;
+  /** The nearest heading above it on the page (outside it): which section of several alike it's in. */
+  heading?: string;
 }
 
 export interface StyleChange {
