@@ -40,7 +40,7 @@ function focusVisible(el: Element): boolean {
 
 /**
  * A tooltip: shown, centered on its trigger, while the trigger is hovered or
- * has keyboard focus. 22px tall, 6px padding, 11px text, with the large
+ * has keyboard focus. 24px tall, 8px padding, 11px text, with the large
  * shadow (Tooltip.css). On hover, the
  * first one waits a moment; moving straight on to another opens it at once
  * (delay.ts). Keyboard focus opens it at once. Use it instead of `title` in
