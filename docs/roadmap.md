@@ -25,7 +25,8 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [ ] **Speed, after agent runs:** the goal is 10s for an edit, 15s at most. A comment took 15–17s with the right code location and 21–34s with Pilot's real prompt on nucleo-2, where the search found the wrong file; an edit 14–17s from the toolbar (Cursor, nav gap), 7s with the right file and the project's facts. Each agent step costs 3–4s; faster models gave wrong answers.
   - [x] The code search finds each element by many details together, and says nothing (or two places) rather than a wrong one: measured on labeled copies of nucleo-2 and four static sites, no wrong answers ([handoff.md](handoff.md), *Finding the code, and the time*). The nav gap edit: 10–12.5s, 2 tool calls (read, edit), with Cursor
   - [ ] The same measure on a React project (labeled JSX), and following a page's own file and what it includes or imports (copies of a module the page doesn't use)
-  - [ ] The project's facts in the prompt: the Tailwind class for each value (its `--spacing` and other scales), classes compiled on save, so the agent doesn't work them out
+  - [x] The project's facts in the prompt: the Tailwind 4 class for each value in the project's theme, and its CSS rebuilt on save, so the agent doesn't work them out ([handoff.md](handoff.md), *Finding the code, and the time*)
+  - [ ] The same facts for Tailwind 3 (its config is code), CSS variables' tokens, and other styling (CSS modules, Sass)
   - [ ] Editor jobs to one session per project (more only for jobs at once), marked as the editor's, so the guidelines are read once
   - [ ] Send the look-alikes' locations, and where a value comes from (inherited from a parent's class)
 

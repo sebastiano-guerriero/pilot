@@ -792,19 +792,28 @@ export function withComponentFiles(job: Job, root: string): Job {
   };
 }
 
+/** A job's elements and where their code probably is, those found. */
+export function jobLocations(job: Job, root: string): Array<{ target: ElementTarget; at: Location }> {
+  if (!searchable(root)) return [];
+  const targets = job.changeSet.request ? requestTargets(job.changeSet.request) : job.changeSet.edits.map((e) => e.target);
+  markupSources(root); // Reading the project isn't the search's time.
+  const deadline = Date.now() + BUDGET_MS;
+  const found: Array<{ target: ElementTarget; at: Location }> = [];
+  for (const target of targets) {
+    const at = locate(target, root, { url: job.changeSet.page?.url, deadline });
+    if (at) found.push({ target, at });
+  }
+  return found;
+}
+
 /**
  * A job's elements and where their code probably is, as a section for the
  * job's prompt; empty when none was found (or the project can't be searched).
  */
-export function whereSection(job: Job, root: string): string {
+export function whereSection(job: Job, root: string, located = jobLocations(job, root)): string {
   if (!searchable(root)) return "";
-  const targets = job.changeSet.request ? requestTargets(job.changeSet.request) : job.changeSet.edits.map((e) => e.target);
-  markupSources(root); // Reading the project isn't the search's time.
-  const deadline = Date.now() + BUDGET_MS;
   const found: string[] = [];
-  for (const target of targets) {
-    const at = locate(target, root, { url: job.changeSet.page?.url, deadline });
-    if (!at) continue;
+  for (const { target, at } of located) {
     const snippet = (place: Omit<Location, "also">) => [
       "",
       `  \`\`\`${extname(place.file).slice(1) || "text"}`,

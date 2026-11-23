@@ -80,6 +80,8 @@ class Index {
   entries = new Map<string, Entry>();
   /** Every walked file, markup or not (componentFile looks at all scripts). */
   paths: string[] = [];
+  /** Every stylesheet walked (not read): where facts.ts looks for the project's Tailwind. */
+  styles: string[] = [];
   /** How many lines of the markup files hold each word, and how many lines they have. */
   counts = new Map<string, number>();
   lines = 0;
@@ -96,6 +98,7 @@ class Index {
     if (Date.now() - this.walkedAt < FRESH_MS) return;
     const seen = new Set<string>();
     const paths: string[] = [];
+    const styles: string[] = [];
     const walk = (dir: string) => {
       let names: string[];
       try {
@@ -117,6 +120,7 @@ class Index {
           walk(path);
           continue;
         }
+        if (extname(name) === ".css" && stat.size <= MAX_FILE_BYTES) styles.push(path);
         if (!EXTENSIONS.has(extname(name)) || stat.size > MAX_FILE_BYTES) continue;
         paths.push(path);
         seen.add(path);
@@ -135,6 +139,7 @@ class Index {
       this.entries.delete(path);
     }
     this.paths = paths;
+    this.styles = styles;
     this.walkedAt = Date.now();
   }
 
@@ -191,6 +196,11 @@ export function markupSources(root: string): { sources: Source[]; rarity: (word:
     sources: index.sources,
     rarity: (word) => Math.max(0, Math.min(6, Math.log2((index.lines + 2) / ((index.counts.get(word) ?? 0) + 1)) * scale)),
   };
+}
+
+/** Every stylesheet under `root` (absolute paths). */
+export function styleFiles(root: string): string[] {
+  return indexOf(root).styles;
 }
 
 /** Every source file under `root` (absolute paths), markup or not. */

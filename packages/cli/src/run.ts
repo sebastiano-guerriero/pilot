@@ -7,7 +7,8 @@ import { AGENTS, type AgentCli, type AgentKind, detectAgents, exec, type FoundAg
 import { Bridge } from "./agent.ts";
 import { attachmentBlocks, attachmentsDir, newAttachments } from "./attachments.ts";
 import { projectName, saveAgent, savedAgent } from "./config.ts";
-import { searchable, whereSection, withComponentFiles } from "./locate.ts";
+import { factsSection } from "./facts.ts";
+import { jobLocations, searchable, whereSection, withComponentFiles } from "./locate.ts";
 import { jobPrompt, skillOf } from "./prompt.ts";
 import { warmSources } from "./sources.ts";
 
@@ -268,13 +269,16 @@ async function runAgent(ctx: RunContext, prompt: string, options: { resume?: str
 }
 
 /**
- * The prompt of a run: the job's, where its code probably is, and the text
+ * The prompt of a run: the job's, where its code probably is, the project's
+ * facts (its Tailwind and the class for each value: facts.ts), and the text
  * files attached; first, the skill the designer picked, started the way the
  * agent's chat starts one (`invokeSkill`).
  */
 export async function promptFor(job: Job, project: string, cli: AgentCli): Promise<string> {
   const j = withComponentFiles(job, project);
-  const where = j.attempt === 2 ? "" : whereSection(j, project);
+  // A follow-up resumes the job's session: it has these already.
+  const located = j.attempt === 2 ? [] : jobLocations(j, project);
+  const where = j.attempt === 2 ? "" : [whereSection(j, project, located), factsSection(j, project, located.map((l) => l.at.file))].filter(Boolean).join("\n\n");
   const texts = (await attachmentBlocks(j)).flatMap((b) => (b.type === "text" ? [b.text] : []));
   const skill = skillOf(j);
   return [...(skill ? [cli.invokeSkill(skill)] : []), jobPrompt(j, where), ...texts].join("\n\n");
