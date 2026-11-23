@@ -45,7 +45,23 @@
     cursor: pointer;
   }
 
+  /* With a tooltip (a manual shadow's whole value), its anchor takes the button's place. */
+  .layer-chip > .tooltip-anchor {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+
+    .layer-chip-open {
+      box-sizing: border-box;
+      width: 100%;
+    }
+  }
+
+  /* The name, then the value: the value gives way, ending in an ellipsis of
+     its own (dimmed, as it is). Names are short: they don't. */
   .layer-chip-name {
+    display: flex;
+    align-items: baseline;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -55,7 +71,11 @@
   /* Its value, dimmed, 4px after the name (as PropertySelect's hints), in
      tabular figures as in the fields, so it doesn't jitter while it changes. */
   .layer-chip-hint {
+    flex: 0 1 auto;
+    min-width: 0;
     margin-left: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
     color: var(--plt-color-contrast-low);
     font-variant-numeric: tabular-nums;
   }

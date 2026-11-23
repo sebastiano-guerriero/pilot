@@ -8,7 +8,8 @@ interface ScrubHandleProps {
   onStart(): boolean;
   /**
    * The drag moved: `steps` is the total from where it started (up is
-   * positive), ×10 while Shift is held. The same `gesture` object for the
+   * positive), ×10 while Shift is held; for a dial (`degrees`), Shift instead
+   * makes the angle it reaches a multiple of 45deg. The same `gesture` object for the
    * whole drag, so it's undone in one step. Returns how many of those steps
    * are past a limit the value stops at (0, or a percent's 100), counted
    * from where it got there and negative below a minimum: let go there, the
@@ -63,6 +64,9 @@ function Dial({ degrees }: { degrees: number }) {
 
 /** Drag distance (px) per step: the value moves with the pointer, as the wheel does. */
 export const PX_PER_STEP = 1;
+
+/** A dial dragged with Shift lands on multiples of this (deg), one every few px (×10, as Shift steps). */
+export const SNAP_DEGREES = 45;
 
 /**
  * The wheel: lines on a small drum seen edge-on, like the iOS timer picker.
@@ -143,8 +147,8 @@ export function ScrubHandle({ onStart, onScrub, degrees }: ScrubHandleProps) {
   const spring = useRef<number | null>(null);
   const paint = () => setAngle(turn.current + band.current);
   // The latest callbacks, for the window listeners of an ongoing drag.
-  const latest = useRef({ onStart, onScrub });
-  latest.current = { onStart, onScrub };
+  const latest = useRef({ onStart, onScrub, degrees });
+  latest.current = { onStart, onScrub, degrees };
   const stop = useRef<(() => void) | null>(null);
   useEffect(
     () => () => {
@@ -205,6 +209,8 @@ export function ScrubHandle({ onStart, onScrub, degrees }: ScrubHandleProps) {
     const gesture = {};
     let steps = 0;
     const from = turn.current;
+    // A dial's angle where the drag starts: Shift snaps from it to multiples of SNAP_DEGREES.
+    const startDegrees = latest.current.degrees;
     // How far past a limit the drag is, in px (0: not at one).
     let past = 0;
 
@@ -212,7 +218,9 @@ export function ScrubHandle({ onStart, onScrub, degrees }: ScrubHandleProps) {
       if (m.pointerId !== pointer) return;
       const dy = startY - m.clientY; // up is positive
       const scale = m.shiftKey ? 10 : 1;
-      const next = Math.trunc(dy / PX_PER_STEP) * scale;
+      let next = Math.trunc(dy / PX_PER_STEP) * scale;
+      // A dial with Shift: the angle it reaches, at the nearest multiple of 45deg.
+      if (m.shiftKey && startDegrees != null) next = Math.round((startDegrees + next) / SNAP_DEGREES) * SNAP_DEGREES - startDegrees;
       if (next !== steps) {
         steps = next;
         const overflow = latest.current.onScrub(steps, gesture);

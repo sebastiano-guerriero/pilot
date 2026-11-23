@@ -20,7 +20,8 @@ const VAR = /^var\(.*\)$/i;
  * before or after them, and `inset` at either end. A var() is a length,
  * unless it comes last after two or more others (then it's the color:
  * `0 4px 4px var(--shadow)`). Null when it doesn't split that way (a var()
- * for the whole shadow, two colors): it's then edited as text.
+ * for the whole shadow, two colors): it's then edited as text. A bare `0`
+ * is `0px`, as the fields show every length.
  */
 export function splitShadow(text: string, maxLengths: number): ShadowParts | null {
   const parts = splitTopLevel(text.trim(), " ").filter(Boolean);
@@ -46,5 +47,6 @@ export function splitShadow(text: string, maxLengths: number): ShadowParts | nul
     } else return null;
   }
   if (lengths.length < 2 || lengths.length > maxLengths) return null;
-  return { lengths, color, inset };
+  // A bare 0 reads as 0px, as every other length shows it: x and y alike.
+  return { lengths: lengths.map((l) => (l === "0" ? "0px" : l)), color, inset };
 }

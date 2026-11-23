@@ -113,7 +113,7 @@ describe("filter", () => {
     mount();
     act(() => (container.querySelector(".layer-chip-open") as HTMLButtonElement).click());
     const value = (label: string) => (container.querySelector(`input[aria-label="${label}"]`) as HTMLInputElement | null)?.value;
-    expect([value("shadow x"), value("shadow y"), value("shadow blur"), value("color")]).toEqual(["0", "4px", "4px", "#000000"]);
+    expect([value("shadow x"), value("shadow y"), value("shadow blur"), value("color")]).toEqual(["0px", "4px", "4px", "#000000"]);
     const y = container.querySelector('input[aria-label="shadow y"]') as HTMLInputElement;
     act(() => y.focus());
     act(() => {
@@ -123,7 +123,7 @@ describe("filter", () => {
     act(() => {
       y.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
     });
-    expect(changes.at(-1)).toEqual(["filter", "drop-shadow(0 -2px 4px #00000040)"]);
+    expect(changes.at(-1)).toEqual(["filter", "drop-shadow(0px -2px 4px #00000040)"]);
   });
 
   it("custom isn't offered, only shown for a filter the page writes that isn't a function", () => {

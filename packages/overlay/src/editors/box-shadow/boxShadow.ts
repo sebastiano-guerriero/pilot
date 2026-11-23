@@ -10,12 +10,12 @@ import { type LayerNumbers, MAX_LAYERS, pxOf, readSmooth, type Smooth, smoothLay
  * that doesn't split into those parts is a custom one: its CSS as text.
  */
 
-/** The panel's first select: outer, inset, or none (box-shadow: none). */
-export const SHADOW_TYPES = ["outer", "inset", "none"] as const;
-export type ShadowType = (typeof SHADOW_TYPES)[number] | "custom";
+/** The panel's first select: outer, inset, custom (any CSS, or a variable: `var(--shadow-md)`), or none (box-shadow: none). */
+export const SHADOW_TYPES = ["outer", "inset", "custom", "none"] as const;
+export type ShadowType = (typeof SHADOW_TYPES)[number];
 
 /** In the type select, after the name, dimmed: what CSS calls it. */
-export const TYPE_TAKES: Partial<Record<ShadowType, string>> = { none: "no shadow", custom: "as written" };
+export const TYPE_TAKES: Partial<Record<ShadowType, string>> = { none: "no shadow", custom: "CSS or variable" };
 
 /** The second select, for outer and inset: each part set by hand, or a smooth stack (smooth.ts). */
 export const SHADOW_MODES = ["manual", "smooth"] as const;
@@ -25,15 +25,15 @@ export type ManualShadow = { type: "outer" | "inset"; mode: "manual"; x: string;
 export type SmoothShadow = { type: "outer" | "inset"; mode: "smooth"; smooth: Smooth };
 export type BoxShadow = ManualShadow | SmoothShadow | { type: "custom"; text: string };
 
-/** What + adds: one layer of Tailwind's shadow-md. */
-export const NEW_SHADOW: ManualShadow = { type: "outer", mode: "manual", x: "0", y: "4px", blur: "6px", spread: "-1px", color: "#0000001a" };
+/** What + adds: one layer of Tailwind's shadow-md, without its spread (the owner's call: no spread unless set). */
+export const NEW_SHADOW: ManualShadow = { type: "outer", mode: "manual", x: "0px", y: "4px", blur: "6px", spread: "", color: "#0000001a" };
 
 /** The footer's help, per type. */
 export const TYPE_HINTS: Record<ShadowType, string> = {
   outer: "Cast outside the element: x and y move it, blur softens it, spread grows or shrinks it.",
   inset: "Drawn inside the element, along its edges: x and y move it, blur softens it, spread thickens it.",
   none: "Declares box-shadow: none, taking off one the page sets (at a width, say). × on the chip declares nothing instead.",
-  custom: "A shadow the page writes that doesn't split into parts, as CSS writes it.",
+  custom: "Any shadow as CSS, or a variable: type -- for the page's shadows.",
 };
 
 /** The footer's help for a smooth shadow. */

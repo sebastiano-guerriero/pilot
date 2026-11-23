@@ -43,7 +43,11 @@ describe("page tokens", () => {
     expect(kindOf("--gap", "calc(1rem + 2px)")).toBe("length");
     expect(kindOf("--bg", "oklch(0.7 0.1 150)")).toBe("color");
     expect(kindOf("--font-mono", "Menlo")).toBe("font");
-    expect(kindOf("--shadow", "0 1px 2px black")).toBe("other");
+    expect(kindOf("--shadow", "0 1px 2px black")).toBe("shadow");
+    expect(kindOf("--shadow-md", "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)")).toBe("shadow");
+    expect(kindOf("--ring", "inset 0 0 0 1px var(--border)")).toBe("shadow");
+    // A border's shorthand isn't one: a single length.
+    expect(kindOf("--border", "1px solid red")).toBe("other");
     expect(kindOf("--ease", "cubic-bezier(0.2, 0, 0, 1)")).toBe("other");
   });
 });

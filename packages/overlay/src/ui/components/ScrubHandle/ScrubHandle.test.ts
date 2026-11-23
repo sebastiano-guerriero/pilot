@@ -110,6 +110,27 @@ describe("the dial, for an angle", () => {
     container.remove();
   });
 
+  it("Shift snaps the angle the drag reaches to multiples of 45deg; without it, 1deg a px", () => {
+    const steps: number[] = [];
+    act(() => render(h(ScrubHandle, { onStart: () => true, onScrub: (s: number) => void steps.push(s), degrees: 30 }), container));
+    const at = (type: string, y: number, shiftKey: boolean) =>
+      act(() => {
+        (type === "pointerdown" ? handle() : document.body).dispatchEvent(
+          new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, pointerId: 1, clientY: y, shiftKey }),
+        );
+      });
+    at("pointerdown", 100, false);
+    at("pointermove", 97, false);
+    expect(steps.at(-1)).toBe(3); // 33deg
+    at("pointermove", 98, true); // 30 + 20 → 50: the nearest notch is 45
+    expect(steps.at(-1)).toBe(15);
+    at("pointermove", 95, true); // 30 + 50 → 80: 90
+    expect(steps.at(-1)).toBe(60);
+    at("pointermove", 104, true); // 30 − 40 → −10: 0
+    expect(steps.at(-1)).toBe(-30);
+    at("pointerup", 104, true);
+  });
+
   it("reads angles in any unit as degrees, and nothing else", () => {
     expect(degreesOf("200deg")).toBe(200);
     expect(degreesOf("-45deg")).toBe(-45);

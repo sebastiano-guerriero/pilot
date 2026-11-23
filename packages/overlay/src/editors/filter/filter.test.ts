@@ -55,9 +55,9 @@ describe("stepFilterValue", () => {
 
 describe("parseShadow / formatShadow", () => {
   it("splits a drop-shadow into x, y, blur and color, the color before or after", () => {
-    expect(parseShadow("0 4px 4px #00000040")).toEqual({ x: "0", y: "4px", blur: "4px", color: "#00000040" });
+    expect(parseShadow("0 4px 4px #00000040")).toEqual({ x: "0px", y: "4px", blur: "4px", color: "#00000040" });
     expect(parseShadow("rgb(0 0 0 / 0.25) 2px 3px")).toEqual({ x: "2px", y: "3px", blur: "", color: "rgb(0 0 0 / 0.25)" });
-    expect(parseShadow("0 4px 8px var(--shadow)")).toEqual({ x: "0", y: "4px", blur: "8px", color: "var(--shadow)" });
+    expect(parseShadow("0 4px 8px var(--shadow)")).toEqual({ x: "0px", y: "4px", blur: "8px", color: "var(--shadow)" });
     expect(parseShadow("var(--x) var(--y)")).toEqual({ x: "var(--x)", y: "var(--y)", blur: "", color: "" });
   });
 

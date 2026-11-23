@@ -3,14 +3,17 @@ import { LayerList } from "../../ui/components/LayerList/LayerList.tsx";
 import { PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { PropertySelect } from "../../ui/components/PropertySelect/PropertySelect.tsx";
+import { Icon, type IconName } from "../../ui/components/Icon/Icon.tsx";
 import { declaredOf, isMixed } from "../declared.ts";
 import { BLUR, OFFSET, ShadowRows } from "../shadow/ShadowRows.tsx";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
+import { closeParens } from "../../css/values.ts";
 import { angleText } from "../mask/mask.ts";
 import { degreesOf } from "../../ui/components/ScrubHandle/ScrubHandle.tsx";
 import {
   type BoxShadow,
   formatBoxShadow,
+  shadowText,
   type ManualShadow,
   NEW_SHADOW,
   parseBoxShadow,
@@ -37,18 +40,59 @@ const LENGTHS = [
 
 const typeOf = (shadow: BoxShadow | "none"): ShadowType => (shadow === "none" ? "none" : shadow.type);
 
-/** A chip: the type, then its lengths dimmed (`outer 0 4px 6px -1px`), or just `smooth` for a smooth one (`outer smooth`). */
-function chipOf(shadow: BoxShadow | "none") {
-  if (shadow === "none") return { name: "none" };
-  if (shadow.type === "custom") return { name: "custom", hint: shadow.text };
-  if (shadow.mode === "smooth") return { name: shadow.type, hint: "smooth" };
-  const lengths = [shadow.x || "0", shadow.y || "0", shadow.blur, shadow.spread].filter(Boolean);
-  return { name: shadow.type, hint: lengths.join(" ") };
+/** Which icon a shadow gets: its kind, or a ring for a manual one that's just a 1px spread. */
+type SwatchLook = "outer" | "inset" | "ring" | "inset-ring" | "plain";
+
+const LOOK_ICONS: Record<SwatchLook, IconName> = {
+  outer: "shadow-outer",
+  inset: "shadow-inset",
+  ring: "shadow-outer-ring",
+  "inset-ring": "shadow-inset-ring",
+  plain: "shadow-custom",
+};
+
+export function swatchLook(shadow: BoxShadow): SwatchLook {
+  if (shadow.type === "custom") return "plain";
+  if (shadow.mode === "manual") {
+    const zero = (v: string) => (pxOf(v) ?? Number.NaN) === 0;
+    if (zero(shadow.x) && zero(shadow.y) && zero(shadow.blur) && pxOf(shadow.spread) === 1) return shadow.type === "inset" ? "inset-ring" : "ring";
+  }
+  return shadow.type;
 }
 
-/** A shadow of another type: outer and inset keep their mode and parts; from none or custom, a new one's. */
-function asType(shadow: BoxShadow | "none", type: Exclude<ShadowType, "custom">): BoxShadow | "none" {
+/**
+ * A shadow's icon (the owner's): its kind's; none, mask's none icon (the red
+ * line). In a 12px slot, its frame on the other icons' (BoxShadowEditor.css).
+ */
+function ShadowSwatch({ shadow }: { shadow: BoxShadow | "none" }) {
+  if (shadow === "none") return <Icon name="mask-none" />;
+  const look = swatchLook(shadow);
+  return (
+    <span class="shadow-icon" data-look={look} aria-hidden="true">
+      <Icon name={LOOK_ICONS[look]} />
+    </span>
+  );
+}
+
+/** A chip: the type, then its lengths dimmed (`outer 0 4px 6px -1px`), or just `smooth` for a smooth one (`outer smooth`). Manual and custom ones show their whole value on hover. */
+function chipOf(shadow: BoxShadow | "none") {
+  const swatch = <ShadowSwatch shadow={shadow} />;
+  if (shadow === "none") return { name: "none", swatch };
+  if (shadow.type === "custom") return { name: "custom", hint: shadow.text, tooltip: shadow.text, swatch };
+  if (shadow.mode === "smooth") return { name: shadow.type, hint: "smooth", swatch };
+  const lengths = [shadow.x || "0px", shadow.y || "0px", shadow.blur, shadow.spread].filter(Boolean);
+  // The chip cuts it, and leaves the color out: hovered, the whole value.
+  return { name: shadow.type, hint: lengths.join(" "), tooltip: shadowText(shadow), swatch };
+}
+
+/**
+ * A shadow of another type: outer and inset keep their mode and parts (from
+ * none or custom, a new one's); custom starts from the shadow's CSS (from
+ * none, a new one's), so it's never empty.
+ */
+function asType(shadow: BoxShadow | "none", type: ShadowType): BoxShadow | "none" {
   if (type === "none") return "none";
+  if (type === "custom") return { type: "custom", text: shadowText(shadow === "none" ? NEW_SHADOW : shadow) };
   if (shadow === "none" || shadow.type === "custom") return { ...NEW_SHADOW, type };
   return { ...shadow, type };
 }
@@ -73,7 +117,7 @@ function toSmooth(shadow: ManualShadow): SmoothShadow {
 function toManual(shadow: SmoothShadow): ManualShadow {
   const { distance: d, direction, elevation: e, color } = shadow.smooth;
   const a = (direction * Math.PI) / 180;
-  const px = (n: number) => (Math.abs(n) < 0.005 ? "0" : `${Math.round(n * 100) / 100}px`);
+  const px = (n: number) => (Math.abs(n) < 0.005 ? "0px" : `${Math.round(n * 100) / 100}px`);
   return { type: shadow.type, mode: "manual", x: px(d * Math.sin(a)), y: px(-d * Math.cos(a)), blur: px(e), spread: px(-SPREAD_RATIO * e), color };
 }
 
@@ -94,8 +138,12 @@ function BoxShadowEditor(props: PropertyEditorProps) {
   // The direction set in the panel, per smooth shadow: the CSS can't say it at
   // distance 0 (read back as 180deg), and says -30deg as 330deg.
   const directions = useRef(new Map<number, number>());
+  // Shadows picked as custom: their CSS may well split into parts again
+  // (read back as outer), so they're shown as custom while the editor's open.
+  const customs = useRef(new Set<number>());
   const read: Array<BoxShadow | "none"> = shadows === "none" ? ["none"] : (shadows ?? []);
   const list = read.map((shadow, i): BoxShadow | "none" => {
+    if (customs.current.has(i) && shadow !== "none" && shadow.type !== "custom") return { type: "custom", text: shadowText(shadow) };
     const set = directions.current.get(i);
     if (set === undefined || shadow === "none" || shadow.type === "custom" || shadow.mode !== "smooth") return shadow;
     const same = shadow.smooth.distance === 0 || Math.abs((((set % 360) + 360) % 360) - shadow.smooth.direction) < 0.1;
@@ -114,6 +162,7 @@ function BoxShadowEditor(props: PropertyEditorProps) {
   };
   const remove = (index: number) => {
     directions.current.clear();
+    customs.current.clear();
     const next = list.filter((_, i) => i !== index);
     if (next.length) write(next);
     else props.onChange(PROPERTY, "", { gesture: {} });
@@ -122,6 +171,8 @@ function BoxShadowEditor(props: PropertyEditorProps) {
   const update = (index: number, shadow: BoxShadow | "none", gesture?: object) => {
     if (shadow !== "none" && shadow.type !== "custom" && shadow.mode === "smooth") directions.current.set(index, shadow.smooth.direction);
     else directions.current.delete(index);
+    if (shadow !== "none" && shadow.type === "custom") customs.current.add(index);
+    else customs.current.delete(index);
     // `none` is the whole value: the other shadows go.
     if (shadow === "none") return write(["none"], gesture);
     write(list.map((s, i) => (i === index ? shadow : s)).filter((s) => s !== "none"), gesture);
@@ -173,7 +224,8 @@ function ShadowPanelRows({
           label="shadow type"
           clearable={false}
           hintFor={(t) => TYPE_TAKES[t as ShadowType]}
-          onChange={(t) => t !== type && t !== "custom" && onUpdate(asType(shadow, t as Exclude<ShadowType, "custom">))}
+          iconFor={(t) => <ShadowSwatch shadow={t === "none" ? "none" : t === "custom" ? { type: "custom", text: "" } : { ...NEW_SHADOW, type: t as "outer" | "inset" }} />}
+          onChange={(t) => t !== type && onUpdate(asType(shadow, t as ShadowType))}
         />
       </PropertyRow>
       {shadow !== "none" && shadow.type !== "custom" && (
@@ -207,9 +259,11 @@ function ShadowPanelRows({
           <PropertyInputText
             value={shadow.text}
             label="shadow value"
-            placeholder="0 4px 6px #0000001a"
+            placeholder="var(--shadow-md)"
+            // The page's shadow variables (Tailwind's --shadow-md…): typed with --, or from the menu.
+            tokens={{ kinds: ["shadow"], property: PROPERTY }}
             onCommit={(text) => {
-              const t = text.trim().replace(/\s+/g, " ");
+              const t = closeParens(text.trim().replace(/\s+/g, " "));
               const valid = !t || typeof CSS === "undefined" || typeof CSS.supports !== "function" || CSS.supports(PROPERTY, t);
               if (valid && t !== shadow.text) onUpdate({ type: "custom", text: t });
             }}

@@ -733,6 +733,53 @@ const ICONS = {
   },
   "text-transform-capitalize": capitalizeAg("var(--plt-color-accent)"),
   "text-transform-none": capitalizeAg("var(--plt-color-contrast-low)"),
+  // box-shadow: the designed icons. Outer and custom are 12×14 (the shadow
+  // hangs below the 12px frame), the outer ring 14×14 (it rings the frame).
+  "shadow-outer": {
+    size: [12, 14],
+    body: (
+      <>
+        <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+        <rect y="12" width="12" height="2" fill="var(--plt-color-accent)" fill-opacity="0.4" />
+      </>
+    ),
+  },
+  "shadow-outer-ring": {
+    size: 14,
+    body: (
+      <>
+        <path d="M13 1V13H1V1H13ZM2 12H12V2H2V12Z" fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+        <path d="M14 14H0V0H14V14ZM1 1V13H13V1H1Z" fill="var(--plt-color-accent)" fill-opacity="0.4" />
+      </>
+    ),
+  },
+  "shadow-inset": {
+    size: 12,
+    body: (
+      <>
+        <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+        <rect x="1" y="1" width="10" height="2" fill="var(--plt-color-accent)" fill-opacity="0.4" />
+      </>
+    ),
+  },
+  "shadow-inset-ring": {
+    size: 12,
+    body: (
+      <>
+        <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+        <path d="M11 11H1V1H11V11ZM2 2V10H10V2H2Z" fill="var(--plt-color-accent)" fill-opacity="0.4" />
+      </>
+    ),
+  },
+  "shadow-custom": {
+    size: [12, 14],
+    body: (
+      <>
+        <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+        <rect y="12" width="12" height="2" fill="var(--plt-color-background-dark)" fill-opacity="0.12" />
+      </>
+    ),
+  },
   // object-fit: the designed icons (fill stretches the picture, none shows it at its own size, cropped).
   "object-fit-cover": {
     size: 12,

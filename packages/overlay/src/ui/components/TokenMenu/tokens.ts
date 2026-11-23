@@ -39,6 +39,7 @@ const HINTS: Array<[RegExp, RegExp]> = [
   [/^z-index$/, /\bz\b|z-|layer|index|elevation/],
   [/^(width|height|min-width|max-width|min-height|max-height|flex-basis)$/, /size|width|height|container|screen|breakpoint/],
   [/^background(-color)?$/, /bg|background|surface|canvas|fill/],
+  [/^box-shadow$/, /shadow|elevation/],
   [/^color$/, /text|ink|fg|foreground|content|muted/],
   [/border.*color|outline-color/, /border|line|divider|stroke|outline/],
 ];

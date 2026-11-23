@@ -8,8 +8,8 @@ describe("parseBoxShadow / formatBoxShadow", () => {
     expect(parseBoxShadow("")).toBeNull();
     expect(parseBoxShadow("none")).toBe("none");
     expect(parseBoxShadow("0 4px 6px -1px rgb(0 0 0 / 0.1), inset 0 2px 4px #0000000d")).toEqual([
-      { type: "outer", mode: "manual", x: "0", y: "4px", blur: "6px", spread: "-1px", color: "rgb(0 0 0 / 0.1)" },
-      { type: "inset", mode: "manual", x: "0", y: "2px", blur: "4px", spread: "", color: "#0000000d" },
+      { type: "outer", mode: "manual", x: "0px", y: "4px", blur: "6px", spread: "-1px", color: "rgb(0 0 0 / 0.1)" },
+      { type: "inset", mode: "manual", x: "0px", y: "2px", blur: "4px", spread: "", color: "#0000000d" },
     ]);
   });
 

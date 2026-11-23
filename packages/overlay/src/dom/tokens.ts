@@ -1,4 +1,5 @@
 import type { FileToken } from "@pilot/protocol";
+import { splitTopLevel } from "./declared.ts";
 import { PREVIEW_ATTRIBUTE } from "./preview.ts";
 
 /**
@@ -13,7 +14,7 @@ import { PREVIEW_ATTRIBUTE } from "./preview.ts";
  * docs/design-tokens.md). Tailwind's own `--tw-*` plumbing isn't a token.
  */
 
-export type TokenKind = "color" | "length" | "font" | "number" | "other";
+export type TokenKind = "color" | "length" | "font" | "number" | "shadow" | "other";
 
 export interface Token {
   /** As written: `--color-accent`. A file's token: the CSS variable Pilot gives it (see fileTokenVariable). */
@@ -91,7 +92,31 @@ export function kindOf(name: string, value: string): TokenKind {
   if (/^#[\da-f]{3,8}$/i.test(value) || /^(rgb|hsl|hwb|lab|lch|oklab|oklch|color)a?\(/i.test(value)) return "color";
   // A font's name can read as a color keyword's shape (one word): the name decides first.
   if (/font|family/i.test(name) || /,\s*(sans-serif|serif|monospace|system-ui)\b/.test(value)) return "font";
+  if (isShadow(value)) return "shadow";
   return isNamedColor(value) ? "color" : "other";
+}
+
+const SHADOW_LENGTH = /^(-?\d*\.?\d+([a-z]+|%)?|(calc|var)\(.*\))$/i;
+
+/**
+ * A shadow (box-shadow's value, Tailwind's `--shadow-md`): each layer,
+ * comma-separated, is 2 to 4 lengths, `inset` at either end, and a color
+ * before or after them (a var() last is the color, as the box-shadow editor
+ * reads it).
+ */
+function isShadow(value: string): boolean {
+  return splitTopLevel(value, ",").every((layer) => {
+    const parts = splitTopLevel(layer.trim(), " ").filter((p) => p && p.toLowerCase() !== "inset");
+    let lengths = 0;
+    let others = 0;
+    for (const [i, part] of parts.entries()) {
+      // A var() last, after two lengths, is the color (`0 1px 2px var(--shadow-color)`).
+      const colorVar = /^var\(/i.test(part) && i === parts.length - 1 && lengths >= 2;
+      if (SHADOW_LENGTH.test(part) && !colorVar) lengths++;
+      else others++;
+    }
+    return lengths >= 2 && lengths <= 4 && others <= 1;
+  });
 }
 
 /** A color by name (`rebeccapurple`), as the browser reads it. */

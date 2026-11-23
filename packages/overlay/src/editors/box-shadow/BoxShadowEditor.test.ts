@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EditHistory } from "../../edits/history.ts";
 import { clearsView, groupOf } from "../listOrder.ts";
 import { matchEditors } from "../registry.ts";
-import { boxShadowEditor } from "./BoxShadowEditor.tsx";
+import { boxShadowEditor, swatchLook } from "./BoxShadowEditor.tsx";
+import { type BoxShadow, parseBoxShadow } from "./boxShadow.ts";
+import { smoothLayers } from "./smooth.ts";
 
 let element: HTMLElement;
 let container: HTMLElement;
@@ -72,11 +74,11 @@ const pickType = (name: string) => {
 };
 
 describe("box-shadow", () => {
-  it("+ adds Tailwind's shadow-md layer and opens its panel: type, mode (manual), x, y, blur, spread, color, and the type's help", () => {
+  it("+ adds Tailwind's shadow-md layer, without a spread, and opens its panel: type, mode (manual), x, y, blur, spread, color, and the type's help", () => {
     mount();
     add();
-    expect(changes).toEqual([["box-shadow", "0 4px 6px -1px #0000001a"]]);
-    expect(chips()).toEqual(["outer 0 4px 6px -1px"]);
+    expect(changes).toEqual([["box-shadow", "0px 4px 6px #0000001a"]]);
+    expect(chips()).toEqual(["outer 0px 4px 6px"]);
     expect(panel()?.getAttribute("aria-label")).toBe("Box Shadow");
     const labels = [...(panel()?.querySelectorAll(".property-label") ?? [])].map((l) => l.textContent);
     expect(labels).toEqual(["type", "mode", "x", "y", "blur", "spread", "color"]);
@@ -87,16 +89,16 @@ describe("box-shadow", () => {
     mount();
     add();
     typeAndEnter("shadow spread", "2");
-    expect(changes.at(-1)).toEqual(["box-shadow", "0 4px 6px 2px #0000001a"]);
+    expect(changes.at(-1)).toEqual(["box-shadow", "0px 4px 6px 2px #0000001a"]);
     pickType("inset");
-    expect(changes.at(-1)).toEqual(["box-shadow", "inset 0 4px 6px 2px #0000001a"]);
-    expect(chips()).toEqual(["inset 0 4px 6px 2px"]);
+    expect(changes.at(-1)).toEqual(["box-shadow", "inset 0px 4px 6px 2px #0000001a"]);
+    expect(chips()).toEqual(["inset 0px 4px 6px 2px"]);
   });
 
   it("shadows stack; none is the whole value; × on the last chip declares nothing", () => {
     declared["box-shadow"] = "0 1px 2px red, inset 0 0 4px blue";
     mount();
-    expect(chips()).toEqual(["outer 0 1px 2px", "inset 0 0 4px"]);
+    expect(chips()).toEqual(["outer 0px 1px 2px", "inset 0px 0px 4px"]);
     act(() => (container.querySelector(".layer-chip-open") as HTMLButtonElement).click());
     pickType("none");
     expect(changes.at(-1)).toEqual(["box-shadow", "none"]);
@@ -104,15 +106,48 @@ describe("box-shadow", () => {
     expect(changes.at(-1)).toEqual(["box-shadow", ""]);
   });
 
-  it("a shadow that doesn't split is a custom chip, with its CSS; custom isn't offered", () => {
+  it("a manual or custom chip shows its whole value on hover (the color too); a smooth one doesn't", () => {
+    declared["box-shadow"] = ["var(--shadow-card)", "0 1px 2px red", ...smoothLayers({ distance: 10, direction: 180, elevation: 10, layers: 4, color: "#00000040" }, false)].join(", ");
+    mount();
+    const tips = [...container.querySelectorAll(".layer-chip")].map((c) => c.querySelector(".tooltip")?.textContent ?? null);
+    expect(tips).toEqual(["var(--shadow-card)", "0px 1px 2px red", null]);
+  });
+
+  it("each chip has a swatch of its kind: outer, inset, a 1px ring, or mask's none icon", () => {
+    const look = (value: string) => (parseBoxShadow(value) as BoxShadow[]).map(swatchLook);
+    expect(look("0 4px 6px red, inset 0 2px 4px blue")).toEqual(["outer", "inset"]);
+    expect(look("0 0 0 1px red, inset 0 0 0 1px red")).toEqual(["ring", "inset-ring"]);
+    // A ring is only a 1px spread: anything else is the plain kind.
+    expect(look("0 0 0 2px red, 0 1px 0 1px red")).toEqual(["outer", "outer"]);
+    expect(look(smoothLayers({ distance: 10, direction: 180, elevation: 10, layers: 4, color: "#00000040" }, true).join(", "))).toEqual(["inset"]);
+    expect(look("var(--shadow)")).toEqual(["plain"]);
+    declared["box-shadow"] = "0 0 0 1px red, inset 0 2px 4px blue";
+    mount();
+    expect([...container.querySelectorAll(".layer-chip .shadow-icon")].map((s) => s.getAttribute("data-look"))).toEqual(["ring", "inset"]);
+    declared["box-shadow"] = "none";
+    mount();
+    expect(container.querySelector(".layer-chip svg")).not.toBeNull();
+  });
+
+  it("a shadow that doesn't split (a variable) is a custom chip, with its CSS", () => {
     declared["box-shadow"] = "var(--shadow)";
     mount();
     expect(chips()).toEqual(["custom var(--shadow)"]);
     act(() => (container.querySelector(".layer-chip-open") as HTMLButtonElement).click());
     act(() => (container.querySelector('[role="combobox"][aria-label="shadow type"]') as HTMLButtonElement).click());
     const options = [...container.querySelectorAll('[role="option"] .label')].map((o) => o.firstChild?.textContent);
-    // Listed only because it's the value, after the offered ones' "Select"-less list.
-    expect(options.filter((o) => o !== "custom")).toEqual(["outer", "inset", "none"]);
+    expect(options).toEqual(["outer", "inset", "custom", "none"]);
+  });
+
+  it("custom can be picked: it starts from the shadow's CSS, and takes any shadow or a variable", () => {
+    mount();
+    add();
+    pickType("custom");
+    expect(changes.at(-1)).toEqual(["box-shadow", "0px 4px 6px #0000001a"]);
+    expect(field("shadow value").value).toBe("0px 4px 6px #0000001a");
+    typeAndEnter("shadow value", "var(--shadow-card)");
+    expect(changes.at(-1)).toEqual(["box-shadow", "var(--shadow-card)"]);
+    expect(chips()).toEqual(["custom var(--shadow-card)"]);
   });
 
   it("smooth: one chip; distance, direction (the dial), layers and color write its layers; manual and back", () => {

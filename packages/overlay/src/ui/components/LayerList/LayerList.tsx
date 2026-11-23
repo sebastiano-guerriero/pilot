@@ -5,12 +5,15 @@ import type { FocusRequest } from "../../../editors/types.ts";
 import { Icon } from "../Icon/Icon.tsx";
 import { PropertyPanel } from "../PropertyPanel/PropertyPanel.tsx";
 import { PropertyRow } from "../PropertyRow/PropertyRow.tsx";
+import { Tooltip } from "../Tooltip/Tooltip.tsx";
 
 /** One chip: what it is (`linear`, `blur`), an optional value after it, dimmed (`4px`), and a preview before it. */
 export interface LayerItem {
   name: string;
   hint?: string;
   swatch?: ComponentChildren;
+  /** Shown on hover (and keyboard focus): its whole value, when the chip can't show all of it. */
+  tooltip?: string;
 }
 
 interface LayerListProps {
@@ -80,25 +83,38 @@ export function LayerList({
     if (open !== null && !hasOpen) onOpen(null);
   }, [open, hasOpen]);
 
+  // A chip's main part: it opens the panel.
+  const openButton = (item: LayerItem, i: number) => (
+    <button
+      type="button"
+      class="layer-chip-open"
+      ref={i === 0 ? firstRef : undefined}
+      aria-label={`Edit ${noun}: ${item.name}`}
+      onClick={() => onOpen(open === i ? null : i)}
+    >
+      {item.swatch}
+      <span class="layer-chip-name">
+        {item.name}
+        {item.hint && <span class="layer-chip-hint">{item.hint}</span>}
+      </span>
+    </button>
+  );
+
   return (
     <PropertyRow label={label} class={className ? `layer-list-row ${className}` : "layer-list-row"}>
       <div class="layer-list" ref={rowRef}>
         {mixed && <span class="layer-mixed field-box">{MIXED}</span>}
         {items.map((item, i) => (
           <div key={i} class="layer-chip field-box" data-open={open === i || undefined}>
-            <button
-              type="button"
-              class="layer-chip-open"
-              ref={i === 0 ? firstRef : undefined}
-              aria-label={`Edit ${noun}: ${item.name}`}
-              onClick={() => onOpen(open === i ? null : i)}
-            >
-              {item.swatch}
-              <span class="layer-chip-name">
-                {item.name}
-                {item.hint && <span class="layer-chip-hint">{item.hint}</span>}
-              </span>
-            </button>
+            {item.tooltip ? (
+              // Below, its right edge on the chip's: above, the first row's would be cut by the dialog's list
+              // (under the chips there's always the +), and it's wider than the chip, so it grows over the label.
+              <Tooltip text={item.tooltip} block align="end" side="bottom">
+                {openButton(item, i)}
+              </Tooltip>
+            ) : (
+              openButton(item, i)
+            )}
             <button type="button" class="layer-chip-remove" aria-label={`Remove ${noun}`} onClick={() => onRemove(i)}>
               <Icon name="close-small" />
             </button>

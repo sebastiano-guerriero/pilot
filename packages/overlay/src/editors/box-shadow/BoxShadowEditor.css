@@ -1,0 +1,24 @@
+/* A shadow's icon (BoxShadowEditor.tsx, the owner's icons) in a 12px slot,
+   so its 12px frame lines up with the other icons': outer and custom are
+   taller (their shadow hangs 2px below the frame), the outer ring larger (1px
+   past each side of it). In chips and the type menu. */
+@scope (.shadow-icon) {
+  :scope {
+    position: relative;
+    display: block;
+    flex: none;
+    width: 12px;
+    height: 12px;
+  }
+
+  .icon {
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
+
+  :scope[data-look="ring"] .icon {
+    top: -1px;
+    left: -1px;
+  }
+}

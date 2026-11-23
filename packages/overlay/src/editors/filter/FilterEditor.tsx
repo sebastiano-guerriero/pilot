@@ -3,6 +3,7 @@ import { LayerList } from "../../ui/components/LayerList/LayerList.tsx";
 import { PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { PropertySelect } from "../../ui/components/PropertySelect/PropertySelect.tsx";
+import { closeParens } from "../../css/values.ts";
 import { declaredOf, isMixed } from "../declared.ts";
 import { BLUR, OFFSET, ShadowRows } from "../shadow/ShadowRows.tsx";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
@@ -156,7 +157,7 @@ function FilterRows(
         label="filter value"
         placeholder={type === "custom" ? "url(#noise)" : FILTERS["drop-shadow"].start}
         onCommit={(typed) => {
-          const t = typed.trim().replace(/\s+/g, " ");
+          const t = closeParens(typed.trim().replace(/\s+/g, " "));
           const next = t ? check(t) : "";
           if (next !== null && next !== text) write(next);
         }}
