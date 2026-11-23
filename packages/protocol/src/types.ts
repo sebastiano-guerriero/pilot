@@ -52,6 +52,31 @@ export interface ElementTarget {
    * (classes repeat, text comes from data), several together are.
    */
   context?: ElementContext;
+  /**
+   * Its style now, for a comment or a task (what they'll change isn't known):
+   * see CurrentStyle. Absent for Send's edits, whose changes say it.
+   */
+  style?: CurrentStyle[];
+}
+
+/**
+ * One property of an element's style as the page has it: the value its CSS
+ * declares (`var(--tracking-tight)`), what that comes to (`-0.4px`, when it
+ * differs), and where it's set: a rule (its selector), the element's own
+ * `style`, or inherited from a parent (typography).
+ */
+export interface CurrentStyle {
+  property: string;
+  value: string;
+  computed?: string;
+  source?: StyleSource | { kind: "inherited" };
+}
+
+/** A token of the page (a CSS variable on its root), with what it comes to at the page's width when that differs (a fluid `clamp()` in px). */
+export interface PageToken {
+  name: string;
+  value: string;
+  now?: string;
 }
 
 /** See ElementTarget.context. Each list short and capped: a few strings each. */
@@ -435,6 +460,12 @@ export interface ChangeSet {
   edits: ElementEdit[];
   /** A task instead of edits (then `edits` is empty): see AgentRequest. */
   request?: AgentRequest;
+  /**
+   * The page's tokens, for a comment or a task: the scales the agent can pick
+   * from, whatever they change. Pilot's CLI says them, or the project's
+   * Tailwind theme instead.
+   */
+  tokens?: PageToken[];
   /** Free-form note from the designer ("make this feel lighter", etc.). */
   note?: string;
   /**

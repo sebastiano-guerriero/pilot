@@ -28,8 +28,9 @@ One line per item. Tick it when it ships; the details go in the doc for its area
   - [x] The project's facts in the prompt: the Tailwind 4 class for each value in the project's theme, and its CSS rebuilt on save, so the agent doesn't work them out ([handoff.md](handoff.md), *Finding the code, and the time*)
   - [x] Facts for every project: where each changed value is set in its own stylesheets (Sass, Less, CSS modules, `<style>` blocks), the page's tokens and single-purpose classes that give the new value, how changes reach the page on save (measured on CodyHouse's Sass: 92.8% found, none wrong)
   - [ ] Still to read: Tailwind 3 (its config is code), CSS-in-JS (styled-components, Emotion: their classes carry no rule in a stylesheet), and the same measures on a CSS-modules or React project
-  - [ ] Editor jobs to one session per project (more only for jobs at once), marked as the editor's, so the guidelines are read once
-  - [ ] Send the look-alikes' locations, and where a value comes from (inherited from a parent's class)
+  - [x] Editor jobs resume a session kept for them per project (more only for jobs at once), the guidelines in one line ([handoff.md](handoff.md), *Agent runs*)
+  - [x] Comments and tasks get their elements' style now (where each value is set) and the theme's scales or the page's tokens: a comment 10–35s → about 10s with Cursor, one round of tool calls ([handoff.md](handoff.md), *Finding the code, and the time*)
+  - [ ] Send the look-alikes' locations (the agent still greps for them before "only this or all?"), and which parent an inherited value comes from
 
 ## Foundation
 

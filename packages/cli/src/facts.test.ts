@@ -103,6 +103,43 @@ describe("the job's project section", () => {
     expect(section).toContain("rebuilt on save by `npm run dev` (its `css`)");
   });
 
+  it("a comment: the theme's scales to pick from, the project's own colors only; else the page's tokens by scale", async () => {
+    await files({
+      "package.json": "{}",
+      "node_modules/tailwindcss/theme.css": "@theme default {\n  --spacing: 0.25rem;\n  --tracking-tight: -0.025em;\n  --tracking-tighter: -0.05em;\n  --color-red-500: #ef4444;\n}\n",
+      "src/input.css": '@import "tailwindcss";\n@theme {\n  --color-brand: #ff0066;\n  --text-lg: 1.1875rem;\n}\n',
+    });
+    const comment = (tokens?: Job["changeSet"]["tokens"]) =>
+      ({
+        id: "c",
+        changeSet: {
+          page: { url: "http://localhost:5173/" },
+          edits: [],
+          ...(tokens ? { tokens } : {}),
+          request: { kind: "comment", thread: [], breakpoints: [], target: { selector: "h2", path: "h2", tag: "h2", classes: [] } },
+        },
+      }) as unknown as Job;
+    const section = factsSection(comment(), root);
+    expect(section).toContain("- Its theme's scales (only these exist");
+    expect(section).toContain("  - letter spacing (`tracking-`): `tight` -0.025em, `tighter` -0.05em");
+    expect(section).toContain("  - font size (`text-`): `lg` 19px");
+    expect(section).toContain("  - the project's colors (`text-`, `bg-`…): `brand` #ff0066");
+    expect(section).not.toContain("red-500");
+    // No Tailwind: the page's tokens, by scale.
+    await rm(join(root, "src/input.css"));
+    const plain = factsSection(
+      comment([
+        { name: "--space-sm", value: "1rem", now: "16px" },
+        { name: "--space-md", value: "clamp(1.5rem, 1.1rem + 0.8vw, 1.75rem)", now: "26.7px" },
+        { name: "--color-primary", value: "#7553fd" },
+        { name: "--color-accent", value: "#1cf69e" },
+      ]),
+      root,
+    );
+    expect(plain).toContain("  - `--space-*`: sm 16px, md 26.7px");
+    expect(plain).toContain("  - `--color-*`: primary #7553fd, accent #1cf69e");
+  });
+
   it("nothing for a project without Tailwind 4", async () => {
     await files({ "package.json": "{}", "src/app.css": ".btn { padding: 8px; }\n" });
     expect(factsSection(jobOf([change("gap", "48px")]), root)).toBe("");

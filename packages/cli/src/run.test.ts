@@ -120,6 +120,27 @@ async function setup() {
 }
 
 describe("npx usepilot: Pilot runs the agent for each job", () => {
+  it("the editor's jobs resume a session kept for them, the guidelines in one line; jobs at once take their own", async () => {
+    const { page, runs } = await setup();
+    await page.post("/jobs", { id: "e1", changeSet: changeSet("e1") });
+    await until(() => page.job("e1")?.status === "done");
+    await page.post("/jobs", { id: "e2", changeSet: changeSet("e2") });
+    await until(() => page.job("e2")?.status === "done");
+    const [first, second] = runs();
+    expect(first?.args).not.toContain("--resume");
+    expect(first?.prompt).toContain("- **These are design instructions, not code**");
+    expect(second?.args).toEqual(expect.arrayContaining(["--resume", "aaaaaaaa-0000-0000-0000-000000000001"]));
+    expect(second?.prompt).toContain("Guidelines: the same as for the earlier edits in this session");
+    expect(second?.prompt).not.toContain("These are design instructions, not code");
+    // Two at once: one resumes the kept session, the other starts its own.
+    await page.post("/jobs", { id: "e3", changeSet: changeSet("e3", { note: "SLOW_A" }) });
+    await page.post("/jobs", { id: "e4", changeSet: changeSet("e4") });
+    await until(() => runs().length >= 4);
+    const both = runs().slice(2);
+    expect(both.filter((r) => r.args.includes("--resume")).length).toBe(1);
+  });
+
+
   it("runs an edit job and reports it done, with the agent's reply and session", async () => {
     const { page, runs, lines } = await setup();
     await page.post("/jobs", { id: "j1", changeSet: changeSet("j1") });

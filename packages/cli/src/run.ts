@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { basename } from "node:path";
-import type { AgentInfo, AgentSession, Job, JobError } from "@pilot/protocol";
+import type { AgentInfo, AgentSession, Job, JobError, PromptOptions } from "@pilot/protocol";
 import { DEFAULT_BRIDGE_PORT, isLocalHost, originKey, originOf, propsOf, questionOf, requestTargets, sessionOf } from "@pilot/protocol";
 import { AGENTS, type AgentCli, type AgentKind, detectAgents, exec, type FoundAgent, type RunOutput } from "./agents.ts";
 import { Bridge } from "./agent.ts";
@@ -9,6 +9,7 @@ import { attachmentBlocks, attachmentsDir, newAttachments } from "./attachments.
 import { projectName, saveAgent, savedAgent } from "./config.ts";
 import { factsSection } from "./facts.ts";
 import { jobLocations, searchable, whereSection, withComponentFiles } from "./locate.ts";
+import { type Lease, SessionPool } from "./pool.ts";
 import { jobPrompt, skillOf } from "./prompt.ts";
 import { warmSources } from "./sources.ts";
 import { warmStyles } from "./styles.ts";
@@ -80,6 +81,7 @@ export async function startRunner(options: RunnerOptions): Promise<Runner> {
     warmStyles(project);
   });
 
+  const pool = new SessionPool(project, cli.kind, options.configFile);
   const stop = new AbortController();
   const runs = new Set<Promise<void>>();
   const slots = options.slots ?? SLOTS;
@@ -95,7 +97,7 @@ export async function startRunner(options: RunnerOptions): Promise<Runner> {
           await sleep(2_000, stop.signal);
           continue;
         }
-        if (job && !stop.signal.aborted) await runJob(job, { bridge, cli, bin, project, out, signal: stop.signal });
+        if (job && !stop.signal.aborted) await runJob(job, { bridge, cli, bin, project, out, signal: stop.signal, pool });
       }
     })();
     runs.add(loop);
@@ -200,6 +202,13 @@ interface RunContext {
   project: string;
   out(line: string): void;
   signal: AbortSignal;
+  /** The sessions kept for the editor's jobs (pool.ts); without it, each edit starts a new session. */
+  pool?: SessionPool;
+}
+
+/** A job from the editor (Send): edits, not a comment or a task, nor an answer to the agent's question. */
+export function isEditorJob(job: Job): boolean {
+  return !job.changeSet.request && !job.answer;
 }
 
 /** Runs the agent for one job and reports it done (or why it couldn't). */
@@ -219,21 +228,33 @@ export async function runJob(job: Job, ctx: RunContext): Promise<void> {
       })
       .catch(() => {});
   }, CANCEL_POLL_MS);
+  // The editor's jobs resume a free session of the pool (its follow-up, its own session, once free).
+  let lease: Lease | undefined;
+  let ended: string | undefined;
   try {
-    const prompt = await promptFor(job, ctx.project, cli);
-    const resume = sessionToResume(job, cli.kind);
+    if (ctx.pool && isEditorJob(job)) {
+      const own = sessionOf(job.session);
+      if (job.attempt !== 2) lease = ctx.pool.take();
+      else if (own?.agent === cli.kind) lease = await ctx.pool.takeOwn(own.id);
+    }
+    const resume = lease ? lease.resume : sessionToResume(job, cli.kind);
+    // A session of the pool has read the edit guidelines: they're one line.
+    const known = !!lease?.resume && job.attempt !== 2;
+    const prompt = await promptFor(job, ctx.project, cli, { guidelinesKnown: known });
     const images = newAttachments(job)
       .map((f) => f.path as string)
       .filter((p) => /\.(png|jpe?g|gif|webp)$/i.test(p));
     let result = await runAgent(ctx, prompt, { resume, images, signal: stop.signal });
-    // A run that failed with no reply: once more (a session gone, a hiccup), without the session.
+    // A run that failed with no reply: once more (a session gone, a hiccup), without the session, the guidelines in full.
     if (!stop.signal.aborted && !result.reply && !signInProblem(result.error)) {
-      result = await runAgent(ctx, prompt, { images, signal: stop.signal });
+      result = await runAgent(ctx, known ? await promptFor(job, ctx.project, cli) : prompt, { images, signal: stop.signal });
     }
     if (stop.signal.aborted) {
+      ended = lease?.resume;
       out(`■ Stopped: ${describeJob(job)}`);
       return;
     }
+    if (result.reply) ended = result.session;
     const seconds = Math.round((Date.now() - started) / 1000);
     if (!result.reply) {
       const error = errorFor(cli, result.error);
@@ -252,6 +273,7 @@ export async function runJob(job: Job, ctx: RunContext): Promise<void> {
       out(`✗ ${jobError.title}: ${jobError.detail}`);
     }
   } finally {
+    lease?.release(ended);
     clearInterval(watch);
     ctx.signal.removeEventListener("abort", onStop);
   }
@@ -278,14 +300,14 @@ async function runAgent(ctx: RunContext, prompt: string, options: { resume?: str
  * files attached; first, the skill the designer picked, started the way the
  * agent's chat starts one (`invokeSkill`).
  */
-export async function promptFor(job: Job, project: string, cli: AgentCli): Promise<string> {
+export async function promptFor(job: Job, project: string, cli: AgentCli, options: PromptOptions = {}): Promise<string> {
   const j = withComponentFiles(job, project);
   // A follow-up resumes the job's session: it has these already.
   const located = j.attempt === 2 ? [] : jobLocations(j, project);
   const where = j.attempt === 2 ? "" : [whereSection(j, project, located), factsSection(j, project, located.map((l) => l.at.file))].filter(Boolean).join("\n\n");
   const texts = (await attachmentBlocks(j)).flatMap((b) => (b.type === "text" ? [b.text] : []));
   const skill = skillOf(j);
-  return [...(skill ? [cli.invokeSkill(skill)] : []), jobPrompt(j, where), ...texts].join("\n\n");
+  return [...(skill ? [cli.invokeSkill(skill)] : []), jobPrompt(j, where, options), ...texts].join("\n\n");
 }
 
 

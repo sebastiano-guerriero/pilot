@@ -8,6 +8,7 @@ import type {
   CommentMessage,
   CommentReference,
   CommentRequest,
+  CurrentStyle,
   ElementEdit,
   ElementState,
   ElementTarget,
@@ -26,7 +27,16 @@ import type {
  * the CLI), and widths are worked out from the code, Pilot measuring them
  * after the run.
  */
-export function formatPrompt(changeSet: ChangeSet): string {
+export interface PromptOptions {
+  /**
+   * The edits go to a session that ran the editor's jobs before (Pilot's
+   * session pool): it has read the guidelines, so they're one line, not the
+   * whole list. Edits only; a fresh session always gets them in full.
+   */
+  guidelinesKnown?: boolean;
+}
+
+export function formatPrompt(changeSet: ChangeSet, options: PromptOptions = {}): string {
   if (changeSet.request?.kind === "responsive") return formatResponsive(changeSet, changeSet.request);
   if (changeSet.request?.kind === "break-and-fix") return formatBreakFix(changeSet, changeSet.request);
   if (changeSet.request?.kind === "comment") return formatComment(changeSet, changeSet.request);
@@ -37,8 +47,9 @@ export function formatPrompt(changeSet: ChangeSet): string {
     "",
     "A designer adjusted the UI below in the browser with Pilot. Apply these changes to the source code.",
     "",
-    "Guidelines:",
-    ...editGuidelines(),
+    ...(options.guidelinesKnown
+      ? ["Guidelines: the same as for the earlier edits in this session (design intent, the project's own conventions, no builds or browser)."]
+      : ["Guidelines:", ...editGuidelines()]),
     "",
     `Page: ${page.url} (${page.title || "untitled"}) at ${page.viewport.width}x${page.viewport.height}`,
   ];
@@ -521,7 +532,19 @@ function targetLines(target: ElementTarget): string[] {
     const of = target.lookAlikesOf ? `other instances of \`${target.lookAlikesOf}\`, the same part of each` : "the same part of other copies";
     out.push(`- Look-alikes: ${target.lookAlikes} more on the page (${of}), not in this job`);
   }
+  if (target.style?.length) out.push("- Its style now (the page's CSS; what each comes to after `=`):", ...target.style.map((st) => `  - ${styleLine(st)}`));
   return out;
+}
+
+/** One property of an element's style now: `letter-spacing: var(--tracking-tight)` = `-0.4px`, from `.tracking-tight`. */
+function styleLine(st: CurrentStyle): string {
+  const value = `\`${st.property}: ${st.value}\`${st.computed ? ` = \`${st.computed}\`` : ""}`;
+  const source = st.source;
+  if (!source) return value;
+  if (source.kind === "inherited") return `${value}, inherited`;
+  if (source.kind === "inline") return `${value}, in its \`style\` attribute`;
+  const shared = source.elements && source.elements > 1 ? `, which matches ${source.elements} elements` : "";
+  return `${value}, from \`${source.selector}\`${source.media ? ` in \`@media ${source.media}\`` : ""}${shared}`;
 }
 
 function formatEdit(edit: ElementEdit, n: number): string[] {

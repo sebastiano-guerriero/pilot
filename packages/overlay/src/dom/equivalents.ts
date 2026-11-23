@@ -1,4 +1,5 @@
 import { splitColor } from "../css/colors.ts";
+import type { PageToken } from "@pilot/protocol";
 import { pageTokens } from "./tokens.ts";
 import { PREVIEW_ATTRIBUTE } from "./preview.ts";
 
@@ -174,4 +175,26 @@ function singlePurposeClasses(doc: Document, property: string): Array<{ name: st
   };
   for (const sheet of Array.from(doc.styleSheets ?? [])) walkSheet(sheet);
   return out;
+}
+
+/**
+ * The page's tokens with what each comes to now: a length in px when its
+ * value isn't one already (`clamp(…)`, `calc(…)`, rem), as the probe gives
+ * it at the page's width; others as they are.
+ */
+export function resolvedTokens(doc: Document = document): PageToken[] {
+  const tokens = pageTokens(doc);
+  const p = probe(doc);
+  try {
+    return tokens.map((t) => {
+      // Only a length whose px isn't written already (rem, vw, calc(), clamp()); `em` is the element's own font size, not the probe's.
+      const single = !/[\s,]/.test(t.value.replace(/\([^()]*(\([^()]*\)[^()]*)*\)/g, ""));
+      const length = single && /\d(rem|px|vw|vh|vmin|vmax)\b/.test(t.value) && !/\dem\b/.test(t.value) && !/^-?[\d.]+px$/.test(t.value);
+      if (!p || !length || t.kind === "color" || t.kind === "font" || /%/.test(t.value)) return { name: t.name, value: t.value };
+      const now = computed(p.element, "width", `var(${t.name})`);
+      return now && now !== t.value && /px$/.test(now) ? { name: t.name, value: t.value, now } : { name: t.name, value: t.value };
+    });
+  } finally {
+    p?.remove();
+  }
 }

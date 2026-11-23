@@ -75,6 +75,30 @@ describe("formatPrompt", () => {
     expect(prompt).toContain("- `color: #7553fd` is the page's tokens `var(--color-primary)`, `var(--brand)`: use one where it fits");
   });
 
+  it("a comment's element with its style now: each value, what it comes to, where it's set", () => {
+    const prompt = formatPrompt({
+      ...changeSet,
+      edits: [],
+      request: {
+        kind: "comment",
+        breakpoints: [],
+        thread: [{ from: "designer", text: "Tighter", at: "" }],
+        target: {
+          ...changeSet.edits[0]!.target,
+          style: [
+            { property: "font-family", value: "Geist, sans-serif", source: { kind: "inherited" } },
+            { property: "letter-spacing", value: "var(--tracking-tight)", computed: "-0.475px", source: { kind: "rule", selector: ".tracking-tight", elements: 6 } },
+            { property: "margin-top", value: "4px", source: { kind: "inline" } },
+          ],
+        },
+      },
+    });
+    expect(prompt).toContain("- Its style now (the page's CSS; what each comes to after `=`):");
+    expect(prompt).toContain("  - `font-family: Geist, sans-serif`, inherited");
+    expect(prompt).toContain("  - `letter-spacing: var(--tracking-tight)` = `-0.475px`, from `.tracking-tight`, which matches 6 elements");
+    expect(prompt).toContain("  - `margin-top: 4px`, in its `style` attribute");
+  });
+
   it("a property the page didn't set reads not set", () => {
     const prompt = formatPrompt({
       ...changeSet,

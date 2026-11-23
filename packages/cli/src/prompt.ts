@@ -1,5 +1,5 @@
 import type { Job } from "@pilot/protocol";
-import { formatPrompt, sharedChoiceMeaning, SKILL_NAME } from "@pilot/protocol";
+import { formatPrompt, type PromptOptions, sharedChoiceMeaning, SKILL_NAME } from "@pilot/protocol";
 
 /**
  * What the agent reads for a job Pilot runs it for (run.ts): the change
@@ -9,7 +9,7 @@ import { formatPrompt, sharedChoiceMeaning, SKILL_NAME } from "@pilot/protocol";
  * in the project), then the footer: the reply is the notes, with a question
  * or a props list in a `pilot` block at its end (see replyOf in run.ts).
  */
-export function jobPrompt(job: Job, where = ""): string {
+export function jobPrompt(job: Job, where = "", options: PromptOptions = {}): string {
   const body =
     job.attempt === 2 && job.issues?.length
       ? taskFollowUp(job)
@@ -17,7 +17,7 @@ export function jobPrompt(job: Job, where = ""): string {
         ? followUp(job)
         : job.answer && job.question
           ? answered(job)
-          : formatPrompt(job.changeSet);
+          : formatPrompt(job.changeSet, options);
   return `${body}${where ? `\n${where}\n` : ""}
 ---
 ${runFooter(job)}

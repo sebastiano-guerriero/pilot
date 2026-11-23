@@ -79,6 +79,8 @@ export interface Tailwind {
   version?: string;
   /** Its theme: Tailwind's defaults, then the project's `@theme`, by variable name without `--`. */
   theme: Map<string, string>;
+  /** The variables the project's own `@theme` sets (its colors, not Tailwind's palette). */
+  own: Set<string>;
 
 }
 
@@ -105,8 +107,9 @@ export function tailwindOf(root: string, near: string[] = [], url?: string): Tai
   const defaults = findUp(dirname(entry), root, join("node_modules", "tailwindcss", "theme.css"));
   if (defaults) readTheme(defaults, theme, 0);
   else for (const [k, v] of DEFAULTS) theme.set(k, v); // Not installed yet: Tailwind 4's own scales (its colors left out).
-  readTheme(entry, theme, 0);
-  return { entry: relative(root, entry), ...(version ? { version } : {}), theme };
+  const own = new Set<string>();
+  readTheme(entry, theme, 0, own);
+  return { entry: relative(root, entry), ...(version ? { version } : {}), theme, own };
 }
 
 function importsTailwind(file: string): boolean {
@@ -158,7 +161,7 @@ function declaredVersion(pkg: string | null): string | undefined {
 }
 
 /** Reads `@theme` blocks' variables into `theme` (later ones win, `--x-*: initial` clears a namespace), following local `@import`s. */
-function readTheme(file: string, theme: Map<string, string>, depth: number): void {
+function readTheme(file: string, theme: Map<string, string>, depth: number, own?: Set<string>): void {
   let css: string;
   try {
     css = readFileSync(file, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
@@ -166,16 +169,18 @@ function readTheme(file: string, theme: Map<string, string>, depth: number): voi
     return;
   }
   if (depth < 3)
-    for (const m of css.matchAll(/@import\s+(?:url\()?["'](\.{1,2}\/[^"']+\.css)["']/g)) readTheme(resolve(dirname(file), m[1] as string), theme, depth + 1);
+    for (const m of css.matchAll(/@import\s+(?:url\()?["'](\.{1,2}\/[^"']+\.css)["']/g)) readTheme(resolve(dirname(file), m[1] as string), theme, depth + 1, own);
   for (const block of themeBlocks(css)) {
     for (const m of block.matchAll(/--([\w-]+|\*)(-\*)?\s*:\s*([^;]+);/g)) {
       const name = m[1] as string;
       const value = (m[3] as string).replace(/\s+/g, " ").trim();
       if (value === "initial" && (m[2] || name === "*")) {
         for (const key of [...theme.keys()]) if (name === "*" || key.startsWith(`${name}-`)) theme.delete(key);
+        own?.add(`${name}-*`);
         continue;
       }
       theme.set(name, value);
+      own?.add(name);
     }
   }
 }
@@ -546,6 +551,24 @@ export function factsSection(job: Job, root: string, near: string[] = []): strin
       );
     }
   }
+  // A comment or a task: where its elements' style is set, and the scales to pick from (what will change isn't known).
+  const request = job.changeSet.request;
+  if (request && request.kind !== "props") {
+    for (const target of [request.target, ...(request.others ?? [])]) {
+      for (const st of target.style ?? []) {
+        if (st.source?.kind !== "rule") continue;
+        let at: RuleSource | null = null;
+        try {
+          at = ruleSource(st.source.selector, st.property, root, near, st.source.media);
+        } catch {
+          // Unreadable stylesheets: nothing said.
+        }
+        if (at?.declaration) add(`- \`${target.path}\`'s \`${st.property}\` is set in \`${at.rule.file}:${at.declaration.line}\`: \`${at.declaration.property}: ${at.declaration.value};\`.`);
+      }
+    }
+    if (tw) lines.push(...tailwindScales(tw));
+    else lines.push(...tokenScales(job.changeSet.tokens ?? []));
+  }
   const pkg = near.length ? nearestPackage(dirname(join(root, near[0] as string)), root) : null;
   const rebuild = rebuildOf(pkg ?? (tw ? nearestPackage(dirname(join(root, tw.entry)), root) : null), root);
   if (rebuild)
@@ -555,4 +578,58 @@ export function factsSection(job: Job, root: string, near: string[] = []): strin
         : `- ${rebuild.by[0]?.toUpperCase()}${rebuild.by.slice(1)} updates the page on save: don't build it or check the compiled output.`,
     );
   return lines.length ? ["## The project", "", ...lines].join("\n") : "";
+}
+
+/** At most this many steps of a scale said, and scales of the page's tokens. */
+const MAX_STEPS = 16;
+const MAX_SCALES = 14;
+
+/** A theme's scale in short form: `tight -0.025em, normal 0em`, lengths in px when they're rem. */
+function scaleLine(tw: Tailwind, namespace: string, label: string): string | null {
+  const steps = scale(tw.theme, namespace).filter(([name]) => !(namespace === "font" && name.startsWith("weight")));
+  if (!steps.length) return null;
+  const shown = steps.slice(0, MAX_STEPS).map(([name, value]) => {
+    const n = /rem$|^calc\(/.test(value) ? toPx(value, tw.theme) : null;
+    const v = namespace === "font" ? (value.split(",")[0] as string).replace(/["']/g, "").trim() : n !== null ? px(n) : value;
+    return `\`${name}\` ${v}`;
+  });
+  return `  - ${label}: ${shown.join(", ")}${steps.length > MAX_STEPS ? ", …" : ""}`;
+}
+
+/** The Tailwind theme's scales a comment or a task picks from, in short form (none made up: `tracking-tightest` isn't one). */
+function tailwindScales(tw: Tailwind): string[] {
+  const colors = scale(tw.theme, "color").filter(([name]) => tw.own.has(`color-${name}`));
+  const lines = [
+    scaleLine(tw, "tracking", "letter spacing (`tracking-`)"),
+    scaleLine(tw, "font-weight", "font weight (`font-`)"),
+    scaleLine(tw, "text", "font size (`text-`)"),
+    scaleLine(tw, "leading", "line height (`leading-`)"),
+    scaleLine(tw, "radius", "radius (`rounded-`)"),
+    scaleLine(tw, "font", "font family (`font-`)"),
+    scaleLine(tw, "breakpoint", "breakpoints"),
+    colors.length
+      ? `  - the project's colors (\`text-\`, \`bg-\`…): ${colors
+          .slice(0, 24)
+          .map(([name, value]) => `\`${name}\` ${value}`)
+          .join(", ")}${colors.length > 24 ? ", …" : ""}`
+      : null,
+  ].filter((l): l is string => !!l);
+  return lines.length ? ["- Its theme's scales (only these exist, with the spacing steps above and Tailwind's palette):", ...lines] : [];
+}
+
+/** The page's tokens a comment or a task picks from, grouped by scale (`--space-*`: xs 8px, sm 12px…). */
+function tokenScales(tokens: readonly { name: string; value: string; now?: string }[]): string[] {
+  const groups = new Map<string, string[]>();
+  for (const t of tokens) {
+    const m = /^(--[\w-]*?)-?([\w]+)$/.exec(t.name);
+    const group = m && m[1] && m[1] !== "--" ? `${m[1]}-*` : t.name;
+    const step = m && m[1] && m[1] !== "--" ? (m[2] as string) : "";
+    const value = t.now ?? (t.value.length > 40 ? `${t.value.slice(0, 39)}…` : t.value);
+    groups.set(group, [...(groups.get(group) ?? []), step ? `${step} ${value}` : value]);
+  }
+  const lines = [...groups]
+    .filter(([, steps]) => steps.length > 1)
+    .slice(0, MAX_SCALES)
+    .map(([group, steps]) => `  - \`${group}\`: ${steps.slice(0, MAX_STEPS).join(", ")}${steps.length > MAX_STEPS ? ", …" : ""}`);
+  return lines.length ? ["- The page's tokens, by scale (what each comes to at this width): use these rather than raw values", ...lines] : [];
 }

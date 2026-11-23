@@ -4,6 +4,7 @@ import { componentProps } from "../dom/component.ts";
 import { fileTokensNow } from "../dom/tokens.ts";
 import { declaredValue } from "../dom/declared.ts";
 import { equivalentsOf } from "../dom/equivalents.ts";
+import { currentStyle, tokensNow } from "../dom/currentStyle.ts";
 import { similarOf } from "../dom/similar.ts";
 import { describeElement } from "../dom/target.ts";
 import { normalizeText, textRunOf } from "../dom/text.ts";
@@ -70,6 +71,12 @@ export function buildChangeSet(
   };
 }
 
+/** The page's tokens, for a request's ChangeSet.tokens; nothing when it has none. */
+function tokensOf(): { tokens?: ReturnType<typeof tokensNow> } {
+  const tokens = tokensNow();
+  return tokens.length ? { tokens } : {};
+}
+
 /**
  * The file tokens (Pilot's variables for the project's token files, see
  * setFileTokens) the edits' values use, as `fileTokens` for the prompt;
@@ -102,7 +109,9 @@ export function buildRequest(
 ): ChangeSet {
   // Several selected together: one request about all of them, `element` first.
   const selected = [element, ...(options.others ?? []).filter((e) => e !== element)];
-  const [target, ...others] = selected.map((e) => ({ ...describeElement(e), ...lookAlikes(e, selected) })) as [
+  // Its style now, for what the comment or task changes (see currentStyle); `/props` changes props.
+  const styled = (e: Element) => (kind === "props" ? {} : { style: currentStyle(e) });
+  const [target, ...others] = selected.map((e) => ({ ...describeElement(e), ...lookAlikes(e, selected), ...styled(e) })) as [
     ElementTarget,
     ...ElementTarget[],
   ];
@@ -139,6 +148,7 @@ export function buildRequest(
     },
     edits: [],
     request,
+    ...(kind === "props" ? {} : tokensOf()),
     ...(options.note?.trim() ? { note: options.note.trim() } : {}),
   };
 }
