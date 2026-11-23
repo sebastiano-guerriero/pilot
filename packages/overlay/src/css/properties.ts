@@ -369,6 +369,10 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   "backdrop-filter": { initial: "none", keywords: ["none"], negative: false },
   "mask-composite": { initial: "add", keywords: [...MASK_COMPOSITE_VALUES], negative: false },
   "border-radius": { initial: "0", keywords: [], negative: false, named: { full: "calc(infinity * 1px)" } },
+  "border-top-left-radius": { initial: "0", keywords: [], negative: false, named: { full: "calc(infinity * 1px)" } },
+  "border-top-right-radius": { initial: "0", keywords: [], negative: false, named: { full: "calc(infinity * 1px)" } },
+  "border-bottom-right-radius": { initial: "0", keywords: [], negative: false, named: { full: "calc(infinity * 1px)" } },
+  "border-bottom-left-radius": { initial: "0", keywords: [], negative: false, named: { full: "calc(infinity * 1px)" } },
   opacity: { initial: "1", keywords: [], negative: false, kind: "percent" },
   "font-family": { initial: "", keywords: [], negative: false, kind: "font-family" },
   "font-size": {

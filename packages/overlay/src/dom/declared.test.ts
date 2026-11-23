@@ -192,6 +192,13 @@ describe("declaredValue (with real stylesheets)", () => {
     expect(declaredValue(element, "width")).toMatchObject({ value: "5px", important: true });
   });
 
+  it("a corner comes from border-radius, filled as a box's sides; its elliptical form isn't one value per corner", () => {
+    sheet(".card { border-radius: var(--r, 8px) 4px; }");
+    expect(declaredValue(element, "border-top-left-radius")?.value).toBe("var(--r, 8px)");
+    expect(declaredValue(element, "border-bottom-left-radius")?.value).toBe("4px");
+    expect(pickSide("10px / 20px", { of: "box", index: 0 })).toBeNull();
+  });
+
   it("a side comes from a shorthand", () => {
     sheet(".card { padding: 10px 18px; }");
     expect(declaredValue(element, "padding-right")?.value).toBe("18px");
