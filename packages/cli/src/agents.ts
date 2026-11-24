@@ -50,6 +50,9 @@ export interface RunOptions {
   platform?: NodeJS.Platform;
 }
 
+/** A run's error when the agent printed nothing to read (the runner adds the exit code). */
+export const NOTHING_PRINTED = "The agent printed nothing.";
+
 export interface AgentCli {
   kind: AgentKind;
   label: string;
@@ -59,6 +62,10 @@ export interface AgentCli {
   install: string;
   /** How to sign in, for the designer. */
   signIn: string;
+  /** How to update it, for the designer: a tool older than Pilot's flags fails every run (see missingFlags). */
+  update: string;
+  /** The arguments that print the help of the command Pilot runs, which lists its flags (see missingFlags). */
+  help: string[];
   /** The sign-in check: its arguments, and whether its output says signed in. */
   status: { args: string[]; ok(output: string, code: number | null): boolean };
   /** An API key in this environment variable signs it in too (its sign-in check may not know: Cursor's says "Not logged in"). */
@@ -138,7 +145,7 @@ function parseStream(stdout: string): RunOutput {
       if (Array.isArray(event.permission_denials)) refused = event.permission_denials.flatMap(denialOf);
     }
   }
-  if (!session && !reply && !error) error = lastLines(stdout) || "The agent printed nothing.";
+  if (!session && !reply && !error) error = lastLines(stdout) || NOTHING_PRINTED;
   return { session, reply, error, ...(refused?.length ? { refused } : {}) };
 }
 
@@ -158,7 +165,7 @@ function parseCodex(stdout: string): RunOutput {
       error = String(event.message ?? e?.message ?? "The agent stopped with an error.");
     }
   }
-  if (!session && !reply && !error) error = lastLines(stdout) || "The agent printed nothing.";
+  if (!session && !reply && !error) error = lastLines(stdout) || NOTHING_PRINTED;
   return { session, reply, error };
 }
 
@@ -236,6 +243,8 @@ export const AGENTS: Record<AgentKind, AgentCli> = {
     bins: ["claude"],
     install: "curl -fsSL https://claude.ai/install.sh | bash",
     signIn: "claude auth login",
+    update: "claude update",
+    help: ["--help"],
     status: { args: ["auth", "status"], ok: (out) => /"loggedIn"\s*:\s*true/.test(out) },
     // The designer's own settings (allow rules, MCP servers, skills), edits in the project accepted.
     // A run can't prompt: `-p` refuses what would ask (checked; `--permission-prompts none` says the
@@ -263,6 +272,8 @@ export const AGENTS: Record<AgentKind, AgentCli> = {
     bins: ["codex"],
     install: "npm install -g @openai/codex",
     signIn: "codex login",
+    update: "npm install -g @openai/codex@latest",
+    help: ["exec", "--help"],
     status: { args: ["login", "status"], ok: (_out, code) => code === 0 },
     // Its sandbox in the mode its chat uses for a project (writes in the project), with the designer's
     // own settings for the rest (network, web search, rules). `exec` never asks: what would is refused.
@@ -288,6 +299,8 @@ export const AGENTS: Record<AgentKind, AgentCli> = {
     bins: ["cursor-agent", "agent"],
     install: "curl https://cursor.com/install -fsS | bash",
     signIn: "cursor-agent login",
+    update: "cursor-agent update",
+    help: ["--help"],
     status: { args: ["status"], ok: (out) => /logged in/i.test(out) && !/not logged in/i.test(out) },
     keyEnv: "CURSOR_API_KEY",
     // Its allowlist mode, not its sandbox: the sandbox doesn't exist on Windows and fails on Ubuntu's
@@ -353,6 +366,34 @@ export interface FoundAgent {
 }
 
 /** The agents installed here, each with whether it's signed in (each check takes about a second). */
+/**
+ * The long flags Pilot runs this agent with that its installed tool's help
+ * doesn't list: a tool older than them fails every run, and Cursor's
+ * printed nothing then ("The agent printed nothing", found with a
+ * year-old cursor-agent that didn't know `--trust` or `--sandbox`). Null
+ * when the help can't be read: then nothing is said. Only ever said, never
+ * a reason to refuse to run: a help worded unlike Pilot expects mustn't stop
+ * a tool that works.
+ */
+export async function missingFlags(cli: AgentCli, bin: string, run: typeof exec = exec): Promise<string[] | null> {
+  const flags = [...new Set(cli.args({ resume: "session", readDirs: ["dir"], images: ["image.png"] }).filter((a) => a.startsWith("--")))];
+  let help: ExecResult;
+  try {
+    help = await run(bin, cli.help, { timeoutMs: 15_000 });
+  } catch {
+    return null;
+  }
+  const text = `${help.stdout}\n${help.stderr}`;
+  // A help that names none of them isn't one Pilot can read (another language, an error): nothing to say.
+  if (help.killed || !text.trim() || !flags.some((f) => listed(text, f))) return null;
+  return flags.filter((f) => !listed(text, f));
+}
+
+/** Whether a help text lists `flag` (`--trust`, not `--trusted`). */
+function listed(text: string, flag: string): boolean {
+  return new RegExp(`(^|[^\\w-])${flag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w-])`).test(text);
+}
+
 export async function detectAgents(kinds: readonly AgentKind[] = AGENT_KINDS): Promise<FoundAgent[]> {
   const found = await Promise.all(
     kinds.map(async (kind): Promise<FoundAgent | null> => {

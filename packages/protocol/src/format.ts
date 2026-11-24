@@ -149,6 +149,16 @@ function sharedCode(): string {
 export const UNCLEAR_ASK =
   '**Unclear, or already done:** if the comment could mean more than one thing ("make this square": square corners, or a 1:1 shape?), or the element already seems to be what it asks, don\'t search for what the designer meant and don\'t guess: leave that part, and ask them in your notes, in one short sentence naming the options ("Square corners, or a 1:1 shape?"). Their answer comes back as their next comment in this thread. (Your notes, not the `pilot` block: that one is for the shared-code question below.) What they meant is in the comment, the elements above and the code, nowhere else: not in git history, other agent sessions or the web.';
 
+/**
+ * A comment and the edits sent with it disagree on a property: the comment
+ * was written after the edits, so it wins. Found on the bench lab: an edit
+ * set `margin-bottom: var(--spacing)`, the comment said "10× the spacing
+ * variable"; the agent wrote `mb-10`, and the follow-up for the edit's value
+ * made it switch to `mb-1`, undoing the comment.
+ */
+export const COMMENT_WINS =
+  "**The comment was written after these edits, so it wins:** where it asks for something else for the same property (an edit sets a margin, the comment says \"10× the spacing\"), do what the comment asks for that property and say so in your notes. Pilot's check may then find the edit's value missing and send it back once: keep what the comment asked.";
+
 /** The edit jobs' guidelines: what every edit asks of the code. */
 export function editGuidelines(): string[] {
   return [
@@ -389,6 +399,8 @@ function formatComment(changeSet: ChangeSet, request: CommentRequest): string {
       "## The designer's edits, sent with the comment",
       "",
       "Before writing it, the designer changed these in Pilot's editor: apply them too, exactly, as design edits. The comment may be about them (\"like this, on mobile too\"). Pilot checks them on the page when you're done.",
+      "",
+      COMMENT_WINS,
       "",
       "Guidelines:",
       ...editGuidelines(),

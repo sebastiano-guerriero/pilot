@@ -117,6 +117,12 @@ export function followUp(job: Job): string {
     "",
     "Fix them: the usual causes are a rule that overrides yours (more specific, later, or in a media query), an edit in the wrong file or component, or a missed change. If you chose a different value on purpose (a token or the nearest step in the project's scale), keep it and say so in your notes. Pilot takes what the code gives after this.",
   );
+  // A comment's edits: where the agent followed the comment instead of an edit, the comment stands (COMMENT_WINS).
+  if (job.changeSet.request?.kind === "comment")
+    lines.push(
+      "",
+      "These edits came with the designer's comment, which was written after them. Where you did what the comment asked instead of an edit's value, that's right: keep it, don't switch to the edit's value, and say so in your notes.",
+    );
   return lines.join("\n");
 }
 

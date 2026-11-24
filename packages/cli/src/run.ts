@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { basename } from "node:path";
 import type { AgentInfo, AgentSession, Job, JobError, PromptOptions } from "@pilot/protocol";
 import { DEFAULT_BRIDGE_PORT, isLocalHost, originKey, originOf, propsOf, questionOf, requestTargets, sessionOf } from "@pilot/protocol";
-import { AGENTS, type AgentCli, type AgentKind, detectAgents, exec, type FoundAgent, type Refused, refusedNote, refusedOf, type RunOutput } from "./agents.ts";
+import { AGENTS, type AgentCli, type AgentKind, detectAgents, exec, type FoundAgent, missingFlags, NOTHING_PRINTED, type Refused, refusedNote, refusedOf, type RunOutput } from "./agents.ts";
 import { Bridge } from "./agent.ts";
 import { attachmentBlocks, attachmentsDir, newAttachments } from "./attachments.ts";
 import { projectName, saveAgent, savedAgent } from "./config.ts";
@@ -75,6 +75,13 @@ export async function startRunner(options: RunnerOptions): Promise<Runner> {
   }
 
   const { cli, bin } = await pickAgent(options, choose, out);
+  // Whether the installed tool knows the flags Pilot runs it with (missingFlags): said at start, and checked again when a run
+  // fails (the designer may have updated it since). In plain words first: whoever reads it may be a designer; the flags last.
+  // Not for a stand-in (`bin`: tests, trying states by hand): it isn't the agent's tool.
+  const checkFlags = options.bin ? undefined : () => missingFlags(cli, bin).catch(() => null);
+  void checkFlags?.().then((missing) => {
+    if (missing?.length) out(outdatedNote(cli, missing));
+  });
   const agent: AgentInfo = { id: randomUUID(), label: `${cli.label} · ${basename(project)}`, folder: project, kind: cli.kind };
   const bridge = new Bridge(agent, options.port ?? (Number(process.env.PILOT_PORT) || DEFAULT_BRIDGE_PORT));
 
@@ -103,7 +110,7 @@ export async function startRunner(options: RunnerOptions): Promise<Runner> {
           await sleep(2_000, stop.signal);
           continue;
         }
-        if (job && !stop.signal.aborted) await runJob(job, { bridge, cli, bin, project, out, signal: stop.signal, pool });
+        if (job && !stop.signal.aborted) await runJob(job, { bridge, cli, bin, project, out, signal: stop.signal, pool, checkFlags });
       }
     })();
     runs.add(loop);
@@ -205,6 +212,8 @@ interface RunContext {
   bridge: Bridge;
   cli: AgentCli;
   bin: string;
+  /** Checks the flags Pilot runs it with that its tool's help doesn't list (missingFlags; null: unknown). None for a stand-in. */
+  checkFlags?: () => Promise<string[] | null>;
   project: string;
   out(line: string): void;
   signal: AbortSignal;
@@ -264,9 +273,11 @@ export async function runJob(job: Job, ctx: RunContext): Promise<void> {
     if (result.reply) ended = result.session;
     const seconds = Math.round((Date.now() - started) / 1000);
     if (!result.reply) {
-      const error = errorFor(cli, result.error);
+      const error = errorFor(cli, result.error, (await ctx.checkFlags?.()) ?? undefined);
       await bridge.done(job.id, undefined, undefined, undefined, { error });
-      out(`✗ ${error.title}. ${error.detail}${result.error && !signInProblem(result.error) ? `\n  ${result.error.split("\n")[0]}` : ""}`);
+      // The whole error here (the page has its most telling line): what the agent printed last, a few lines.
+      const said = (result.error ?? "").split("\n").map((l) => l.trim()).filter(Boolean).slice(-8);
+      out(`✗ ${error.title}. ${error.detail}${said.length && !signInProblem(result.error) ? `\n${said.map((l) => `  ${l}`).join("\n")}` : ""}`);
       return;
     }
     const reply = replyOf(result.reply);
@@ -322,6 +333,8 @@ async function runAgent(
   const parsed = cli.parse(run.stdout);
   if (!parsed.reply && !parsed.error) parsed.error = run.stderr.trim().split("\n").slice(-3).join("\n") || `exit code ${run.code}`;
   if (!parsed.reply && run.stderr && !parsed.error?.includes(run.stderr.trim().slice(0, 40))) parsed.error = `${parsed.error}\n${run.stderr.trim().slice(-500)}`;
+  // Nothing on either stream: the exit code is all there is to say.
+  if (!parsed.reply && !run.stderr.trim() && parsed.error === NOTHING_PRINTED) parsed.error = `${NOTHING_PRINTED} (exit code ${run.code}${run.killed ? ", stopped" : ""})`;
   return parsed;
 }
 
@@ -377,12 +390,30 @@ function signInProblem(error: string | undefined): boolean {
   return !!error && /not (logged|signed) in|log ?in required|please (run )?\/?login|authenticat|unauthori[sz]ed|\b401\b|api key/i.test(error);
 }
 
+/**
+ * What the terminal says when the agent's tool is older than Pilot's flags:
+ * what to do first, in plain words (a designer may be reading), the flags
+ * last, for whoever wants to know why.
+ */
+export function outdatedNote(cli: AgentCli, missing: string[]): string {
+  return [`! ${cli.label} needs an update to work with Pilot. In a terminal, run:`, `    ${cli.update}`, `  (This version doesn't support ${missing.join(", ")}, which Pilot uses.)`].join("\n");
+}
+
 /** A run's error for the designer: what's wrong and what to do. */
-export function errorFor(cli: AgentCli, error: string | undefined): JobError {
+export function errorFor(cli: AgentCli, error: string | undefined, missing?: string[]): JobError {
   if (signInProblem(error)) return { title: `${cli.label} isn't signed in`, detail: `Run ${cli.signIn} in a terminal, then send again.` };
+  // Its tool doesn't know flags Pilot runs it with: every run fails until it's updated.
+  if (missing?.length)
+    return {
+      title: `${cli.label} needs an update`,
+      detail: `This version of ${cli.label} can't work with Pilot yet. In a terminal, run ${cli.update}, then send again.`,
+    };
+  // The line that says what went wrong: not the generic one when the agent's own error follows it.
+  const lines = (error ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
+  const telling = lines.find((l) => !l.startsWith(NOTHING_PRINTED)) ?? lines[0] ?? "It stopped without a reply.";
   return {
     title: `${cli.label} couldn't do this job`,
-    detail: `${(error ?? "It stopped without a reply.").split("\n")[0]?.slice(0, 300)} The terminal running npx usepilot has the details. Send again to retry.`,
+    detail: `${telling.slice(0, 300)} The terminal running npx usepilot has the details. Send again to retry.`,
   };
 }
 

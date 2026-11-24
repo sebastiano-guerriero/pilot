@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { AGENTS, agentFromEnv, childEnv, exec, findBin, refusedNote, refusedOf } from "./agents.ts";
+import { AGENTS, agentFromEnv, childEnv, exec, findBin, missingFlags, refusedNote, refusedOf } from "./agents.ts";
 
 // What each tool printed in real runs (2026-11), trimmed.
 const CLAUDE_STREAM = [
@@ -125,6 +125,32 @@ describe("finding an agent", () => {
     const dir = mkdtempSync(join(tmpdir(), "pilot-bin-"));
     writeFileSync(join(dir, "codex.cmd"), "");
     expect(findBin(["codex"], { PATH: dir, PATHEXT: ".EXE;.CMD" }, "win32", dir)).toBe(join(dir, "codex.cmd"));
+  });
+});
+
+describe("an agent's tool too old for Pilot's flags", () => {
+  const helps = (text: string) => (async () => ({ stdout: text, stderr: "", code: 0, killed: false })) as unknown as typeof exec;
+  // Cursor's help as the 2025.09.12 tool printed it (no --trust, no --sandbox), and as a current one does.
+  const old = "Usage: cursor-agent [options]\n  -p, --print  Print responses\n  --output-format <format>  text | json | stream-json\n  --resume [chatId]  Resume a chat session\n  -f, --force  Force allow commands";
+  const current = `${old}\n  --sandbox <mode>  Explicitly enable or disable sandbox mode\n  --trust  Trust the current workspace without prompting`;
+
+  it("names the flags Pilot runs it with that its help doesn't list", async () => {
+    expect(await missingFlags(AGENTS.cursor, "cursor-agent", helps(old))).toEqual(["--trust", "--sandbox"]);
+    expect(await missingFlags(AGENTS.cursor, "cursor-agent", helps(current))).toEqual([]);
+  });
+
+  it("a flag counts only as itself (--trust isn't --trusted)", async () => {
+    expect(await missingFlags(AGENTS.cursor, "cursor-agent", helps(`${old}\n  --trusted  something else\n  --sandbox <mode>`))).toEqual(["--trust"]);
+  });
+
+  it("says nothing when the help can't be read: no output, or none of its flags", async () => {
+    expect(await missingFlags(AGENTS.cursor, "cursor-agent", helps(""))).toBeNull();
+    expect(await missingFlags(AGENTS.cursor, "cursor-agent", helps("Fehler: unbekannter Befehl"))).toBeNull();
+  });
+
+  it("reads the help of the command Pilot runs: Codex's exec", () => {
+    expect(AGENTS.codex.help).toEqual(["exec", "--help"]);
+    for (const cli of Object.values(AGENTS)) expect(cli.update).toBeTruthy();
   });
 });
 

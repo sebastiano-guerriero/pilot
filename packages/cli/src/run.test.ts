@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { ChangeSet, Job, PageEvent } from "@pilot/protocol";
 import { afterEach, describe, expect, it } from "vitest";
 import { AGENTS } from "./agents.ts";
-import { activityOf, errorFor, replyOf, sessionToResume, startRunner } from "./run.ts";
+import { activityOf, errorFor, outdatedNote, replyOf, sessionToResume, startRunner } from "./run.ts";
 
 const APP = "http://localhost:5173";
 const changeSet = (id: string, extra: Partial<ChangeSet> = {}): ChangeSet => ({
@@ -318,5 +318,18 @@ describe("a run's reply", () => {
   it("explains a failed run", () => {
     expect(errorFor(AGENTS.codex, "401 Unauthorized").title).toBe("Codex isn't signed in");
     expect(errorFor(AGENTS.cursor, "stream disconnected").detail).toMatch(/^stream disconnected/);
+    // The agent's own error, not the generic line before it.
+    expect(errorFor(AGENTS.cursor, "The agent printed nothing.\nerror: unknown option '--trust'").detail).toMatch(/^error: unknown option '--trust'/);
+    expect(errorFor(AGENTS.cursor, "The agent printed nothing. (exit code 1)").detail).toMatch(/^The agent printed nothing\. \(exit code 1\)/);
+    // A tool older than Pilot's flags: in plain words (a designer may read it), what to do; no flags on the page.
+    const old = errorFor(AGENTS.cursor, "The agent printed nothing. (exit code 1)", ["--trust", "--sandbox"]);
+    expect(old.title).toBe("Cursor needs an update");
+    expect(old.detail).toBe("This version of Cursor can't work with Pilot yet. In a terminal, run cursor-agent update, then send again.");
+    // The terminal: what to do first, the command on its own line, the flags last.
+    expect(outdatedNote(AGENTS.cursor, ["--trust", "--sandbox"])).toBe(
+      "! Cursor needs an update to work with Pilot. In a terminal, run:\n    cursor-agent update\n  (This version doesn't support --trust, --sandbox, which Pilot uses.)",
+    );
+    // Signed out comes first: updating wouldn't help.
+    expect(errorFor(AGENTS.cursor, "Not logged in", ["--trust"]).title).toBe("Cursor isn't signed in");
   });
 });

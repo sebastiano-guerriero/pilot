@@ -351,6 +351,8 @@ describe("formatPrompt", () => {
     expect(text).toContain("Guidelines:");
     expect(text).toContain("### 1. `");
     expect(text).toContain("| `opacity` | `1` | `0.8` |");
+    // Written after the edits, the comment wins where they disagree on a property.
+    expect(text).toContain("**The comment was written after these edits, so it wins:**");
     // Without edits, none of it.
     expect(formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, thread, breakpoints: [] } })).not.toContain("sent with the comment");
   });

@@ -7,6 +7,29 @@ const edit = (selector: string) => ({ target: target(selector), changes: [{ prop
 const jobOf = (...selectors: string[]) =>
   ({ id: "j", changeSet: { page: { url: "http://localhost:5173/", title: "Home", viewport: { width: 1280, height: 800 } }, edits: selectors.map(edit) } }) as unknown as Job;
 
+describe("a follow-up", () => {
+  const differences = [{ selector: ".card", property: "margin-bottom", expected: "4px", actual: "40px", ok: false }];
+
+  it("of a comment's edits: where the agent followed the comment instead, it keeps it", () => {
+    const base = jobOf(".card");
+    const comment = {
+      ...base,
+      attempt: 2,
+      differences,
+      changeSet: { ...base.changeSet, request: { kind: "comment", target: target(".card"), thread: [{ from: "designer", text: "10× the spacing", at: "" }], breakpoints: [] } },
+    } as unknown as Job;
+    const prompt = jobPrompt(comment);
+    expect(prompt).toContain("# Pilot design edits: follow-up");
+    expect(prompt).toContain("keep it, don't switch to the edit's value");
+  });
+
+  it("of a Send's edits: no comment to follow", () => {
+    const prompt = jobPrompt({ ...jobOf(".card"), attempt: 2, differences } as unknown as Job);
+    expect(prompt).toContain("# Pilot design edits: follow-up");
+    expect(prompt).not.toContain("don't switch to the edit's value");
+  });
+});
+
 describe("the run's footer", () => {
   it("on several elements, a question says which one it's about (asked there)", () => {
     const prompt = jobPrompt(jobOf(".card", "footer a"));
