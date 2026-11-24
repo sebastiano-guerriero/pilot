@@ -11,8 +11,11 @@ import { EditHistory } from "../../../edits/history.ts";
 import { editors as allEditors, matchEditors } from "../../../editors/registry.ts";
 import { groupOf, inListOrder } from "../../../editors/listOrder.ts";
 import { type FocusRequest, type PropertyEditor, propertiesOf } from "../../../editors/types.ts";
+import type { PlacedRect } from "../../../select/useElementRect.ts";
 import { px } from "../../px.ts";
+import { useWindowScroll } from "../../useWindowScroll.ts";
 import { Icon } from "../Icon/Icon.tsx";
+import { PageAnchor } from "../PageAnchor/PageAnchor.tsx";
 import { ScrollThumb } from "../ScrollThumb/ScrollThumb.tsx";
 import { ContextMenu } from "../ContextMenu/ContextMenu.tsx";
 import { copiedProperties, copyProperties, cssText, rowEntries } from "../../propertyClipboard.ts";
@@ -32,7 +35,7 @@ interface PropertyDialogProps {
    * Its bounding box. The dialog picks its spot next to it when it opens
    * (dialogSpot); later changes of the box don't move it.
    */
-  anchor: DOMRect;
+  anchor: PlacedRect;
   /**
    * The element the spot is picked beside, when it isn't `element`: with
    * several selected, the latest one (App). Picked again when it changes,
@@ -341,7 +344,7 @@ export function PropertyDialog({
   // only shifts to stay on screen. A window resize picks the spot again.
   const vw = document.documentElement.clientWidth;
   const vh = window.innerHeight;
-  const scroll = { x: window.scrollX, y: window.scrollY };
+  const scroll = useWindowScroll(!anchor.at);
   const [spot, setSpot] = useState<{ left: number; top: number } | null>(null);
   // Picked at the first layout (before paint, so the first frame is already in
   // place), with the dialog's real width and the element's box measured right
@@ -362,7 +365,8 @@ export function PropertyDialog({
     window.addEventListener("resize", repick);
     return () => window.removeEventListener("resize", repick);
   }, []);
-  const { left, top } = dialogPosition(spot ?? dialogSpot(anchor, width, vw, scroll), { width, height }, { width: vw, height: vh }, scroll);
+  const spotNow = spot ?? dialogSpot(anchor, width, vw, scroll);
+  const { left, top } = dialogPosition(spotNow, { width, height }, { width: vw, height: vh }, scroll);
   // When growing pushed it up (the list got taller than the room below),
   // the spot moves up with it: shrinking afterwards (the / menu, a shorter
   // list) keeps its top where it is instead of dropping back down.
@@ -400,117 +404,119 @@ export function PropertyDialog({
   };
 
   return (
-    <div
-      ref={ref}
-      class="property-dialog surface"
-      style={{ left: px(left), top: px(top) }}
-      role="dialog"
-      aria-label="Edit properties"
-      data-dragging={dragging || undefined}
-      data-veiled={veiled || undefined}
-      onKeyDown={onKeyDown}
-      onFocusIn={onFocusIn}
-      onPointerDown={onPointerDown}
-      onContextMenu={onContextMenu}
-    >
-      {/* The drag strip: 12px along the top edge, over the search (it adds no
-          height), with the grip as the visual clue. */}
+    <PageAnchor at={dialogAnchor(spotNow, { left, top }, scroll)}>
       <div
-        class="drag-handle"
-        aria-hidden="true"
-        onPointerDown={onDragStart}
-        onPointerMove={onDragMove}
-        onPointerUp={onDragEnd}
-        onPointerCancel={onDragEnd}
+        ref={ref}
+        class="property-dialog surface"
+        style={{ left: px(left), top: px(top) }}
+        role="dialog"
+        aria-label="Edit properties"
+        data-dragging={dragging || undefined}
+        data-veiled={veiled || undefined}
+        onKeyDown={onKeyDown}
+        onFocusIn={onFocusIn}
+        onPointerDown={onPointerDown}
+        onContextMenu={onContextMenu}
       >
-        <Icon name="grip" />
-      </div>
-      <PropertySearch
-        value={query}
-        onChange={setQuery}
-        onKeyDown={onSearchKeyDown}
-        inputRef={searchRef}
-        widths={widths}
-        onWidthsChange={onWidthsChange}
-        states={states}
-        onStatesChange={onStatesChange}
-        viewportWidth={viewportWidth}
-        autoFocus={autoFocus}
-      />
-      {matches.length > 0 && (
-        // Wrapper for the property editors shown below the search. Only
-        // rendered when something matches, so the empty dialog is just the search.
-        <>
-          {/* The list scrolls inside the frame; the frame draws the line under the
-              search and the fades at the list's top and bottom edges. */}
-          <div class="properties-frame">
-            <div class="properties" ref={listRef}>
-              {/* Editors own everything inside `.editor` (see the @scope boundary in the CSS). */}
-              {matches.map((match, index) => {
-                // With nothing typed, the list is grouped (LIST_ORDER): each group
-                // starts with its label, after a dotted line between groups.
-                // Searching shows the matches alone, without labels.
-                const group = empty ? groupOf(match.id) : undefined;
-                const previous = matches[index - 1];
-                const startsGroup = !!group && (!previous || groupOf(previous.id) !== group);
-                return (
-                  <Fragment key={match.id}>
-                    {startsGroup && previous && <div class="group-divider" aria-hidden="true" />}
-                    {startsGroup && <div class="group-label">{group}</div>}
-                    <div class="editor" data-editor={match.id}>
-                      <MatchedEditor
-                        editor={match}
-                        element={element}
-                        others={others}
-                        history={history}
-                        widths={widths ?? undefined}
-                        states={states}
-                        query={query}
-                        focusRequest={focus?.index === index ? focus.request : undefined}
-                        onReturnToSearch={returnToSearch}
-                        onTabOut={(direction) => tabOut(index, direction)}
-                        onHint={setEditorHint}
-                        onInspect={inspectFor(match.id)}
-                        onChanged={() => changedBy(match.id)}
-                      />
-                    </div>
-                  </Fragment>
-                );
-              })}
-            </div>
-            <div class="fade" data-edge="top" aria-hidden="true" />
-            <div class="fade" data-edge="bottom" aria-hidden="true" />
-            <ScrollThumb target={listRef} />
-          </div>
-          <footer class="footer" data-area={editorHint ? "editor-hint" : focusArea} aria-live="polite">
-            {editorHint ?? <Hint area={focusArea} />}
-          </footer>
-        </>
-      )}
-      {/* Something typed that no property matches (not the `/` modifiers, which have their own menu): say so, rather than nothing. */}
-      {!empty && !matches.length && !isModifierQuery(query) && (
-        <div class="properties-frame">
-          <p class="no-match" role="status">
-            No property matches “{query.trim()}”
-          </p>
+        {/* The drag strip: 12px along the top edge, over the search (it adds no
+            height), with the grip as the visual clue. */}
+        <div
+          class="drag-handle"
+          aria-hidden="true"
+          onPointerDown={onDragStart}
+          onPointerMove={onDragMove}
+          onPointerUp={onDragEnd}
+          onPointerCancel={onDragEnd}
+        >
+          <Icon name="grip" />
         </div>
-      )}
-      {rowMenu && (
-        <ContextMenu
-          x={rowMenu.x}
-          y={rowMenu.y}
-          onClose={() => setRowMenu(null)}
-          items={(() => {
-            const entries = rowValues(rowMenu.editor);
-            return [
-              { label: "Copy CSS", disabled: !entries.length, onSelect: () => void copyText(cssText(entries)) },
-              { label: "Copy properties", disabled: !entries.length, onSelect: () => copyProperties(entries) },
-              { label: "Paste properties", disabled: !copiedProperties(), onSelect: paste },
-            ];
-          })()}
+        <PropertySearch
+          value={query}
+          onChange={setQuery}
+          onKeyDown={onSearchKeyDown}
+          inputRef={searchRef}
+          widths={widths}
+          onWidthsChange={onWidthsChange}
+          states={states}
+          onStatesChange={onStatesChange}
+          viewportWidth={viewportWidth}
+          autoFocus={autoFocus}
         />
-      )}
-    </div>
+        {matches.length > 0 && (
+          // Wrapper for the property editors shown below the search. Only
+          // rendered when something matches, so the empty dialog is just the search.
+          <>
+            {/* The list scrolls inside the frame; the frame draws the line under the
+                search and the fades at the list's top and bottom edges. */}
+            <div class="properties-frame">
+              <div class="properties" ref={listRef}>
+                {/* Editors own everything inside `.editor` (see the @scope boundary in the CSS). */}
+                {matches.map((match, index) => {
+                  // With nothing typed, the list is grouped (LIST_ORDER): each group
+                  // starts with its label, after a dotted line between groups.
+                  // Searching shows the matches alone, without labels.
+                  const group = empty ? groupOf(match.id) : undefined;
+                  const previous = matches[index - 1];
+                  const startsGroup = !!group && (!previous || groupOf(previous.id) !== group);
+                  return (
+                    <Fragment key={match.id}>
+                      {startsGroup && previous && <div class="group-divider" aria-hidden="true" />}
+                      {startsGroup && <div class="group-label">{group}</div>}
+                      <div class="editor" data-editor={match.id}>
+                        <MatchedEditor
+                          editor={match}
+                          element={element}
+                          others={others}
+                          history={history}
+                          widths={widths ?? undefined}
+                          states={states}
+                          query={query}
+                          focusRequest={focus?.index === index ? focus.request : undefined}
+                          onReturnToSearch={returnToSearch}
+                          onTabOut={(direction) => tabOut(index, direction)}
+                          onHint={setEditorHint}
+                          onInspect={inspectFor(match.id)}
+                          onChanged={() => changedBy(match.id)}
+                        />
+                      </div>
+                    </Fragment>
+                  );
+                })}
+              </div>
+              <div class="fade" data-edge="top" aria-hidden="true" />
+              <div class="fade" data-edge="bottom" aria-hidden="true" />
+              <ScrollThumb target={listRef} />
+            </div>
+            <footer class="footer" data-area={editorHint ? "editor-hint" : focusArea} aria-live="polite">
+              {editorHint ?? <Hint area={focusArea} />}
+            </footer>
+          </>
+        )}
+        {/* Something typed that no property matches (not the `/` modifiers, which have their own menu): say so, rather than nothing. */}
+        {!empty && !matches.length && !isModifierQuery(query) && (
+          <div class="properties-frame">
+            <p class="no-match" role="status">
+              No property matches “{query.trim()}”
+            </p>
+          </div>
+        )}
+        {rowMenu && (
+          <ContextMenu
+            x={rowMenu.x}
+            y={rowMenu.y}
+            onClose={() => setRowMenu(null)}
+            items={(() => {
+              const entries = rowValues(rowMenu.editor);
+              return [
+                { label: "Copy CSS", disabled: !entries.length, onSelect: () => void copyText(cssText(entries)) },
+                { label: "Copy properties", disabled: !entries.length, onSelect: () => copyProperties(entries) },
+                { label: "Paste properties", disabled: !copiedProperties(), onSelect: paste },
+              ];
+            })()}
+          />
+        )}
+      </div>
+    </PageAnchor>
   );
 }
 
@@ -575,6 +581,20 @@ export function dialogPosition(
     left: clamp(spot.left - scroll.x, viewport.width - GAP - size.width),
     top: clamp(spot.top - scroll.y, viewport.height - GAP - size.height),
   };
+}
+
+/**
+ * Where the dialog is drawn from (PageAnchor): in the page while it's at its
+ * spot (`shown`, from dialogPosition), so it scrolls with the page with no
+ * lag; shifted to stay on screen, fixed in the window (null), where it's
+ * kept.
+ */
+export function dialogAnchor(
+  spot: { left: number; top: number },
+  shown: { left: number; top: number },
+  scroll: { x: number; y: number },
+): { x: number; y: number } | null {
+  return shown.left === Math.round(spot.left - scroll.x) && shown.top === Math.round(spot.top - scroll.y) ? scroll : null;
 }
 
 /**

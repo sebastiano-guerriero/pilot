@@ -19,6 +19,7 @@
 @import "../components/PropertyDialog/PropertyDialog.css" layer(components);
 @import "../components/PropertyPanel/PropertyPanel.css" layer(components);
 @import "../components/PropertySearch/PropertySearch.css" layer(components);
+@import "../components/PageAnchor/PageAnchor.css" layer(components);
 @import "../components/Highlight/Highlight.css" layer(components);
 @import "../components/BoxAreas/BoxAreas.css" layer(components);
 @import "../components/GridOverlay/GridOverlay.css" layer(components);

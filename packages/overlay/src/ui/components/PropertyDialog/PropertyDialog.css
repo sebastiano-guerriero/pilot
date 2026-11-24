@@ -10,7 +10,7 @@
   }
 
   :scope {
-    position: fixed;
+    position: var(--_place, fixed); /* PageAnchor */
     z-index: var(--plt-z-ui);
     background: var(--plt-color-background);
     border-radius: 12px;

@@ -1,0 +1,23 @@
+/* PageAnchor.tsx: its children's CSS has `position: var(--_place, fixed)`.
+   In the window, no box of its own. In the page, a strip at the scroll the
+   children were measured at (left and top inline), the window's width (the
+   width of what's fixed, for its children), clipping them sideways: drawn in
+   the page, nothing of theirs past the window's edge makes the page wider
+   (down, anchorAt checks). No height, z-index or transform: no stacking
+   context (its children's layers still apply), and the fixed things inside
+   its children (tooltips, menus) stay fixed in the window, unclipped. */
+@scope (.page-anchor) {
+  :scope {
+    display: contents;
+    --_place: fixed;
+  }
+
+  :scope[data-page] {
+    display: block;
+    position: absolute;
+    width: 100%;
+    height: 0;
+    overflow-x: clip;
+    --_place: absolute;
+  }
+}

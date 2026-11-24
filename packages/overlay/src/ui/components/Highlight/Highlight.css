@@ -1,7 +1,7 @@
 /* Box position and size are set inline by Highlight.tsx. */
 @scope (.highlight) {
   :scope {
-    position: fixed;
+    position: var(--_place, fixed); /* PageAnchor */
     z-index: var(--plt-z-highlight);
     pointer-events: none;
     border: 1px solid var(--plt-color-accent);

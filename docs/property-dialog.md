@@ -8,7 +8,7 @@ Strict rules (`dialogSpot()`, `dialogPosition()`):
 
 1. It picks its spot once, when the element is selected: beside it, on its right, else its left, else overlapping its right edge when the element is too wide for either; level with its top.
 2. **Editing never moves it.** The element growing, shrinking or moving (a padding, a width, a display change) leaves the dialog where it is, even if the element ends up under it. Don't re-anchor it to the element's live box.
-3. Scrolling moves it with the page: the spot is in page coordinates.
+3. Scrolling moves it with the page: the spot is in page coordinates, and while it's at its spot it's drawn in the page, so it scrolls with no lag (`dialogAnchor`; [page.md](page.md), *Following the page as it scrolls*).
 4. It only shifts to stay on screen: when scrolling would take it off, or when it grows taller than the room below. A shift from growing sticks (`raisedSpot`): the spot moves up with it, so when it shrinks again (the `/` menu, a shorter list) its top stays put instead of dropping back. A shift from scrolling doesn't stick.
 5. It picks a new spot when another element is selected, or when the window is resized (measuring the element right then).
 6. **You can drag it** by a strip along its top edge, over the search's empty top padding (it adds no height), with a grip as the clue. The dragged spot lasts for this selection, still moves with scrolling and stays on screen; selecting another element (or resizing the window) puts it beside that element again. Focus stays in the search, and the drag never reaches the page.

@@ -1,10 +1,13 @@
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import { elementName } from "../../../dom/name.ts";
+import type { PlacedRect } from "../../../select/useElementRect.ts";
 import { px } from "../../px.ts";
+import { PageAnchor } from "../PageAnchor/PageAnchor.tsx";
 
 interface HighlightProps {
   element: Element;
-  rect: DOMRect;
+  /** The element's box (viewport px), drawn in the page when it has `at` (PageAnchor). */
+  rect: PlacedRect;
   variant: "hover" | "selected" | "dots" | "busy" | "flash";
   /**
    * Show the name and size label. The hover highlight has one; the selection
@@ -80,33 +83,35 @@ export function Highlight({
     if (want !== compact) setCompact(want);
   });
   return (
-    <div
-      class="highlight"
-      data-variant={variant}
-      data-working={working || undefined}
-      style={{ left: px(rect.left), top: px(rect.top), width: px(rect.width), height: px(rect.height) }}
-      aria-hidden="true"
-    >
-      {label && (
-        <span
-          class="label"
-          data-inside={labelInside || undefined}
-          data-below={below || undefined}
-          data-compact={compact || undefined}
-          style={{
-            ...(room !== null && !below ? { maxWidth: px(room) } : {}),
-            ...(labelShift && !below ? { translate: `0 ${px(labelShift)}` } : {}),
-          }}
-        >
-          <span class="name" ref={nameRef}>
-            {elementName(element, nameAttributes)}
+    <PageAnchor at={rect.at}>
+      <div
+        class="highlight"
+        data-variant={variant}
+        data-working={working || undefined}
+        style={{ left: px(rect.left), top: px(rect.top), width: px(rect.width), height: px(rect.height) }}
+        aria-hidden="true"
+      >
+        {label && (
+          <span
+            class="label"
+            data-inside={labelInside || undefined}
+            data-below={below || undefined}
+            data-compact={compact || undefined}
+            style={{
+              ...(room !== null && !below ? { maxWidth: px(room) } : {}),
+              ...(labelShift && !below ? { translate: `0 ${px(labelShift)}` } : {}),
+            }}
+          >
+            <span class="name" ref={nameRef}>
+              {elementName(element, nameAttributes)}
+            </span>
+            <span class="size" ref={sizeRef}>
+              {size}
+            </span>
           </span>
-          <span class="size" ref={sizeRef}>
-            {size}
-          </span>
-        </span>
-      )}
-      {variant === "dots" && rect.width >= MIN_DOTS_SIZE && rect.height >= MIN_DOTS_SIZE && CORNERS.map((corner) => <span key={corner} class="handle" data-corner={corner} />)}
-    </div>
+        )}
+        {variant === "dots" && rect.width >= MIN_DOTS_SIZE && rect.height >= MIN_DOTS_SIZE && CORNERS.map((corner) => <span key={corner} class="handle" data-corner={corner} />)}
+      </div>
+    </PageAnchor>
   );
 }

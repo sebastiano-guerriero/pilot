@@ -1,10 +1,12 @@
+import type { PlacedRect } from "../../../select/useElementRect.ts";
 import { px } from "../../px.ts";
 import { Icon } from "../Icon/Icon.tsx";
+import { PageAnchor } from "../PageAnchor/PageAnchor.tsx";
 import { Tooltip } from "../Tooltip/Tooltip.tsx";
 
 interface SelectionActionsProps {
-  /** The element's box (viewport px). */
-  rect: DOMRect;
+  /** The element's box (viewport px), drawn in the page when it has `at` (PageAnchor). */
+  rect: PlacedRect;
   /** On the selection, whose line is 2px (1px outside the box, Highlight.css): the actions keep 4px from its outer edge. */
   selected?: boolean;
   /** The DOM tree is open (the action shows it pressed). */
@@ -104,75 +106,77 @@ export function SelectionActions({
   const side = box.inside ? "bottom" : "top";
   if (!count) return null;
   return (
-    <div class="selection-actions" style={{ left: px(box.left), top: px(box.top) }}>
-      {similar && (
-        <Tooltip text={`Select ${similar.count} similar`} side={side}>
-          <button
-            type="button"
-            class="action"
-            aria-label={`Select ${similar.count} similar`}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={similar.onSelect}
-          >
-            <Icon name="similar" />
-          </button>
-        </Tooltip>
-      )}
-      {onShowInDom && (
-        <Tooltip text="Show in DOM" side={side}>
-          <button
-            type="button"
-            class="action"
-            aria-label="Show in DOM (Alt+D)"
-            aria-pressed={domOpen}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={onShowInDom}
-          >
-            <Icon name="code" />
-          </button>
-        </Tooltip>
-      )}
-      {onOpenThread && (
-        <Tooltip text="Open comment" side={side}>
-          <button type="button" class="action" aria-label="Open comment" onMouseDown={(e) => e.preventDefault()} onClick={onOpenThread}>
-            <Icon name="thread" />
-          </button>
-        </Tooltip>
-      )}
-      {/* The loader last, on the far right: where a job always shows. */}
-      {busy &&
-        (busy.onCancel ? (
-          <Tooltip
-            text={busy.stuck?.title ?? busy.about ?? "Cancel job"}
-            detail={busy.stuck?.detail ?? (busy.about ? `${busy.status ?? busy.text} · Click to cancel` : undefined)}
-            side={side}
-            align="end"
-          >
+    <PageAnchor at={rect.at}>
+      <div class="selection-actions" style={{ left: px(box.left), top: px(box.top) }}>
+        {similar && (
+          <Tooltip text={`Select ${similar.count} similar`} side={side}>
             <button
               type="button"
-              class="action busy"
-              data-stuck={busy.stuck ? "" : undefined}
-              aria-label={busy.stuck ? `${busy.stuck.title}. ${busy.stuck.detail}. Cancel job (${busy.text})` : `Cancel job (${busy.text})`}
+              class="action"
+              aria-label={`Select ${similar.count} similar`}
               onMouseDown={(e) => e.preventDefault()}
-              onClick={busy.onCancel}
+              onClick={similar.onSelect}
             >
-              <Icon name={busy.stuck ? "warning" : "busy"} class="spinner" />
-              <Icon name="xmark" class="cancel" />
+              <Icon name="similar" />
             </button>
           </Tooltip>
-        ) : (
-          <Tooltip text={busy.stuck?.title ?? busy.about ?? busy.text} detail={busy.stuck?.detail ?? (busy.about ? busy.status : undefined)} side={side} align="end">
-            <span
-              class="action busy"
-              data-stuck={busy.stuck ? "" : undefined}
-              role="status"
-              aria-label={busy.stuck ? `${busy.stuck.title}. ${busy.stuck.detail}` : busy.text}
-              tabIndex={0}
+        )}
+        {onShowInDom && (
+          <Tooltip text="Show in DOM" side={side}>
+            <button
+              type="button"
+              class="action"
+              aria-label="Show in DOM (Alt+D)"
+              aria-pressed={domOpen}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={onShowInDom}
             >
-              <Icon name={busy.stuck ? "warning" : "busy"} class="spinner" />
-            </span>
+              <Icon name="code" />
+            </button>
           </Tooltip>
-        ))}
-    </div>
+        )}
+        {onOpenThread && (
+          <Tooltip text="Open comment" side={side}>
+            <button type="button" class="action" aria-label="Open comment" onMouseDown={(e) => e.preventDefault()} onClick={onOpenThread}>
+              <Icon name="thread" />
+            </button>
+          </Tooltip>
+        )}
+        {/* The loader last, on the far right: where a job always shows. */}
+        {busy &&
+          (busy.onCancel ? (
+            <Tooltip
+              text={busy.stuck?.title ?? busy.about ?? "Cancel job"}
+              detail={busy.stuck?.detail ?? (busy.about ? `${busy.status ?? busy.text} · Click to cancel` : undefined)}
+              side={side}
+              align="end"
+            >
+              <button
+                type="button"
+                class="action busy"
+                data-stuck={busy.stuck ? "" : undefined}
+                aria-label={busy.stuck ? `${busy.stuck.title}. ${busy.stuck.detail}. Cancel job (${busy.text})` : `Cancel job (${busy.text})`}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={busy.onCancel}
+              >
+                <Icon name={busy.stuck ? "warning" : "busy"} class="spinner" />
+                <Icon name="xmark" class="cancel" />
+              </button>
+            </Tooltip>
+          ) : (
+            <Tooltip text={busy.stuck?.title ?? busy.about ?? busy.text} detail={busy.stuck?.detail ?? (busy.about ? busy.status : undefined)} side={side} align="end">
+              <span
+                class="action busy"
+                data-stuck={busy.stuck ? "" : undefined}
+                role="status"
+                aria-label={busy.stuck ? `${busy.stuck.title}. ${busy.stuck.detail}` : busy.text}
+                tabIndex={0}
+              >
+                <Icon name={busy.stuck ? "warning" : "busy"} class="spinner" />
+              </span>
+            </Tooltip>
+          ))}
+      </div>
+    </PageAnchor>
   );
 }

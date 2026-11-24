@@ -11,9 +11,12 @@ import {
 import { Fragment } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type { CommentThread } from "../../../bridge/session.ts";
+import type { PlacedRect } from "../../../select/useElementRect.ts";
 import { px } from "../../px.ts";
+import { useWindowScroll } from "../../useWindowScroll.ts";
 import { Icon } from "../Icon/Icon.tsx";
-import { dialogPosition, dialogSpot, raisedSpot } from "../PropertyDialog/PropertyDialog.tsx";
+import { PageAnchor } from "../PageAnchor/PageAnchor.tsx";
+import { dialogAnchor, dialogPosition, dialogSpot, raisedSpot } from "../PropertyDialog/PropertyDialog.tsx";
 import { type ChangeCounts, changesLabel } from "../../changesLabel.ts";
 import { PropsList } from "../PropsList/PropsList.tsx";
 import { ScrollThumb } from "../ScrollThumb/ScrollThumb.tsx";
@@ -36,7 +39,7 @@ export interface CommentError {
 interface CommentWidgetProps {
   element: Element;
   /** The element's box (viewport px), to open beside it. */
-  anchor: DOMRect;
+  anchor: PlacedRect;
   /**
    * The element the spot is picked beside, when it isn't `element`: with
    * several selected, the latest one (App). Picked again when it changes,
@@ -253,7 +256,7 @@ export function CommentWidget({
   });
   const vw = document.documentElement.clientWidth;
   const vh = window.innerHeight;
-  const scroll = { x: window.scrollX, y: window.scrollY };
+  const scroll = useWindowScroll(!anchor.at);
   const [spot, setSpot] = useState<{ left: number; top: number } | null>(null);
   const beside = placeBy ?? element;
   const placedBeside = useRef(beside);
@@ -271,7 +274,8 @@ export function CommentWidget({
     window.addEventListener("resize", repick);
     return () => window.removeEventListener("resize", repick);
   }, []);
-  const { left, top } = dialogPosition(spot ?? dialogSpot(anchor, size.width, vw, scroll), size, { width: vw, height: vh }, scroll);
+  const spotNow = spot ?? dialogSpot(anchor, size.width, vw, scroll);
+  const { left, top } = dialogPosition(spotNow, size, { width: vw, height: vh }, scroll);
   useLayoutEffect(() => {
     if (!spot) return;
     const raised = raisedSpot(spot, size, { width: vw, height: vh }, scroll);
@@ -613,368 +617,370 @@ export function CommentWidget({
   );
 
   return (
-    <div
-      ref={ref}
-      class="comment-widget"
-      style={{ left: px(left), top: px(top) }}
-      role="dialog"
-      aria-label="Comment"
-      data-dragging={dragging || undefined}
-      data-veiled={veiled || undefined}
-      data-dropping={dropping || undefined}
-      onKeyDown={onKeyDown}
-      onDragEnter={onDragEnter}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-    >
-      {dropping && (
-        <div class="drop-overlay" aria-hidden="true">
-          <Icon name="attach-add" />
-          <span>Drop to attach</span>
-        </div>
-      )}
+    <PageAnchor at={dialogAnchor(spotNow, { left, top }, scroll)}>
       <div
-        class="drag-handle"
-        aria-hidden="true"
-        onPointerDown={onDragStart}
-        onPointerMove={onDragMove}
-        onPointerUp={onDragEnd}
-        onPointerCancel={onDragEnd}
+        ref={ref}
+        class="comment-widget"
+        style={{ left: px(left), top: px(top) }}
+        role="dialog"
+        aria-label="Comment"
+        data-dragging={dragging || undefined}
+        data-veiled={veiled || undefined}
+        data-dropping={dropping || undefined}
+        onKeyDown={onKeyDown}
+        onDragEnter={onDragEnter}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
       >
-        <Icon name="grip" />
-      </div>
-      {(count > 0 || status || shownError) && (
-        // The thread scrolls inside its frame (up to 400px, less in a short
-        // window), with fades at its edges and Pilot's scroll thumb.
-        <div class="messages-frame">
-          <div class="messages" ref={listRef} onScroll={measure}>
-            {thread?.messages.map((m, i) =>
-              m.from === "designer" ? (
-                <div key={m.at + m.from} class="message">
-                  {m.attachments?.length ? (
-                    <ul class="sent-images" aria-label="Attachments">
-                      {m.attachments.map((file) => (
-                        <li key={file.id} class="attachment" title={file.name}>
-                          {file.thumb ? (
-                            <img src={file.thumb} alt={file.name ?? "Image"} draggable={false} />
-                          ) : (
-                            <FileTile name={file.name ?? file.id} />
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                  {/* Chips are for writing: sent, an action or a skill reads as typed (`/responsive`, `/better-ui`), and the edits that went with it as words, in green. */}
-                  {(m.text || m.action || m.skill || m.edits) && (
-                    <p>
-                      {m.action && <span class="mention">/{actionCommand(m.action)}</span>}
-                      {!m.action && m.skill && <span class="mention">/{m.skill}</span>}
-                      {m.edits ? (
-                        <span class="mention">
-                          {m.action || m.skill ? " " : ""}
-                          {changesLabel(m.edits)}
-                        </span>
-                      ) : null}
-                      {(m.action || m.skill || m.edits) && m.text ? " " : null}
-                      {splitMentions(m.text, m.references).map((part, j) =>
-                        part.mention ? (
-                          <span key={j} class="mention">
-                            {part.text}
-                          </span>
-                        ) : (
-                          part.text
-                        ),
-                      )}
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div key={m.at + m.from} class="agent-reply" data-split={liveProps(i) ? "" : undefined}>
-                  <div class="message" data-from="agent" aria-label={`${agentName ?? "Agent"}: ${m.text}`}>
-                    {renderMarkdown(m.text)}
-                    {/* The agent's question, not answered yet: its one-click answers (or write one), the agent's suggestion first. */}
-                    {m.choices?.length && i === count - 1 ? (
-                      <div class="choices" role="group" aria-label="Answers">
-                        {m.choices.map((choice) => (
-                          <button
-                            key={choice}
-                            type="button"
-                            class="choice"
-                            disabled={!agentOn || sending}
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => void answer(choice)}
-                          >
-                            {choice}
-                          </button>
+        {dropping && (
+          <div class="drop-overlay" aria-hidden="true">
+            <Icon name="attach-add" />
+            <span>Drop to attach</span>
+          </div>
+        )}
+        <div
+          class="drag-handle"
+          aria-hidden="true"
+          onPointerDown={onDragStart}
+          onPointerMove={onDragMove}
+          onPointerUp={onDragEnd}
+          onPointerCancel={onDragEnd}
+        >
+          <Icon name="grip" />
+        </div>
+        {(count > 0 || status || shownError) && (
+          // The thread scrolls inside its frame (up to 400px, less in a short
+          // window), with fades at its edges and Pilot's scroll thumb.
+          <div class="messages-frame">
+            <div class="messages" ref={listRef} onScroll={measure}>
+              {thread?.messages.map((m, i) =>
+                m.from === "designer" ? (
+                  <div key={m.at + m.from} class="message">
+                    {m.attachments?.length ? (
+                      <ul class="sent-images" aria-label="Attachments">
+                        {m.attachments.map((file) => (
+                          <li key={file.id} class="attachment" title={file.name}>
+                            {file.thumb ? (
+                              <img src={file.thumb} alt={file.name ?? "Image"} draggable={false} />
+                            ) : (
+                              <FileTile name={file.name ?? file.id} />
+                            )}
+                          </li>
                         ))}
-                      </div>
+                      </ul>
                     ) : null}
-                    {/* The latest reply to a job that may have changed something: adjust it by hand. Not on a question (its answers are there), a props list, or Pilot's "Stopped". */}
-                    {onAdjust && i === count - 1 && !m.choices?.length && !m.propList && !m.early && !m.stopped ? (
-                      <div class="choices">
-                        <button type="button" class="choice" data-secondary onMouseDown={(e) => e.preventDefault()} onClick={onAdjust}>
-                          Edit manually
-                        </button>
-                      </div>
-                    ) : null}
+                    {/* Chips are for writing: sent, an action or a skill reads as typed (`/responsive`, `/better-ui`), and the edits that went with it as words, in green. */}
+                    {(m.text || m.action || m.skill || m.edits) && (
+                      <p>
+                        {m.action && <span class="mention">/{actionCommand(m.action)}</span>}
+                        {!m.action && m.skill && <span class="mention">/{m.skill}</span>}
+                        {m.edits ? (
+                          <span class="mention">
+                            {m.action || m.skill ? " " : ""}
+                            {changesLabel(m.edits)}
+                          </span>
+                        ) : null}
+                        {(m.action || m.skill || m.edits) && m.text ? " " : null}
+                        {splitMentions(m.text, m.references).map((part, j) =>
+                          part.mention ? (
+                            <span key={j} class="mention">
+                              {part.text}
+                            </span>
+                          ) : (
+                            part.text
+                          ),
+                        )}
+                      </p>
+                    )}
                   </div>
-                  {/* The agent's reply to /props, in a box of its own under its words: a row per prop, its value on the page; a pick joins the comment being written. Answered, only the words stay. */}
-                  {liveProps(i) && m.propList ? (
-                    <PropsList props={m.propList} current={pageProps} picked={written} onPick={pickProp} />
-                  ) : null}
-                </div>
-              ),
-            )}
-            {/* Where the latest comment stands, as the reply to come, until the agent's real reply replaces it. */}
-            {/* What's wrong (stuck, or a send that failed) in a red reply; else where the latest comment stands. */}
-            {shownError ? (
-              <p class="message" data-from="agent" data-error role="alert">
-                {shownError.title}. {shownError.detail}.
-              </p>
-            ) : (
-              status && (
-                <p class="message" data-from="agent" data-pending role="status">
-                  {status}…
-                </p>
-              )
-            )}
-          </div>
-          <div class="fade" data-edge="top" data-on={more.above || undefined} aria-hidden="true" />
-          <div class="fade" data-edge="bottom" data-on={more.below || undefined} aria-hidden="true" />
-          <ScrollThumb target={listRef} />
-        </div>
-      )}
-      <div class="composer">
-        {(action || skill || (editsCount > 0 && withEdits)) && (
-          <div class="action-chip-row">
-            {/* The editor's changes on the selection go with the comment (not with an action: they wait for Send). */}
-            {editsCount > 0 && withEdits && !action && (
-              <span class="action-chip" data-kind="edits" title="Your edits on this element, not sent yet, go with the comment">
-                {changesLabel(edits)}
-                <button
-                  type="button"
-                  class="action-remove"
-                  aria-label={`Don't send the ${changesLabel(edits)} with the comment`}
-                  onClick={() => {
-                    setWithEdits(false);
-                    fieldRef.current?.focus();
-                  }}
-                >
-                  <Icon name="close-small" />
-                </button>
-              </span>
-            )}
-            {action && (
-              <span class="action-chip">
-                {actionName(action)}
-                <button
-                  type="button"
-                  class="action-remove"
-                  aria-label={`Remove ${actionName(action)}`}
-                  onClick={() => {
-                    setAction(null);
-                    fieldRef.current?.focus();
-                  }}
-                >
-                  <Icon name="close-small" />
-                </button>
-              </span>
-            )}
-            {/* A skill of the agent's, picked from the `/` list: its name, as the agent calls it, in an action's chip. */}
-            {skill && (
-              <span class="action-chip" data-kind="skill" title="Your agent uses this skill for the comment">
-                {skill}
-                <button
-                  type="button"
-                  class="action-remove"
-                  aria-label={`Remove ${skill}`}
-                  onClick={() => {
-                    setSkill(null);
-                    fieldRef.current?.focus();
-                  }}
-                >
-                  <Icon name="close-small" />
-                </button>
-              </span>
-            )}
-          </div>
-        )}
-        {attachments.length > 0 && (
-          <ul class="attachments" aria-label="Attachments">
-            {attachments.map((a) => (
-              <li key={a.id} class="attachment" title={a.file.name}>
-                {a.url ? <img src={a.url} alt={a.file.name} draggable={false} /> : <FileTile name={a.file.name} />}
-                <button type="button" class="detach" aria-label={`Remove ${a.file.name}`} onClick={() => detach(a)}>
-                  <Icon name="close" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {/* The field and Pilot's scroll thumb over the box's edge, once it's past its 120px. */}
-        <div class="field-frame">
-          <textarea
-            ref={fieldRef}
-            class="field"
-            data-reply={count > 0 || undefined}
-            rows={1}
-            value={text}
-            placeholder={placeholder(!!action || !!skill, count > 0, !!mentions)}
-            aria-label="Comment"
-            onInput={(e) => {
-              const field = e.currentTarget as HTMLTextAreaElement;
-              setText(field.value);
-              setCaret(field.selectionStart ?? field.value.length);
-            }}
-            onKeyUp={(e) => {
-              if (e.key.startsWith("Arrow") || e.key === "Home" || e.key === "End") readCaret();
-            }}
-            onClick={readCaret}
-            aria-controls={menuOpen ? "pilot-actions" : mentionOpen ? "pilot-mentions" : undefined}
-            aria-activedescendant={
-              menuOpen && options[active]
-                ? `pilot-action-${options[active].id}`
-                : menuOpen && skillOptions[active - options.length]
-                  ? `pilot-skill-${active - options.length}`
-                  : mentionOpen && mentionMatches[active]
-                  ? `pilot-mention-${active}`
-                  : undefined
-            }
-          />
-          <ScrollThumb target={fieldRef} />
-        </div>
-        {mentionOpen && pool && (
-          <div class="actions-menu" id="pilot-mentions" role="listbox" aria-label="Mention">
-            {mentionMatches.length ? (
-              mentionMatches.map((o, i) => (
-                <Fragment key={o.group + o.label}>
-                  {o.group !== mentionMatches[i - 1]?.group && (
-                    <div class="mention-group" role="presentation">
-                      {o.group}
+                ) : (
+                  <div key={m.at + m.from} class="agent-reply" data-split={liveProps(i) ? "" : undefined}>
+                    <div class="message" data-from="agent" aria-label={`${agentName ?? "Agent"}: ${m.text}`}>
+                      {renderMarkdown(m.text)}
+                      {/* The agent's question, not answered yet: its one-click answers (or write one), the agent's suggestion first. */}
+                      {m.choices?.length && i === count - 1 ? (
+                        <div class="choices" role="group" aria-label="Answers">
+                          {m.choices.map((choice) => (
+                            <button
+                              key={choice}
+                              type="button"
+                              class="choice"
+                              disabled={!agentOn || sending}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => void answer(choice)}
+                            >
+                              {choice}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                      {/* The latest reply to a job that may have changed something: adjust it by hand. Not on a question (its answers are there), a props list, or Pilot's "Stopped". */}
+                      {onAdjust && i === count - 1 && !m.choices?.length && !m.propList && !m.early && !m.stopped ? (
+                        <div class="choices">
+                          <button type="button" class="choice" data-secondary onMouseDown={(e) => e.preventDefault()} onClick={onAdjust}>
+                            Edit manually
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
-                  )}
-                  <div
-                    id={`pilot-mention-${i}`}
-                    class="action-option mention-option"
-                    role="option"
-                    aria-selected={i === active}
-                    data-active={i === active || undefined}
-                    onPointerEnter={() => setActive(i)}
-                    // Keep focus in the field.
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => pickMention(i)}
-                  >
-                    {o.swatch && <span class="mention-swatch color-preview" style={{ "--_color": o.swatch }} aria-hidden="true" />}
-                    <span class="action-name">{o.label}</span>
-                    {o.detail && <span class="action-description">{o.detail}</span>}
+                    {/* The agent's reply to /props, in a box of its own under its words: a row per prop, its value on the page; a pick joins the comment being written. Answered, only the words stay. */}
+                    {liveProps(i) && m.propList ? (
+                      <PropsList props={m.propList} current={pageProps} picked={written} onPick={pickProp} />
+                    ) : null}
                   </div>
-                </Fragment>
-              ))
-            ) : (
-              <div class="action-none">{pool.length ? "Nothing matches" : "Nothing to mention on this page"}</div>
-            )}
+                ),
+              )}
+              {/* Where the latest comment stands, as the reply to come, until the agent's real reply replaces it. */}
+              {/* What's wrong (stuck, or a send that failed) in a red reply; else where the latest comment stands. */}
+              {shownError ? (
+                <p class="message" data-from="agent" data-error role="alert">
+                  {shownError.title}. {shownError.detail}.
+                </p>
+              ) : (
+                status && (
+                  <p class="message" data-from="agent" data-pending role="status">
+                    {status}…
+                  </p>
+                )
+              )}
+            </div>
+            <div class="fade" data-edge="top" data-on={more.above || undefined} aria-hidden="true" />
+            <div class="fade" data-edge="bottom" data-on={more.below || undefined} aria-hidden="true" />
+            <ScrollThumb target={listRef} />
           </div>
         )}
-        {menuOpen && (
-          <div class="actions-menu" id="pilot-actions" role="listbox" aria-label="Actions">
-            {options.map((a, i) => (
-              <div
-                key={a.id}
-                id={`pilot-action-${a.id}`}
-                class="action-option"
-                role="option"
-                aria-selected={i === active}
-                data-active={i === active || undefined}
-                onPointerEnter={() => setActive(i)}
-                // Keep focus in the field.
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => pick(i)}
-              >
-                <span class="action-name">{a.name}</span>
-                <span class="action-description">{a.description}</span>
-              </div>
-            ))}
-            {/* The agent's skills, after Pilot's actions: a group of their own, in the `@` list's design (its heading, and rows on one line: the name, the description cut at its right). */}
-            {skillOptions.length > 0 && (
-              <div class="mention-group" role="presentation">
-                Skills
-              </div>
-            )}
-            {skillOptions.map((s, i) => (
-              <div
-                key={`skill-${s.name}`}
-                id={`pilot-skill-${i}`}
-                class="action-option mention-option"
-                data-kind="skill"
-                role="option"
-                aria-selected={options.length + i === active}
-                data-active={options.length + i === active || undefined}
-                onPointerEnter={() => setActive(options.length + i)}
-                // Keep focus in the field.
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => pick(options.length + i)}
-              >
-                <span class="action-name">{s.name}</span>
-                {s.description && <span class="action-description">{s.description}</span>}
-              </div>
-            ))}
+        <div class="composer">
+          {(action || skill || (editsCount > 0 && withEdits)) && (
+            <div class="action-chip-row">
+              {/* The editor's changes on the selection go with the comment (not with an action: they wait for Send). */}
+              {editsCount > 0 && withEdits && !action && (
+                <span class="action-chip" data-kind="edits" title="Your edits on this element, not sent yet, go with the comment">
+                  {changesLabel(edits)}
+                  <button
+                    type="button"
+                    class="action-remove"
+                    aria-label={`Don't send the ${changesLabel(edits)} with the comment`}
+                    onClick={() => {
+                      setWithEdits(false);
+                      fieldRef.current?.focus();
+                    }}
+                  >
+                    <Icon name="close-small" />
+                  </button>
+                </span>
+              )}
+              {action && (
+                <span class="action-chip">
+                  {actionName(action)}
+                  <button
+                    type="button"
+                    class="action-remove"
+                    aria-label={`Remove ${actionName(action)}`}
+                    onClick={() => {
+                      setAction(null);
+                      fieldRef.current?.focus();
+                    }}
+                  >
+                    <Icon name="close-small" />
+                  </button>
+                </span>
+              )}
+              {/* A skill of the agent's, picked from the `/` list: its name, as the agent calls it, in an action's chip. */}
+              {skill && (
+                <span class="action-chip" data-kind="skill" title="Your agent uses this skill for the comment">
+                  {skill}
+                  <button
+                    type="button"
+                    class="action-remove"
+                    aria-label={`Remove ${skill}`}
+                    onClick={() => {
+                      setSkill(null);
+                      fieldRef.current?.focus();
+                    }}
+                  >
+                    <Icon name="close-small" />
+                  </button>
+                </span>
+              )}
+            </div>
+          )}
+          {attachments.length > 0 && (
+            <ul class="attachments" aria-label="Attachments">
+              {attachments.map((a) => (
+                <li key={a.id} class="attachment" title={a.file.name}>
+                  {a.url ? <img src={a.url} alt={a.file.name} draggable={false} /> : <FileTile name={a.file.name} />}
+                  <button type="button" class="detach" aria-label={`Remove ${a.file.name}`} onClick={() => detach(a)}>
+                    <Icon name="close" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {/* The field and Pilot's scroll thumb over the box's edge, once it's past its 120px. */}
+          <div class="field-frame">
+            <textarea
+              ref={fieldRef}
+              class="field"
+              data-reply={count > 0 || undefined}
+              rows={1}
+              value={text}
+              placeholder={placeholder(!!action || !!skill, count > 0, !!mentions)}
+              aria-label="Comment"
+              onInput={(e) => {
+                const field = e.currentTarget as HTMLTextAreaElement;
+                setText(field.value);
+                setCaret(field.selectionStart ?? field.value.length);
+              }}
+              onKeyUp={(e) => {
+                if (e.key.startsWith("Arrow") || e.key === "Home" || e.key === "End") readCaret();
+              }}
+              onClick={readCaret}
+              aria-controls={menuOpen ? "pilot-actions" : mentionOpen ? "pilot-mentions" : undefined}
+              aria-activedescendant={
+                menuOpen && options[active]
+                  ? `pilot-action-${options[active].id}`
+                  : menuOpen && skillOptions[active - options.length]
+                    ? `pilot-skill-${active - options.length}`
+                    : mentionOpen && mentionMatches[active]
+                    ? `pilot-mention-${active}`
+                    : undefined
+              }
+            />
+            <ScrollThumb target={fieldRef} />
           </div>
-        )}
-        {/* While a list is open (`/`, `@`), only it and the field show: picking is the next step, not sending or attaching. */}
-        <div class="buttons" hidden={menuOpen || (mentionOpen && !!pool)}>
-          <Tooltip text="Attach files" align="start">
-            <button type="button" class="attach" aria-label="Attach files" onClick={() => fileRef.current?.click()}>
-              <Icon name="attach" />
-            </button>
-          </Tooltip>
-          <input
-            ref={fileRef}
-            type="file"
-            accept={ATTACHMENT_ACCEPT}
-            multiple
-            hidden
-            onChange={(e) => {
-              const input = e.currentTarget as HTMLInputElement;
-              attach(input.files);
-              // So picking the same file again still counts as a change.
-              input.value = "";
-            }}
-          />
-          <div class="send-group">
-            {/* The thread's job, while it can be taken back: stop it (as the loader's × does). */}
-            {onStop && (
-              <Tooltip text="Stop the job" align="end">
-                <button
-                  type="button"
-                  class="attach stop"
-                  aria-label="Stop the job"
+          {mentionOpen && pool && (
+            <div class="actions-menu" id="pilot-mentions" role="listbox" aria-label="Mention">
+              {mentionMatches.length ? (
+                mentionMatches.map((o, i) => (
+                  <Fragment key={o.group + o.label}>
+                    {o.group !== mentionMatches[i - 1]?.group && (
+                      <div class="mention-group" role="presentation">
+                        {o.group}
+                      </div>
+                    )}
+                    <div
+                      id={`pilot-mention-${i}`}
+                      class="action-option mention-option"
+                      role="option"
+                      aria-selected={i === active}
+                      data-active={i === active || undefined}
+                      onPointerEnter={() => setActive(i)}
+                      // Keep focus in the field.
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => pickMention(i)}
+                    >
+                      {o.swatch && <span class="mention-swatch color-preview" style={{ "--_color": o.swatch }} aria-hidden="true" />}
+                      <span class="action-name">{o.label}</span>
+                      {o.detail && <span class="action-description">{o.detail}</span>}
+                    </div>
+                  </Fragment>
+                ))
+              ) : (
+                <div class="action-none">{pool.length ? "Nothing matches" : "Nothing to mention on this page"}</div>
+              )}
+            </div>
+          )}
+          {menuOpen && (
+            <div class="actions-menu" id="pilot-actions" role="listbox" aria-label="Actions">
+              {options.map((a, i) => (
+                <div
+                  key={a.id}
+                  id={`pilot-action-${a.id}`}
+                  class="action-option"
+                  role="option"
+                  aria-selected={i === active}
+                  data-active={i === active || undefined}
+                  onPointerEnter={() => setActive(i)}
+                  // Keep focus in the field.
                   onMouseDown={(e) => e.preventDefault()}
-                  onClick={onStop}
+                  onClick={() => pick(i)}
                 >
-                  <Icon name="stop" />
-                </button>
-              </Tooltip>
-            )}
-            {agentOn ? (
-              sendButton
-            ) : (
-              <Tooltip text="Pilot isn't running for this site" detail="Run npx usepilot in your project's folder" align="end">
-                {sendButton}
-              </Tooltip>
-            )}
+                  <span class="action-name">{a.name}</span>
+                  <span class="action-description">{a.description}</span>
+                </div>
+              ))}
+              {/* The agent's skills, after Pilot's actions: a group of their own, in the `@` list's design (its heading, and rows on one line: the name, the description cut at its right). */}
+              {skillOptions.length > 0 && (
+                <div class="mention-group" role="presentation">
+                  Skills
+                </div>
+              )}
+              {skillOptions.map((s, i) => (
+                <div
+                  key={`skill-${s.name}`}
+                  id={`pilot-skill-${i}`}
+                  class="action-option mention-option"
+                  data-kind="skill"
+                  role="option"
+                  aria-selected={options.length + i === active}
+                  data-active={options.length + i === active || undefined}
+                  onPointerEnter={() => setActive(options.length + i)}
+                  // Keep focus in the field.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => pick(options.length + i)}
+                >
+                  <span class="action-name">{s.name}</span>
+                  {s.description && <span class="action-description">{s.description}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+          {/* While a list is open (`/`, `@`), only it and the field show: picking is the next step, not sending or attaching. */}
+          <div class="buttons" hidden={menuOpen || (mentionOpen && !!pool)}>
+            <Tooltip text="Attach files" align="start">
+              <button type="button" class="attach" aria-label="Attach files" onClick={() => fileRef.current?.click()}>
+                <Icon name="attach" />
+              </button>
+            </Tooltip>
+            <input
+              ref={fileRef}
+              type="file"
+              accept={ATTACHMENT_ACCEPT}
+              multiple
+              hidden
+              onChange={(e) => {
+                const input = e.currentTarget as HTMLInputElement;
+                attach(input.files);
+                // So picking the same file again still counts as a change.
+                input.value = "";
+              }}
+            />
+            <div class="send-group">
+              {/* The thread's job, while it can be taken back: stop it (as the loader's × does). */}
+              {onStop && (
+                <Tooltip text="Stop the job" align="end">
+                  <button
+                    type="button"
+                    class="attach stop"
+                    aria-label="Stop the job"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={onStop}
+                  >
+                    <Icon name="stop" />
+                  </button>
+                </Tooltip>
+              )}
+              {agentOn ? (
+                sendButton
+              ) : (
+                <Tooltip text="Pilot isn't running for this site" detail="Run npx usepilot in your project's folder" align="end">
+                  {sendButton}
+                </Tooltip>
+              )}
+            </div>
           </div>
         </div>
+        {thread && onResolve && (
+          <div class="footer">
+            <span class="hint">{RESOLVE_KEYS} to resolve</span>
+            <button ref={resolveRef} type="button" class="resolve" onClick={resolve}>
+              <Icon name="solved" />
+              Mark as solved
+            </button>
+          </div>
+        )}
       </div>
-      {thread && onResolve && (
-        <div class="footer">
-          <span class="hint">{RESOLVE_KEYS} to resolve</span>
-          <button ref={resolveRef} type="button" class="resolve" onClick={resolve}>
-            <Icon name="solved" />
-            Mark as solved
-          </button>
-        </div>
-      )}
-    </div>
+    </PageAnchor>
   );
 }

@@ -2,17 +2,19 @@
    Position and size are set inline by BoxAreas.tsx. */
 @scope (.box-areas) {
   .area {
-    position: fixed;
+    position: var(--_place, fixed); /* PageAnchor */
     z-index: var(--plt-z-highlight);
     pointer-events: none;
     background-color: hsl(from var(--plt-color-accent) h s l / 30%);
-    /* 1px oblique accent lines (50%), 4px apart. Anchored to the viewport, so
-       the stripes run continuously across adjacent areas. */
+    /* 1px oblique accent lines (50%), 4px apart. All from the same point
+       (background-position, inline: the window's corner, or the
+       PageAnchor's), so the stripes run continuously across adjacent areas.
+       Not `background-attachment: fixed`: the browser would repaint them on
+       the page's thread at every scroll step, and they'd trail the page. */
     background-image: repeating-linear-gradient(
       -45deg,
       hsl(from var(--plt-color-accent) h s l / 50%) 0 1px,
       transparent 1px 4px
     );
-    background-attachment: fixed;
   }
 }

@@ -7,7 +7,7 @@ Each doc covers one area. Read the one for the area you're changing before you c
 | Doc | Covers |
 | --- | --- |
 | [product.md](product.md) | What Pilot is, its principles, the loop from the designer to the agent and back |
-| [page.md](page.md) | What Pilot draws on the page: launching, the toolbar, selecting, element names, grid lines, inline text editing, the DOM tree, the viewport width and breakpoints, tooltips |
+| [page.md](page.md) | What Pilot draws on the page: launching, the toolbar, selecting, element names, grid lines, inline text editing, following the page as it scrolls, the DOM tree, the viewport width and breakpoints, tooltips |
 | [property-dialog.md](property-dialog.md) | The dialog next to the selection: where it sits, the empty-search list, finding properties, the width chip and state pills, keys |
 | [editors.md](editors.md) | Property editors: the contract, the shared pieces, value grammar, the property database, and each editor |
 | [edits.md](edits.md) | How a change is recorded, shown and handed off: the history and undo, the preview stylesheet, declared values, removals, widths, states, text changes, the change set, reloads |

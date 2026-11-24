@@ -2,7 +2,7 @@
    buttons, their icon in the background color. */
 @scope (.selection-actions) {
   :scope {
-    position: fixed;
+    position: var(--_place, fixed); /* PageAnchor */
     z-index: var(--plt-z-ui);
     display: flex;
     gap: 4px;
