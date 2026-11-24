@@ -577,8 +577,42 @@
     color: var(--plt-color-contrast-high);
   }
 
+  /* The name, and who made it in the corner (Pilot's own say Pilot; a skill
+     its author, when its SKILL.md says one). */
+  .action-head {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .action-head .action-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .action-author {
+    margin-left: auto;
+    flex-shrink: 0;
+    max-width: 50%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--plt-color-contrast-low);
+  }
+
+  /* Two lines at most: a skill's description can be long (up to 300 characters).
+     A little more room between its lines than the list's single spacing. */
   .action-description {
     color: var(--plt-color-contrast-low);
+    line-height: 14px;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
   }
 
   .action-none {

@@ -86,8 +86,7 @@ export function actionsBox(
  * with either tool), Select similar (when there's something similar), Show in DOM (opens the DOM tree on the selected
  * element). While a job is on the element (`busy`), its loader takes the
  * corner, always the far right; with an unresolved comment thread, a
- * comment icon sits left of it (or takes the corner) and opens it. Tasks for the agent (Make responsive) aren't here:
- * they're the comment box's `/` actions. Elements that aren't selected get these
+ * comment icon sits left of it (or takes the corner) and opens it. Elements that aren't selected get these
  * two alone, so they're found on the page. Inside
  * the corner when the element touches the top of the window (the tooltips
  * then go below, so they stay on screen).

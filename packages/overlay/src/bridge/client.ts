@@ -152,7 +152,10 @@ export class BridgeClient {
       const { skills } = (await res.json()) as { skills?: unknown };
       return Array.isArray(skills)
         ? skills
-            .filter((s): s is ProjectSkill => typeof s?.name === "string" && (s.description === undefined || typeof s.description === "string"))
+            .filter(
+              (s): s is ProjectSkill =>
+                typeof s?.name === "string" && (s.description === undefined || typeof s.description === "string") && (s.author === undefined || typeof s.author === "string"),
+            )
             .map(({ name, description }) => ({ name, ...(description ? { description } : {}) }))
         : [];
     } catch {

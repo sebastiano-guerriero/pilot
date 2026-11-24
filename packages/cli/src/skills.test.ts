@@ -55,6 +55,19 @@ describe("the agent's skills (the / list)", () => {
     ]);
   });
 
+  it("its author, when its SKILL.md says one: at the top, or in its metadata (the Agent Skills format)", async () => {
+    await files({
+      "skills/top/SKILL.md": skill("top", "One.", "author: Jane Doe\n"),
+      "skills/meta/SKILL.md": skill("meta", "Two.", 'metadata:\n  version: "1.0"\n  author: "Acme Design"\n'),
+      "skills/none/SKILL.md": skill("none", "Three.", "metadata:\n  version: 2\n"),
+    });
+    expect(findSkills([join(root, "skills")])).toEqual([
+      { name: "meta", description: "Two.", author: "Acme Design" },
+      { name: "none", description: "Three." },
+      { name: "top", description: "One.", author: "Jane Doe" },
+    ]);
+  });
+
   it("follows links (installers link each agent's folder to one copy), and cuts a long description", async () => {
     await files({ "shared/better-motion/SKILL.md": skill("better-motion", "x".repeat(400)) });
     await mkdir(join(root, "home/.cursor/skills"), { recursive: true });

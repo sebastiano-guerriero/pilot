@@ -21,7 +21,7 @@ import { type ChangeCounts, changesLabel } from "../../changesLabel.ts";
 import { PropsList } from "../PropsList/PropsList.tsx";
 import { ScrollThumb } from "../ScrollThumb/ScrollThumb.tsx";
 import { Tooltip } from "../Tooltip/Tooltip.tsx";
-import { actionAt, actionCommand, actionName, matchActions, matchSkills, withoutQuery } from "./actions.ts";
+import { actionAt, actionCommand, actionName, matchActions, matchSkills, PILOT_AUTHOR, withoutQuery } from "./actions.ts";
 import { renderMarkdown } from "./markdown.tsx";
 import { propsInText, withPropLine } from "./propLines.ts";
 import { insertMention, matchMentions, type MentionOption, mentionAt, mentionsIn, projectOptions, splitMentions } from "./mentions.ts";
@@ -145,7 +145,7 @@ function FileTile({ name }: { name: string }) {
 function placeholder(withAction: boolean, reply: boolean, mentions: boolean): string {
   if (withAction) return mentions ? "Add details (optional), @ to mention" : "Add details (optional)";
   const lead = reply ? "Reply" : "Ask the agent";
-  return mentions ? `${lead}, / for actions, @ to mention` : `${lead}, or / for actions`;
+  return mentions ? `${lead}, / for skills, @ to mention` : `${lead}, or / for skills`;
 }
 
 /** Skills the `/` list shows at once, the best matches first (as the `@` list's few per group): typing narrows them. */
@@ -379,9 +379,9 @@ export function CommentWidget({
   // closes it, leaving the text as typed. With nothing matching it doesn't
   // show: a `/about` is just text, and Enter sends it. Backspace at the
   // start of the field removes the chip.
-  // The agent's skills come after the actions, in a group of their own: a
-  // pick is a chip too, and the comment goes as usual, for the agent to use
-  // that skill. Asked for when the box opens (so Enter right after `/x`
+  // The designer's skills, after Pilot's own two (Props on a component, and
+  // Make responsive): a skill picked is a chip too, and the comment goes as
+  // usual, for the agent to use that skill. Asked for when the box opens (so Enter right after `/x`
   // finds them) and again each time the list opens (a skill installed meanwhile).
   const [action, setAction] = useState<CommentAction | null>(null);
   const [skill, setSkill] = useState<string | null>(null);
@@ -413,8 +413,7 @@ export function CommentWidget({
     if (!slash) return;
     const chosen = options[index];
     const chosenSkill = chosen ? undefined : skillOptions[index - options.length];
-    // A preview (listed, not built yet) can't be picked: nothing to send.
-    if ((!chosen && !chosenSkill) || chosen?.preview) return;
+    if (!chosen && !chosenSkill) return;
     if (chosen) setAction(chosen.id as CommentAction);
     else if (chosenSkill) setSkill(chosenSkill.name);
     const next = withoutQuery(text, slash);
@@ -882,7 +881,7 @@ export function CommentWidget({
             </div>
           )}
           {menuOpen && (
-            <div class="actions-menu" id="pilot-actions" role="listbox" aria-label="Actions">
+            <div class="actions-menu" id="pilot-actions" role="listbox" aria-label="Skills">
               {options.map((a, i) => (
                 <div
                   key={a.id}
@@ -896,21 +895,19 @@ export function CommentWidget({
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => pick(i)}
                 >
-                  <span class="action-name">{a.name}</span>
+                  <span class="action-head">
+                    <span class="action-name">{a.name}</span>
+                    <span class="action-author">{PILOT_AUTHOR}</span>
+                  </span>
                   <span class="action-description">{a.description}</span>
                 </div>
               ))}
-              {/* The agent's skills, after Pilot's actions: a group of their own, in the `@` list's design (its heading, and rows on one line: the name, the description cut at its right). */}
-              {skillOptions.length > 0 && (
-                <div class="mention-group" role="presentation">
-                  Skills
-                </div>
-              )}
+              {/* The designer's skills, after Pilot's two: the same rows, each with its author in the corner when it says one. */}
               {skillOptions.map((s, i) => (
                 <div
                   key={`skill-${s.name}`}
                   id={`pilot-skill-${i}`}
-                  class="action-option mention-option"
+                  class="action-option"
                   data-kind="skill"
                   role="option"
                   aria-selected={options.length + i === active}
@@ -920,7 +917,10 @@ export function CommentWidget({
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => pick(options.length + i)}
                 >
-                  <span class="action-name">{s.name}</span>
+                  <span class="action-head">
+                    <span class="action-name">{s.name}</span>
+                    {s.author && <span class="action-author">{s.author}</span>}
+                  </span>
                   {s.description && <span class="action-description">{s.description}</span>}
                 </div>
               ))}

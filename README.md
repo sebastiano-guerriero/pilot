@@ -6,7 +6,7 @@ Pilot turns the page you're building into a design surface for your agents. You 
 
 - **Edit.** Select an element, type a property the way you'd type a Tailwind class (`pt`, `w`, `gap-x`), and set it with a visual control.
 - **Ask for a change.** Click an element with the comment tool and say what you want, in your own words, with a screenshot or a file if it helps. The agent makes the change and tells you in a line what it did.
-- **Run a task.** Type `/` in the comment box and pick one: **Make responsive** makes the element work at every screen width, and **Break and fix** tries it with odd content (very long text, missing or odd-shaped images) and fixes what breaks. Your agent's own skills are there too: pick one and the agent uses it for your comment.
+- **Use your skills.** Type `/` in the comment box to pick one of your agent's skills (yours, or your team's), and the agent uses it for your comment. Pilot adds two of its own: **Make responsive** makes the element work at every screen width, and on a component, **Props** lists the props you can change.
 
 > **Early preview (0.x).** It works, and things will change between versions.
 
@@ -67,7 +67,7 @@ Then restart your app's dev server and `npx usepilot`. Updating from 0.13 or ear
    - Type `hover:` to change the hover state.
    - Type `/` to see every modifier.
 4. **Send** your changes to the agent with the toolbar's Send button. Keep designing while it works. Each change stays previewed until it's really in your code.
-5. **Ask for a change** with the speech-bubble tool: click an element (Shift+click for several) and tell the agent what to change. Type `/` there for tasks like Make responsive and Break and fix.
+5. **Ask for a change** with the speech-bubble tool: click an element (Shift+click for several) and tell the agent what to change. Type `/` there to use one of your skills.
 6. **Edit text** in place: with the cursor tool on, double-click it.
 
 Your changes survive reloads in the same browser tab. Close Pilot with the toolbar's last button.

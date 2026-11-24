@@ -52,7 +52,7 @@ export function findSkills(folders: readonly string[]): ProjectSkill[] {
       if (!meta) continue;
       const name = meta.name || entry;
       if (!SKILL_NAME.test(name) || found.has(name)) continue;
-      found.set(name, { name, ...(meta.description ? { description: meta.description } : {}) });
+      found.set(name, { name, ...(meta.description ? { description: meta.description } : {}), ...(meta.author ? { author: meta.author } : {}) });
     }
   }
   return [...found.values()].sort((a, b) => a.name.localeCompare(b.name));
@@ -60,16 +60,20 @@ export function findSkills(folders: readonly string[]): ProjectSkill[] {
 
 const MAX_SKILL_BYTES = 256_000;
 const MAX_DESCRIPTION = 300;
+const MAX_AUTHOR = 60;
 
-/** A `SKILL.md`'s name and description (a symlinked folder counts, as installers make them); null when there's none. */
-function readSkill(file: string): { name?: string; description?: string } | null {
+/** A `SKILL.md`'s name, description and author (a symlinked folder counts, as installers make them); null when there's none. */
+function readSkill(file: string): { name?: string; description?: string; author?: string } | null {
   try {
     if (statSync(file).size > MAX_SKILL_BYTES) return null;
-    const meta = frontmatter(readFileSync(file, "utf8"));
+    const text = readFileSync(file, "utf8");
+    const meta = frontmatter(text);
     const description = meta.description?.replace(/\s+/g, " ").trim();
+    const author = (meta.author ?? metadataValue(text, "author"))?.replace(/\s+/g, " ").trim().slice(0, MAX_AUTHOR);
     return {
       name: meta.name?.trim(),
       description: description && description.length > MAX_DESCRIPTION ? `${description.slice(0, MAX_DESCRIPTION - 1).trimEnd()}…` : description,
+      ...(author ? { author } : {}),
     };
   } catch {
     return null;
@@ -99,6 +103,24 @@ export function frontmatter(text: string): Record<string, string> {
     out[key] = unquote(value);
   }
   return out;
+}
+
+/**
+ * A key of the frontmatter's `metadata:` map (the Agent Skills format keeps
+ * `author` and `version` there), as text; undefined when there's none.
+ */
+export function metadataValue(text: string, key: string): string | undefined {
+  const block = /^\uFEFF?---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(text)?.[1];
+  if (block === undefined) return undefined;
+  const lines = block.split(/\r?\n/);
+  const start = lines.findIndex((l) => /^metadata:[ \t]*$/.test(l));
+  if (start < 0) return undefined;
+  for (const line of lines.slice(start + 1)) {
+    if (!/^[ \t]+\S/.test(line)) break;
+    const pair = new RegExp(`^[ \\t]+${key}:[ \\t]*(.+)$`).exec(line);
+    if (pair) return unquote((pair[1] as string).trim());
+  }
+  return undefined;
 }
 
 function unquote(value: string): string {

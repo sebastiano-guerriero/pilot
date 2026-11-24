@@ -29,10 +29,10 @@ const press = (key: string) =>
     field().dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
   });
 
-function draw(onSend = vi.fn(() => "sent" as const), mentions?: () => MentionOption[]) {
+function draw(onSend = vi.fn(() => "sent" as const), mentions?: () => MentionOption[], component?: string) {
   act(() =>
     render(
-      h(CommentWidget, { element, anchor: new DOMRect(0, 0, 100, 40), thread: null, onSend, onClose: () => {}, agentOn: true, mentions }),
+      h(CommentWidget, { element, anchor: new DOMRect(0, 0, 100, 40), thread: null, onSend, onClose: () => {}, agentOn: true, mentions, component }),
       container,
     ),
   );
@@ -82,22 +82,34 @@ describe("CommentWidget's send", () => {
   });
 });
 
-describe("CommentWidget's / actions", () => {
-  it("/ lists the actions; Enter picks one as a chip, and Send sends it with the words", async () => {
-    const onSend = draw();
-    await type("/resp");
-    expect([...container.querySelectorAll(".action-option .action-name")].map((e) => e.textContent)).toEqual(["Make responsive"]);
+describe("CommentWidget's / menu", () => {
+  it("on a component, / lists Props among the skills; Enter picks it as a chip, and Send sends it with the words", async () => {
+    const onSend = draw(undefined, undefined, "Button");
+    await type("/prop");
+    expect([...container.querySelectorAll(".action-option .action-name")].map((e) => e.textContent)).toEqual(["Props"]);
     await press("Enter");
-    expect(container.querySelector(".composer .action-chip")?.textContent).toBe("Make responsive");
+    expect(container.querySelector(".composer .action-chip")?.textContent).toBe("Props");
     expect(field().value).toBe("");
     expect(field().placeholder).toBe("Add details (optional)");
-    await type("Two columns on tablet");
+    await type("Only the tone");
     await press("Enter");
-    expect(onSend).toHaveBeenCalledWith("Two columns on tablet", [], "responsive", [], false, []);
+    expect(onSend).toHaveBeenCalledWith("Only the tone", [], "props", [], false, []);
+  });
+
+  it("Pilot's own two say Pilot in the corner; Break and fix and the previews aren't there any more", async () => {
+    draw(undefined, undefined, "Button");
+    await type("/");
+    expect([...container.querySelectorAll(".action-option")].map((o) => [o.querySelector(".action-name")?.textContent, o.querySelector(".action-author")?.textContent])).toEqual([
+      ["Props", "Pilot"],
+      ["Make responsive", "Pilot"],
+    ]);
+    await type("/break");
+    expect(container.querySelector("#pilot-actions")).toBeNull();
+    expect(field().placeholder).toBe("Ask the agent, or / for skills");
   });
 
   it("an action can go alone; Backspace at the start removes it; Esc closes only the menu, the text stays", async () => {
-    const onSend = draw();
+    const onSend = draw(undefined, undefined, "Button");
     await type("/");
     await press("Escape");
     expect(field().value).toBe("/");
@@ -111,15 +123,15 @@ describe("CommentWidget's / actions", () => {
     await type("/");
     await press("Enter");
     await press("Enter");
-    expect(onSend).toHaveBeenCalledWith("", [], "responsive", [], false, []);
+    expect(onSend).toHaveBeenCalledWith("", [], "props", [], false, []);
   });
 });
 
 describe("CommentWidget's skills", () => {
-  it("/ lists the agent's skills after the actions; a pick is a chip, sent with the comment (its edits too), and shown as /name", async () => {
+  it("/ lists the agent's skills, in the same rows as Props (no heading); a pick is a chip, sent with the comment (its edits too), and shown as /name", async () => {
     const onSend = vi.fn(() => "sent" as const);
     const skills = vi.fn(async () => [
-      { name: "better-ui", description: "Polishes surfaces and icons" },
+      { name: "better-ui", description: "Polishes surfaces and icons", author: "Acme" },
       { name: "variant", description: "Builds variants" },
     ]);
     await act(async () => {
@@ -135,7 +147,10 @@ describe("CommentWidget's skills", () => {
       field().dispatchEvent(new Event("input", { bubbles: true }));
     });
     expect([...container.querySelectorAll(".action-option[data-kind=skill] .action-name")].map((e) => e.textContent)).toEqual(["better-ui"]);
-    expect(container.querySelector(".mention-group")?.textContent).toBe("Skills");
+    expect(container.querySelector(".mention-group")).toBeNull();
+    // Its author in the corner, when its SKILL.md says one.
+    expect(container.querySelector(".action-option[data-kind=skill] .action-author")?.textContent).toBe("Acme");
+    expect(container.querySelector(".action-option[data-kind=skill]")?.classList.contains("mention-option")).toBe(false);
     await press("Enter");
     expect(container.querySelector(".composer .action-chip[data-kind=skill]")?.textContent).toBe("better-ui");
     expect(field().value).toBe("");
@@ -182,16 +197,16 @@ describe("CommentWidget's skills", () => {
 });
 
 describe("CommentWidget's / anywhere", () => {
-  it("/ at the start of any word opens the actions; the pick leaves the text, the words stay as its note", async () => {
-    const onSend = draw();
-    await type("Two columns on tablet /resp");
-    expect([...container.querySelectorAll(".action-option .action-name")].map((e) => e.textContent)).toEqual(["Make responsive"]);
+  it("/ at the start of any word opens the list; the pick leaves the text, the words stay as its note", async () => {
+    const onSend = draw(undefined, undefined, "Button");
+    await type("Only the tone /prop");
+    expect([...container.querySelectorAll(".action-option .action-name")].map((e) => e.textContent)).toEqual(["Props"]);
     expect(container.querySelector(".buttons")?.hasAttribute("hidden")).toBe(true);
     await press("Enter");
-    expect(container.querySelector(".composer .action-chip")?.textContent).toBe("Make responsive");
-    expect(field().value).toBe("Two columns on tablet ");
+    expect(container.querySelector(".composer .action-chip")?.textContent).toBe("Props");
+    expect(field().value).toBe("Only the tone ");
     await press("Enter");
-    expect(onSend).toHaveBeenCalledWith("Two columns on tablet", [], "responsive", [], false, []);
+    expect(onSend).toHaveBeenCalledWith("Only the tone", [], "props", [], false, []);
   });
 
   it("not inside a word (and/or); a /word matching nothing is text, and Enter sends it", async () => {
@@ -231,12 +246,18 @@ describe("CommentWidget's edits chip", () => {
     await press("Enter");
     expect(onSend).toHaveBeenLastCalledWith("Calmer", [], undefined, [], false, []);
     render(null, container);
-    const withAction = drawWith({ styles: 2, texts: 0 });
-    await type("/resp");
+    const withAction = vi.fn(() => "sent" as const);
+    act(() =>
+      render(
+        h(CommentWidget, { element, anchor: new DOMRect(0, 0, 100, 40), thread: null, onSend: withAction, onClose: () => {}, agentOn: true, edits: { styles: 2, texts: 0 }, component: "Button" }),
+        container,
+      ),
+    );
+    await type("/prop");
     await press("Enter");
     expect(chip()).toBeNull();
     await press("Enter");
-    expect(withAction).toHaveBeenCalledWith("", [], "responsive", [], false, []);
+    expect(withAction).toHaveBeenCalledWith("", [], "props", [], false, []);
   });
 
   it("none: no chip", () => {
@@ -424,7 +445,7 @@ describe("CommentWidget's @ mentions", () => {
         container,
       ),
     );
-    expect(field().placeholder).toBe("Ask the agent, / for actions, @ to mention");
+    expect(field().placeholder).toBe("Ask the agent, / for skills, @ to mention");
     await type("@Pr");
     expect(shown()).toEqual(["ProductCard"]);
     await act(async () => send([{ name: "PricingTable", file: "src/pricing/table.tsx", line: 4 }]));
@@ -479,16 +500,3 @@ describe("CommentWidget's Edit manually", () => {
   });
 });
 
-describe("CommentWidget's / previews", () => {
-  it("a preview shows in the list, but picking it does nothing (no chip, nothing sent)", () => {
-    const onSend = draw();
-    act(() => field().focus());
-    type("/container");
-    const option = container.querySelector(".action-option") as HTMLElement;
-    expect(option.querySelector(".action-name")?.textContent).toBe("Fit its container");
-    act(() => option.click());
-    press("Enter");
-    expect(container.querySelector(".action-chip")).toBeNull();
-    expect(onSend).not.toHaveBeenCalled();
-  });
-});

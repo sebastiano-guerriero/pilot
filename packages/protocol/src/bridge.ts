@@ -84,6 +84,8 @@ export interface AgentInfo {
 export interface ProjectSkill {
   name: string;
   description?: string;
+  /** Who made it, as its `SKILL.md` says (`author`, or `metadata.author`): shown in the `/` list. */
+  author?: string;
 }
 
 /** A skill's name, as agents name them (`better-ui`, `ui:polish`): what may go into a prompt's first line. */

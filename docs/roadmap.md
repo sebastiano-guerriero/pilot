@@ -145,7 +145,7 @@ Items marked *(chat loop)* were for an agent's chat running Pilot over MCP, up t
 - [x] A comment carries the element's unsent changes (a chip in the box; applied and checked with it)
 - [x] Comment attachments (images, text files, PDFs): picked, previewed, sent with the comment or alone, saved by the hub in the OS temp folder, shown to the agent with the job
 - [ ] Design the file tile for attachments that aren't images (placeholder now)
-- [ ] `/` actions listed as previews, to build: Fit its container (container queries), Check accessibility, Explore variations, Use design tokens, Add states, Support dark mode, Add motion ([handoff.md](handoff.md), *Actions*)
+- Dropped (2026-11-24, the owner's call): the `/` actions listed as previews, and Break and fix left the menu: `/` is the designer's skills, after Pilot's own two (Props, Make responsive), each row with its author ([handoff.md](handoff.md), *The `/` menu*)
 - [x] Skills in the `/` menu: the agent's own skills (its project and home folders), picked as a chip, and the run starts with it as the agent's chat does (`/name`, `$name`) ([handoff.md](handoff.md), *Skills*)
   - [x] Replies: concise for comments (no longer one sentence), as the skill says with a skill; the skills group in the `@` list's design, the chip an action's
   - [ ] A Claude Code plugin's skills (`plugin:skill`), if designers ask

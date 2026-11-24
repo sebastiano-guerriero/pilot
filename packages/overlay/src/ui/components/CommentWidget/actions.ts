@@ -1,97 +1,45 @@
 import type { CommentAction } from "@pilot/protocol";
 
 /**
- * What the comment box's `/` menu offers: tasks for the agent about the
- * element. `/` at the start of any word opens it (not in a word: "and/or",
- * URLs), as `@` does. Picked, an action becomes a chip at the start of the
- * message, its `/word` leaves the text; the words, and any files, go with it. Each is sent as a
- * job of its own (see PilotSession.comment), and shows in the thread as
- * the designer's message, with the agent's reply after it.
+ * What the comment box's `/` menu offers: the designer's skills (see
+ * matchSkills), after Pilot's own two, listed as skills of Pilot's (its
+ * name in the row's corner, where a skill's author goes): Props, on a
+ * component's instance, and Make responsive. The rest of Pilot's tasks
+ * (Break and fix) and the previews of what was planned left the menu (the
+ * owner's call, 2026-11-24): the designer's skills, their team's own
+ * workflows, are what `/` is for. `/` at the start of any word opens it
+ * (not in a word: "and/or", URLs), as `@` does. Picked, it becomes a chip
+ * at the start of the message, its `/word` leaves the text; the words, and
+ * any files, go with it. Pilot's are sent as a job of their own (see
+ * PilotSession.comment), shown in the thread as the designer's message,
+ * with the agent's reply after it.
  */
 export interface Action {
-  /** A preview's id isn't a CommentAction: it's never sent. */
-  id: CommentAction | `preview-${string}`;
+  id: CommentAction;
   /** What's typed after `/` to find it (a word of the name works too); not shown. */
   command: string;
   name: string;
   description: string;
   /** Offered only when the selection is a component's instance (its top-level element). */
   forComponent?: boolean;
-  /**
-   * Listed, not built yet (the roadmap): shown in the menu (the owner's video,
-   * and a look at what's coming), but picking it does nothing.
-   */
-  preview?: boolean;
 }
 
+/** Who made Pilot's own (the row's corner, as a skill's author). */
+export const PILOT_AUTHOR = "Pilot";
+
 export const ACTIONS: Action[] = [
-  {
-    id: "responsive",
-    command: "responsive",
-    name: "Make responsive",
-    description: "Make it work at every screen width",
-  },
-  {
-    id: "preview-container",
-    command: "container",
-    name: "Fit its container",
-    description: "Adapt to the space it's in, with container queries",
-    preview: true,
-  },
-  {
-    id: "preview-a11y",
-    command: "a11y",
-    name: "Check accessibility",
-    description: "Fix contrast, labels, focus and keyboard use",
-    preview: true,
-  },
-  {
-    id: "preview-variations",
-    command: "variations",
-    name: "Explore variations",
-    description: "Try a few takes on it, to pick from",
-    preview: true,
-  },
-  {
-    id: "break-and-fix",
-    command: "break",
-    name: "Break and fix",
-    description: "Try odd content and fix what breaks",
-  },
-  {
-    id: "preview-tokens",
-    command: "tokens",
-    name: "Use design tokens",
-    description: "Swap hardcoded values for the project's tokens",
-    preview: true,
-  },
-  {
-    id: "preview-states",
-    command: "states",
-    name: "Add states",
-    description: "Design its hover, focus and disabled looks",
-    preview: true,
-  },
-  {
-    id: "preview-dark",
-    command: "dark",
-    name: "Support dark mode",
-    description: "Make it work in dark mode",
-    preview: true,
-  },
-  {
-    id: "preview-motion",
-    command: "motion",
-    name: "Add motion",
-    description: "A subtle transition or entrance",
-    preview: true,
-  },
   {
     id: "props",
     command: "props",
     name: "Props",
     description: "Change the component's props from a list",
     forComponent: true,
+  },
+  {
+    id: "responsive",
+    command: "responsive",
+    name: "Make responsive",
+    description: "Make it work at every screen width",
   },
 ];
 
@@ -116,10 +64,8 @@ export function withoutQuery(text: string, at: { start: number; query: string })
 /** The actions for what's typed after `/`: by command or name, those that start with it first. */
 export function matchActions(typed: string, context: { component?: boolean } = {}): Action[] {
   const query = typed.toLowerCase();
-  // A component selected: its own actions (Props) first, then the rest.
-  const offered = context.component
-    ? [...ACTIONS.filter((a) => a.forComponent), ...ACTIONS.filter((a) => !a.forComponent)]
-    : ACTIONS.filter((a) => !a.forComponent);
+  // A component's (Props) only on a component's instance, and first there: it's what that selection is most likely for.
+  const offered = ACTIONS.filter((a) => !a.forComponent || context.component);
   if (!query) return offered;
   const words = (a: Action) => [a.command, ...a.name.toLowerCase().split(/\s+/)];
   const starts = offered.filter((a) => words(a).some((w) => w.startsWith(query)));
@@ -127,19 +73,19 @@ export function matchActions(typed: string, context: { component?: boolean } = {
   return [...starts, ...contains];
 }
 
-/** What's typed for an action (`responsive`, `break`): a sent message shows it as `/responsive`. */
+/** What's typed for an action (`props`; a task asked before they left the menu, by its kind): a sent message shows it as `/props`. */
 export function actionCommand(id: CommentAction): string {
   return ACTIONS.find((a) => a.id === id)?.command ?? id;
 }
 
-/** An action's name, for its chip ("Make responsive"). */
+/** An action's name, for its chip ("Props"). */
 export function actionName(id: CommentAction): string {
   return ACTIONS.find((a) => a.id === id)?.name ?? id;
 }
 
 /**
- * The agent's skills for what's typed after `/`, listed after Pilot's
- * actions: by name, those whose name (or a word of it: `ui` finds
+ * The agent's skills for what's typed after `/`, listed after Props (on a
+ * component), in the same rows: by name, those whose name (or a word of it: `ui` finds
  * `better-ui`) starts with it first. Names only: a description says what a
  * skill is for, not what it's called.
  */
