@@ -547,6 +547,47 @@ const ICONS = {
       </>
     ),
   },
+  // The jobs button: an agent coding (Nucleo UI ai-developer, filled, 18px),
+  // animated in Toolbar.css. The eyes are holes, drawn in a mask so they can move (they read
+  // the screen, and blink); the laptop breathes, and sparkles twinkle around it.
+  "ai-developer": {
+    size: 18,
+    body: (
+      <>
+        <mask id="plt-developer-eyes" maskUnits="userSpaceOnUse" x="0" y="0" width="18" height="18">
+          <rect width="18" height="18" fill="white" />
+          <g class="dev-eyes" fill="black">
+            <circle cx="7" cy="6" r="1" />
+            <circle cx="10.5" cy="6" r="1" />
+          </g>
+        </mask>
+        <path
+          d="m13.5,4.5h-.5v-.75c0-1.5166-1.2334-2.75-2.75-2.75h-4.5c-1.5166,0-2.75,1.2334-2.75,2.75v.75h-.5c-.4141,0-.75.3359-.75.75s.3359.75.75.75h.5v.25c0,1.5166,1.2334,2.75,2.75,2.75h4.5c1.5166,0,2.75-1.2334,2.75-2.75v-.25h.5c.4141,0,.75-.3359.75-.75s-.3359-.75-.75-.75Z"
+          fill="currentColor"
+          mask="url(#plt-developer-eyes)"
+        />
+        <path
+          d="m1.9521,14.75c-.1426,0-.2861-.0405-.4141-.125-.3452-.2285-.4395-.6943-.2104-1.0396,1.4883-2.2451,3.9824-3.5854,6.6719-3.5854.4141,0,.75.3359.75.75s-.3359.75-.75.75c-2.1855,0-4.2119,1.0894-5.4219,2.9146-.144.2178-.3828.3354-.6255.3354Z"
+          fill="currentColor"
+        />
+        <path
+          class="dev-laptop"
+          d="m17.5288,11.5688c-.2319-.3564-.6235-.5688-1.0483-.5688h-5.4058c-.4951,0-.9443.2925-1.1426.7422l-1.6702,3.7578h-2.5124c-.4141,0-.75.3359-.75.75s.3359.75.75.75h9.1748c.4941,0,.9429-.2915,1.1426-.7422l1.5562-3.5005c.1724-.3882.1372-.8325-.0942-1.1885Z"
+          fill="currentColor"
+        />
+        {/* Sparkles (Nucleo UI sparkle's small one, centered on 4.5, 4.5) and a dot, each at its own pace; off the top-right corner (the pill). */}
+        <g fill="currentColor">
+          <g transform="translate(12.2 2.95) scale(.9)">
+            <path class="dev-spark" style={{ animationDuration: "2.6s", animationDelay: "-0.4s" }} d="M2.342 4.974L3.605 5.395L4.026 6.658C4.094 6.862 4.286 7 4.501 7C4.716 7 4.907 6.862 4.976 6.658L5.397 5.395L6.66 4.974C6.864 4.906 7.002 4.715 7.002 4.5C7.002 4.285 6.864 4.094 6.66 4.026L5.397 3.605L4.976 2.342C4.839 1.934 4.164 1.934 4.027 2.342L3.606 3.605L2.343 4.026C2.139 4.094 2.001 4.285 2.001 4.5C2.001 4.715 2.138 4.906 2.342 4.974Z" />
+          </g>
+          <g transform="translate(-3.125 5.875) scale(.75)">
+            <path class="dev-spark" style={{ animationDuration: "3.4s", animationDelay: "-1.9s" }} d="M2.342 4.974L3.605 5.395L4.026 6.658C4.094 6.862 4.286 7 4.501 7C4.716 7 4.907 6.862 4.976 6.658L5.397 5.395L6.66 4.974C6.864 4.906 7.002 4.715 7.002 4.5C7.002 4.285 6.864 4.094 6.66 4.026L5.397 3.605L4.976 2.342C4.839 1.934 4.164 1.934 4.027 2.342L3.606 3.605L2.343 4.026C2.139 4.094 2.001 4.285 2.001 4.5C2.001 4.715 2.138 4.906 2.342 4.974Z" />
+          </g>
+          <circle class="dev-spark" style={{ animationDuration: "1.9s", animationDelay: "-1.2s" }} cx="1.25" cy="1.75" r=".75" />
+        </g>
+      </>
+    ),
+  },
   loader: {
     size: 18,
     body: (

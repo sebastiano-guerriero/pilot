@@ -143,6 +143,31 @@
     animation: robot-twinkle 2.6s ease-in-out infinite both;
   }
 
+  /* The jobs button's agent coding (Icon "ai-developer"). It sits
+     still; its eyes read the screen (down and to the right, along a line,
+     then back) and blink, the laptop breathes, fading gently in and out,
+     and two sparkles and a dot twinkle around it. */
+  .developer {
+    overflow: visible;
+  }
+
+  .developer .dev-eyes {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: dev-read 3.2s ease-in-out infinite;
+  }
+
+  .developer .dev-laptop {
+    animation: dev-breathe 1.6s ease-in-out infinite alternate;
+  }
+
+  /* Its sparkles twinkle as the robot's (robot-twinkle), each at its own pace (Icon.tsx). */
+  .developer .dev-spark {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: robot-twinkle 2.6s ease-in-out infinite both;
+  }
+
   /* A count on a button's top-right corner (comments to review, changes
      to send, jobs in progress): 10px tall, a 1px ring in the toolbar's
      background so it reads where it overlaps the button. */
@@ -265,11 +290,47 @@
     }
   }
 
+  /* On the screen (down, to the right), along a line and back, a blink. */
+  @keyframes dev-read {
+    0%,
+    100% {
+      transform: translate(0.5px, 0.5px) scaleY(1);
+    }
+    30% {
+      transform: translate(1.25px, 0.6px) scaleY(1);
+    }
+    45% {
+      transform: translate(0.25px, 0.6px) scaleY(1);
+    }
+    70% {
+      transform: translate(1px, 0.6px) scaleY(1);
+    }
+    86% {
+      transform: translate(0.5px, 0.5px) scaleY(1);
+    }
+    90% {
+      transform: translate(0.5px, 0.5px) scaleY(0.1);
+    }
+    94% {
+      transform: translate(0.5px, 0.5px) scaleY(1);
+    }
+  }
+
+  @keyframes dev-breathe {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0.35;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .jobs-slot,
     .jobs,
     .pill,
-    .robot * {
+    .robot *,
+    .developer * {
       animation: none;
     }
   }

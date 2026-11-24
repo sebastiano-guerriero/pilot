@@ -294,7 +294,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
           ...(stuck.jobs.some(inThread) ? { comment: stuckAlert } : {}),
           ...(stuck.jobs.some((id) => !inThread(id)) ? { send: stuckAlert } : {}),
         };
-  // Every job stuck: none is being worked on, so the jobs button (its spinner) goes.
+  // Every job stuck: none is being worked on, so the jobs button (its robot at work) goes.
   const running = stuck && stuck.jobs.length >= pending ? 0 : pending;
   // Where the designer dragged the toolbar (null: centered at the bottom), kept through reloads.
   const [toolbarSpot, setToolbarSpot] = useState<ToolbarSpot | null>(loadSpot);
