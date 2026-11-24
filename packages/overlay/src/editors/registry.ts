@@ -18,6 +18,7 @@ import {
   textDecorationThicknessEditor,
   textUnderlineOffsetEditor,
 } from "./text-decoration/TextDecorationEditors.tsx";
+import { outlineColorEditor, outlineOffsetEditor, outlineStyleEditor, outlineWidthEditor } from "./outline/OutlineEditors.tsx";
 import { listStylePositionEditor, listStyleTypeEditor } from "./list-style/ListStyleEditors.tsx";
 import { overscrollEditor } from "./overscroll/OverscrollEditor.tsx";
 import { fillEditor, strokeEditor, strokeWidthEditor } from "./svg/SvgEditors.tsx";
@@ -151,6 +152,10 @@ export const editors: PropertyEditor[] = [
   whiteSpaceEditor,
   textOverflowEditor,
   lineClampEditor,
+  outlineWidthEditor,
+  outlineStyleEditor,
+  outlineColorEditor,
+  outlineOffsetEditor,
   textDecorationLineEditor,
   textDecorationColorEditor,
   textDecorationStyleEditor,
