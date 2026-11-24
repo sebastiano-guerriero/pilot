@@ -9,7 +9,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
   - [x] Tested on macOS with Claude Code, Codex and Cursor (jobs, follow-ups, two jobs at once, file and network limits); `scripts/agent-runs-check.mjs` and the Agent runs workflow
   - [x] Codex on Windows and Linux (Windows needs `windows.sandbox="unelevated"`)
   - [x] Claude Code and Cursor on Windows and Linux: Claude Code passes as is; Cursor in its allowlist mode (its sandbox isn't on Windows and fails on Ubuntu's AppArmor)
-  - [x] `npx usepilot`: the runner (agent picked and saved per project, up to 3 jobs at once, Stop kills the run, errors said on the page); threads keep their agent session; Close only closes
+  - [x] `npx usepilot`: the runner (agent picked and saved per project, up to 5 jobs at once, Stop kills the run, errors said on the page); threads keep their agent session; Close only closes
   - [x] `init` and `update` for it (check the agent's tool, remove the old chat setup), both READMEs; the MCP loop, `setup` and the `/pilot` skill removed (`usepilot mcp` only says what to do instead)
 - [ ] **After agent runs, before the release:**
   - [x] Copy prompt removed: it handed over edits only, while comments, tasks, questions and props need Pilot running; without it, Send and Comment say "Pilot isn't running for this site". The prompt has one form, the run's, and names none of Pilot's old MCP tools
@@ -33,6 +33,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
   - [x] Measured with Claude Code and Codex too (2026-11-23): every edit right; resumed edits 6.5–7.4s (Claude Code), 8.7–9.6s (Codex), comments about 10–16s. Codex checked its own edits (`git diff`, a script): the prompt now says Pilot checks the page, and its first edits went from 18–21s to 11–13s
   - [x] A run that has gone quiet (no output from the agent for 2 minutes) is stuck, said on its loader, the toolbar and the thread; and Pilot not running is no longer hidden by an earlier failed run ([handoff.md](handoff.md), *When something's stuck*)
   - [x] A comment that's unclear, or asks for what the element already is, gets a question at once instead of a search (one took 17 model rounds, 127s), and a refused command isn't retried another way; the benchmark list left the bench lab, whose agent read it for clues ([handoff.md](handoff.md), *The agent asks*; [benchmark.md](benchmark.md))
+  - [x] Up to five jobs at once, not three: a burst of six comments left two waiting about 10s each, and jobs at once ran no slower ([benchmark.md](benchmark.md), B1)
   - [ ] Send the look-alikes' locations (the agent still greps for them before "only this or all?"), and which parent an inherited value comes from
 
 ## Foundation

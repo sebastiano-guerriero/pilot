@@ -22,8 +22,12 @@ import { warmStyles } from "./styles.ts";
  * Nothing waits in an agent's chat, so nothing there can time out or pause.
  */
 
-/** Jobs run at once: the page never sends two on one element at once. */
-export const SLOTS = 3;
+/**
+ * Jobs run at once: the page never sends two on one element at once. Five, not
+ * three: a designer's burst of six comments left two waiting about 10s each for
+ * a slot, and three at once made no job slower (docs/benchmark.md, B1).
+ */
+export const SLOTS = 5;
 /** How often a run checks that its job wasn't cancelled. */
 const CANCEL_POLL_MS = 2_000;
 /** How often, at most, the runner tells the hub the agent is at work (Job.activeAt): well under the page's quiet time. */

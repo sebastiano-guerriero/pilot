@@ -39,6 +39,16 @@ How long Pilot's jobs take, measured on the bench lab (`../pilot-lab-bench`, [de
 | T2 | `/` | First product card | `/props` | Reading a component's props (`ProductCard`: `compact`) |
 | T3 | `/account` | Orders table | `/break` | Stress-testing with odd content, then putting it back |
 
+## Bursts (several jobs at once)
+
+A designer reviewing a page writes comment after comment without waiting for replies. The runner runs at most 5 jobs at once (`SLOTS` in [run.ts](../packages/cli/src/run.ts); 3 when B1 was first measured, raised after it); a burst shows whether the rest wait for a slot ("waiting for an agent" in each job's console line), and whether jobs at once run slower than alone.
+
+| # | Page | What to send, as fast as you can type it | What it exercises |
+| --- | --- | --- | --- |
+| B1 | `/` | Six comments on six elements: the hero title "make this a bit bolder"; the hero's "Shop the collection" button "less round corners"; the "Shop by category" tile grid "3 columns below 1024px, 2 below 640px"; the testimonials grid "stack these on small screens"; the newsletter's Subscribe button "brand green, white text"; the footer's "Help" column "lighter links" | Six jobs for three slots, two of them long (responsive): how long the others wait |
+
+Record each job's waiting, agent and total time, and the order they finished in.
+
 ## Results
 
 One row per run. Times in seconds, from the console line; "steps" from the agent's output when the runner logs them.
@@ -47,3 +57,4 @@ One row per run. Times in seconds, from the console line; "steps" from the agent
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2026-11-24 | checkout (bridge 8) | Cursor 2026.11.22 | E1 | 1 | 0 | 13.9 | 0 | 13.9 | Yes (`text-5xl` → `text-6xl`) | No | First job of the runner: a new session, the guidelines in full |
 | 2026-11-24 | checkout (bridge 8) | Cursor 2025.09.12 | E1 | – | – | – | – | – | Failed | – | This Cursor CLI predates `--trust` and `--sandbox`: the run exits at once, "printed nothing" |
+| 2026-11-24 | checkout (bridge 8) | Cursor 2026.11.22, Auto | B1 | 1 | 0 / 0 / 0 / 0 / 10.7 / 9.6 | 13.4 / 26.5 / 17.2 / 28.3 / 15.7 / 48.2 | 0 | 80.7 (last done, from the first send) | 5 done, 1 asked (Button's radius, shared) | No | Six comments sent within 23s (title, button, tile grid, testimonials, Subscribe, footer links). The two sent once 3 ran waited about 10s each for a slot. Rounds per job 2–5, none refused; agent time per round 3–16s with no pattern from running 3 at once (the slowest, 48s in 3 rounds, ran mostly beside one other job) |
