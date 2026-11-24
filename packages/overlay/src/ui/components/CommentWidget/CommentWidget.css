@@ -290,6 +290,14 @@
       color: var(--plt-color-contrast-higher);
     }
 
+    /* A web address in a reply: underlined, in the text's color. */
+    & a {
+      color: inherit;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      overflow-wrap: anywhere;
+    }
+
     & code {
       padding: 0 3px;
       border-radius: 3px;

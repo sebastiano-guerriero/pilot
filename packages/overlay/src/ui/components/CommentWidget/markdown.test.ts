@@ -33,10 +33,26 @@ describe("renderMarkdown", () => {
     expect(html("```\nopen")).toBe("<pre><code>open</code></pre>");
   });
 
-  it("headings bold, quotes plain, links as their text", () => {
+  it("headings bold, quotes plain", () => {
     expect(html("## Done")).toBe("<p><strong>Done</strong></p>");
     expect(html("> quoted")).toBe("<p>quoted</p>");
-    expect(html("See [the docs](https://example.com)")).toBe("<p>See the docs</p>");
+  });
+
+  it("web addresses are links, opened in a new tab with nothing passed back: [text](url) and written out", () => {
+    const a = (href: string, text = href) => `<a href="${href}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+    expect(html("See [the docs](https://example.com)")).toBe(`<p>See ${a("https://example.com", "the docs")}</p>`);
+    expect(html("**URL:**\nhttp://localhost:5188/states/button/")).toBe(`<p><strong>URL:</strong><br>${a("http://localhost:5188/states/button/")}</p>`);
+    // The punctuation that ends a sentence isn't part of it.
+    expect(html("Open http://localhost:5188/x.")).toBe(`<p>Open ${a("http://localhost:5188/x")}.</p>`);
+    expect(html("(see https://example.com/a?b=1)")).toBe(`<p>(see ${a("https://example.com/a?b=1")})</p>`);
+    // In code, it's code.
+    expect(html("`http://localhost:5188`")).toBe("<p><code>http://localhost:5188</code></p>");
+  });
+
+  it("only web addresses: any other kind stays text", () => {
+    expect(html("[click](javascript:alert(1))")).toBe("<p>click)</p>");
+    expect(html("[mail](mailto:a@b.c)")).toBe("<p>mail</p>");
+    expect(html("javascript:alert(1)")).toBe("<p>javascript:alert(1)</p>");
   });
 
   it("never HTML: tags show as text", () => {

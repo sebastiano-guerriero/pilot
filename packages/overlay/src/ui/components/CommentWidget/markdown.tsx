@@ -4,8 +4,10 @@ import type { ComponentChildren, JSX } from "preact";
  * The agent's replies as markdown, the subset agents write by habit:
  * paragraphs (a single newline is a line break), **bold**, *italic*,
  * `inline code`, fenced code blocks, and bulleted and numbered lists.
- * Headings show as bold paragraphs, quotes as plain ones, links as their
- * text. Everything else stays as written.
+ * Headings show as bold paragraphs, quotes as plain ones. Web addresses
+ * are links, as `[text](url)` or written out (http and https only: any
+ * other kind, `javascript:` among them, stays text), opened in a new tab
+ * with nothing passed back to the page. Everything else stays as written.
  *
  * Builds elements, never HTML: whatever the text holds (tags included)
  * shows as text, so a reply can't inject anything into the page.
@@ -112,11 +114,23 @@ function lines(text: string): ComponentChildren[] {
 }
 
 /**
- * Inline: `code` (taken as is), **bold** / __bold__, *italic*, and
- * [links](url) as their text. Underscores alone don't make italics, so
- * snake_case names stay intact.
+ * Inline: `code` (taken as is), **bold** / __bold__, *italic*,
+ * [links](url), and web addresses written out (`http://localhost:5188/x`,
+ * without the punctuation that ends a sentence after it). Underscores alone
+ * don't make italics, so snake_case names stay intact.
  */
-const INLINE = /`([^`]+)`|\*\*(.+?)\*\*|__(.+?)__|\*(?=\S)(.+?)(?<=\S)\*|\[([^\]]+)\]\([^)\s]*\)/g;
+const INLINE =
+  /`([^`]+)`|\*\*(.+?)\*\*|__(.+?)__|\*(?=\S)(.+?)(?<=\S)\*|\[([^\]]+)\]\(([^)\s]*)\)|(https?:\/\/[^\s<>`"]*[^\s<>`".,;:!?')\]])/g;
+
+/** A link to `url` when it's a web address (http, https), opened in a new tab; null otherwise. */
+function link(url: string, children: ComponentChildren, key: number): JSX.Element | null {
+  if (!/^https?:\/\/\S+$/i.test(url)) return null;
+  return (
+    <a key={key} href={url} target="_blank" rel="noopener noreferrer">
+      {children}
+    </a>
+  );
+}
 
 export function inline(text: string): ComponentChildren[] {
   const out: ComponentChildren[] = [];
@@ -124,11 +138,13 @@ export function inline(text: string): ComponentChildren[] {
   for (const m of text.matchAll(INLINE)) {
     const index = m.index ?? 0;
     if (index > at) out.push(text.slice(at, index));
-    const [, code, bold, boldU, italic, link] = m;
+    const [, code, bold, boldU, italic, linkText, linkUrl, url] = m;
     if (code !== undefined) out.push(<code key={index}>{code}</code>);
     else if (bold !== undefined || boldU !== undefined) out.push(<strong key={index}>{inline((bold ?? boldU) as string)}</strong>);
     else if (italic !== undefined) out.push(<em key={index}>{inline(italic)}</em>);
-    else out.push(...inline(link as string));
+    else if (url !== undefined) out.push(link(url, url, index) ?? url);
+    // A link of another kind: its text alone.
+    else out.push(link(linkUrl ?? "", inline(linkText as string), index) ?? inline(linkText as string));
     at = index + m[0].length;
   }
   if (at < text.length) out.push(text.slice(at));
