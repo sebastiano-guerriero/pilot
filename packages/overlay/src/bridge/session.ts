@@ -6,6 +6,7 @@ import { type ChangeCounts, countChanges } from "../ui/changesLabel.ts";
 import { describeElement, findTarget, structuralSelector, uniqueSelector } from "../dom/target.ts";
 import { buildChangeSet, buildRequest } from "../edits/changeSet.ts";
 import type { EditHistory, RecordedChange } from "../edits/history.ts";
+import { changedLook, type Look, looksOf } from "../edits/look.ts";
 import { watchJob } from "../edits/verify.ts";
 import { BridgeClient, type BridgeState } from "./client.ts";
 
@@ -61,6 +62,8 @@ export interface JobRecord {
   session?: AgentSession;
   /** Pilot couldn't run the agent for it (Job.error): said where stuck jobs are, until the designer sends again. */
   error?: JobError;
+  /** A thread's job: how its elements looked when it was sent (edits/look.ts), to tell whether the agent changed it. */
+  look?: Array<Look | null>;
 }
 
 /**
@@ -112,10 +115,20 @@ export type ThreadMessage = Omit<CommentMessage, "attachments"> & {
   early?: boolean;
   /** The agent's reply to `/props`: the component's props, for the designer to set (see PilotSession.setProps). */
   propList?: PropSpec[];
+  /**
+   * The agent's reply, once its job changed how the thread's elements look
+   * (see watchLook): Edit manually shows under it, so the dialog can tweak
+   * what it chose. Not for a reply that changed nothing the dialog edits.
+   */
+  restyled?: boolean;
 };
 
 /** A file on a designer's message: the hub's id for it, and for an image a small preview (a data URL) for the thread. */
 export type ThreadAttachment = CommentAttachment & { thumb?: string };
+
+/** How long after a thread's reply Pilot looks for its job's change on the page (see watchLook), and how often. */
+const LOOK_WAIT = 10_000;
+const LOOK_EVERY = 500;
 
 const STORAGE_KEY = "pilot:jobs";
 const THREADS_KEY = "pilot:comments";
@@ -666,6 +679,38 @@ export class PilotSession {
     }
     if (thread.messages.some((m) => m.replyTo === job.id)) return;
     this.patchThread(thread.id, { messages: [...thread.messages, reply] });
+    this.watchLook(thread.id, job);
+  }
+
+  /**
+   * After a thread's reply: whether its job changed how the thread's
+   * elements look, once the code is on the page. Hot reload can come after
+   * the reply, so Pilot looks again every LOOK_EVERY, up to LOOK_WAIT; the
+   * first change marks the reply `restyled` (Edit manually shows), and
+   * nothing changed by then, it stays without. The elements are found again
+   * by their targets: a swapped icon is the new one.
+   */
+  private watchLook(threadId: string, job: JobRecord): void {
+    const before = job.look;
+    const request = job.changeSet.request;
+    if (!before || !request) return;
+    const targets = requestTargets(request);
+    const until = Date.now() + LOOK_WAIT;
+    const look = () => {
+      const after = looksOf(this.history, targets.map((t) => findTarget(t)));
+      if (changedLook(before, after)) {
+        const thread = this.threads.find((t) => t.id === threadId);
+        if (!thread) return;
+        return this.patchThread(threadId, { messages: thread.messages.map((m) => (m.from === "agent" && m.replyTo === job.id ? { ...m, restyled: true } : m)) });
+      }
+      if (Date.now() >= until) return;
+      const t = setTimeout(() => {
+        this.timers.delete(t);
+        look();
+      }, LOOK_EVERY);
+      this.timers.add(t);
+    };
+    look();
   }
 
   private patchThread(threadId: string, patch: Partial<CommentThread>): void {
@@ -703,6 +748,8 @@ export class PilotSession {
     // Sending again: the runs that failed are said no more (their changes are unsent again already).
     for (const failed of this.jobs.filter((j) => j.error)) this.dismiss(failed.id);
     const job: JobRecord = { id, changeSet, status: "queued", createdAt: new Date().toISOString() };
+    // A thread's job (a comment, a task): how its elements look now, for its reply (see watchLook).
+    if (changeSet.request) job.look = looksOf(this.history, requestTargets(changeSet.request).map((t) => findTarget(t)));
     this.jobs = [...this.jobs, job];
     this.save();
     void this.bridge?.postJob({ id, changeSet, status: "queued" });

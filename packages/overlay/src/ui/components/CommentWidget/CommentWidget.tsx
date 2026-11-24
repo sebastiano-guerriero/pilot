@@ -716,7 +716,7 @@ export function CommentWidget({
                         </div>
                       ) : null}
                       {/* The latest reply to a job that may have changed something: adjust it by hand. Not on a question (its answers are there), a props list, or Pilot's "Stopped". */}
-                      {onAdjust && i === count - 1 && !m.choices?.length && !m.propList && !m.early && !m.stopped ? (
+                      {onAdjust && i === count - 1 && m.restyled && !m.choices?.length && !m.propList && !m.early && !m.stopped ? (
                         <div class="choices">
                           <button type="button" class="choice" data-secondary onMouseDown={(e) => e.preventDefault()} onClick={onAdjust}>
                             Edit manually

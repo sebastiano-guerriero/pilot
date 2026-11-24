@@ -302,6 +302,27 @@ describe("PilotSession", () => {
     expect(reloaded.request(el, "responsive")).toBeNull();
   });
 
+  it("Edit manually: a reply is marked restyled once its job changed the element's look on the page, not otherwise", async () => {
+    vi.useFakeTimers();
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    // A change the dialog can't edit (an icon swapped, an answer): nothing of the look changes.
+    const first = s.comment(el, "Use a book icon").job as { id: string };
+    hub().emit({ type: "job", job: job({ id: first.id, status: "done", agent, notes: "Swapped it." }) });
+    await vi.advanceTimersByTimeAsync(11_000);
+    const reply = () => s.threadFor(el)?.messages.at(-1);
+    expect(reply()).toMatchObject({ from: "agent", text: "Swapped it." });
+    expect(reply()?.restyled).toBeUndefined();
+    // A change of its look, which hot reload brings a moment after the reply.
+    const second = s.comment(el, "More space on top").job as { id: string };
+    hub().emit({ type: "job", job: job({ id: second.id, status: "done", agent, notes: "Padding is 20px now." }) });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reply()?.restyled).toBeUndefined();
+    sheet.textContent = ".card { padding-top: 20px; }";
+    await vi.advanceTimersByTimeAsync(600);
+    expect(reply()).toMatchObject({ text: "Padding is 20px now.", restyled: true });
+  });
+
   it("a comment goes to the agent at once, with its thread; the agent's notes come back as its reply", async () => {
     vi.useFakeTimers();
     const s = session();

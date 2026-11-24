@@ -455,21 +455,26 @@ describe("CommentWidget's Edit manually", () => {
   const adjust = () => [...container.querySelectorAll(".choice")].find((b) => b.textContent === "Edit manually") as HTMLButtonElement | undefined;
   const asked = { from: "designer", text: "Make the text bigger", at: "1" };
 
-  it("on the latest reply to a job: a secondary button that adjusts it by hand", () => {
-    const onAdjust = drawMessages([asked, { from: "agent", text: "Done.", at: "2" }]);
+  it("on the latest reply to a job that changed the elements' look: a secondary button that adjusts it by hand", () => {
+    const onAdjust = drawMessages([asked, { from: "agent", text: "Done.", at: "2", restyled: true }]);
     expect(adjust()?.hasAttribute("data-secondary")).toBe(true);
     act(() => adjust()?.click());
     expect(onAdjust).toHaveBeenCalledTimes(1);
   });
 
+  it("not on a reply whose job changed nothing the dialog edits (an icon swapped, an answer)", () => {
+    drawMessages([asked, { from: "agent", text: "Swapped the icon.", at: "2" }]);
+    expect(adjust()).toBeUndefined();
+  });
+
   it("only the latest, and not on a question, a props list or a stopped job", () => {
-    drawMessages([asked, { from: "agent", text: "Done.", at: "2" }, { from: "designer", text: "And the title?", at: "3" }]);
+    drawMessages([asked, { from: "agent", text: "Done.", at: "2", restyled: true }, { from: "designer", text: "And the title?", at: "3" }]);
     expect(adjust()).toBeUndefined();
-    drawMessages([asked, { from: "agent", text: "Every card?", at: "2", choices: ["All of them", "Only this"] }]);
+    drawMessages([asked, { from: "agent", text: "Every card?", at: "2", choices: ["All of them", "Only this"], restyled: true }]);
     expect(adjust()).toBeUndefined();
-    drawMessages([asked, { from: "agent", text: "1 prop.", at: "2", propList: [{ name: "tone", type: "options", options: ["a"] }] }]);
+    drawMessages([asked, { from: "agent", text: "1 prop.", at: "2", propList: [{ name: "tone", type: "options", options: ["a"] }], restyled: true }]);
     expect(adjust()).toBeUndefined();
-    drawMessages([asked, { from: "agent", text: "Stopped.", at: "2", stopped: true }]);
+    drawMessages([asked, { from: "agent", text: "Stopped.", at: "2", stopped: true, restyled: true }]);
     expect(adjust()).toBeUndefined();
   });
 });
