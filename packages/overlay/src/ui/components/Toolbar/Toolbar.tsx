@@ -276,7 +276,7 @@ export function Toolbar({
               aria-label={`${jobs.count} ${jobs.count === 1 ? "job" : "jobs"} in progress: show the next`}
               onClick={onNextJob}
             >
-              <Icon name="loader" class="spinner" />
+              <Icon name="robot" class="robot" />
               <span class="pill" aria-hidden="true">
                 {jobs.count}
               </span>

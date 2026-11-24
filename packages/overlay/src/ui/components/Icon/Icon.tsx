@@ -513,6 +513,40 @@ const ICONS = {
       </g>
     ),
   },
+  // The jobs button: an agent at work (Nucleo UI face-robot-4, filled, 18px), animated in
+  // Toolbar.css. The eyes are holes, drawn in a mask so they can move (they read, and blink);
+  // the head (ears, antenna) floats as one. Around it, two sparkles (Nucleo UI sparkle's small
+  // one, centered on 4.5, 4.5) and a dot twinkle, off the top-right corner (the button's pill).
+  robot: {
+    size: 18,
+    body: (
+      <>
+        <mask id="plt-robot-eyes" maskUnits="userSpaceOnUse" x="0" y="0" width="18" height="18">
+          <rect width="18" height="18" fill="white" />
+          <g class="robot-eyes" fill="black">
+            <ellipse cx="6.5" cy="9.5" rx="1" ry="1.5" />
+            <ellipse cx="11.5" cy="9.5" rx="1" ry="1.5" />
+          </g>
+        </mask>
+        <g class="robot-head" fill="currentColor">
+          <path d="m2.25,12c-.9976,0-1.75-1.0747-1.75-2.5s.7524-2.5,1.75-2.5c.4141,0,.75.3359.75.75,0,.3989.0308,3.0923.0308,3.5063s-.3667.7437-.7808.7437Z" />
+          <path d="m15.75,12c-.4141,0-.75-.3359-.75-.75s-.0308-3.0923-.0308-3.5063.3667-.7437.7808-.7437c.9976,0,1.75,1.0747,1.75,2.5s-.7524,2.5-1.75,2.5Z" />
+          <path d="m9,4.5c-.4141,0-.75-.3359-.75-.75V1.5c0-.4141.3359-.75.75-.75s.75.3359.75.75v2.25c0,.4141-.3359.75-.75.75Z" />
+          <rect x="2" y="3" width="14" height="13" rx="2.75" mask="url(#plt-robot-eyes)" />
+        </g>
+        {/* Each twinkles at its own pace (duration, and a delay that starts it mid-way): they overlap and drift apart. */}
+        <g fill="currentColor">
+          <g transform="translate(-4 -3.5)">
+            <path class="robot-spark" style={{ animationDuration: "2.6s", animationDelay: "-0.4s" }} d="M2.342 4.974L3.605 5.395L4.026 6.658C4.094 6.862 4.286 7 4.501 7C4.716 7 4.907 6.862 4.976 6.658L5.397 5.395L6.66 4.974C6.864 4.906 7.002 4.715 7.002 4.5C7.002 4.285 6.864 4.094 6.66 4.026L5.397 3.605L4.976 2.342C4.839 1.934 4.164 1.934 4.027 2.342L3.606 3.605L2.343 4.026C2.139 4.094 2.001 4.285 2.001 4.5C2.001 4.715 2.138 4.906 2.342 4.974Z" />
+          </g>
+          <g transform="translate(14.6 13.2) scale(.8)">
+            <path class="robot-spark" style={{ animationDuration: "3.4s", animationDelay: "-1.9s" }} d="M2.342 4.974L3.605 5.395L4.026 6.658C4.094 6.862 4.286 7 4.501 7C4.716 7 4.907 6.862 4.976 6.658L5.397 5.395L6.66 4.974C6.864 4.906 7.002 4.715 7.002 4.5C7.002 4.285 6.864 4.094 6.66 4.026L5.397 3.605L4.976 2.342C4.839 1.934 4.164 1.934 4.027 2.342L3.606 3.605L2.343 4.026C2.139 4.094 2.001 4.285 2.001 4.5C2.001 4.715 2.138 4.906 2.342 4.974Z" />
+          </g>
+          <circle class="robot-spark" style={{ animationDuration: "1.9s", animationDelay: "-1.2s" }} cx="-1.75" cy="12.5" r=".75" />
+        </g>
+      </>
+    ),
+  },
   loader: {
     size: 18,
     body: (

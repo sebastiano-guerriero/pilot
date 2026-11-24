@@ -117,8 +117,30 @@
     animation: pop-out 0.15s ease-in both;
   }
 
-  .spinner {
-    animation: spin 1s linear infinite;
+  /* The jobs button's robot (Icon "robot"): an agent at work, looped. Its
+     head floats up and down, its eyes read from side to side and blink, and
+     two sparkles and a dot around it twinkle, each at its own pace (Icon.tsx),
+     so they overlap and drift apart rather than take turns: something's
+     being made. Movements of a pixel or so: it
+     stays an 18px icon. */
+  .robot {
+    overflow: visible;
+  }
+
+  .robot .robot-head {
+    animation: robot-float 1.2s ease-in-out infinite alternate;
+  }
+
+  .robot .robot-eyes {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: robot-read 2.4s ease-in-out infinite;
+  }
+
+  .robot .robot-spark {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: robot-twinkle 2.6s ease-in-out infinite both;
   }
 
   /* A count on a button's top-right corner (comments to review, changes
@@ -190,9 +212,56 @@
     }
   }
 
-  @keyframes spin {
+  @keyframes robot-float {
+    from {
+      transform: translateY(0.5px);
+    }
     to {
-      rotate: 1turn;
+      transform: translateY(-0.75px);
+    }
+  }
+
+  /* Looks left, then right (reading), back to the middle, and blinks. */
+  @keyframes robot-read {
+    0%,
+    10% {
+      transform: translateX(0) scaleY(1);
+    }
+    22%,
+    36% {
+      transform: translateX(-1.25px) scaleY(1);
+    }
+    50%,
+    64% {
+      transform: translateX(1.25px) scaleY(1);
+    }
+    76% {
+      transform: translateX(0) scaleY(1);
+    }
+    80% {
+      transform: translateX(0) scaleY(0.1);
+    }
+    84%,
+    100% {
+      transform: translateX(0) scaleY(1);
+    }
+  }
+
+  /* A glint: brightens and grows quickly, turning a little, then fades
+     slowly to a faint glow, never quite gone. */
+  @keyframes robot-twinkle {
+    0%,
+    100% {
+      transform: scale(0.45) rotate(0);
+      opacity: 0.15;
+    }
+    25% {
+      transform: scale(1) rotate(20deg);
+      opacity: 1;
+    }
+    60% {
+      transform: scale(0.6) rotate(35deg);
+      opacity: 0.35;
     }
   }
 
@@ -200,7 +269,7 @@
     .jobs-slot,
     .jobs,
     .pill,
-    .spinner {
+    .robot * {
       animation: none;
     }
   }
