@@ -18,4 +18,10 @@ describe("the run's footer", () => {
     const prompt = jobPrompt(jobOf(".card"));
     expect(prompt).not.toContain('"element"');
   });
+
+  it("every agent is asked to list what it was refused, so Pilot can say how to allow it", () => {
+    const prompt = jobPrompt(jobOf(".card"));
+    expect(prompt).toContain("list it in that block as `refused`");
+    expect(prompt).toContain('{"refused": [{"mcp": ');
+  });
 });

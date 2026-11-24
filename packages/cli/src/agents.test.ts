@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { AGENTS, agentFromEnv, childEnv, exec, findBin } from "./agents.ts";
+import { AGENTS, agentFromEnv, childEnv, exec, findBin, refusedNote, refusedOf } from "./agents.ts";
 
 // What each tool printed in real runs (2026-11), trimmed.
 const CLAUDE_STREAM = [
@@ -158,5 +158,50 @@ describe("the agent running Pilot's setup", () => {
     expect(agentFromEnv({ CURSOR_TRACE_ID: "x" })).toBe("cursor");
     expect(agentFromEnv({ CODEX_SANDBOX: "seatbelt" })).toBe("codex");
     expect(agentFromEnv({ PATH: "/bin" })).toBeNull();
+  });
+});
+
+describe("what a run was refused", () => {
+  // A real Claude Code run (2026-11-24) refused an MCP tool: its result event, trimmed.
+  const REFUSED =
+    '{"type":"result","subtype":"success","is_error":false,"result":"Not done: the call was blocked.","session_id":"s1","permission_denials":[{"tool_name":"mcp__nucleo-icons__nucleo_list_families","tool_use_id":"toolu_1","tool_input":{}},{"tool_name":"mcp__nucleo-icons__nucleo_search_icons","tool_use_id":"toolu_2","tool_input":{"query":"book"}},{"tool_name":"Bash","tool_use_id":"toolu_3","tool_input":{"command":"curl -sI https://example.com"}},{"tool_name":"WebFetch","tool_use_id":"toolu_4","tool_input":{"url":"https://linear.app/features"}}]}';
+
+  it("Claude Code reports it in its result, as the kinds every agent uses", () => {
+    expect(AGENTS.claude.parse(REFUSED).refused).toEqual([
+      { mcp: "nucleo-icons" },
+      { mcp: "nucleo-icons" },
+      { command: "curl -sI https://example.com" },
+      { web: "linear.app" },
+    ]);
+    expect(AGENTS.claude.parse(CLAUDE_STREAM).refused).toBeUndefined();
+  });
+
+  it("what an agent says it was refused, checked: the known kinds, plain strings", () => {
+    expect(refusedOf([{ mcp: "nucleo-icons" }, { command: " curl x " }, { web: 3 }, { other: "x" }, "Bash"])).toEqual([{ mcp: "nucleo-icons" }, { command: "curl x" }]);
+    expect(refusedOf(undefined)).toEqual([]);
+  });
+
+  it("each agent says how to allow it in its own settings, briefly, each thing once", () => {
+    const refused = AGENTS.claude.parse(REFUSED).refused;
+    expect(refusedNote(AGENTS.claude, refused)).toBe(
+      [
+        "**Not allowed in this run** (Claude Code can't ask you here, as in its chat).",
+        '- To allow `nucleo-icons` (MCP), add `"mcp__nucleo-icons"` to `permissions.allow` in `~/.claude/settings.json`.',
+        '- To allow `curl -sI https://example.com`, add `"Bash(curl -sI https://example.com)"` to `permissions.allow` in `~/.claude/settings.json`.',
+        '- To allow `linear.app`, add `"WebFetch(domain:linear.app)"` to `permissions.allow` in `~/.claude/settings.json`.',
+      ].join("\n"),
+    );
+    expect(refusedNote(AGENTS.cursor, [{ mcp: "nucleo-icons" }])).toBe(
+      '**Not allowed in this run** (Cursor can\'t ask you here, as in its chat). To allow `nucleo-icons` (MCP), add `"Mcp(nucleo-icons:*)"` to `permissions.allow` in `~/.cursor/cli-config.json`.',
+    );
+    expect(refusedNote(AGENTS.cursor, [{ command: "curl -sI https://example.com" }])).toContain('`"Shell(curl)"`');
+    expect(refusedNote(AGENTS.codex, [{ mcp: "nucleo-icons" }])).toContain('`default_tools_approval_mode = "approve"` under `[mcp_servers.nucleo-icons]` in `~/.codex/config.toml`');
+    expect(refusedNote(AGENTS.codex, [{ command: "curl -sI https://example.com" }])).toContain('`prefix_rule(pattern = ["curl"], decision = "allow")` to `~/.codex/rules/default.rules`');
+    expect(refusedNote(AGENTS.codex, [{ web: "linear.app" }])).toContain("`network_access = true` under `[sandbox_workspace_write]`");
+  });
+
+  it("nothing refused, or nothing of it that can be allowed: no note", () => {
+    expect(refusedNote(AGENTS.claude, undefined)).toBeNull();
+    expect(refusedNote(AGENTS.cursor, [{ tool: "Something" }])).toBeNull();
   });
 });

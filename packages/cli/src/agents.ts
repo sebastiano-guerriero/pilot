@@ -23,7 +23,22 @@ export interface RunOutput {
   session?: string;
   reply?: string;
   error?: string;
+  /**
+   * What the run was refused (what the agent's chat would have asked about:
+   * no one is there to answer), when the agent reports it in its output.
+   * Pilot tells the designer how to allow it (refusedNote).
+   */
+  refused?: Refused[];
 }
+
+/**
+ * Something a run was refused, the same for every agent: an MCP server's
+ * tool (`mcp`: the server's name), a shell command (`command`: as run), a
+ * website (`web`: its domain), or another tool (`tool`: its name). The
+ * agent says it in its reply's `pilot` block (the prompt asks every agent);
+ * Claude Code also lists it in its output.
+ */
+export type Refused = { mcp: string } | { command: string } | { web: string } | { tool: string };
 
 export interface RunOptions {
   /** The session to resume (a comment thread's, or the job's own for its follow-up). */
@@ -64,6 +79,12 @@ export interface AgentCli {
    * a skill only its user may start (`disable-model-invocation`) starts too.
    */
   invokeSkill(name: string): string;
+  /**
+   * How the designer lets this agent's runs do what one was refused, in its
+   * own settings: one short line per refusal, Markdown. From each agent's
+   * docs; what doesn't apply to it (`tool` for most) is null.
+   */
+  allow(refused: Refused): string | null;
 }
 
 /**
@@ -71,10 +92,37 @@ export interface AgentCli {
  * `assistant` messages, then a `result` with the session. The reply is the
  * last assistant message (Cursor's `result` joins all of them).
  */
+/** What an agent said it was refused, in its reply's `pilot` block (`refused`), checked: the known kinds, plain strings. */
+export function refusedOf(value: unknown): Refused[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((v): Refused[] => {
+    const r = v as Record<string, unknown> | null;
+    const text = (k: string) => (typeof r?.[k] === "string" && (r[k] as string).trim() ? (r[k] as string).trim().slice(0, 200) : null);
+    const mcp = text("mcp");
+    const command = text("command");
+    const web = text("web");
+    const tool = text("tool");
+    return mcp ? [{ mcp }] : command ? [{ command }] : web ? [{ web }] : tool ? [{ tool }] : [];
+  });
+}
+
+/** One of Claude Code's `permission_denials`, as a Refused: an MCP tool's server, a command, a fetched site, or the tool. */
+function denialOf(d: { tool_name?: unknown; tool_input?: unknown }): Refused[] {
+  if (typeof d?.tool_name !== "string") return [];
+  const input = (d.tool_input && typeof d.tool_input === "object" ? d.tool_input : {}) as Record<string, unknown>;
+  const mcp = /^mcp__(.+?)__/.exec(d.tool_name);
+  if (mcp?.[1]) return [{ mcp: mcp[1] }];
+  if (d.tool_name === "Bash" && typeof input.command === "string" && input.command.trim()) return [{ command: input.command.trim() }];
+  const host = typeof input.url === "string" ? /^https?:\/\/([^/:]+)/.exec(input.url)?.[1] : undefined;
+  if (d.tool_name === "WebFetch" && host) return [{ web: host }];
+  return [{ tool: d.tool_name }];
+}
+
 function parseStream(stdout: string): RunOutput {
   let session: string | undefined;
   let reply: string | undefined;
   let error: string | undefined;
+  let refused: Refused[] | undefined;
   for (const line of stdout.split("\n")) {
     const event = jsonLine(line);
     if (!event) continue;
@@ -86,10 +134,12 @@ function parseStream(stdout: string): RunOutput {
     if (event.type === "result") {
       if (event.is_error) error = String(event.result ?? event.error ?? "The agent stopped with an error.");
       else if (!reply && typeof event.result === "string" && event.result.trim()) reply = event.result.trim();
+      // Claude Code lists what it was refused (`permission_denials`: each tool's name and input).
+      if (Array.isArray(event.permission_denials)) refused = event.permission_denials.flatMap(denialOf);
     }
   }
   if (!session && !reply && !error) error = lastLines(stdout) || "The agent printed nothing.";
-  return { session, reply, error };
+  return { session, reply, error, ...(refused?.length ? { refused } : {}) };
 }
 
 /** Codex prints JSON lines: `thread.started` (the session), `agent_message` items, errors. */
@@ -110,6 +160,42 @@ function parseCodex(stdout: string): RunOutput {
   }
   if (!session && !reply && !error) error = lastLines(stdout) || "The agent printed nothing.";
   return { session, reply, error };
+}
+
+/**
+ * What the designer reads when a run was refused something: what, and how to
+ * allow it in the agent's own settings, as briefly as it can be said. Pilot
+ * only says it: the designer decides, and changes their settings themselves
+ * (security first: a button on the page could be clicked by the page's own
+ * scripts). Markdown, after the agent's reply. Null when nothing was refused,
+ * or nothing of it can be allowed.
+ */
+export function refusedNote(cli: AgentCli, refused: Refused[] | undefined): string | null {
+  const seen = new Set<string>();
+  const lines: string[] = [];
+  for (const r of refused ?? []) {
+    const key = JSON.stringify(r);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const how = cli.allow(r);
+    if (how) lines.push(how);
+  }
+  if (!lines.length) return null;
+  const head = `**Not allowed in this run** (${cli.label} can't ask you here, as in its chat).`;
+  return lines.length === 1 ? `${head} ${lines[0]}` : [head, ...lines.map((l) => `- ${l}`)].join("\n");
+}
+
+/** What was refused, for the designer: `nucleo-icons` (MCP), the command, the site. */
+function named(r: Refused): string {
+  if ("mcp" in r) return `\`${r.mcp}\` (MCP)`;
+  if ("command" in r) return `\`${r.command}\``;
+  if ("web" in r) return `\`${r.web}\``;
+  return `\`${r.tool}\``;
+}
+
+/** A command's first word: the program, what an allow rule by prefix names. */
+function program(command: string): string {
+  return command.trim().split(/\s+/)[0] ?? command;
 }
 
 export const AGENTS: Record<AgentKind, AgentCli> = {
@@ -138,6 +224,11 @@ export const AGENTS: Record<AgentKind, AgentCli> = {
     parse: parseStream,
     skills: { project: [".claude/skills"], home: [".claude/skills"] },
     invokeSkill: (name) => `/${name}`,
+    // Its permission rules (`permissions.allow`): an MCP server's tools all at once, a command as it was run.
+    allow: (r) => {
+      const rule = "mcp" in r ? `mcp__${r.mcp}` : "command" in r ? `Bash(${r.command})` : "web" in r ? `WebFetch(domain:${r.web})` : r.tool;
+      return `To allow ${named(r)}, add \`"${rule}"\` to \`permissions.allow\` in \`~/.claude/settings.json\`.`;
+    },
   },
   codex: {
     kind: "codex",
@@ -162,6 +253,16 @@ export const AGENTS: Record<AgentKind, AgentCli> = {
     parse: parseCodex,
     skills: { project: [".agents/skills"], home: [".agents/skills", ".codex/skills"] },
     invokeSkill: (name) => "$" + name,
+    // From its docs (2026-11-24): an MCP server's approval mode, a command by its prefix in its
+    // rules (it runs outside the sandbox then), the network for the whole sandbox.
+    allow: (r) =>
+      "mcp" in r
+        ? `To allow ${named(r)}, set \`default_tools_approval_mode = "approve"\` under \`[mcp_servers.${r.mcp}]\` in \`~/.codex/config.toml\`.`
+        : "command" in r
+          ? `To allow ${named(r)}, add \`prefix_rule(pattern = ["${program(r.command)}"], decision = "allow")\` to \`~/.codex/rules/default.rules\`.`
+          : "web" in r
+            ? `To allow ${named(r)}, set \`network_access = true\` under \`[sandbox_workspace_write]\` in \`~/.codex/config.toml\` (every site).`
+            : null,
   },
   cursor: {
     kind: "cursor",
@@ -178,6 +279,11 @@ export const AGENTS: Record<AgentKind, AgentCli> = {
     parse: parseStream,
     skills: { project: [".agents/skills", ".cursor/skills"], home: [".cursor/skills"] },
     invokeSkill: (name) => `/${name}`,
+    // Its allowlist (`permissions.allow`), from its docs (2026-11-24): an MCP server's tools, a command by its program, a site.
+    allow: (r) => {
+      const rule = "mcp" in r ? `Mcp(${r.mcp}:*)` : "command" in r ? `Shell(${program(r.command)})` : "web" in r ? `WebFetch(${r.web})` : null;
+      return rule ? `To allow ${named(r)}, add \`"${rule}"\` to \`permissions.allow\` in \`~/.cursor/cli-config.json\`.` : null;
+    },
   },
 };
 

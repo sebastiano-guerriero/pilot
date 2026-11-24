@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { basename } from "node:path";
 import type { AgentInfo, AgentSession, Job, JobError, PromptOptions } from "@pilot/protocol";
 import { DEFAULT_BRIDGE_PORT, isLocalHost, originKey, originOf, propsOf, questionOf, requestTargets, sessionOf } from "@pilot/protocol";
-import { AGENTS, type AgentCli, type AgentKind, detectAgents, exec, type FoundAgent, type RunOutput } from "./agents.ts";
+import { AGENTS, type AgentCli, type AgentKind, detectAgents, exec, type FoundAgent, type Refused, refusedNote, refusedOf, type RunOutput } from "./agents.ts";
 import { Bridge } from "./agent.ts";
 import { attachmentBlocks, attachmentsDir, newAttachments } from "./attachments.ts";
 import { projectName, saveAgent, savedAgent } from "./config.ts";
@@ -267,8 +267,12 @@ export async function runJob(job: Job, ctx: RunContext): Promise<void> {
     }
     const reply = replyOf(result.reply);
     const session: AgentSession | undefined = result.session ? { agent: cli.kind, id: result.session } : undefined;
-    await bridge.done(job.id, reply.notes, reply.question, reply.props, { session });
+    // Tools it was refused: said after its reply, with how to allow them.
+    const refused = refusedNote(cli, [...(result.refused ?? []), ...(reply.refused ?? [])]);
+    const notes = refused ? [reply.notes, refused].filter(Boolean).join("\n\n") : reply.notes;
+    await bridge.done(job.id, notes, reply.question, reply.props, { session });
     out(`✓ ${seconds}s · ${firstLine(reply.notes) || "Done."}`);
+    if (refused) out(`! ${refused.replaceAll("**", "").replaceAll("`", "")}`);
   } catch (error) {
     if (!stop.signal.aborted) {
       const jobError = { title: `Pilot couldn't run ${cli.label}`, detail: (error as Error).message };
@@ -347,11 +351,11 @@ export function sessionToResume(job: Job, agent: AgentKind): string | undefined 
  * The agent's reply, read: its notes, and a question or props from the
  * `pilot` block at its end (see prompt.ts), which isn't part of the notes.
  */
-export function replyOf(reply: string): { notes?: string; question?: Job["question"]; props?: Job["props"] } {
+export function replyOf(reply: string): { notes?: string; question?: Job["question"]; props?: Job["props"]; refused?: Refused[] } {
   const blocks = [...reply.matchAll(/```pilot\s*\n([\s\S]*?)```/g)];
   const last = blocks.at(-1);
   let notes = reply;
-  let data: { question?: unknown; props?: unknown } = {};
+  let data: { question?: unknown; props?: unknown; refused?: unknown } = {};
   if (last) {
     notes = reply.replace(last[0], "");
     try {
@@ -361,7 +365,8 @@ export function replyOf(reply: string): { notes?: string; question?: Job["questi
     }
   }
   notes = notes.trim();
-  return { notes: notes || undefined, question: questionOf(data.question), props: propsOf(data.props) };
+  const refused = refusedOf(data.refused);
+  return { notes: notes || undefined, question: questionOf(data.question), props: propsOf(data.props), ...(refused.length ? { refused } : {}) };
 }
 
 function signInProblem(error: string | undefined): boolean {

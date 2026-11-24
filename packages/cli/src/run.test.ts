@@ -290,6 +290,14 @@ describe("a run's reply", () => {
     expect(replyOf("Hm.\n```pilot\nnot json\n```").question).toBeUndefined();
   });
 
+  it("what the agent says it was refused, from the same block, with a question or alone", () => {
+    const reply = replyOf('Used another icon.\n\n```pilot\n{"question": {"text": "Keep it?"}, "refused": [{"mcp": "nucleo-icons"}]}\n```');
+    expect(reply.notes).toBe("Used another icon.");
+    expect(reply.question?.text).toBe("Keep it?");
+    expect(reply.refused).toEqual([{ mcp: "nucleo-icons" }]);
+    expect(replyOf('Done.\n```pilot\n{"refused": [{"command": "curl x"}]}\n```').refused).toEqual([{ command: "curl x" }]);
+  });
+
   it("resumes only the same agent's session: the job's own for its follow-up, else the thread's", () => {
     const base = { id: "j", origin: APP, status: "queued", createdAt: "", updatedAt: "" } as const;
     const target = changeSet("x").edits[0]?.target as ChangeSet["edits"][number]["target"];
