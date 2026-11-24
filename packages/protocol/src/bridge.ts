@@ -158,6 +158,11 @@ export interface AgentQuestion {
   text: string;
   /** One-click answers (at most MAX_CHOICES, a few words each); the designer can also write one. */
   choices?: string[];
+  /**
+   * On a job about several elements, the one it's about: its number in the
+   * prompt (its heading's, from 1). Pilot asks it in that element's thread.
+   */
+  element?: number;
 }
 
 /** One-click answers to a question, at most. */
@@ -165,14 +170,15 @@ export const MAX_CHOICES = 4;
 
 /** An agent's question (see AgentQuestion), its text and choices trimmed and capped; undefined when it isn't one. */
 export function questionOf(value: unknown): AgentQuestion | undefined {
-  const q = value as { text?: unknown; choices?: unknown } | undefined;
+  const q = value as { text?: unknown; choices?: unknown; element?: unknown } | undefined;
   if (typeof q?.text !== "string" || !q.text.trim()) return undefined;
   const choices = (Array.isArray(q.choices) ? q.choices : [])
     .filter((c): c is string => typeof c === "string")
     .map((c) => c.trim().slice(0, 60))
     .filter(Boolean)
     .slice(0, MAX_CHOICES);
-  return { text: q.text.trim().slice(0, 500), ...(choices.length ? { choices } : {}) };
+  const element = Number.isInteger(q.element) && (q.element as number) >= 1 && (q.element as number) <= 1000 ? (q.element as number) : undefined;
+  return { text: q.text.trim().slice(0, 500), ...(choices.length ? { choices } : {}), ...(element ? { element } : {}) };
 }
 
 /**

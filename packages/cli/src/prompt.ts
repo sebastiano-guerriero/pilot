@@ -1,5 +1,5 @@
 import type { Job } from "@pilot/protocol";
-import { formatPrompt, type PromptOptions, sharedChoiceMeaning, SKILL_NAME } from "@pilot/protocol";
+import { formatPrompt, type PromptOptions, requestTargets, sharedChoiceMeaning, SKILL_NAME } from "@pilot/protocol";
 
 /**
  * What the agent reads for a job Pilot runs it for (run.ts): the change
@@ -31,6 +31,9 @@ ${runFooter(job)}
  */
 function runFooter(job: Job): string {
   const props = job.changeSet.request?.kind === "props";
+  const { request, edits } = job.changeSet;
+  // Several elements: the question says which one it's about, so it's asked on that one.
+  const several = (request ? requestTargets(request) : edits).length > 1;
   return [
     skillOf(job)
       ? `When you're done, reply with your notes for the designer: ${notesFor(job)}. Pilot shows them to the designer in the element's thread.`
@@ -43,9 +46,12 @@ function runFooter(job: Job): string {
     "```pilot",
     props
       ? '{"props": [{"name": "tone", "type": "options", "options": ["light", "dark"], "default": "light", "description": "a few words, when the name doesn\'t say"}]}'
-      : '{"question": {"text": "One short sentence?", "choices": ["Your suggestion", "Another"]}}',
+      : several
+        ? '{"question": {"text": "One short sentence?", "choices": ["Your suggestion", "Another"], "element": 2}}'
+        : '{"question": {"text": "One short sentence?", "choices": ["Your suggestion", "Another"]}}',
     "```",
     ...(props ? ["", "`type` is one of `options`, `boolean`, `text`, `number`; `options` only for `options`."] : []),
+    ...(!props && several ? ["", "`element`: the number of the element it's about (its heading's), so the designer sees it there; leave it out when it's about all of them."] : []),
   ].join("\n");
 }
 

@@ -277,8 +277,11 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     const mark = marks.get(element);
     return Number(!!mark?.job) + Number(!!mark?.thread);
   };
-  // Jobs not finished yet: waiting, an agent applying, checking the page.
-  const pending = (session?.jobs ?? []).filter((j) => j.status === "queued" || j.status === "working" || (j.status === "done" && !j.checked && !j.error)).length;
+  // Jobs not finished yet: waiting, an agent applying, checking the page. Not one whose question waits for the
+  // designer (awaitsAnswer): nothing runs until they answer, then it's running again.
+  const pending = (session?.jobs ?? []).filter(
+    (j) => !awaitsAnswer(j) && (j.status === "queued" || j.status === "working" || (j.status === "done" && !j.checked && !j.error)),
+  ).length;
   // The toolbar's alerts. Pilot not running for the site (or an older one in the way): on Comment and Send both, jobs
   // or not (whatever goes next can't go), so cancelling the stuck jobs doesn't hide it. A run that failed or went
   // quiet: on Comment for stuck jobs asked in a thread (comments, tasks from the comment box), on Send for the rest.

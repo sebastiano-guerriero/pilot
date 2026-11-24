@@ -794,8 +794,10 @@ export class PilotSession {
   /**
    * The agent asked the designer something (pilot_done's question, mostly
    * "all of them, or only this one?"): Pilot asks it in a comment thread,
-   * the job's own (a comment's), else the thread on its first element, else
-   * a new one there, about all of its elements. The job isn't checked
+   * the job's own (a comment's), else the thread on the element it's about
+   * (the question's `element`, its number in the prompt), or on its first
+   * element, else a new one there (about that element, or all of them when
+   * it names none). The job isn't checked
    * meanwhile, and stays on its elements; the designer's next message in
    * the thread is the answer (see comment), and the job goes back to the
    * agent with it.
@@ -803,12 +805,16 @@ export class PilotSession {
   private ask(job: JobRecord): void {
     const question = job.question;
     if (!question) return;
-    const [first] = this.elementsOf(job);
+    const { request, edits } = job.changeSet;
+    const targets = request ? requestTargets(request) : edits.map((e) => e.target);
+    // The element it's about, when it names one of them (the prompt numbers them from 1).
+    const about = question.element ? targets[question.element - 1] : undefined;
+    const aboutElement = about ? findTarget(about) : null;
+    const [first] = aboutElement ? [aboutElement] : this.elementsOf(job);
     let thread = this.threads.find((t) => t.messages.some((m) => m.jobId === job.id || m.asks === job.id)) ?? (first ? this.threadFor(first) : null);
     if (thread?.messages.some((m) => m.asks === job.id)) return;
     if (!thread) {
-      const { request, edits } = job.changeSet;
-      const [target, ...others] = request ? requestTargets(request) : edits.map((e) => e.target);
+      const [target, ...others] = about ? [about] : targets;
       if (!target) return;
       thread = { id: `thread_${newJobId().slice(4)}`, target, ...(others.length ? { others } : {}), messages: [] };
       this.threads = [...this.threads, thread];

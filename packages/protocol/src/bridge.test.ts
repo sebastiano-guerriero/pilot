@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isLocalHost, originKey, originOf, propsOf, sameOrigin } from "./bridge.ts";
+import { isLocalHost, originKey, originOf, propsOf, questionOf, sameOrigin } from "./bridge.ts";
 
 describe("origins", () => {
   it("takes the origin of a URL, with or without a scheme", () => {
@@ -56,5 +56,14 @@ describe("isLocalHost: development addresses, never a server's", () => {
     for (const h of ["nucleoapp.com", "www.example.org", "staging.example.com", "8.8.8.8", "172.32.0.1", "11.0.0.1", "2001:db8::1", "localhost.evil.com", ""]) {
       expect(isLocalHost(h), h).toBe(false);
     }
+  });
+});
+
+describe("questionOf", () => {
+  it("keeps the element it's about, a number from 1; anything else is left out", () => {
+    expect(questionOf({ text: "Every link?", element: 2 })).toEqual({ text: "Every link?", element: 2 });
+    expect(questionOf({ text: "Every link?", element: 0 })).toEqual({ text: "Every link?" });
+    expect(questionOf({ text: "Every link?", element: "2" })).toEqual({ text: "Every link?" });
+    expect(questionOf({ text: "Every link?", element: 1.5 })).toEqual({ text: "Every link?" });
   });
 });

@@ -618,6 +618,29 @@ describe("PilotSession", () => {
     ]);
   });
 
+  it("a job on several elements: the question goes on the one it names, not the first", async () => {
+    vi.useFakeTimers();
+    const link = document.createElement("a");
+    link.className = "feedback";
+    document.body.append(link);
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    history.apply(el, "padding-top", "20px");
+    history.apply(link, "color", "orange");
+    const sent = s.send() as { id: string };
+    const [, second] = (posts.at(-1)?.body as { changeSet: { edits: Array<{ target: { selector: string } }> } }).changeSet.edits;
+    expect(second?.target.selector).toContain("feedback");
+    const question = { text: "Every **Footer** link, or only this one?", choices: ["All of them", "Only this"], element: 2 };
+    hub().emit({ type: "job", job: job({ id: sent.id, status: "done", agent, question }) });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(s.threadFor(el)).toBeNull();
+    const thread = s.threadFor(link) as NonNullable<ReturnType<typeof s.threadFor>>;
+    expect(thread.target.selector).toContain("feedback");
+    expect(thread.others).toBeUndefined();
+    expect(thread.messages).toMatchObject([{ from: "agent", asks: sent.id }]);
+    link.remove();
+  });
+
   it("stuck: Pilot not running for the site, said once it has lasted; a job queued or being run isn't stuck", async () => {
     vi.useFakeTimers();
     const s = session();
