@@ -116,3 +116,29 @@ describe("Discard", () => {
     ]);
   });
 });
+
+describe("settle", () => {
+  it("a value set twice before Send: when the job lands, the first one doesn't come back unsent", () => {
+    const history = new EditHistory(inlinePreview());
+    history.apply(card, "padding-top", "20px");
+    history.apply(card, "padding-top", "24px");
+    history.apply(card, "padding", "8px");
+    history.apply(card, "gap", "4px");
+    history.apply(card, "gap", "6px");
+    history.send("job-1");
+    history.apply(card, "margin-top", "2px"); // after Send: stays unsent
+    history.settle("job-1");
+    expect(history.changes().map((c) => [c.property, c.value, c.job])).toEqual([["margin-top", "2px", undefined]]);
+    expect(card.style.paddingTop).toBe("");
+    expect(card.style.gap).toBe("");
+  });
+
+  it("what the job keeps (came out different) still covers the earlier value", () => {
+    const history = new EditHistory(inlinePreview());
+    history.apply(card, "gap", "4px");
+    history.apply(card, "gap", "6px");
+    history.send("job-1");
+    history.settle("job-1", () => true);
+    expect(history.changes().map((c) => [c.property, c.value, c.job])).toEqual([["gap", "6px", "job-1"]]);
+  });
+});

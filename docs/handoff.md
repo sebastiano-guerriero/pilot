@@ -79,7 +79,7 @@ Without Pilot running for the site, nothing is sent: Send and Comment say "Pilot
 The toolbar's **Send** turns the changes not sent yet into a job (`PilotSession`, [bridge/session.ts](../packages/overlay/src/bridge/session.ts)). Their preview stays on the page while the agent works, and you keep designing: new changes go in the next job.
 
 - **Jobs in the history:** Send tags the changes not sent yet with the job's id (`EditHistory.send()`, saved with the history). Sent changes stay previewed and aren't sent again; a newer change of the same property goes in the next job. Cancel un-tags them (`unsend()`).
-- **Settling:** a job's changes leave the history only through `settle()`, after the page checked them: what landed at once, what didn't after its one follow-up, and what Pilot can't check on the agent's word. A settled change leaves for good, not as an undo step: undoing it would cover the real code with a stale preview.
+- **Settling:** a job's changes leave the history only through `settle()`, after the page checked them: what landed at once, what didn't after its one follow-up, and what Pilot can't check on the agent's word. A settled change leaves for good, not as an undo step: undoing it would cover the real code with a stale preview. The earlier unsent values it replaced leave with it: a property set twice before Send sends only the latest, and the first one, left behind, came back as unsent once the job landed (Send's pill still counting after the job was done). Not a Discard's copies of sent changes: they restate changes made before.
 
 ### The check after done
 

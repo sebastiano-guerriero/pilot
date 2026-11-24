@@ -277,14 +277,28 @@ export class EditHistory {
    * A job's changes are in the code now: they leave the history for good (no
    * undo step: undoing them would cover the real code with a stale preview).
    * `keep`: the ones that came out different, which stay on the page, still
-   * the job's.
+   * the job's. The earlier unsent changes a settled one replaced (the same
+   * property set twice before Send: only the latest was sent) go with it:
+   * left behind, they'd show again, unsent, once it's gone.
    */
   settle(jobId: string, keep: (change: RecordedChange) => boolean = () => false): void {
+    const settled = (e: Entry) => e.job === jobId && !keep(e);
+    // From the newest back: an unsent change before a settled one that covers it. Not a Discard's
+    // copies (a Clear's entries): they say again changes made before, which cover what they covered.
+    const replaced = new Set<Entry>();
+    const later: Entry[] = [];
+    for (const step of [...this.done].reverse()) {
+      if (step.clears) continue;
+      for (const entry of [...step.entries].reverse()) {
+        if (settled(entry)) later.push(entry);
+        else if (!entry.job && later.some((s) => covers(s, entry))) replaced.add(entry);
+      }
+    }
     const settle = (steps: Step[]) =>
       steps
         .map((step) => ({
           ...step,
-          entries: step.entries.filter((e) => e.job !== jobId || keep(e)),
+          entries: step.entries.filter((e) => !settled(e) && !replaced.has(e)),
         }))
         .filter((step) => step.clears || step.entries.length > 0);
     this.done = settle(this.done);
@@ -410,16 +424,7 @@ export class EditHistory {
       if (clears) out.length = 0;
       for (const entry of entries) {
         if (!only(entry)) continue;
-        const covered = longhandsOf(entry.property);
-        for (let i = out.length - 1; i >= 0; i--) {
-          const prior = out[i] as Entry;
-          const replaced =
-            prior.element === entry.element &&
-            sameWidths(prior.widths, entry.widths) &&
-            sameStates(prior.states, entry.states) &&
-            (prior.property === entry.property || covered.includes(prior.property));
-          if (replaced) out.splice(i, 1);
-        }
+        for (let i = out.length - 1; i >= 0; i--) if (covers(entry, out[i] as Entry)) out.splice(i, 1);
         const needed =
           entry.value !== "" ||
           out.some((r) => r.element === entry.element && sameStates(r.states, entry.states) && sets(r, entry.property));
@@ -509,6 +514,16 @@ export class EditHistory {
 }
 
 /** Whether a change sets `property`: it's that property, or a shorthand of it. */
+/** `later` replaces `earlier` (see rules): the same element, widths and states, and the same property or a shorthand of it. */
+function covers(later: Entry, earlier: Entry): boolean {
+  return (
+    later.element === earlier.element &&
+    sameWidths(later.widths, earlier.widths) &&
+    sameStates(later.states, earlier.states) &&
+    sets(later, earlier.property)
+  );
+}
+
 function sets(entry: Entry, property: string): boolean {
   return entry.property === property || longhandsOf(entry.property).includes(property);
 }
