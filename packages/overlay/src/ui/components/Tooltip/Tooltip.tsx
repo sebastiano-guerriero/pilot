@@ -61,6 +61,22 @@ function focusVisible(el: Element): boolean {
 }
 
 /**
+ * Where `bubble` lands fixed at 0, 0 (viewport px), and its size there: the
+ * window's corner, unless a container of it is moved (`translate`, a
+ * transform, a filter), which then holds what's fixed inside it. Measured,
+ * as the reasons a container does so are many. Its style is put back.
+ */
+function fixedOrigin(bubble: HTMLElement): { left: number; top: number; width: number; height: number } {
+  const style = bubble.getAttribute("style");
+  bubble.style.cssText = "position: fixed; left: 0; top: 0; right: auto; bottom: auto; margin: 0; translate: none";
+  const { left, top } = bubble.getBoundingClientRect();
+  const size = { width: bubble.offsetWidth, height: bubble.offsetHeight };
+  if (style === null) bubble.removeAttribute("style");
+  else bubble.setAttribute("style", style);
+  return { left, top, ...size };
+}
+
+/**
  * A tooltip: shown, centered on its trigger, while the trigger is hovered or
  * has keyboard focus. 24px tall, 8px padding, 11px text, with the large
  * shadow (Tooltip.css). On hover, the
@@ -134,7 +150,11 @@ export function Tooltip({
       const a = anchor.current?.getBoundingClientRect();
       const b = bubble.current;
       if (!a || !b) return;
-      const next = placeTooltip(a, { width: b.offsetWidth, height: b.offsetHeight }, { side, align, gap: gap ?? GAP });
+      const origin = fixedOrigin(b);
+      const placed = placeTooltip(a, origin, { side, align, gap: gap ?? GAP });
+      // From where `fixed` starts for it: the window's corner, or a container's that is moved
+      // (`translate`, a transform: the toolbar, centered so), which holds what's fixed inside it.
+      const next = { left: placed.left - origin.left, top: placed.top - origin.top };
       setSpot((s) => (s && Math.abs(s.left - next.left) < 0.5 && Math.abs(s.top - next.top) < 0.5 ? s : next));
     };
     place();

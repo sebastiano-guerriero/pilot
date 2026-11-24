@@ -109,11 +109,17 @@ describe("Tooltip", () => {
   });
 });
 
+/** Triggers measured at 300, 200 (100 × 24); a tooltip's bubble, fixed at 0, 0, at `origin`. */
+function measured(origin: { left: number; top: number }) {
+  return vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+    const box = this.classList.contains("tooltip") ? { ...origin, width: 0, height: 0 } : { left: 300, top: 200, width: 100, height: 24 };
+    return { ...box, right: box.left + box.width, bottom: box.top + box.height, x: box.left, y: box.top, toJSON: () => ({}) } as DOMRect;
+  });
+}
+
 describe("placed in the window", () => {
   it("open, it's fixed in the window, from its trigger: a panel's scrolling list can't cut it", () => {
-    const rect = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
-      left: 300, right: 400, top: 200, bottom: 224, width: 100, height: 24, x: 300, y: 200, toJSON: () => ({}),
-    } as DOMRect);
+    const rect = measured({ left: 0, top: 0 });
     pointer(0, "pointerenter");
     wait(OPEN_DELAY);
     const bubble = anchors()[0]?.querySelector(".tooltip") as HTMLElement;
@@ -121,6 +127,17 @@ describe("placed in the window", () => {
     // Above the trigger, 4px away (happy-dom measures it 0 × 0): centered on it.
     expect(bubble.style.top).toBe("196px");
     expect(bubble.style.left).toBe("350px");
+    rect.mockRestore();
+  });
+
+  it("in a moved container (the toolbar, centered with translate), from where its `fixed` starts", () => {
+    // Fixed at 0, 0, the bubble lands at the container's corner: the window's 500, 700.
+    const rect = measured({ left: 500, top: 700 });
+    pointer(0, "pointerenter");
+    wait(OPEN_DELAY);
+    const bubble = anchors()[0]?.querySelector(".tooltip") as HTMLElement;
+    expect(bubble.style.top).toBe("-504px");
+    expect(bubble.style.left).toBe("-150px");
     rect.mockRestore();
   });
 
