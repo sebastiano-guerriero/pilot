@@ -647,8 +647,11 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     const start = rect.left;
     let room = Infinity;
     let shift = 0;
-    const own = cornerWidth(marksOn(element));
-    if (own) room = rect.width - own;
+    // Its own corner icons: the label stops short of them; flipped to the left (near the window's
+    // left edge, see actionsBox), they're where the label starts, so it goes below (no room).
+    const icons = marksOn(element);
+    const own = cornerWidth(icons);
+    if (own) room = actionsBox(rect, icons).flipped ? 0 : rect.width - own;
     const box = element === selected?.element ? null : selectionActions;
     const top = rect.top < 24 ? rect.top + 4 : rect.top - 24;
     if (box && box.top < top + 20 && box.bottom > top && box.right > start) {

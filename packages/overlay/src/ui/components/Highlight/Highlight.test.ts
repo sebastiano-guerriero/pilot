@@ -50,4 +50,32 @@ describe("Highlight", () => {
     expect(label().hasAttribute("data-below")).toBe(true);
     expect(label().style.maxWidth).toBe("");
   });
+
+  it("near the window's right edge, the label lines up with the box's right edge instead; not beside corner icons", () => {
+    const width = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth");
+    const clientWidth = Object.getOwnPropertyDescriptor(document.documentElement, "clientWidth");
+    Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => 90 });
+    Object.defineProperty(document.documentElement, "clientWidth", { configurable: true, value: 1000 });
+    try {
+      const at = (left: number, labelRoom?: number) =>
+        act(() => render(h(Highlight, { element: el, rect: new DOMRect(left, 100, 40, 30), variant: "hover", labelRoom }), container));
+      at(100);
+      expect(label().hasAttribute("data-flipped")).toBe(false);
+      at(940); // a 90px label from 939 would end at 1029
+      expect(label().hasAttribute("data-flipped")).toBe(true);
+      // With corner icons on its row, it keeps to its room (and goes below when there's none).
+      at(940, 10);
+      expect(label().hasAttribute("data-flipped")).toBe(false);
+    } finally {
+      if (width) Object.defineProperty(HTMLElement.prototype, "offsetWidth", width);
+      if (clientWidth) Object.defineProperty(document.documentElement, "clientWidth", clientWidth);
+      else delete (document.documentElement as { clientWidth?: number }).clientWidth;
+    }
+  });
+
+  it("below would leave the window: inside the box, at its bottom", () => {
+    act(() => render(h(Highlight, { element: el, rect: new DOMRect(10, window.innerHeight - 30, 40, 28), variant: "hover", labelRoom: 10 }), container));
+    expect(label().hasAttribute("data-below")).toBe(false);
+    expect(label().hasAttribute("data-inside-bottom")).toBe(true);
+  });
 });

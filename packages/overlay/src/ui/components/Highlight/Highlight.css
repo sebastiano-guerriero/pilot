@@ -144,6 +144,30 @@
     margin-top: 5px;
   }
 
+  /* Below would leave the window too: inside the box, at its bottom. */
+  .label[data-inside-bottom] {
+    bottom: 3px;
+    left: 3px;
+    margin: 0;
+  }
+
+  /* Near the window's right edge: aligned with the box's right edge, growing
+     left (Highlight.tsx decides, from the label's width). */
+  .label[data-flipped] {
+    left: auto;
+    right: -1px;
+
+    &[data-inside] {
+      left: auto;
+      right: 3px;
+    }
+
+    &[data-below] {
+      left: auto;
+      right: -1px;
+    }
+  }
+
   /* Round markers on the selected element's corners, centered on its 2px
      line (the border and the ring outside it): -1px from the inner edge. */
   .handle {

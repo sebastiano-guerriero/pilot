@@ -57,19 +57,25 @@ export interface Busy {
 /** The actions' size and their gap to the selection, in px. */
 const SIZE = 20;
 const GAP = 4;
+/** How close to the window's edges the actions may go, in px. */
+const EDGE = 8;
 
 /**
  * Where `count` actions sit for an element's box (viewport px): one 20px
  * square each, 4px apart, right-aligned with it, 4px above its top edge
  * (above its 2px line, for the selection: `selected`), or inside it, 4px
- * in, when it touches the top of the window. What other
- * overlays keep clear of (the hover label).
+ * in, when it touches the top of the window. Right-aligned, they'd cross
+ * the window's left edge (a narrow element near it): aligned with its left
+ * edge instead (`flipped`), and kept 8px inside the window if even that
+ * doesn't fit (an element partly off screen). What other overlays keep
+ * clear of (the hover label).
  */
 export function actionsBox(
   rect: DOMRect,
   count: number,
   selected = false,
-): { left: number; top: number; right: number; bottom: number; inside: boolean } {
+  viewportWidth = document.documentElement.clientWidth,
+): { left: number; top: number; right: number; bottom: number; inside: boolean; flipped: boolean } {
   // The selection's line reaches 1px outside its box.
   const outset = selected ? 1 : 0;
   const inside = rect.top < SIZE + GAP + outset;
@@ -77,7 +83,11 @@ export function actionsBox(
   // Not rounded: on the same fractional pixels as the element's outline and label.
   const right = inside ? rect.right - GAP : rect.right;
   const top = inside ? rect.top + GAP : rect.top - outset - SIZE - GAP;
-  return { left: right - width, top, right, bottom: top + SIZE, inside };
+  const bottom = top + SIZE;
+  if (right - width >= EDGE) return { left: right - width, top, right, bottom, inside, flipped: false };
+  const start = inside ? rect.left + GAP : rect.left;
+  const left = Math.min(Math.max(start, EDGE), Math.max(EDGE, viewportWidth - EDGE - width));
+  return { left, top, right: left + width, bottom, inside, flipped: true };
 }
 
 /**
@@ -103,6 +113,8 @@ export function SelectionActions({
   const count = Number(!!similar) + Number(!!onShowInDom) + Number(!!onOpenThread) + Number(!!busy);
   const box = actionsBox(rect, count, selected);
   const side = box.inside ? "bottom" : "top";
+  // Their tooltips line up with the actions' outer edge: the right one, or the left one when they're flipped.
+  const align = box.flipped ? "start" : "end";
   if (!count) return null;
   return (
     <PageAnchor at={rect.at}>
@@ -148,7 +160,7 @@ export function SelectionActions({
               text={busy.stuck?.title ?? busy.about ?? "Cancel job"}
               detail={busy.stuck?.detail ?? (busy.about ? `${busy.status ?? busy.text} · Click to cancel` : undefined)}
               side={side}
-              align="end"
+              align={align}
             >
               <button
                 type="button"
@@ -163,7 +175,7 @@ export function SelectionActions({
               </button>
             </Tooltip>
           ) : (
-            <Tooltip text={busy.stuck?.title ?? busy.about ?? busy.text} detail={busy.stuck?.detail ?? (busy.about ? busy.status : undefined)} side={side} align="end">
+            <Tooltip text={busy.stuck?.title ?? busy.about ?? busy.text} detail={busy.stuck?.detail ?? (busy.about ? busy.status : undefined)} side={side} align={align}>
               <span
                 class="action busy"
                 data-stuck={busy.stuck ? "" : undefined}

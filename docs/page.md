@@ -88,7 +88,9 @@ Classes are never used: there's no reliable way to tell a meaningful one (`card`
 
 ### Selection actions
 
-[SelectionActions](../packages/overlay/src/ui/components/SelectionActions/SelectionActions.tsx): small accent buttons above the selection's top-right corner (inside it when the element touches the top of the window). The same with either tool. The corner holds status and navigation only, a few icons at most; tasks for the agent are the comment box's `/` actions ([handoff.md](handoff.md), *Actions*), where a list can grow without crowding the element.
+[SelectionActions](../packages/overlay/src/ui/components/SelectionActions/SelectionActions.tsx): small accent buttons above the selection's top-right corner (inside it when the element touches the top of the window). The same with either tool. The corner holds status and navigation only, a few icons at most; the agent's skills are the comment box's `/` list ([handoff.md](handoff.md), *The `/` menu*), where a list can grow without crowding the element.
+
+- **Near the window's edges** (`actionsBox()`; the label in [Highlight](../packages/overlay/src/ui/components/Highlight/Highlight.tsx)): actions that would cross the window's left edge (a narrow element near it) line up with the element's left edge instead, growing right, and stay 8px inside the window if even that doesn't fit (an element partly off screen); their tooltips line up the same way. The mirror for the hover label: crossing the window's right edge, it lines up with the element's right edge, growing left. They never share a corner: a label beside an element's corner icons keeps to the room left of them, and goes below the element when there's none, as when the icons flip to its left edge; below, it goes inside the element's bottom when below would leave the window too.
 
 - **Select similar** adds the elements like the selected one to the selection: the same part of each copy of what repeats, so a card's title selects every card's title, not every heading (see *Several elements*). Its tooltip says how many ("Select 2 similar"). Only there while some of them aren't selected yet.
 - **Show in DOM** (`< >`) opens the DOM tree on it.
