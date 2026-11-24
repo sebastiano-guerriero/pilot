@@ -603,7 +603,9 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // element shows clear (clearsView()). Measuring hides them too.
   const clearView = !commenting && !!editingId && clearsView(editingId);
   const bare = measuring || clearView;
-  const hideSelection = !!inspect?.some(hidesSelection) || bare;
+  // What the property dialog shows of the box (padding, gap…): with Select only (it doesn't clear it when it closes).
+  const inspected = commenting ? null : inspect;
+  const hideSelection = !!inspected?.some(hidesSelection) || bare;
   // Beside the latest one added, while it's still selected (taken out: back to the first).
   const placeBy = latest && others.includes(latest) ? latest : undefined;
 
@@ -678,67 +680,9 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
       {flash?.elements.map((element) => (
         <FlashOutline key={`${flash.key}-${elementKey(element)}`} element={element} />
       ))}
-      {selected && selectedRect && commenting && (
-        <>
-          {!measuring && (
-            <Highlight element={selected.element} rect={selectedRect} variant="selected" label={false} working={!!selectedJob && !isStuck(selectedJob)} />
-          )}
-          {!measuring &&
-            others.map((element) => <SelectedOutline key={elementKey(element)} element={element} working={workingOn(element)} />)}
-          {/* Before the panel (same layer: DOM order decides), so the panel covers them when it's over the element's corner. */}
-          {!measuring && (
-            <SelectionActions
-              rect={selectedRect}
-              selected
-              domOpen={domOpen}
-              similar={similar}
-              onShowInDom={others.length ? undefined : () => setDomOpen((open) => !open)}
-              busy={selectedBusy}
-              // The thread is open already: its icon stays, as everywhere.
-              onOpenThread={selectedThread ? () => setTool("comment") : undefined}
-            />
-          )}
-          <CommentWidget
-            key={selected.key}
-            element={selected.element}
-            initialText={selectedDraft}
-            onTextChange={(text) => keepDraft(selected.element, text)}
-            anchor={selectedRect}
-            placeBy={placeBy}
-            veiled={measuring}
-            thread={thread}
-            status={threadStatus}
-            error={threadJob && isStuck(threadJob) ? stuckAlert : undefined}
-            onStop={threadJob && session?.canCancel(threadJob) ? () => session.cancel(threadJob.id) : undefined}
-            agentName={agentName(threadJob?.agent?.label ?? session?.state.agents[0]?.label)}
-            agentOn={sendToAgent}
-            onSend={(text, files, action, mentions, withEdits, props, skill) => sendComment(selected.element, text, files, action, mentions, withEdits, props, skill)}
-            edits={unsentOnSelection}
-            // `/props` for one component instance, alone (a list for several would mix their props).
-            component={others.length ? undefined : (componentName(selected.element) ?? undefined)}
-            currentProps={() => componentProps(selected.element)?.props ?? {}}
-            mentions={() => mentionOptions(mentionables(nameAttributes))}
-            projectComponents={session ? () => session.projectComponents() : undefined}
-            skills={session ? () => session.projectSkills() : undefined}
-            // Resolved: the thread goes, and the widget closes (the next one is the Comment button's click away).
-            onResolve={
-              thread
-                ? (from) => {
-                    session?.resolve(thread.id);
-                    dismiss();
-                    // A little celebration, from Mark as solved (the widget is gone, so App draws it).
-                    if (from) setBursts((all) => [...all, { key: ++burstKey.current, from }]);
-                  }
-                : undefined
-            }
-            // Adjust by hand: Select keeps the selection (the thread's elements), so the dialog opens on them.
-            onAdjust={() => setTool("select")}
-            onClose={dismiss}
-            autoFocus={selected.from !== "dom"}
-          />
-        </>
-      )}
-      {selected && selectedRect && !commenting && (
+      {/* The selection, drawn the same with either tool (grid lines and numbers, outline,
+          the other selected elements, the actions), then the tool's panel. */}
+      {selected && selectedRect && (
         <>
           {/* Grid containers also show their grid lines, under the selection
               highlight and the gap stripes; their numbers go on top (below).
@@ -759,7 +703,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
               working={!!selectedJob && !isStuck(selectedJob)}
             />
           )}
-          {inspect && <BoxAreas element={selected.element} areas={inspect} />}
+          {inspected && <BoxAreas element={selected.element} areas={inspected} />}
           {!hideSelection && <GridOverlay element={selected.element} part="numbers" orParent />}
           {/* The other selected elements: the selection's outline, and dots. */}
           {!bare &&
@@ -779,29 +723,70 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
               onOpenThread={selectedThread ? () => setTool("comment") : undefined}
             />
           )}
-          <PropertyDialog
-            key={selected.key}
-            element={selected.element}
-            others={others}
-            anchor={selectedRect}
-            placeBy={placeBy}
-            veiled={measuring}
-            initialQuery={lastQuery.current}
-            onQueryChange={(query) => {
-              lastQuery.current = query;
-            }}
-            history={history}
-            onClose={dismiss}
-            onInspect={setInspect}
-            onEditing={setEditingId}
-            widths={widths}
-            onWidthsChange={setWidths}
-            states={states}
-            onStatesChange={setStates}
-            viewportWidth={viewportWidth}
-            widthPick={widthPick}
-            autoFocus={selected.from !== "dom"}
-          />
+          {commenting ? (
+            <CommentWidget
+              key={selected.key}
+              element={selected.element}
+              initialText={selectedDraft}
+              onTextChange={(text) => keepDraft(selected.element, text)}
+              anchor={selectedRect}
+              placeBy={placeBy}
+              veiled={measuring}
+              thread={thread}
+              status={threadStatus}
+              error={threadJob && isStuck(threadJob) ? stuckAlert : undefined}
+              onStop={threadJob && session?.canCancel(threadJob) ? () => session.cancel(threadJob.id) : undefined}
+              agentName={agentName(threadJob?.agent?.label ?? session?.state.agents[0]?.label)}
+              agentOn={sendToAgent}
+              onSend={(text, files, action, mentions, withEdits, props, skill) => sendComment(selected.element, text, files, action, mentions, withEdits, props, skill)}
+              edits={unsentOnSelection}
+              // `/props` for one component instance, alone (a list for several would mix their props).
+              component={others.length ? undefined : (componentName(selected.element) ?? undefined)}
+              currentProps={() => componentProps(selected.element)?.props ?? {}}
+              mentions={() => mentionOptions(mentionables(nameAttributes))}
+              projectComponents={session ? () => session.projectComponents() : undefined}
+              skills={session ? () => session.projectSkills() : undefined}
+              // Resolved: the thread goes, and the widget closes (the next one is the Comment button's click away).
+              onResolve={
+                thread
+                  ? (from) => {
+                      session?.resolve(thread.id);
+                      dismiss();
+                      // A little celebration, from Mark as solved (the widget is gone, so App draws it).
+                      if (from) setBursts((all) => [...all, { key: ++burstKey.current, from }]);
+                    }
+                  : undefined
+              }
+              // Adjust by hand: Select keeps the selection (the thread's elements), so the dialog opens on them.
+              onAdjust={() => setTool("select")}
+              onClose={dismiss}
+              autoFocus={selected.from !== "dom"}
+            />
+          ) : (
+            <PropertyDialog
+              key={selected.key}
+              element={selected.element}
+              others={others}
+              anchor={selectedRect}
+              placeBy={placeBy}
+              veiled={measuring}
+              initialQuery={lastQuery.current}
+              onQueryChange={(query) => {
+                lastQuery.current = query;
+              }}
+              history={history}
+              onClose={dismiss}
+              onInspect={setInspect}
+              onEditing={setEditingId}
+              widths={widths}
+              onWidthsChange={setWidths}
+              states={states}
+              onStatesChange={setStates}
+              viewportWidth={viewportWidth}
+              widthPick={widthPick}
+              autoFocus={selected.from !== "dom"}
+            />
+          )}
         </>
       )}
       {/* The hover comes after the selection, so its label is drawn over the

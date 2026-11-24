@@ -98,7 +98,7 @@ Classes are never used: there's no reliable way to tell a meaningful one (`card`
 
 [GridOverlay](../packages/overlay/src/ui/components/GridOverlay/GridOverlay.tsx), lines from [dom/gridLines.ts](../packages/overlay/src/dom/gridLines.ts).
 
-- **Grid containers** show their grid lines on hover, and numbered once selected, numbered as CSS numbers them (1 at the start edge). Columns are numbered just below the content box, rows to its left.
+- **Grid containers** show their grid lines on hover, and numbered once selected, numbered as CSS numbers them (1 at the start edge). Columns are numbered just below the content box, rows to its left. The same with either tool: the selection is drawn alike with Select and Comment (lines and numbers, outline, the other selected elements, the actions), only the panel beside it differs (`App.tsx`). Comment used to show the outline alone, though the grid matters as much when asking for a change. What only the property dialog shows (the striped areas of what's being edited) stays with Select.
 - Between tracks with a gap, both edges of the gap are drawn and the number sits in the middle.
 - Lines on the element's outline (the outer lines, without padding or border) aren't drawn, since they'd only double it. Their numbers stay. The first and last numbers are placed so they never overlap each other or a corner, even in a row shorter than two badges.
 - The numbers are drawn above everything else (lines, outline, dots, stripes), so nothing covers them. Digits are tabular.
