@@ -53,7 +53,8 @@ function runFooter(job: Job): string {
     ...(props ? ["", "`type` is one of `options`, `boolean`, `text`, `number`; `options` only for `options`."] : []),
     ...(!props && several ? ["", "`element`: the number of the element it's about (its heading's), so the designer sees it there; leave it out when it's about all of them."] : []),
     "",
-    "If you were refused something you needed (a tool, a command, a website: it would have asked the designer, and no one can answer in this run), list it in that block as `refused`, and do without it. Pilot tells the designer how to allow it, so don't explain that yourself:",
+    // Refused stays refused however it's put: a run tried `git show` five ways, a model round each.
+    "If you were refused something you needed (a tool, a command, a website: it would have asked the designer, and no one can answer in this run), list it in that block as `refused`, and do without it: it stays refused however you put it, so don't retry it another way. Pilot tells the designer how to allow it, so don't explain that yourself:",
     "",
     "```pilot",
     '{"refused": [{"mcp": "the MCP server\'s name"}, {"command": "the command, as you ran it"}, {"web": "the site\'s domain"}, {"tool": "any other tool\'s name"}]}',

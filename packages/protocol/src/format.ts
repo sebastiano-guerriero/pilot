@@ -137,6 +137,18 @@ function sharedCode(): string {
     'Don\'t ask when the designer already said (in the comment or note: "only here", "every card", "as a variant"), when every copy is in the job, or when nothing else uses that code: just change it.',
   ].join(" ");
 }
+/**
+ * A comment that's unclear, or asks for what the element already is: the
+ * agent asks in its reply, at once, instead of searching for what the
+ * designer meant (one "make this square", already `aspect-square`, took 17
+ * model rounds and 127s of git, other sessions' transcripts and the web
+ * before a question). In the reply, not the `pilot` block: a job asks that
+ * one once, and the shared-code question may still be needed after the
+ * designer's answer, which comes back as their next comment in the thread.
+ */
+export const UNCLEAR_ASK =
+  '**Unclear, or already done:** if the comment could mean more than one thing ("make this square": square corners, or a 1:1 shape?), or the element already seems to be what it asks, don\'t search for what the designer meant and don\'t guess: leave that part, and ask them in your notes, in one short sentence naming the options ("Square corners, or a 1:1 shape?"). Their answer comes back as their next comment in this thread. (Your notes, not the `pilot` block: that one is for the shared-code question below.) What they meant is in the comment, the elements above and the code, nowhere else: not in git history, other agent sessions or the web.';
+
 /** The edit jobs' guidelines: what every edit asks of the code. */
 export function editGuidelines(): string[] {
   return [
@@ -398,6 +410,7 @@ function formatComment(changeSet: ChangeSet, request: CommentRequest): string {
     "",
     "- **A specific, small ask** (a color, a size, a spacing, a text): make it right away, in the project's conventions (its tokens, utilities, components). Speed matters: no screenshots or builds.",
     "- **An open-ended ask that needs design judgment** (make it calmer, rework this layout): it's an advanced task. If you can hand work to a more capable model than the one you run on (a subagent, or another model your agent offers), do: give it this prompt (with the job id), and report back with its notes.",
+    `- ${UNCLEAR_ASK}`,
     `- The designer was looking at the page ${page.viewport.width}px wide. If the comment is about how it looks at that width only, scope the change with the project's breakpoints; otherwise it's for every width.`,
     `- ${PROJECT_CODE}`,
     several > 1 ? "- Change only what the comment is about, on each of these elements." : "- Change only what the comment is about.",

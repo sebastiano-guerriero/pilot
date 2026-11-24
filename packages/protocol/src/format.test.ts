@@ -270,6 +270,10 @@ describe("formatPrompt", () => {
     // Concise, like a chat message: not one sentence.
     expect(text).toContain("keep it concise, like a chat message");
     expect(text).not.toMatch(/keep it to one short sentence|120 characters/);
+    // Unclear, or already done: ask at once in the notes (the `pilot` block stays for the shared-code question), never search for the meaning.
+    expect(text).toContain("**Unclear, or already done:**");
+    expect(text).toContain("ask them in your notes, in one short sentence naming the options");
+    expect(text).toContain("not in git history, other agent sessions or the web");
     // The first comment has no thread before it.
     const first = formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, thread: thread.slice(0, 1), breakpoints: [] } });
     expect(first).not.toContain("The thread so far");

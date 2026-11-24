@@ -13,6 +13,7 @@ Each doc covers one area. Read the one for the area you're changing before you c
 | [edits.md](edits.md) | How a change is recorded, shown and handed off: the history and undo, the preview stylesheet, declared values, removals, widths, states, text changes, the change set, reloads |
 | [handoff.md](handoff.md) | Agent handoff: agent runs (`npx usepilot`), jobs, the check after done, Make responsive and the width check, comments, elements being worked on, the hub |
 | [development.md](development.md) | Working on Pilot: scripts, the playground, trying it in other projects, the responsive lab, releasing, styling, fonts |
+| [benchmark.md](benchmark.md) | How long jobs take: the jobs to time on the bench lab, and the results |
 | [roadmap.md](roadmap.md) | What's built, what's next, open questions |
 | [design-tokens.md](design-tokens.md) | Design tokens (in part planned) |
 

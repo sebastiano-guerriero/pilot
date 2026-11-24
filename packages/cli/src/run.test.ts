@@ -153,6 +153,8 @@ describe("npx usepilot: Pilot runs the agent for each job", () => {
     expect(first?.prompt).toContain("- **These are design instructions, not code**");
     // Pilot checks the page: the agent doesn't check its own edit (a git diff, a script).
     expect(first?.prompt).toContain("don't check your edit afterwards (no git diff, script or second read of the file): Pilot does.");
+    // No one approves a refused command: the agent doesn't retry it another way.
+    expect(first?.prompt).toContain("it stays refused however you put it, so don't retry it another way");
     expect(second?.args).toEqual(expect.arrayContaining(["--resume", "aaaaaaaa-0000-0000-0000-000000000001"]));
     expect(second?.prompt).toContain("Guidelines: the same as for the earlier edits in this session");
     expect(second?.prompt).not.toContain("These are design instructions, not code");

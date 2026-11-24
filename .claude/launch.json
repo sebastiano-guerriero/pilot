@@ -14,6 +14,12 @@
       "port": 5183
     },
     {
+      "name": "lab-bench",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "../pilot-lab-bench", "run", "dev"],
+      "port": 5188
+    },
+    {
       "name": "experiments",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["dev:experiments"],
