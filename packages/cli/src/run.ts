@@ -271,12 +271,12 @@ export async function runJob(job: Job, ctx: RunContext): Promise<void> {
     }
     const reply = replyOf(result.reply);
     const session: AgentSession | undefined = result.session ? { agent: cli.kind, id: result.session } : undefined;
-    // Tools it was refused: said after its reply, with how to allow them.
+    // What it was refused: said after its reply; what can be allowed safely, a request the thread copies with a button.
     const refused = refusedNote(cli, [...(result.refused ?? []), ...(reply.refused ?? [])]);
-    const notes = refused ? [reply.notes, refused].filter(Boolean).join("\n\n") : reply.notes;
-    await bridge.done(job.id, notes, reply.question, reply.props, { session });
+    const notes = refused ? [reply.notes, refused.note].filter(Boolean).join("\n\n") : reply.notes;
+    await bridge.done(job.id, notes, reply.question, reply.props, { session, ...(refused?.allow ? { allow: refused.allow } : {}) });
     out(`✓ ${seconds}s · ${firstLine(reply.notes) || "Done."}`);
-    if (refused) out(`! ${refused.replaceAll("**", "").replaceAll("`", "")}`);
+    if (refused) out(`! ${[refused.note, refused.allow].filter(Boolean).join(" ").replaceAll("**", "").replaceAll("`", "")}`);
   } catch (error) {
     if (!stop.signal.aborted) {
       const jobError = { title: `Pilot couldn't run ${cli.label}`, detail: (error as Error).message };

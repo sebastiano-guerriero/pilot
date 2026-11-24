@@ -141,6 +141,12 @@ export interface Job {
   session?: AgentSession;
   /** Pilot couldn't run the agent for it (not installed, not signed in, the run failed): what's wrong and what to do. The job is done, unapplied. */
   error?: JobError;
+  /**
+   * The run was refused an MCP server or a site the designer can allow: the
+   * request for their agent's chat, which the thread copies with a button
+   * (never shown, never done by Pilot: see refusedNote in the runner).
+   */
+  allow?: string;
 }
 
 /** Why a job couldn't run, for the designer: a title ("Claude Code isn't signed in") and what to do ("Run claude auth login in a terminal"). */
@@ -193,6 +199,13 @@ export function sessionOf(value: unknown): AgentSession | undefined {
   if (typeof s?.agent !== "string" || !/^[a-z]{1,20}$/.test(s.agent)) return undefined;
   if (typeof s.id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9-]{7,99}$/.test(s.id)) return undefined;
   return { agent: s.agent, id: s.id };
+}
+
+/** A run's request to allow what it was refused (Job.allow): plain text, one line, cut; undefined when it isn't one. */
+export function allowOf(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const text = value.replace(/\s+/g, " ").trim();
+  return text ? text.slice(0, 500) : undefined;
 }
 
 /** A job's error from a run (see JobError), trimmed; undefined when it isn't one. */

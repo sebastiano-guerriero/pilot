@@ -24,4 +24,10 @@ describe("the run's footer", () => {
     expect(prompt).toContain("list it in that block as `refused`");
     expect(prompt).toContain('{"refused": [{"mcp": ');
   });
+
+  it("every agent reads with its own file tools and leaves the page to Pilot: what runs were refused most, for nothing", () => {
+    const prompt = jobPrompt(jobOf(".card"));
+    expect(prompt).toContain("Read and search files with your own file tools, not shell commands");
+    expect(prompt).toContain("don't fetch or open the page");
+  });
 });

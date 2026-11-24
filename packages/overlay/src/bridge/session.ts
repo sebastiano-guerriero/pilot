@@ -64,6 +64,8 @@ export interface JobRecord {
   error?: JobError;
   /** A thread's job: how its elements looked when it was sent (edits/look.ts), to tell whether the agent changed it. */
   look?: Array<Look | null>;
+  /** What the designer can ask their agent to allow (Job.allow): copied from its reply. */
+  allow?: string;
 }
 
 /**
@@ -121,6 +123,12 @@ export type ThreadMessage = Omit<CommentMessage, "attachments"> & {
    * what it chose. Not for a reply that changed nothing the dialog edits.
    */
   restyled?: boolean;
+  /**
+   * The run was refused an MCP server or a site the designer can allow: the
+   * request for their agent's chat (Job.allow), copied by the reply's Copy
+   * instructions button, never shown or done by Pilot.
+   */
+  allow?: string;
 };
 
 /** A file on a designer's message: the hub's id for it, and for an image a small preview (a data URL) for the thread. */
@@ -669,7 +677,7 @@ export class PilotSession {
     const request = job.changeSet.request;
     // A `/props` list: remembered for this component, for the next `/props`.
     if (request?.kind === "props" && job.props?.length) rememberProps(request.component, request.target.source?.file, job.props);
-    const reply: ThreadMessage = { from: "agent", text: job.notes?.trim() || "Done.", at: new Date().toISOString(), replyTo: job.id };
+    const reply: ThreadMessage = { from: "agent", text: job.notes?.trim() || "Done.", at: new Date().toISOString(), replyTo: job.id, ...(job.allow ? { allow: job.allow } : {}) };
     if (job.props?.length) reply.propList = job.props;
     // The list shown early (see postComment): the agent's reply takes its place.
     const early = thread.messages.find((m) => m.replyTo === job.id && m.early);
@@ -821,6 +829,7 @@ export class PilotSession {
       ...(job.props ? { props: job.props } : {}),
       session: job.session ?? mine.session,
       error: job.error,
+      ...(job.allow ? { allow: job.allow } : {}),
     });
     if (job.status === "cancelled") {
       this.unhold(mine);

@@ -80,11 +80,11 @@ export interface AgentCli {
    */
   invokeSkill(name: string): string;
   /**
-   * How the designer lets this agent's runs do what one was refused, in its
-   * own settings: one short line per refusal, Markdown. From each agent's
-   * docs; what doesn't apply to it (`tool` for most) is null.
+   * Its settings for this project only, kept out of the repository where it
+   * has such a file: where the request the designer can copy (see
+   * refusedNote) asks their agent to allow an MCP server or a site.
    */
-  allow(refused: Refused): string | null;
+  projectSettings: string;
 }
 
 /**
@@ -163,39 +163,70 @@ function parseCodex(stdout: string): RunOutput {
 }
 
 /**
- * What the designer reads when a run was refused something: what, and how to
- * allow it in the agent's own settings, as briefly as it can be said. Pilot
- * only says it: the designer decides, and changes their settings themselves
- * (security first: a button on the page could be clicked by the page's own
- * scripts). Markdown, after the agent's reply. Null when nothing was refused,
- * or nothing of it can be allowed.
+ * What the designer reads when a run was refused something, as briefly as it
+ * can be said, after the agent's reply (`note`), and, for what can be
+ * allowed safely, a request for their agent's chat that Pilot's thread copies
+ * with a button (`allow`).
+ *
+ * Safely means narrow, and the designer's own: an MCP server they installed
+ * (a skill's tools: Nucleo's), a website to look at; in the project's own
+ * settings, not every project's. Never a command: a run's commands can do
+ * anything (`curl` sends files anywhere or fetches a script, `node` and
+ * `python3` run any code), and allowing one allows every future run whatever
+ * a skill, the page's text or an attachment tells it, so the note only names
+ * them (most need no allowing: the prompt has the agent read with its own
+ * file tools, and leave the page to Pilot). Files outside the project: named,
+ * nothing to allow. Pilot never allows anything itself (security first: a
+ * button on the page could be clicked by the page's own scripts): the
+ * designer pastes the request, their agent edits its settings and asks them
+ * to confirm, as it does. An MCP server's request allows all its tools: the
+ * note names the server, the designer decides. Null when nothing was refused.
  */
-export function refusedNote(cli: AgentCli, refused: Refused[] | undefined): string | null {
-  const seen = new Set<string>();
-  const lines: string[] = [];
+export function refusedNote(cli: AgentCli, refused: Refused[] | undefined): { note: string; allow?: string } | null {
+  const servers = new Set<string>();
+  const sites = new Set<string>();
+  const programs = new Set<string>();
+  const files = new Set<string>();
   for (const r of refused ?? []) {
-    const key = JSON.stringify(r);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const how = cli.allow(r);
-    if (how) lines.push(how);
+    if ("mcp" in r) servers.add(r.mcp);
+    else if ("web" in r) sites.add(r.web);
+    else if ("command" in r) programs.add(program(r.command));
+    else files.add(FILE_TOOLS[r.tool] ?? `using ${r.tool}`);
   }
-  if (!lines.length) return null;
-  const head = `**Not allowed in this run** (${cli.label} can't ask you here, as in its chat).`;
-  return lines.length === 1 ? `${head} ${lines[0]}` : [head, ...lines.map((l) => `- ${l}`)].join("\n");
+  const allowable = [
+    ...[...servers].map((m) => ({ ask: `the ${m} MCP server`, said: `the \`${m}\` MCP server` })),
+    ...[...sites].map((w) => ({ ask: `fetching ${w}`, said: `fetching \`${w}\`` })),
+  ];
+  const said = [...allowable.map((a) => a.said), ...(programs.size ? [`running ${list([...programs].map((p) => `\`${p}\``))}`] : []), ...files];
+  if (!said.length) return null;
+  const head = `**Not allowed in this run** (${cli.label} can't ask you here, as in its chat): ${list(said)}.`;
+  if (!allowable.length) return { note: head };
+  const them = allowable.length > 1 ? "them" : "it";
+  return {
+    note: `${head} To allow ${allowable.length > 1 ? "the MCP servers and sites" : servers.size ? "the MCP server" : "the site"}, copy the instructions for ${cli.label}.`,
+    allow: `Allow ${list(allowable.map((a) => a.ask))} in this project's ${cli.label} settings (${cli.projectSettings}), so Pilot's runs here can use ${them}.`,
+  };
 }
 
-/** What was refused, for the designer: `nucleo-icons` (MCP), the command, the site. */
-function named(r: Refused): string {
-  if ("mcp" in r) return `\`${r.mcp}\` (MCP)`;
-  if ("command" in r) return `\`${r.command}\``;
-  if ("web" in r) return `\`${r.web}\``;
-  return `\`${r.tool}\``;
+/** The file tools a run is refused outside the project, said in words. */
+const FILE_TOOLS: Record<string, string> = {
+  Write: "writing files outside the project",
+  Edit: "editing files outside the project",
+  MultiEdit: "editing files outside the project",
+  NotebookEdit: "editing files outside the project",
+  Read: "reading files outside the project",
+};
+
+/** `a`, `a and b`, `a, b and c`. */
+function list(items: string[]): string {
+  return items.length < 2 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
 
-/** A command's first word: the program, what an allow rule by prefix names. */
+/** A command's program: its first word (after any `VAR=value`), the file's name for a path. */
 function program(command: string): string {
-  return command.trim().split(/\s+/)[0] ?? command;
+  const words = command.trim().split(/\s+/);
+  const first = words.find((w) => !/^[A-Za-z_]\w*=/.test(w)) ?? words[0] ?? command;
+  return (first.split("/").pop() || first).replace(/^["']|["']$/g, "").slice(0, 40);
 }
 
 export const AGENTS: Record<AgentKind, AgentCli> = {
@@ -224,11 +255,7 @@ export const AGENTS: Record<AgentKind, AgentCli> = {
     parse: parseStream,
     skills: { project: [".claude/skills"], home: [".claude/skills"] },
     invokeSkill: (name) => `/${name}`,
-    // Its permission rules (`permissions.allow`): an MCP server's tools all at once, a command as it was run.
-    allow: (r) => {
-      const rule = "mcp" in r ? `mcp__${r.mcp}` : "command" in r ? `Bash(${r.command})` : "web" in r ? `WebFetch(domain:${r.web})` : r.tool;
-      return `To allow ${named(r)}, add \`"${rule}"\` to \`permissions.allow\` in \`~/.claude/settings.json\`.`;
-    },
+    projectSettings: ".claude/settings.local.json",
   },
   codex: {
     kind: "codex",
@@ -253,16 +280,7 @@ export const AGENTS: Record<AgentKind, AgentCli> = {
     parse: parseCodex,
     skills: { project: [".agents/skills"], home: [".agents/skills", ".codex/skills"] },
     invokeSkill: (name) => "$" + name,
-    // From its docs (2026-11-24): an MCP server's approval mode, a command by its prefix in its
-    // rules (it runs outside the sandbox then), the network for the whole sandbox.
-    allow: (r) =>
-      "mcp" in r
-        ? `To allow ${named(r)}, set \`default_tools_approval_mode = "approve"\` under \`[mcp_servers.${r.mcp}]\` in \`~/.codex/config.toml\`.`
-        : "command" in r
-          ? `To allow ${named(r)}, add \`prefix_rule(pattern = ["${program(r.command)}"], decision = "allow")\` to \`~/.codex/rules/default.rules\`.`
-          : "web" in r
-            ? `To allow ${named(r)}, set \`network_access = true\` under \`[sandbox_workspace_write]\` in \`~/.codex/config.toml\` (every site).`
-            : null,
+    projectSettings: ".codex/config.toml",
   },
   cursor: {
     kind: "cursor",
@@ -279,11 +297,7 @@ export const AGENTS: Record<AgentKind, AgentCli> = {
     parse: parseStream,
     skills: { project: [".agents/skills", ".cursor/skills"], home: [".cursor/skills"] },
     invokeSkill: (name) => `/${name}`,
-    // Its allowlist (`permissions.allow`), from its docs (2026-11-24): an MCP server's tools, a command by its program, a site.
-    allow: (r) => {
-      const rule = "mcp" in r ? `Mcp(${r.mcp}:*)` : "command" in r ? `Shell(${program(r.command)})` : "web" in r ? `WebFetch(${r.web})` : null;
-      return rule ? `To allow ${named(r)}, add \`"${rule}"\` to \`permissions.allow\` in \`~/.cursor/cli-config.json\`.` : null;
-    },
+    projectSettings: ".cursor/cli.json",
   },
 };
 

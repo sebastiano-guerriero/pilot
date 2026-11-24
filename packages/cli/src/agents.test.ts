@@ -181,27 +181,40 @@ describe("what a run was refused", () => {
     expect(refusedOf(undefined)).toEqual([]);
   });
 
-  it("each agent says how to allow it in its own settings, briefly, each thing once", () => {
-    const refused = AGENTS.claude.parse(REFUSED).refused;
-    expect(refusedNote(AGENTS.claude, refused)).toBe(
-      [
-        "**Not allowed in this run** (Claude Code can't ask you here, as in its chat).",
-        '- To allow `nucleo-icons` (MCP), add `"mcp__nucleo-icons"` to `permissions.allow` in `~/.claude/settings.json`.',
-        '- To allow `curl -sI https://example.com`, add `"Bash(curl -sI https://example.com)"` to `permissions.allow` in `~/.claude/settings.json`.',
-        '- To allow `linear.app`, add `"WebFetch(domain:linear.app)"` to `permissions.allow` in `~/.claude/settings.json`.',
-      ].join("\n"),
-    );
-    expect(refusedNote(AGENTS.cursor, [{ mcp: "nucleo-icons" }])).toBe(
-      '**Not allowed in this run** (Cursor can\'t ask you here, as in its chat). To allow `nucleo-icons` (MCP), add `"Mcp(nucleo-icons:*)"` to `permissions.allow` in `~/.cursor/cli-config.json`.',
-    );
-    expect(refusedNote(AGENTS.cursor, [{ command: "curl -sI https://example.com" }])).toContain('`"Shell(curl)"`');
-    expect(refusedNote(AGENTS.codex, [{ mcp: "nucleo-icons" }])).toContain('`default_tools_approval_mode = "approve"` under `[mcp_servers.nucleo-icons]` in `~/.codex/config.toml`');
-    expect(refusedNote(AGENTS.codex, [{ command: "curl -sI https://example.com" }])).toContain('`prefix_rule(pattern = ["curl"], decision = "allow")` to `~/.codex/rules/default.rules`');
-    expect(refusedNote(AGENTS.codex, [{ web: "linear.app" }])).toContain("`network_access = true` under `[sandbox_workspace_write]`");
+  it("what was refused, said briefly; a request to copy only for MCP servers and sites, in the project's own settings", () => {
+    expect(refusedNote(AGENTS.claude, AGENTS.claude.parse(REFUSED).refused)).toEqual({
+      note: "**Not allowed in this run** (Claude Code can't ask you here, as in its chat): the `nucleo-icons` MCP server, fetching `linear.app` and running `curl`. To allow the MCP servers and sites, copy the instructions for Claude Code.",
+      allow: "Allow the nucleo-icons MCP server and fetching linear.app in this project's Claude Code settings (.claude/settings.local.json), so Pilot's runs here can use them.",
+    });
   });
 
-  it("nothing refused, or nothing of it that can be allowed: no note", () => {
+  it("every agent alike, its project's settings named; its agent knows their format", () => {
+    expect(refusedNote(AGENTS.cursor, [{ mcp: "nucleo-icons" }])).toEqual({
+      note: "**Not allowed in this run** (Cursor can't ask you here, as in its chat): the `nucleo-icons` MCP server. To allow the MCP server, copy the instructions for Cursor.",
+      allow: "Allow the nucleo-icons MCP server in this project's Cursor settings (.cursor/cli.json), so Pilot's runs here can use it.",
+    });
+    expect(refusedNote(AGENTS.codex, [{ web: "linear.app" }])?.allow).toBe(
+      "Allow fetching linear.app in this project's Codex settings (.codex/config.toml), so Pilot's runs here can use it.",
+    );
+  });
+
+  it("never anything to allow for commands (they can do anything) or files outside the project: only named, programs once", () => {
+    // What a real run was refused (a skill's checks), trimmed: a script written in a heredoc, run twice, a long sed, and cat, cd, curl.
+    const refused = [
+      { command: "mkdir -p /tmp/bc && cat > /tmp/bc/c.mjs <<'EOF'\nconst hex=h=>{};\nEOF\nnode /tmp/bc/c.mjs" },
+      { tool: "Write" },
+      { command: "node /tmp/bc/c.mjs" },
+      { command: "node /var/folders/x/T/pilot-attachments/bc/c.mjs" },
+      { command: "sed -i '' \\\n -e 's/a/b/' \\\n src/components/dashboard.tsx && git diff --stat" },
+      { command: "FOO=1 /usr/bin/curl -s http://localhost:5188/" },
+    ];
+    expect(refusedNote(AGENTS.claude, refused)).toEqual({
+      note: "**Not allowed in this run** (Claude Code can't ask you here, as in its chat): running `mkdir`, `node`, `sed` and `curl` and writing files outside the project.",
+    });
+  });
+
+  it("nothing refused: no note", () => {
     expect(refusedNote(AGENTS.claude, undefined)).toBeNull();
-    expect(refusedNote(AGENTS.cursor, [{ tool: "Something" }])).toBeNull();
+    expect(refusedNote(AGENTS.cursor, [])).toBeNull();
   });
 });

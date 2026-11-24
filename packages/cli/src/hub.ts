@@ -53,6 +53,8 @@ export interface WaitResult {
 export interface DoneExtra {
   session?: AgentSession;
   error?: JobError;
+  /** What the designer can ask their agent to allow (Job.allow). */
+  allow?: string;
 }
 
 interface Agent {
@@ -229,6 +231,7 @@ export class Hub {
       // The session to resume for its follow-up (kept from the first run when a later one has none), and the run's error or none.
       session: extra.session ?? job.session,
       error: extra.error,
+      allow: extra.allow,
     });
     return job;
   }

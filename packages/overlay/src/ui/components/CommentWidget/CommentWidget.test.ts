@@ -488,6 +488,23 @@ describe("CommentWidget's Edit manually", () => {
     expect(adjust()).toBeUndefined();
   });
 
+  it("a reply whose run was refused something the designer can allow: Copy instructions copies the request, never shown", async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const request = "Allow the nucleo-icons MCP server in this project's Claude Code settings (.claude/settings.local.json), so Pilot's runs here can use it.";
+    drawMessages([asked, { from: "agent", text: "Used another icon.", at: "2", allow: request }]);
+    const copy = () => [...container.querySelectorAll(".choice")].find((b) => /Cop/.test(b.textContent ?? "")) as HTMLButtonElement | undefined;
+    expect(copy()?.textContent).toBe("Copy instructions");
+    expect(container.textContent).not.toContain("settings.local.json");
+    await act(async () => copy()?.click());
+    expect(writeText).toHaveBeenCalledWith(request);
+    expect(copy()?.textContent).toBe("Copied");
+    // Beside Edit manually, when there's both.
+    drawMessages([asked, { from: "agent", text: "Done.", at: "2", restyled: true, allow: request }]);
+    // (Still "Copied" from the click a moment ago.)
+    expect([...container.querySelectorAll(".choices .choice")].map((b) => b.textContent)).toEqual(["Edit manually", "Copied"]);
+  });
+
   it("only the latest, and not on a question, a props list or a stopped job", () => {
     drawMessages([asked, { from: "agent", text: "Done.", at: "2", restyled: true }, { from: "designer", text: "And the title?", at: "3" }]);
     expect(adjust()).toBeUndefined();

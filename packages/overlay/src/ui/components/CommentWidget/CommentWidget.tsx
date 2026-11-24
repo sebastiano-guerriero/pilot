@@ -148,6 +148,41 @@ function placeholder(withAction: boolean, reply: boolean, mentions: boolean): st
   return mentions ? `${lead}, / for skills, @ to mention` : `${lead}, or / for skills`;
 }
 
+/** How long Copy instructions says it copied, in ms. */
+const COPIED_FOR = 1500;
+
+/**
+ * Copy instructions, under a reply whose run was refused an MCP server or a
+ * site: copies the request for the designer's agent (Job.allow), which they
+ * paste into its chat; their agent edits its settings and asks them to
+ * confirm. Pilot never allows anything itself (security first).
+ */
+function CopyAllow({ text }: { text: string }) {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  useEffect(() => {
+    if (state === "idle") return;
+    const t = setTimeout(() => setState("idle"), COPIED_FOR);
+    return () => clearTimeout(t);
+  }, [state]);
+  return (
+    <button
+      type="button"
+      class="choice"
+      data-secondary
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => {
+        if (!navigator.clipboard) return setState("failed");
+        navigator.clipboard.writeText(text).then(
+          () => setState("copied"),
+          () => setState("failed"),
+        );
+      }}
+    >
+      {state === "copied" ? "Copied" : state === "failed" ? "Couldn't copy" : "Copy instructions"}
+    </button>
+  );
+}
+
 /** Skills the `/` list shows at once, the best matches first (as the `@` list's few per group): typing narrows them. */
 const SKILLS_SHOWN = 6;
 
@@ -714,14 +749,20 @@ export function CommentWidget({
                           ))}
                         </div>
                       ) : null}
-                      {/* The latest reply to a job that may have changed something: adjust it by hand. Not on a question (its answers are there), a props list, or Pilot's "Stopped". */}
-                      {onAdjust && i === count - 1 && m.restyled && !m.choices?.length && !m.propList && !m.early && !m.stopped ? (
-                        <div class="choices">
-                          <button type="button" class="choice" data-secondary onMouseDown={(e) => e.preventDefault()} onClick={onAdjust}>
-                            Edit manually
-                          </button>
-                        </div>
-                      ) : null}
+                      {/* The latest reply to a job that changed the look: adjust it by hand (not on a question, its answers are there, a props list, or Pilot's "Stopped"). And a reply whose run was refused something the designer can allow: the request for their agent, copied, never shown. */}
+                      {(() => {
+                        const adjust = onAdjust && i === count - 1 && m.restyled && !m.choices?.length && !m.propList && !m.early && !m.stopped;
+                        return adjust || m.allow ? (
+                          <div class="choices">
+                            {adjust && (
+                              <button type="button" class="choice" data-secondary onMouseDown={(e) => e.preventDefault()} onClick={onAdjust}>
+                                Edit manually
+                              </button>
+                            )}
+                            {m.allow && <CopyAllow text={m.allow} />}
+                          </div>
+                        ) : null;
+                      })()}
                     </div>
                     {/* The agent's reply to /props, in a box of its own under its words: a row per prop, its value on the page; a pick joins the comment being written. Answered, only the words stay. */}
                     {liveProps(i) && m.propList ? (

@@ -302,6 +302,17 @@ describe("PilotSession", () => {
     expect(reloaded.request(el, "responsive")).toBeNull();
   });
 
+  it("what the run can't do and the designer can allow comes with the reply, for its Copy instructions", async () => {
+    vi.useFakeTimers();
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    const sent = s.comment(el, "Use a book icon").job as { id: string };
+    const allow = "Allow the nucleo-icons MCP server in this project's Claude Code settings (.claude/settings.local.json), so Pilot's runs here can use it.";
+    hub().emit({ type: "job", job: job({ id: sent.id, status: "done", agent, notes: "Used another icon.", allow }) });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(s.threadFor(el)?.messages.at(-1)).toMatchObject({ from: "agent", text: "Used another icon.", allow });
+  });
+
   it("Edit manually: a reply is marked restyled once its job changed the element's look on the page, not otherwise", async () => {
     vi.useFakeTimers();
     const s = session();

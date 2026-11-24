@@ -3,4 +3,4 @@ export { ATTACHMENT_ACCEPT, ATTACHMENT_ID, ATTACHMENT_TYPES, attachmentKind, att
 export { describeStates, describeWidths, editGuidelines, formatPrompt, formatWidthCheck, SHARED_CHOICES, sharedChoiceMeaning } from "./format.ts";
 export type { PromptOptions } from "./format.ts";
 export type { AgentInfo, AgentQuestion, ChangeResult, Job, JobError, JobStatus, OpenPage, FileToken, PageEvent, ProjectComponent, ProjectSkill, WidthCheck, WidthReport } from "./bridge.ts";
-export { BRIDGE_VERSION, DEFAULT_BRIDGE_PORT, isLocalHost, SKILL_NAME, MAX_CHOICES, MAX_PROPS, jobErrorOf, originKey, originOf, projectNameOf, propsOf, questionOf, sameOrigin, sessionOf } from "./bridge.ts";
+export { BRIDGE_VERSION, DEFAULT_BRIDGE_PORT, isLocalHost, SKILL_NAME, MAX_CHOICES, MAX_PROPS, allowOf, jobErrorOf, originKey, originOf, projectNameOf, propsOf, questionOf, sameOrigin, sessionOf } from "./bridge.ts";

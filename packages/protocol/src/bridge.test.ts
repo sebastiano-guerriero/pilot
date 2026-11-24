@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isLocalHost, originKey, originOf, propsOf, questionOf, sameOrigin } from "./bridge.ts";
+import { allowOf, isLocalHost, originKey, originOf, propsOf, questionOf, sameOrigin } from "./bridge.ts";
 
 describe("origins", () => {
   it("takes the origin of a URL, with or without a scheme", () => {
@@ -65,5 +65,14 @@ describe("questionOf", () => {
     expect(questionOf({ text: "Every link?", element: 0 })).toEqual({ text: "Every link?" });
     expect(questionOf({ text: "Every link?", element: "2" })).toEqual({ text: "Every link?" });
     expect(questionOf({ text: "Every link?", element: 1.5 })).toEqual({ text: "Every link?" });
+  });
+});
+
+describe("allowOf", () => {
+  it("one line of plain text, cut; anything else isn't one", () => {
+    expect(allowOf("Allow the x MCP server\n in my settings.")).toBe("Allow the x MCP server in my settings.");
+    expect(allowOf("a".repeat(600))).toHaveLength(500);
+    expect(allowOf(3)).toBeUndefined();
+    expect(allowOf("   ")).toBeUndefined();
   });
 });

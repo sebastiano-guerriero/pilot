@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AgentInfo, ChangeResult, PageEvent, WidthCheck } from "@pilot/protocol";
-import { BRIDGE_VERSION, jobErrorOf, originKey, projectNameOf, propsOf, questionOf, sessionOf } from "@pilot/protocol";
+import { BRIDGE_VERSION, allowOf, jobErrorOf, originKey, projectNameOf, propsOf, questionOf, sessionOf } from "@pilot/protocol";
 import { attachmentsDir, extensionOf, MAX_ATTACHMENT_BYTES, saveAttachment, sweepAttachments, withAttachmentPaths } from "./attachments.ts";
 import { projectComponents } from "./components.ts";
 import { findSkills } from "./skills.ts";
@@ -182,7 +182,7 @@ function events(hub: Hub, origin: string, req: IncomingMessage, res: ServerRespo
 }
 
 async function handleAgent(hub: Hub, action: string, data: unknown, req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const d = data as { agent: AgentInfo; origin?: string; jobId?: string; notes?: string; question?: unknown; props?: unknown; session?: unknown; error?: unknown; timeoutMs?: number };
+  const d = data as { agent: AgentInfo; origin?: string; jobId?: string; notes?: string; question?: unknown; props?: unknown; session?: unknown; error?: unknown; allow?: unknown; timeoutMs?: number };
   if (!d?.agent?.id) return json(res, 400, { error: "agent needed" });
   switch (action) {
     case "register":
@@ -206,7 +206,7 @@ async function handleAgent(hub: Hub, action: string, data: unknown, req: Incomin
     case "done":
       if (!d.jobId) return json(res, 400, { error: "jobId needed" });
       return json(res, 200, {
-        job: hub.done(d.agent.id, d.jobId, d.notes, questionOf(d.question), propsOf(d.props), { session: sessionOf(d.session), error: jobErrorOf(d.error) }),
+        job: hub.done(d.agent.id, d.jobId, d.notes, questionOf(d.question), propsOf(d.props), { session: sessionOf(d.session), error: jobErrorOf(d.error), allow: allowOf(d.allow) }),
       });
     case "activity":
       if (!d.jobId) return json(res, 400, { error: "jobId needed" });
