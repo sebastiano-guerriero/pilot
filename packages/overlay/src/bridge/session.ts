@@ -264,6 +264,20 @@ export class PilotSession {
   }
 
   /**
+   * Discard: the changes not sent yet leave the page (EditHistory.discard,
+   * one undo step), and nothing waits to go after a job anymore: brought
+   * back by undo, they wait for the next Send. Returns how many went.
+   */
+  discard(): number {
+    const count = this.history.discard();
+    if (this.held.size) {
+      this.held.clear();
+      this.saveHeld();
+    }
+    return count;
+  }
+
+  /**
    * Send: the changes not sent yet become a job for the agent. Changes on
    * an element a job is still on (see jobOn) wait instead: they go as a job
    * of their own once it's finished, so two jobs never work on one element

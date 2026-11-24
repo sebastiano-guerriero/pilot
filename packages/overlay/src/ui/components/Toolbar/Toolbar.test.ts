@@ -46,6 +46,22 @@ describe("Toolbar", () => {
     expect(send().hasAttribute("data-ready")).toBe(false);
   });
 
+  it("Discard, right after Send: disabled with nothing unsent; a click discards", () => {
+    let discarded = 0;
+    const discard = () => container.querySelector(".discard") as HTMLButtonElement;
+    draw({ onDiscard: () => discarded++, discardCount: 0 } as Partial<typeof props>);
+    expect(discard().previousElementSibling).toBeNull(); // its own tooltip anchor…
+    expect(discard().closest(".tooltip-anchor")?.previousElementSibling?.querySelector(".send")).not.toBeNull(); // …right after Send's
+    expect(discard().disabled).toBe(true);
+    expect(tip(discard())?.textContent).toBe("Nothing to discard");
+    draw({ onDiscard: () => discarded++, discardCount: 3 } as Partial<typeof props>);
+    expect(discard().disabled).toBe(false);
+    expect(tip(discard())?.textContent).toBe("Discard changes");
+    expect(discard().getAttribute("aria-label")).toBe("Discard changes (3 changes)");
+    act(() => discard().click());
+    expect(discarded).toBe(1);
+  });
+
   it("with something to send, Send lights up", () => {
     draw({ canSend: true });
     expect(send().disabled).toBe(false);

@@ -847,6 +847,8 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
         canSend={sendCount > 0}
         sendCount={sendCount}
         onSend={sendChanges}
+        discardCount={session?.unsent ?? history.changes({ unsent: true }).length}
+        onDiscard={() => (session ? session.discard() : history.discard())}
         pending={running}
         alerts={toolbarAlerts}
         onNextJob={nextJob}

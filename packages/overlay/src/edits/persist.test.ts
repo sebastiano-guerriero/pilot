@@ -88,3 +88,31 @@ describe("Clear", () => {
   });
 });
 
+
+describe("Discard", () => {
+  it("takes the unsent changes off the page as one undo step; the sent ones stay, and so through a reload", () => {
+    const history = new EditHistory(inlinePreview());
+    history.apply(card, "padding-top", "24px");
+    history.send("job-1");
+    history.apply(card, "gap", "8px");
+    history.apply(card, "padding-top", "32px");
+    expect(history.discard()).toBe(2);
+    expect(card.style.paddingTop).toBe("24px"); // the sent value, back in effect
+    expect(card.style.gap).toBe("");
+    expect(history.changes().map((c) => [c.property, c.job])).toEqual([["padding-top", "job-1"]]);
+    expect(history.discard()).toBe(0); // nothing left to discard: no step
+
+    const restored = new EditHistory(inlinePreview());
+    restored.load(history.serialize(), resolveTarget);
+    expect(restored.changes().map((c) => [c.property, c.value, c.job])).toEqual([["padding-top", "24px", "job-1"]]);
+    // The job lands: its change leaves the history, there too.
+    restored.settle("job-1");
+    expect(restored.changes()).toEqual([]);
+    // Undo brings the discarded ones back, unsent.
+    expect(restored.undo()).toBe(true);
+    expect(restored.changes({ unsent: true }).map((c) => [c.property, c.value])).toEqual([
+      ["gap", "8px"],
+      ["padding-top", "32px"],
+    ]);
+  });
+});

@@ -32,6 +32,10 @@ interface ToolbarProps {
   sendCount?: number;
   /** Send; resolves to whether it worked, or to what the tooltip says instead of "Sent" ("Queued"). */
   onSend(): Promise<boolean | string> | boolean | string | void;
+  /** How many changes Discard would take off the page (the unsent ones): dimmed and disabled at 0. */
+  discardCount?: number;
+  /** Discard the changes not sent yet (one undo step). */
+  onDiscard?(): void;
   /** Jobs not finished yet (waiting, an agent applying, checking): the jobs button shows while there are any. */
   pending: number;
   /** The jobs button: scroll to the next job's elements (see App's nextJob). */
@@ -52,7 +56,7 @@ interface ToolbarProps {
 }
 
 /**
- * The only UI visible while Pilot runs: select, Send, the jobs in progress
+ * The only UI visible while Pilot runs: select, Send, Discard, the jobs in progress
  * (only while there are some, with how many in a pill), a divider, quit.
  * Comment is divided from Select and Send too.
  * Send shows how many changes it would send in a pill (like the comments
@@ -80,6 +84,8 @@ export function Toolbar({
   canSend,
   sendCount = 0,
   onSend,
+  discardCount = 0,
+  onDiscard,
   pending,
   onNextJob,
   onQuit,
@@ -247,6 +253,20 @@ export function Toolbar({
           )}
         </button>
       </Tooltip>
+      {/* Discard, right after Send: the changes Send would send (and those waiting for a job), off the page. Undo brings them back. */}
+      {onDiscard && (
+        <Tooltip text={discardCount ? "Discard changes" : "Nothing to discard"} gap={TIP_GAP}>
+          <button
+            type="button"
+            class="button discard"
+            aria-label={discardCount ? `Discard changes (${discardCount} ${discardCount === 1 ? "change" : "changes"})` : "Nothing to discard"}
+            disabled={!discardCount}
+            onClick={onDiscard}
+          >
+            <Icon name="brush" />
+          </button>
+        </Tooltip>
+      )}
       {jobs && (
         <span class="jobs-slot" data-leaving={jobs.leaving || undefined}>
           <Tooltip text={`${jobs.count} ${jobs.count === 1 ? "job" : "jobs"} running`} gap={TIP_GAP}>

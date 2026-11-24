@@ -222,6 +222,29 @@ describe("PilotSession", () => {
     expect(reloaded.unsent).toBe(2);
   });
 
+  it("Discard: the unsent changes leave the page, the job's stay, and nothing waits to go after it", async () => {
+    vi.useFakeTimers();
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    history.apply(el, "padding-top", "20px");
+    const first = s.send() as { id: string };
+    history.apply(el, "margin-top", "8px");
+    expect(s.send()).toBeNull();
+    expect(s.heldCount).toBe(1);
+    expect(s.discard()).toBe(1);
+    expect(s.unsent).toBe(0);
+    expect(s.heldCount).toBe(0);
+    expect(history.changes().map((c) => c.property)).toEqual(["padding-top"]);
+    // Brought back by undo, it waits for the next Send: the job finishing doesn't send it.
+    history.undo();
+    const before = posts.length;
+    sheet.textContent = ".card { padding-top: 20px; }";
+    hub().emit({ type: "job", job: job({ id: first.id, status: "done", agent }) });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(posts.slice(before).filter((p) => p.url === "http://hub/jobs")).toHaveLength(0);
+    expect(s.unsent).toBe(1);
+  });
+
   it("Make responsive: a job of its own for the element, apart from the changes, with a baseline at the designer's width", async () => {
     vi.useFakeTimers();
     widths.snapshots = 0;

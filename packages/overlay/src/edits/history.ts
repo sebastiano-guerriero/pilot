@@ -71,15 +71,19 @@ interface Step {
   /** Continuous-interaction token: changes sharing it are one undo step. */
   gesture?: object;
   entries: Entry[];
-  /** A Clear: every change before it stops being in effect (undoing it brings them back). */
+  /**
+   * A Clear: every change before it stops being in effect (undoing it brings
+   * them back), but the step's own `entries`: a Discard keeps the sent
+   * changes that way (the same entries, in effect again after it).
+   */
   clears?: boolean;
 }
 
 /** A change as saved (no element: it's found again from `target` on load). */
 export type SavedEntry = Omit<Entry, "element">;
 
-/** A step as saved: its changes, or a Clear. */
-export type SavedStep = SavedEntry[] | { clears: true };
+/** A step as saved: its changes, or a Clear (a Discard's with the changes it keeps). */
+export type SavedStep = SavedEntry[] | { clears: true; entries?: SavedEntry[] };
 
 /** The history as saved, to survive reloads (see edits/persist.ts). */
 export interface SavedHistory {
@@ -123,7 +127,10 @@ export class EditHistory {
   /** The history as plain data, to save (steps keep their order; gestures are dropped). */
   serialize(): SavedHistory {
     const save = (steps: Step[]): SavedStep[] =>
-      steps.map((s) => (s.clears ? { clears: true } : s.entries.map(({ element: _, ...rest }) => rest)));
+      steps.map((s) => {
+        const entries = s.entries.map(({ element: _, ...rest }) => rest);
+        return s.clears ? { clears: true, ...(entries.length && { entries }) } : entries;
+      });
     return { version: 1, done: save(this.done), undone: save(this.undone) };
   }
 
@@ -143,7 +150,9 @@ export class EditHistory {
     };
     const steps = (list: SavedStep[]): Step[] =>
       list.map((step) =>
-        Array.isArray(step) ? { entries: step.map((e) => ({ ...e, element: element(e) })) } : { entries: [], clears: true },
+        Array.isArray(step)
+          ? { entries: step.map((e) => ({ ...e, element: element(e) })) }
+          : { entries: (step.entries ?? []).map((e) => ({ ...e, element: element(e) })), clears: true },
       );
     this.done = steps(saved.done ?? []);
     this.undone = steps(saved.undone ?? []);
@@ -347,6 +356,26 @@ export class EditHistory {
     this.render();
   }
 
+  /**
+   * Discard: the changes not sent yet stop being in effect, so the page
+   * shows its own CSS for them again; the sent ones (a job on them) stay. One
+   * undo step: undo brings the discarded ones back. Returns how many went
+   * (as `changes({ unsent: true })` counts them); nothing to discard, no step.
+   */
+  discard(): number {
+    const rules = this.rules();
+    if (rules.every((r) => r.job)) return 0;
+    const count = rules.filter((r) => !r.job && r.value !== "").length;
+    // In effect as if the unsent changes had never been made: a sent value
+    // an unsent one replaced is back. The same entries, so a job's settle,
+    // unsend and send reach them here as before it.
+    const kept = this.rules((e) => !!e.job);
+    this.done.push({ entries: kept, clears: true });
+    this.undone = [];
+    this.render();
+    return count;
+  }
+
   /** Revert the latest step. Returns false when there's nothing to undo. */
   undo(): boolean {
     const step = this.done.pop();
@@ -373,12 +402,14 @@ export class EditHistory {
    * rule of Pilot's still sets the property (a shorthand, or the same
    * property for other widths). Then it stays, and the preview writes
    * `revert-layer` for it: the page's own value, as if Pilot didn't set it.
+   * `only`: as if the other entries had never been made.
    */
-  private rules(): Entry[] {
+  private rules(only: (entry: Entry) => boolean = () => true): Entry[] {
     const out: Entry[] = [];
     for (const { entries, clears } of this.done) {
       if (clears) out.length = 0;
       for (const entry of entries) {
+        if (!only(entry)) continue;
         const covered = longhandsOf(entry.property);
         for (let i = out.length - 1; i >= 0; i--) {
           const prior = out[i] as Entry;
