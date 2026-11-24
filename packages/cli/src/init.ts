@@ -212,7 +212,21 @@ export function packageManager(cwd: string, root: string): "npm" | "pnpm" | "yar
 }
 
 export interface Framework {
-  kind: "next-app" | "next-pages" | "nuxt" | "sveltekit" | "astro" | "react-router" | "vite" | "vite-html" | "webpack" | "unknown";
+  kind:
+    | "next-app"
+    | "next-pages"
+    | "nuxt"
+    | "sveltekit"
+    | "astro"
+    | "react-router"
+    | "angular"
+    | "gatsby"
+    | "vite"
+    | "vite-html"
+    | "rsbuild"
+    | "parcel"
+    | "webpack"
+    | "unknown";
   /** The file Pilot is loaded from, when one can be told (relative paths are resolved from the app's folder). */
   file?: string;
   /** The file that already loads Pilot, if any. */
@@ -241,6 +255,10 @@ export function detectFramework(cwd: string, deps: Record<string, string>): Fram
   if (has("@sveltejs/kit")) return result("sveltekit", first("src/hooks.client.ts", "src/hooks.client.js"));
   if (has("astro")) return result("astro");
   if (has("@react-router/dev") || has("@remix-run/react")) return result("react-router", first("app/root.tsx", "app/root.jsx"));
+  // Before Vite: Angular's builder runs on Vite and esbuild, without listing them.
+  if (has("@angular/core")) return result("angular", first("src/main.ts"));
+  // Before webpack: Gatsby builds with it without listing it.
+  if (has("gatsby")) return result("gatsby", first(...GATSBY_BROWSER));
   if (has("vite") || Object.keys(deps).some((d) => d.startsWith("@vitejs/"))) {
     const entry = viteEntry(cwd);
     if (entry) return result("vite", entry);
@@ -255,13 +273,42 @@ export function detectFramework(cwd: string, deps: Record<string, string>): Fram
     }
     return result("vite");
   }
-  if (has("react-scripts") || has("webpack")) {
+  if (has("@rsbuild/core")) return result("rsbuild", first(...JS_ENTRIES));
+  if (has("parcel")) return result("parcel", parcelEntry(cwd));
+  // Webpack, and the tools built on it or on its API (Create React App, Vue CLI, Rspack): `process.env.NODE_ENV` is replaced at build time.
+  if (has("react-scripts") || has("webpack") || has("@vue/cli-service") || has("@rspack/core") || has("@rspack/cli")) {
     return result(
       "webpack",
       first("src/index.tsx", "src/index.ts", "src/index.jsx", "src/index.js", "src/main.tsx", "src/main.ts", "src/main.js"),
     );
   }
   return { kind: "unknown", loads };
+}
+
+/** Gatsby's browser hooks file, at the app's root: where code that runs in the browser goes. */
+const GATSBY_BROWSER = ["gatsby-browser.tsx", "gatsby-browser.ts", "gatsby-browser.jsx", "gatsby-browser.js"];
+/** The usual names of an app's entry module. */
+const JS_ENTRIES = ["src/index.tsx", "src/index.ts", "src/index.jsx", "src/index.js", "src/main.tsx", "src/main.ts", "src/main.jsx", "src/main.js"];
+
+/**
+ * A Parcel app's entry: the script its HTML page loads (the page is the
+ * package.json's `source`, or `index.html`), else the usual names. Parcel
+ * bundles classic scripts too, so any `<script src>` counts.
+ */
+function parcelEntry(cwd: string): string | undefined {
+  const source = readJson<{ source?: unknown }>(join(cwd, "package.json"))?.source;
+  const page = [...(typeof source === "string" ? [source] : Array.isArray(source) ? source.filter((s): s is string => typeof s === "string") : []), "index.html", "src/index.html"]
+    .map((f) => join(cwd, f))
+    .find((f) => f.endsWith(".html") && existsSync(f));
+  if (page) {
+    for (const tag of readFileSync(page, "utf8").match(/<script\b[^>]*>/gi) ?? []) {
+      const src = /src=["']([^"'?#]+)/i.exec(tag)?.[1];
+      const file = src && !/^[a-z]+:|^\/\//i.test(src) ? join(src.startsWith("/") ? cwd : dirname(page), src) : undefined;
+      if (file && existsSync(file)) return file;
+    }
+  }
+  if (typeof source === "string" && /\.[mc]?[jt]sx?$/.test(source) && existsSync(join(cwd, source))) return join(cwd, source);
+  return JS_ENTRIES.map((f) => join(cwd, f)).find((f) => existsSync(f));
 }
 
 /** A Vite app's entry: the module script in its index.html, or the usual names. */
@@ -308,8 +355,8 @@ function findLoader(cwd: string): string | undefined {
     }
     return undefined;
   };
-  // index.html, and the Vite config (where a page with no module of its own gets Pilot).
-  for (const name of ["index.html", "vite.config.ts", "vite.config.mts", "vite.config.js", "vite.config.mjs"]) {
+  // index.html, the Vite config (where a page with no module of its own gets Pilot), and Gatsby's browser hooks.
+  for (const name of ["index.html", "vite.config.ts", "vite.config.mts", "vite.config.js", "vite.config.mjs", ...GATSBY_BROWSER]) {
     const file = join(cwd, name);
     if (existsSync(file) && /usepilot/.test(readText(file))) return file;
   }
@@ -408,8 +455,23 @@ export function Pilot() {
   if (import.meta.env.DEV) import("usepilot/auto");
 }, []);`,
       )}`;
+    case "angular":
+      // Not isDevMode(): it's decided in the browser, so a production build still carries Pilot's files (checked with
+      // Angular 22). Angular's build sets ngDevMode to false for production, and the bundler drops the import.
+      return `${intro} It's Angular: in ${at(framework.file, "the file that bootstraps the app (`src/main.ts`)")}, after the bootstrap, add:${code("ts", 'if (typeof ngDevMode === "undefined" || ngDevMode) import("usepilot/auto");')}\n\n   Use \`ngDevMode\`, not \`isDevMode()\`: Angular's production build sets \`ngDevMode\` to false and drops Pilot from the bundle, while \`isDevMode()\` is decided in the browser and leaves Pilot's files in the build.`;
+    case "gatsby":
+      return `${intro} It's Gatsby: in ${at(framework.file, "`gatsby-browser.js` at the app's root (create it if there's none)")}, in its \`onClientEntry\` (add the export if there's none, keep the others):${code(
+        "js",
+        `export const onClientEntry = () => {
+  if (process.env.NODE_ENV === "development") import("usepilot/auto");
+};`,
+      )}`;
+    case "rsbuild":
+      return `${intro} It's Rsbuild: in its entry module, ${at(framework.file, "the one `source.entry` in its config names (`src/index` by default)")}, add:${code("ts", 'if (import.meta.env.DEV) import("usepilot/auto");')}`;
+    case "parcel":
+      return `${intro} It's Parcel: in the script its HTML page loads, ${at(framework.file, "the `<script src>` of the page Parcel builds")}, add:${code("js", 'if (process.env.NODE_ENV === "development") import("usepilot/auto");')}`;
     case "webpack":
-      return `${intro} In the app's entry file, ${at(framework.file, "the one its bundler config starts from")}, add:${code("js", 'if (process.env.NODE_ENV === "development") import("usepilot/auto");')}`;
+      return `${intro} It's webpack, or a tool built on it (Create React App, Vue CLI, Rspack): in the app's entry file, ${at(framework.file, "the one its bundler config starts from")}, add:${code("js", 'if (process.env.NODE_ENV === "development") import("usepilot/auto");')}`;
     default:
       return `${intro} With no bundler Pilot knows (a server-rendered site: PHP, Rails, Django, plain HTML), add it to the layout every page shares (Pilot works on every page), as one tag pointing at Pilot's file where the dev server serves it: \`<script type="module" src="…/node_modules/usepilot/dist/pilot-auto.js"></script>\`. **It must never be output on a server, whatever a request says.** Print it only when both hold: Pilot's own file is on disk (\`node_modules/usepilot/dist/pilot-auto.js\`: a dev dependency, never on a server, as long as the deploy leaves \`node_modules\` out or installs without dev dependencies: check the project's deploy rules, and ask the user if you can't tell), and the project's own development setting says so (an environment variable like \`APP_ENV=local\`, or the local config file that isn't deployed; ask the user if there's none). Never decide from the request (the Host header, the client's IP): a proxy or a client can make them say anything. For example, in PHP:${code(
         "php",

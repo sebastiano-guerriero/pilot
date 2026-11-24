@@ -18,6 +18,8 @@
   "bin": {
     "usepilot": "./cli/index.js"
   },
+  "main": "./dist/pilot.js",
+  "types": "./types/index.d.ts",
   "exports": {
     ".": {
       "types": "./types/index.d.ts",

@@ -237,5 +237,48 @@ describe("usepilot init", () => {
     expect(detectFramework(dir, { "@react-router/dev": "7", vite: "7" }).kind).toBe("react-router");
     expect(detectFramework(dir, { "react-scripts": "5" }).kind).toBe("webpack");
     expect(detectFramework(dir, { express: "5" }).kind).toBe("unknown");
+    // Tools built on webpack or its API, which don't list webpack.
+    expect(detectFramework(dir, { "@vue/cli-service": "5" }).kind).toBe("webpack");
+    expect(detectFramework(dir, { "@rspack/cli": "1", "@rspack/core": "1" }).kind).toBe("webpack");
+    expect(detectFramework(dir, { "@rsbuild/core": "1" }).kind).toBe("rsbuild");
+    expect(detectFramework(dir, { parcel: "2" }).kind).toBe("parcel");
+    // Gatsby before webpack, Angular before Vite (its builder uses Vite and esbuild).
+    expect(detectFramework(dir, { gatsby: "5", webpack: "5" }).kind).toBe("gatsby");
+    expect(detectFramework(dir, { "@angular/core": "22", vite: "7" }).kind).toBe("angular");
+  });
+
+  it("Angular: ngDevMode, not isDevMode() (a production build would keep Pilot's files)", async () => {
+    await files({ "package.json": { name: "shop", dependencies: { "@angular/core": "^22" } }, "src/main.ts": "" });
+    const out = await init({ detect: none, env: {}, home, cwd: dir, install: false });
+    expect(out).toContain("It's Angular: in `src/main.ts`");
+    expect(out).toContain('if (typeof ngDevMode === "undefined" || ngDevMode) import("usepilot").then((p) => p.mountPilot({ project: "shop" }))');
+    expect(out).toContain("not `isDevMode()`");
+  });
+
+  it("Gatsby: onClientEntry in gatsby-browser, and a loader there counts as loading Pilot", async () => {
+    await files({ "package.json": { name: "blog", dependencies: { gatsby: "^5" } } });
+    const fresh = await init({ detect: none, env: {}, home, cwd: dir, install: false });
+    expect(fresh).toContain("It's Gatsby: in `gatsby-browser.js` at the app's root (create it if there's none)");
+    expect(fresh).toContain('if (process.env.NODE_ENV === "development") import("usepilot").then((p) => p.mountPilot({ project: "blog" }));');
+    await files({ "gatsby-browser.js": 'export const onClientEntry = () => { if (process.env.NODE_ENV === "development") import("usepilot").then((p) => p.mountPilot({ project: "blog" })); };' });
+    expect(await init({ detect: none, env: {}, home, cwd: dir, install: false })).not.toContain("It's Gatsby");
+  });
+
+  it("Parcel: the script its page loads; Rsbuild: its entry, with import.meta.env.DEV", async () => {
+    await files({
+      "package.json": { name: "site", source: "src/index.html", devDependencies: { parcel: "^2" } },
+      "src/index.html": '<html><body><script src="./app.js"></script></body></html>',
+      "src/app.js": "",
+    });
+    const parcel = await init({ detect: none, env: {}, home, cwd: dir, install: false });
+    expect(parcel).toContain("It's Parcel: in the script its HTML page loads, `src/app.js`");
+    expect(parcel).toContain('if (process.env.NODE_ENV === "development") import("usepilot")');
+
+    const rsbuild = await mkdtemp(join(tmpdir(), "pilot-init-"));
+    await files({ "package.json": { name: "app", devDependencies: { "@rsbuild/core": "^1" } }, "src/index.tsx": "" }, rsbuild);
+    const out = await init({ detect: none, env: {}, home, cwd: rsbuild, install: false });
+    expect(out).toContain("It's Rsbuild: in its entry module, `src/index.tsx`");
+    expect(out).toContain('if (import.meta.env.DEV) import("usepilot")');
+    await rm(rsbuild, { recursive: true, force: true });
   });
 });

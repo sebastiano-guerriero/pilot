@@ -168,6 +168,7 @@ Items marked *(chat loop)* were for an agent's chat running Pilot over MCP, up t
 - [x] The name: `usepilot` on npm (package and organization), `usepilot.design` for the site
 - [x] `usepilot` published, installable in Vite and Next.js apps, with the CLI
 - [x] `npx usepilot init`: one prompt for any agent; installs Pilot, checks the agent's command-line tool, removes the old chat setup, and tells the agent where to load Pilot (until agent runs: registered the MCP server and the skill per agent)
+- [x] `init` knows Angular, Gatsby, Rsbuild, Parcel, Vue CLI and Rspack too, each with a development check its build removes (checked by building samples); `usepilot` has a `main`, for Parcel ([handoff.md](handoff.md), *Installing*)
 - [x] `npx usepilot update`: the latest package, the old chat setup removed, and what to restart
 - [x] `npx usepilot`: Pilot for the project, running the agent for each job (Claude Code, Codex, Cursor)
 
