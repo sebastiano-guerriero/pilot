@@ -621,9 +621,9 @@ describe("PilotSession", () => {
     const question = { text: "Every card, or only this one?", choices: ["All of them", "Only this one"] };
     hub().emit({ type: "job", job: job({ id: sent.id, status: "done", agent, question }) });
     await vi.advanceTimersByTimeAsync(2_000);
-    // Not checked: the change is still previewed, and the job still on the element.
+    // Not checked: the change is still previewed. Nothing waits for it there: no agent is on it (see the next test).
     expect(s.jobs.find((j) => j.id === sent.id)?.checked).toBeFalsy();
-    expect(s.jobOn(el)?.id).toBe(sent.id);
+    expect(s.jobOn(el)).toBeNull();
     const thread = s.threadFor(el) as NonNullable<ReturnType<typeof s.threadFor>>;
     expect(thread.messages).toMatchObject([{ from: "agent", text: question.text, asks: sent.id, choices: question.choices }]);
     expect(s.attention.map((t) => t.id)).toEqual([thread.id]);
@@ -648,6 +648,62 @@ describe("PilotSession", () => {
       ["designer", "All of them"],
       ["agent", "Card padding is 20px now."],
     ]);
+  });
+
+  it("a job waiting for an answer holds nothing: a comment with edits there goes at once, and the answer waits for it", async () => {
+    vi.useFakeTimers();
+    const badge = document.createElement("span");
+    badge.className = "badge";
+    document.body.append(badge);
+    let s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    // Sent: the grid's padding, and the badge's outline, which the agent asks about.
+    history.apply(el, "padding-top", "20px");
+    history.apply(badge, "outline-color", "red");
+    const first = s.send() as { id: string };
+    sheet.textContent = ".card { padding-top: 20px; }";
+    const question = { text: "Every **Badge**, or only this one?", choices: ["Only this", "All of them"], element: 2 };
+    hub().emit({ type: "job", job: job({ id: first.id, status: "done", agent, question }) });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(s.jobOn(el)).toBeNull();
+    expect(s.jobOn(badge)).toBeNull();
+    // After a reload too: still asking, not checked (which would send a follow-up for the badge, the question skipped).
+    s.destroy();
+    s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(s.jobs.find((j) => j.id === first.id)).toMatchObject({ status: "done" });
+    expect(s.jobs.find((j) => j.id === first.id)?.attempt ?? 1).toBe(1);
+    expect(posts.some((p) => p.url.includes("/retry"))).toBe(false);
+    expect(s.jobOn(el)).toBeNull();
+    // On the grid: an edit, and a comment that takes it. They go at once, as one job.
+    history.apply(el, "margin-top", "8px");
+    const commented = s.comment(el, "Add another card", [], undefined, [], [], true);
+    expect(commented.waiting).toBe(false);
+    const posted = posts.at(-1)?.body as { id: string; changeSet: { request: { kind: string }; edits: Array<{ changes: Array<{ property: string }> }> } };
+    expect(posted.changeSet.request.kind).toBe("comment");
+    expect(posted.changeSet.edits.flatMap((e) => e.changes.map((c) => c.property))).toEqual(["margin-top"]);
+    // What the first job landed on the grid settled then; the badge's outline is still its, for after the answer.
+    expect(history.changes({ job: first.id }).map((c) => c.property)).toEqual(["outline-color"]);
+    expect(s.jobOn(el)?.id).toBe(posted.id);
+    // The answer, while the comment's job is on the grid: it waits.
+    const thread = s.threadFor(badge) as NonNullable<ReturnType<typeof s.threadFor>>;
+    const before = posts.length;
+    s.comment(badge, "Only this");
+    expect(posts.length).toBe(before);
+    expect(s.jobs.find((j) => j.id === first.id)).toMatchObject({ status: "queued", answer: "Only this", answerWaits: true });
+    expect(s.openQuestion(thread)).toBeNull();
+    // The hub's copy (still asking, after a reconnect) changes nothing; nor is it posted again.
+    hub().emit({ type: "job", job: job({ id: first.id, status: "done", agent, question }) });
+    expect(s.jobs.find((j) => j.id === first.id)?.status).toBe("queued");
+    // The comment's job is done and checked: the answer goes.
+    sheet.textContent = ".card { padding-top: 20px; margin-top: 8px; }";
+    hub().emit({ type: "job", job: job({ id: posted.id, status: "done", agent, notes: "Added a card." }) });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(posts.at(-1)).toEqual({ url: `http://hub/jobs/${first.id}/answer`, body: { answer: "Only this" } });
+    expect(s.jobs.find((j) => j.id === first.id)?.answerWaits).toBeUndefined();
+    expect(s.jobOn(badge)?.id).toBe(first.id);
+    badge.remove();
   });
 
   it("a job on several elements: the question goes on the one it names, not the first", async () => {

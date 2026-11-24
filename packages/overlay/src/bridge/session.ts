@@ -7,7 +7,7 @@ import { describeElement, findTarget, structuralSelector, uniqueSelector } from 
 import { buildChangeSet, buildRequest } from "../edits/changeSet.ts";
 import type { EditHistory, RecordedChange } from "../edits/history.ts";
 import { changedLook, type Look, looksOf } from "../edits/look.ts";
-import { watchJob } from "../edits/verify.ts";
+import { settleLanded, watchJob } from "../edits/verify.ts";
 import { BridgeClient, type BridgeState } from "./client.ts";
 
 /**
@@ -35,6 +35,8 @@ export interface JobRecord {
   question?: AgentQuestion;
   /** The designer's answer: the job went back to the agent with it. */
   answer?: string;
+  /** Answered while another job was on its elements: the answer goes once that one is finished (see answer). */
+  answerWaits?: boolean;
   /** The agent's notes, when done. */
   notes?: string;
   createdAt: string;
@@ -241,6 +243,8 @@ export class PilotSession {
     for (const job of [...this.jobs]) {
       // Finished before the reload: nothing left to show.
       if (job.checked || job.status === "cancelled") this.dismiss(job.id);
+      // Its question still waits for the designer: still asked, not checked (see ask).
+      else if (awaitsAnswer(job)) this.ask(job);
       // Done before the reload, checking interrupted: check again (a run that failed has nothing to check).
       else if (job.status === "done" && !job.error) this.verify(job);
     }
@@ -333,6 +337,12 @@ export class PilotSession {
    */
   private release(): void {
     if (!this.canSendToAgent) return;
+    // Answers first: the job they send back holds its elements again, so what else waited there waits for it.
+    for (const job of this.jobs) {
+      if (!job.answerWaits || this.heldByOther(job)) continue;
+      this.patch(job.id, { answerWaits: undefined });
+      this.sendAnswer(job, job.answer ?? "");
+    }
     for (const thread of this.threads) {
       if (!thread.messages.some((m) => m.waiting)) continue;
       const element = this.threadElement(thread);
@@ -359,19 +369,20 @@ export class PilotSession {
   /**
    * The job that isn't finished yet (waiting, an agent on it, being
    * checked, or its follow-up) on `element`, if any: a task about it, a
-   * comment on it, or an edits job that changes it. While there's one, the
+   * comment on it, or an edits job that changes it; not one waiting for the
+   * designer's answer (see holds). While there's one, the
    * selection's actions give way to its status, and changes sent for the
    * element wait for it (see send).
    */
   jobOn(element: Element): JobRecord | null {
-    return this.jobs.find((job) => unfinished(job) && this.elementsOf(job).includes(element)) ?? null;
+    return this.jobs.find((job) => holds(job) && this.elementsOf(job).includes(element)) ?? null;
   }
 
   /** The elements unfinished jobs are on, each with the job (the earliest, when several are). */
   get busy(): Array<{ element: Element; job: JobRecord }> {
     const found = new Map<Element, JobRecord>();
     for (const job of this.jobs) {
-      if (!unfinished(job)) continue;
+      if (!holds(job)) continue;
       for (const element of this.elementsOf(job)) if (!found.has(element)) found.set(element, job);
     }
     return [...found].map(([element, job]) => ({ element, job }));
@@ -755,6 +766,11 @@ export class PilotSession {
   private post(id: string, changeSet: ChangeSet): JobRecord {
     // Sending again: the runs that failed are said no more (their changes are unsent again already).
     for (const failed of this.jobs.filter((j) => j.error)) this.dismiss(failed.id);
+    // A job waiting for the designer's answer on these elements: what it landed settles now (see settleLanded).
+    const elements = this.jobElements.get(id) ?? [];
+    for (const asking of this.jobs.filter(awaitsAnswer)) {
+      if (this.elementsOf(asking).some((e) => elements.includes(e))) settleLanded(this.history, asking.id);
+    }
     const job: JobRecord = { id, changeSet, status: "queued", createdAt: new Date().toISOString() };
     // A thread's job (a comment, a task): how its elements look now, for its reply (see watchLook).
     if (changeSet.request) job.look = looksOf(this.history, requestTargets(changeSet.request).map((t) => findTarget(t)));
@@ -811,7 +827,8 @@ export class PilotSession {
   /** A job update from the hub. Jobs of other tabs on the same page are ignored. */
   private update(job: Job): void {
     const mine = this.jobs.find((j) => j.id === job.id);
-    if (!mine || mine.status === "cancelled") return;
+    // An answer that waits: the hub still has the job as asking, which the page is past.
+    if (!mine || mine.status === "cancelled" || mine.answerWaits) return;
     // A stale update (after a takeover, or from before the follow-up).
     if ((job.attempt ?? 1) < (mine.attempt ?? 1)) return;
     // (Back from done is the follow-up, a new attempt, or an answer to the agent's question.)
@@ -895,7 +912,19 @@ export class PilotSession {
 
   /** The designer answered a job's question: back to the agent with it (posted again when the hub doesn't have it, a new hub). */
   private answer(job: JobRecord, answer: string): void {
-    this.patch(job.id, { status: "queued", answer, notes: undefined });
+    // Another job went on its elements while it waited for the answer (see holds): the answer waits for it, as comments do.
+    const waits = this.heldByOther(job);
+    this.patch(job.id, { status: "queued", answer, notes: undefined, ...(waits ? { answerWaits: true } : {}) });
+    if (!waits) this.sendAnswer(job, answer);
+  }
+
+  /** Whether a job other than `job` holds any of its elements (see holds). */
+  private heldByOther(job: JobRecord): boolean {
+    const elements = this.elementsOf(job);
+    return this.jobs.some((j) => j.id !== job.id && holds(j) && this.elementsOf(j).some((e) => elements.includes(e)));
+  }
+
+  private sendAnswer(job: JobRecord, answer: string): void {
     void this.bridge?.answer(job.id, answer).then((ok) => {
       if (!ok) {
         const { changeSet, agent, attempt, question, session } = job;
@@ -925,6 +954,8 @@ export class PilotSession {
   /** Connected (again): post the jobs the hub may not know (a new hub after a takeover). */
   private repost(): void {
     for (const job of this.jobs) {
+      // An answer that waits isn't the hub's yet (see answer): it goes once the other job is finished.
+      if (job.answerWaits) continue;
       if (job.status === "queued" || job.status === "working") {
         void this.bridge?.postJob({
           id: job.id,
@@ -1219,6 +1250,17 @@ export function awaitsAnswer(job: Pick<JobRecord, "status" | "question" | "answe
 /** Not finished yet: waiting, an agent on it, being checked, or its follow-up (a run that failed is over: its changes are unsent again). */
 function unfinished(job: JobRecord): boolean {
   return job.status !== "cancelled" && !job.checked && !job.error;
+}
+
+/**
+ * Whether a job holds its elements: what's sent for them waits for it (see
+ * jobOn). Every unfinished job, but one waiting for the designer's answer:
+ * no agent is on it, and the designer may answer much later, so their next
+ * comment or Send on those elements goes at once (the answer then waits for
+ * it instead, see answer). Before, it waited, said only as "Queued".
+ */
+function holds(job: JobRecord): boolean {
+  return unfinished(job) && !awaitsAnswer(job);
 }
 
 /** The elements held before a reload (see PilotSession.held), found again by selector. */

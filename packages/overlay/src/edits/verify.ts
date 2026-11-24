@@ -236,3 +236,15 @@ export function isPageMutation(r: Pick<MutationRecord, "type" | "target" | "adde
 function same(a: RecordedChange, b: RecordedChange): boolean {
   return a.element === b.element && a.property === b.property && a.widths?.min === b.widths?.min && a.widths?.max === b.widths?.max;
 }
+
+/**
+ * A job waiting for the designer's answer, when another job goes on its
+ * elements: what it already landed leaves the history now (as a check
+ * would), so the other job's code can't later show as a difference on it
+ * and get a follow-up undoing it. The rest (what the question is about,
+ * what can't be checked now) stays the job's, for after the answer.
+ */
+export function settleLanded(history: EditHistory, jobId: string): void {
+  const { landed } = checkJob(history, jobId);
+  if (landed.length) history.settle(jobId, (c) => !landed.some((l) => same(l, c)));
+}
