@@ -525,7 +525,7 @@ export function PropertyDialog({
  * a value for (editorsWithValues). True lists every editor, with a value or
  * not, side by side: handy while many editors are added and designed together.
  */
-export const LIST_ALL_EDITORS = true;
+export const LIST_ALL_EDITORS = false;
 
 const NO_STATES: ElementState[] = [];
 
