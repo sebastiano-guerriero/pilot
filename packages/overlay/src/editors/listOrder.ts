@@ -75,7 +75,18 @@ export const LIST_ORDER: ReadonlyArray<{ group: string; entries: readonly ListEn
   {
     // What's applied on top of how it looks.
     group: "Effects",
-    entries: ["box-shadow", "mix-blend-mode", "background-blend-mode", "filter", "backdrop-filter"],
+    entries: [
+      "box-shadow",
+      // the outline, as its longhands in the shorthand's order (width, style, color), then its offset: drawn over the box, like a shadow
+      "outline-width",
+      "outline-style",
+      "outline-color",
+      "outline-offset",
+      "mix-blend-mode",
+      "background-blend-mode",
+      "filter",
+      "backdrop-filter",
+    ],
   },
   {
     group: "Typography",

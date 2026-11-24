@@ -236,6 +236,9 @@ export const TEXT_TRANSFORM_VALUES = ["uppercase", "lowercase", "capitalize", "n
 /** text-decoration-style's options, in menu order. */
 export const TEXT_DECORATION_STYLE_VALUES = ["solid", "double", "dotted", "dashed", "wavy"] as const;
 
+/** outline-style's options, in menu order (none last). */
+export const OUTLINE_STYLE_VALUES = ["solid", "dashed", "dotted", "double", "none"] as const;
+
 /** text-wrap's options, in menu order. */
 export const TEXT_WRAP_VALUES = ["wrap", "nowrap", "balance", "pretty"] as const;
 
@@ -404,6 +407,11 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   "text-decoration-color": { initial: "currentcolor", keywords: ["currentcolor", "transparent"], negative: false },
   "text-decoration-style": { initial: "solid", keywords: [...TEXT_DECORATION_STYLE_VALUES], negative: false },
   "text-decoration-thickness": { initial: "auto", keywords: ["auto", "from-font"], negative: false },
+  // Edited by the color editor, not as a length.
+  "outline-color": { initial: "currentcolor", keywords: ["currentcolor", "transparent"], negative: false },
+  "outline-style": { initial: "none", keywords: [...OUTLINE_STYLE_VALUES], negative: false },
+  "outline-width": { initial: "medium", keywords: ["thin", "medium", "thick"], negative: false },
+  "outline-offset": { initial: "0", keywords: [], negative: true },
   "vertical-align": { initial: "baseline", keywords: [...VERTICAL_ALIGN_VALUES], negative: true },
   "text-transform": { initial: "none", keywords: [...TEXT_TRANSFORM_VALUES], negative: false },
   "text-underline-offset": { initial: "auto", keywords: ["auto"], negative: true },
