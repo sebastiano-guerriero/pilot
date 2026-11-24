@@ -255,7 +255,7 @@ export function Toolbar({
       </Tooltip>
       {/* Discard, right after Send: the changes Send would send (and those waiting for a job), off the page. Undo brings them back. */}
       {onDiscard && (
-        <Tooltip text={discardCount ? "Discard changes" : "Nothing to discard"} gap={TIP_GAP}>
+        <Tooltip text={discardCount ? `Discard ${discardCount} ${discardCount === 1 ? "change" : "changes"}` : "Nothing to discard"} gap={TIP_GAP}>
           <button
             type="button"
             class="button discard"

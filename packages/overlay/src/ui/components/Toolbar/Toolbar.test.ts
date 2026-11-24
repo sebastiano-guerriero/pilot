@@ -56,8 +56,10 @@ describe("Toolbar", () => {
     expect(tip(discard())?.textContent).toBe("Nothing to discard");
     draw({ onDiscard: () => discarded++, discardCount: 3 } as Partial<typeof props>);
     expect(discard().disabled).toBe(false);
-    expect(tip(discard())?.textContent).toBe("Discard changes");
+    expect(tip(discard())?.textContent).toBe("Discard 3 changes");
     expect(discard().getAttribute("aria-label")).toBe("Discard changes (3 changes)");
+    draw({ onDiscard: () => discarded++, discardCount: 1 } as Partial<typeof props>);
+    expect(tip(discard())?.textContent).toBe("Discard 1 change");
     act(() => discard().click());
     expect(discarded).toBe(1);
   });
