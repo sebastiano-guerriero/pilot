@@ -5,16 +5,33 @@
     position: var(--_place, fixed); /* PageAnchor */
     z-index: var(--plt-z-highlight);
     pointer-events: none;
-    background-color: hsl(from var(--plt-color-accent) h s l / 30%);
-    /* 1px oblique accent lines (50%), 4px apart. All from the same point
+    --_color: var(--plt-color-accent);
+    /* How strong: the fill, and the lines over it. */
+    --_fill: 30%;
+    --_lines: 50%;
+    background-color: hsl(from var(--_color) h s l / var(--_fill));
+    /* 1px oblique lines in its color (50%), 4px apart, continuous across
+       adjacent areas: a tile the same in every area, from the same point
        (background-position, inline: the window's corner, or the
-       PageAnchor's), so the stripes run continuously across adjacent areas.
-       Not `background-attachment: fixed`: the browser would repaint them on
-       the page's thread at every scroll step, and they'd trail the page. */
+       PageAnchor's). A square of 4√2px holds two of the lines' 4px periods
+       along its diagonal, so tiles join without a seam. One gradient across
+       each area wouldn't: a slanted gradient's lines depend on its box's
+       size, so a wide area's and a tall one's didn't meet. Nor
+       `background-attachment: fixed` (one gradient for the window): the
+       browser repaints it at every scroll step, and it trails the page. */
     background-image: repeating-linear-gradient(
       -45deg,
-      hsl(from var(--plt-color-accent) h s l / 50%) 0 1px,
+      hsl(from var(--_color) h s l / var(--_lines)) 0 1px,
       transparent 1px 4px
     );
+    background-size: calc(4px * sqrt(2)) calc(4px * sqrt(2));
+    background-position: var(--_x) var(--_y);
+  }
+
+  /* The margin: yellow, and a little lighter (it's outside the element, the owner's call). */
+  .area[data-box="margin"] {
+    --_color: var(--plt-color-yellow);
+    --_fill: 20%;
+    --_lines: 35%;
   }
 }

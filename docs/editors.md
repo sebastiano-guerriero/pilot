@@ -151,7 +151,7 @@ What each one decides beyond the shared pieces. Their order in the list is `LIST
   - Logical names assume horizontal, left-to-right text, as declared values do.
   - Tab goes through the sides, then on. The view button isn't a Tab stop: the search switches views from the keyboard. It changes nothing on the page.
   - Clearing a side after setting the one value shows the page's own value for that side (`revert-layer` in the preview).
-  - Hovering or focusing a field stripes its area on the page.
+  - Hovering or focusing a field stripes its area on the page: in the accent, the margin in yellow (`--plt-color-yellow`, a little lighter: BoxAreas.css; it's outside the element, the owner's call).
 - **Box sizing** (`box-sizing/`): border-box, content-box; Tailwind's `box-border`, `box-content`.
 - **Float** (`float/`): left, right, inline-start, inline-end, none; Tailwind's `float-left`, `float-start`… Listed right after display, since both decide how the element sits in the flow.
 - **Overflow** (`overflow/`): visible, hidden, clip, scroll, auto. It writes the shorthand, so a page value on one axis only (`overflow-x`) isn't shown.

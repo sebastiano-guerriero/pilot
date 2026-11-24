@@ -13,10 +13,10 @@ interface BoxAreasProps {
 }
 
 /**
- * Shows parts of the selected element, striped: box-model sides (padding,
- * border, margin), e.g. the padding sides an editor is about to change, or a
- * grid container's gaps. Re-measured every frame, so the areas follow the
- * values live while dragging or typing. Purely visual: never receives events.
+ * Shows parts of an element, striped: box-model sides (padding, border,
+ * margin), e.g. the padding sides an editor is about to change, or a grid
+ * container's gaps. Re-measured every frame, so the areas follow the values
+ * live while dragging or typing. Purely visual: never receives events.
  */
 export function BoxAreas({ element, areas }: BoxAreasProps) {
   // Measured together, with the scroll then: drawn in the page (PageAnchor).
@@ -55,13 +55,14 @@ export function BoxAreas({ element, areas }: BoxAreasProps) {
             class="area"
             data-box={r.box}
             data-side={r.side}
-            // The stripes start at the anchor's corner (BoxAreas.css).
+            // The pattern starts at the anchor's corner (`--_x`, `--_y`: BoxAreas.css).
             style={{
               left: px(r.left),
               top: px(r.top),
               width: px(r.width),
               height: px(r.height),
-              backgroundPosition: `${px(-r.left)} ${px(-r.top)}`,
+              "--_x": px(-r.left),
+              "--_y": px(-r.top),
             }}
           />
         ))}

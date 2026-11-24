@@ -801,6 +801,10 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
       )}
       {!bare && hovered && hoverRect && !domHover && (
         <>
+          {/* A hovered element shows its padding and a grid or flex container its gaps (striped), and its
+              margin (lines): there's space to set, before it's even selected. Selected, they go, until
+              their field is in use. */}
+          <BoxAreas element={hovered} areas={HOVER_AREAS} />
           <Highlight element={hovered} rect={hoverRect} variant="hover" nameAttributes={nameAttributes} {...labelPlace(hovered, hoverRect)} />
           {/* A hovered grid shows its lines; numbers come with the selection. */}
           <GridOverlay element={hovered} part="lines" />
@@ -909,6 +913,17 @@ function CornerMarks({ element, busy, onOpenThread }: { element: Element; busy?:
 function cornerWidth(count: number): number {
   return count ? count * 20 + (count - 1) * 4 + 4 : 0;
 }
+
+/**
+ * What a hovered element shows (BoxAreas): its padding and, for a grid or flex container, its gaps
+ * striped, its margin as lines. Selected, they go, until their field is in use.
+ */
+const SIDES = ["top", "right", "bottom", "left"] as const;
+const HOVER_AREAS: BoxArea[] = [
+  ...SIDES.map((side) => ({ box: "margin" as const, side })),
+  ...SIDES.map((side) => ({ box: "padding" as const, side })),
+  { box: "gap" },
+];
 
 /** How long the jobs button's flash lasts, in ms (Highlight.css, `flash`). */
 const FLASH_MS = 900;
