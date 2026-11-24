@@ -850,7 +850,8 @@ describe("PilotSession", () => {
     hub().emit({ type: "job", job: job({ id: sent.id, status: "working", agent, attempt: 2 }) });
     sheet.textContent = ".card { padding-top: 12px; }";
     hub().emit({ type: "job", job: job({ id: sent.id, status: "done", agent, attempt: 2, notes: "kept the 12px step" }) });
-    await vi.advanceTimersByTimeAsync(16_000);
+    // Final once nothing changes for a while (UNSEEN), not the whole SETTLE_TIME.
+    await vi.advanceTimersByTimeAsync(7_000);
     expect(history.changes()).toEqual([]);
     expect(el.style.paddingTop).toBe("");
     expect(s.jobs[0]).toEqual(expect.objectContaining({ checked: true, notes: "kept the 12px step" }));

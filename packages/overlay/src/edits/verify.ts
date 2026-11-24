@@ -67,11 +67,37 @@ export function checkJob(history: EditHistory, jobId: string, width = window.inn
   return check;
 }
 
-/** Two computed values that look the same: equal, or the same shadows once the layers that draw nothing are left out. */
+/**
+ * Two computed values that look the same: equal; the same shadows once the
+ * layers that draw nothing are left out; or, anything but shadows, the same
+ * but for lengths a pixel or two off (APPROX). The prompt has the agent take
+ * the project's scale when it's within a pixel or two of the designer's
+ * value (`pr-17`, 68px, for 67px) and say so: by exact value that was a
+ * difference, a full SETTLE_TIME, and a follow-up the agent answered by
+ * keeping it, the element's loader spinning all along after its reply.
+ */
 export function sameLook(property: string, a: string, b: string): boolean {
   if (a === b) return true;
-  if (property !== "box-shadow" && property !== "text-shadow") return false;
-  return visibleShadows(a) === visibleShadows(b);
+  if (property === "box-shadow" || property === "text-shadow") return visibleShadows(a) === visibleShadows(b);
+  return closeLengths(a, b);
+}
+
+/** How far a length may be from the designer's and still count as it: a pixel or two, and at most a quarter of it (1px isn't 2px). */
+const APPROX = { px: 2, share: 0.25 };
+const LENGTH = /-?(?:\d+\.?\d*|\.\d+)px/g;
+
+/** The same text but for its px lengths, each close to the other's (APPROX). */
+function closeLengths(actual: string, expected: string): boolean {
+  if (actual.replace(LENGTH, "#") !== expected.replace(LENGTH, "#")) return false;
+  const a = actual.match(LENGTH) ?? [];
+  const e = expected.match(LENGTH) ?? [];
+  return (
+    a.length > 0 &&
+    a.every((v, i) => {
+      const diff = Math.abs(Number.parseFloat(v) - Number.parseFloat(e[i] as string));
+      return diff <= APPROX.px && diff <= Math.abs(Number.parseFloat(e[i] as string)) * APPROX.share;
+    })
+  );
 }
 
 /** A computed shadow list without its layers that draw nothing; `none` when none's left. */
@@ -104,14 +130,25 @@ function computed(element: Element, property: string): string {
   return getComputedStyle(element).getPropertyValue(property).trim();
 }
 
-/** How long after the agent's "done" Pilot keeps checking, while hot reload brings the new CSS in. */
+/** How long after the agent's "done" Pilot keeps checking at most, while hot reload brings the new CSS in. */
 export const SETTLE_TIME = 15_000;
+
+/**
+ * What still differs is final sooner, once nothing changes: QUIET after the
+ * page's stylesheets last changed (hot reload came, and what it brought is
+ * in), or UNSEEN after the start when none did (it usually came before the
+ * agent's "done", while the run was ending). Waiting SETTLE_TIME every
+ * time, the element's loader spun 15 seconds after the agent's reply, twice
+ * with the follow-up.
+ */
+export const QUIET = 2_000;
+export const UNSEEN = 6_000;
 
 /**
  * Checks a done job until its changes have landed, as the page's CSS updates
  * (hot reload can come a moment after the agent's "done"): on every
  * stylesheet change in the document's head and every half second, for up to
- * SETTLE_TIME. Each change that landed (or can't be checked) is settled right
+ * SETTLE_TIME, or until what differs has stayed so a while (QUIET, UNSEEN). Each change that landed (or can't be checked) is settled right
  * away: its preview goes, and what shows is the real code. What still differs
  * at the end is left previewed: `onFinish` gets every change's outcome, and
  * the session decides (one follow-up to the agent, then it accepts the code).
@@ -120,10 +157,14 @@ export function watchJob(
   history: EditHistory,
   jobId: string,
   onFinish: (results: ChangeResult[]) => void,
-  options: { settleTime?: number; interval?: number } = {},
+  options: { settleTime?: number; interval?: number; quiet?: number; unseen?: number } = {},
 ): () => void {
-  const { settleTime = SETTLE_TIME, interval = 500 } = options;
+  const { settleTime = SETTLE_TIME, interval = 500, quiet = QUIET, unseen = UNSEEN } = options;
   const outcomes = new Map<string, ChangeResult>();
+  // Since when the outcome is what it is, and whether the page's CSS changed meanwhile (see QUIET).
+  let since = Date.now();
+  let reloaded = false;
+  let last = "";
   const keyOf = (r: { selector: string; property: string }) => `${r.selector}|${r.property}`;
   let finished = false;
   const finish = () => {
@@ -140,19 +181,30 @@ export function watchJob(
     if (check.landed.length || check.unchecked.length) {
       history.settle(jobId, (c) => check.differs.some((d) => same(d, c)));
     }
-    if (!check.differs.length) finish();
+    if (!check.differs.length) return finish();
+    const now = JSON.stringify([...outcomes.values()]);
+    if (now !== last) {
+      last = now;
+      since = Date.now();
+    }
+    if (Date.now() - since >= (reloaded ? quiet : unseen)) finish();
+  };
+  const pageChanged = () => {
+    reloaded = true;
+    since = Date.now();
+    run();
   };
   // The page's own stylesheets changing (hot reload).
   const observer =
     typeof MutationObserver !== "undefined"
       ? new MutationObserver((records) => {
-          if (records.some(isPageMutation)) run();
+          if (records.some(isPageMutation)) pageChanged();
         })
       : null;
   observer?.observe(document.head, { childList: true, subtree: true, characterData: true, attributes: true });
   // A <link> stylesheet that finished loading.
   const onLoad = (e: Event) => {
-    if (e.target instanceof HTMLLinkElement) run();
+    if (e.target instanceof HTMLLinkElement) pageChanged();
   };
   document.addEventListener("load", onLoad, true);
   const timer = setInterval(run, interval);

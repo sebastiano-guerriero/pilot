@@ -116,6 +116,33 @@ describe("checking a done job", () => {
     expect(history.changes({ job: "j1" }).map((c) => c.property)).toEqual(["border-radius"]);
   });
 
+  it("what still differs is final once nothing changes: soon after hot reload, a while after the start without one", async () => {
+    vi.useFakeTimers();
+    history.apply(el, "border-radius", "12px");
+    history.send("j1");
+    let after = -1;
+    const start = Date.now();
+    watchJob(history, "j1", () => (after = Date.now() - start), { settleTime: 15_000, interval: 100, quiet: 2_000, unseen: 6_000 });
+    // Hot reload brings a different radius: 2s of nothing changing after it, and it's final.
+    await vi.advanceTimersByTimeAsync(1_000);
+    pageCss(".card { padding-top: 10px; border-radius: 8px; }");
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(after).toBeGreaterThanOrEqual(3_000);
+    expect(after).toBeLessThan(4_000);
+
+    // No hot reload seen (it came before the agent's "done"): final after 6s, not 15.
+    history.apply(el, "padding-top", "30px");
+    history.send("j2");
+    let done = -1;
+    const start2 = Date.now();
+    watchJob(history, "j2", () => (done = Date.now() - start2), { settleTime: 15_000, interval: 100, quiet: 2_000, unseen: 6_000 });
+    await vi.advanceTimersByTimeAsync(5_500);
+    expect(done).toBe(-1);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(done).toBeGreaterThanOrEqual(6_000);
+    expect(done).toBeLessThan(7_000);
+  });
+
   it("only the page's own stylesheet changes trigger a check, not Pilot's preview sheet", () => {
     const preview = document.createElement("style");
     preview.setAttribute(PREVIEW_ATTRIBUTE, "");
