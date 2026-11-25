@@ -670,6 +670,22 @@ function fieldValues(
   );
 }
 
+/** The properties whose field value only a reset gives: Pilot sets none there, and the page's comes from a `*` rule. */
+function resetValues(
+  element: EditableElement,
+  properties: string[],
+  history: EditHistory,
+  states?: readonly ElementState[],
+): Set<string> {
+  const page = declaredValues(element, properties, states);
+  const width = window.innerWidth;
+  return new Set(
+    properties.filter(
+      (p) => !history.removalOf(element, p, width, states) && history.valueOf(element, p, width, states) === null && isFromReset(page[p]),
+    ),
+  );
+}
+
 /**
  * The footer's helper message: the keys that matter for what the designer is
  * doing. Property-agnostic on purpose: every property panel follows the same
@@ -737,6 +753,8 @@ function MatchedEditor({
     for (const p of properties) if (theirs[p] !== declared[p]) mixed.add(p);
   }
   for (const p of mixed) declared[p] = "";
+  // Values only a reset gives (Pilot sets none, the page's comes from a `*` rule).
+  const reset = resetValues(element, properties, history, states);
   const Editor = editor.component;
   return (
     <Editor
@@ -744,6 +762,7 @@ function MatchedEditor({
       values={values}
       declared={declared}
       mixed={mixed}
+      reset={reset}
       onChange={(property, value, options) => {
         // Every selected element, with one gesture: one undo step for all of them.
         const gesture = options?.gesture ?? (others.length ? {} : undefined);

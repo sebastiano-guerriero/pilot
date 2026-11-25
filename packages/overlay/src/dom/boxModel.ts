@@ -25,8 +25,8 @@ export type BoxArea = SideArea | GapArea;
  * label (and a grid's lines and numbers) while the designer interacts with its
  * editor. The project owner decides per property: padding, margin and the gap
  * keep the selection (its outline helps place the striped area). Border hides
- * it, since the outline sits right on top of the border it would cover (no
- * border editor yet). Decide here for every new kind of area.
+ * it, since the outline sits right on top of the border it would cover (the
+ * border editor shows no area yet). Decide here for every new kind of area.
  */
 const HIDES_SELECTION: Record<BoxArea["box"], boolean> = {
   padding: false,

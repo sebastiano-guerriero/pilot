@@ -37,6 +37,11 @@ interface PropertySelectProps {
    * number means (font-weight's 700 → bold). None for values without one.
    */
   hintFor?(value: string): string | undefined;
+  /**
+   * The trigger shows only the value's icon (iconFor), centered, no text and
+   * no chevron: a 24px button (border's style). The menu is as usual.
+   */
+  iconOnly?: boolean;
 }
 
 /** The menu's padding: its options line up with the trigger once it's moved left by this. */
@@ -79,6 +84,7 @@ export function PropertySelect({
   iconFor,
   hintFor,
   placeholder = "Select",
+  iconOnly = false,
 }: PropertySelectProps) {
   // "" is the "Select" option: no value.
   const list = [...(clearable ? [""] : []), ...(value && !options.includes(value) ? [value] : []), ...options];
@@ -195,7 +201,7 @@ export function PropertySelect({
   };
 
   return (
-    <div class="property-select">
+    <div class="property-select" data-icon-only={iconOnly || undefined}>
       <button
         ref={trigger}
         type="button"
@@ -211,7 +217,7 @@ export function PropertySelect({
         onBlur={close}
       >
         {iconFor && <span class="option-icon">{iconFor(value)}</span>}
-        {value ? (
+        {iconOnly ? null : value ? (
           <span class="value">
             <span class="text">{value}</span>
             {hintFor?.(value) && <span class="hint">{hintFor(value)}</span>}
@@ -219,7 +225,7 @@ export function PropertySelect({
         ) : (
           <span class="value placeholder">{placeholder}</span>
         )}
-        <Icon name="chevron-down" class="chevron" />
+        {!iconOnly && <Icon name="chevron-down" class="chevron" />}
       </button>
       {open && (
         // The menu's box (placed, not scrolling), the list that scrolls inside it, and Pilot's scroll thumb over its edge.

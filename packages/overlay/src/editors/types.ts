@@ -78,6 +78,13 @@ export interface PropertyEditorProps {
    */
   mixed?: ReadonlySet<string>;
   /**
+   * Properties whose `declared` value only a reset gives (a rule for every
+   * element, `*`: Tailwind's preflight `border: 0 solid`), not the element
+   * nor Pilot. An editor may show them as not set (border's style does).
+   * Read it with `isFromReset()` (editors/declared.ts).
+   */
+  reset?: ReadonlySet<string>;
+  /**
    * Apply a value: Pilot records it in the undo history (Cmd/Ctrl+Z) and
    * shows it on the page (the preview stylesheet). Editors never write
    * `element.style` themselves. An empty `value` clears it: the element

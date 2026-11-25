@@ -236,6 +236,9 @@ export const TEXT_TRANSFORM_VALUES = ["uppercase", "lowercase", "capitalize", "n
 /** text-decoration-style's options, in menu order. */
 export const TEXT_DECORATION_STYLE_VALUES = ["solid", "double", "dotted", "dashed", "wavy"] as const;
 
+/** border-style's options, in menu order (none last): Tailwind's border-solid, -dashed, -dotted, -double, -hidden, -none. */
+export const BORDER_STYLE_VALUES = ["solid", "dashed", "dotted", "double", "hidden", "none"] as const;
+
 /** outline-style's options, in menu order (none last). */
 export const OUTLINE_STYLE_VALUES = ["solid", "dashed", "dotted", "double", "none"] as const;
 
@@ -408,6 +411,9 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   "text-decoration-style": { initial: "solid", keywords: [...TEXT_DECORATION_STYLE_VALUES], negative: false },
   "text-decoration-thickness": { initial: "auto", keywords: ["auto", "from-font"], negative: false },
   // Edited by the color editor, not as a length.
+  "border-color": { initial: "currentcolor", keywords: ["currentcolor", "transparent"], negative: false },
+  "border-style": { initial: "none", keywords: [...BORDER_STYLE_VALUES], negative: false },
+  "border-width": { initial: "medium", keywords: ["thin", "medium", "thick"], negative: false },
   "outline-color": { initial: "currentcolor", keywords: ["currentcolor", "transparent"], negative: false },
   "outline-style": { initial: "none", keywords: [...OUTLINE_STYLE_VALUES], negative: false },
   "outline-width": { initial: "medium", keywords: ["thin", "medium", "thick"], negative: false },

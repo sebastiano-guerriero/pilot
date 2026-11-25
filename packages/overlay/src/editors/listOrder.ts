@@ -70,7 +70,7 @@ export const LIST_ORDER: ReadonlyArray<{ group: string; entries: readonly ListEn
   },
   {
     group: "Appearance",
-    entries: ["background-color", "border-radius", "opacity"],
+    entries: ["background-color", "border", "border-radius", "opacity"],
   },
   {
     // What's applied on top of how it looks.

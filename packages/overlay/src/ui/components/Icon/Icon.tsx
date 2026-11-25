@@ -689,6 +689,44 @@ const ICONS = {
   "side-right": sides("right"),
   "side-bottom": sides("bottom"),
   "side-left": sides("left"),
+  // Border styles, for border's style button and menu: solid, dashed and dotted are the owner's (one color, drawn
+  // in currentColor: the style button shows them in the accent); double is derived from solid.
+  "border-solid": {
+    size: 12,
+    body: <path d="M1 6H11" stroke-linecap="round" stroke="currentColor" />,
+  },
+  "border-dashed": {
+    size: 12,
+    body: (
+      <g stroke="currentColor" stroke-linecap="round">
+        <path d="M1 6H3" />
+        <path d="M5 6H7" />
+        <path d="M9 6H11" />
+      </g>
+    ),
+  },
+  "border-dotted": {
+    size: 12,
+    body: (
+      <g fill="currentColor">
+        <circle cx="1" cy="5.5" r="0.5" />
+        <circle cx="3" cy="5.5" r="0.5" />
+        <circle cx="5" cy="5.5" r="0.5" />
+        <circle cx="7" cy="5.5" r="0.5" />
+        <circle cx="9" cy="5.5" r="0.5" />
+        <circle cx="11" cy="5.5" r="0.5" />
+      </g>
+    ),
+  },
+  "border-double": {
+    size: 12,
+    body: (
+      <g stroke="currentColor" stroke-linecap="round">
+        <path d="M1 4.5H11" />
+        <path d="M1 7.5H11" />
+      </g>
+    ),
+  },
   // Adding a value to a list (a mask): a plus.
   plus: {
     size: 8,

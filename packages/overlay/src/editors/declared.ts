@@ -14,5 +14,10 @@ export function isMixed(props: Pick<PropertyEditorProps, "mixed">, property: str
   return !!props.mixed?.has(property);
 }
 
+/** Whether only a reset gives `property` its value (see `reset` in PropertyEditorProps). */
+export function isFromReset(props: Pick<PropertyEditorProps, "reset">, property: string): boolean {
+  return !!props.reset?.has(property);
+}
+
 /** What an empty field reads when the selected elements differ on its property. */
 export const MIXED = "Mixed";

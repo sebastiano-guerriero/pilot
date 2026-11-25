@@ -25,6 +25,7 @@ import { fillEditor, strokeEditor, strokeWidthEditor } from "./svg/SvgEditors.ts
 import { backdropFilterEditor, filterEditor } from "./filter/FilterEditor.tsx";
 import { boxShadowEditor } from "./box-shadow/BoxShadowEditor.tsx";
 import { aspectRatioEditor } from "./aspect-ratio/AspectRatioEditor.tsx";
+import { borderEditor } from "./border/BorderEditor.tsx";
 import { borderRadiusEditor } from "./border-radius/BorderRadiusEditor.tsx";
 import { displayEditor } from "./display/DisplayEditor.tsx";
 import { floatEditor } from "./float/FloatEditor.tsx";
@@ -128,6 +129,7 @@ export const editors: PropertyEditor[] = [
   insetEditor,
   zIndexEditor,
   backgroundColorEditor,
+  borderEditor,
   borderRadiusEditor,
   opacityEditor,
   mixBlendModeEditor,

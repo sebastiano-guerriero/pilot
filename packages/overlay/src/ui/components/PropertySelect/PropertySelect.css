@@ -140,4 +140,14 @@
     width: 8px;
   }
 
+
+  /* Icon only (iconOnly): a 24px square, its icon centered. */
+  :scope[data-icon-only] .trigger {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  :scope[data-icon-only] .trigger .option-icon {
+    margin-right: 0;
+  }
 }
