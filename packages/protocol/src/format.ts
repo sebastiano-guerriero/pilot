@@ -134,7 +134,8 @@ function sharedCode(): string {
   return [
     `**Shared code, only some copies:** an element's "Look-alikes" line counts the elements like it that this job leaves out (other instances of its component, or the same part of other copies). If they come from the same code (a shared component, a loop over data), and the designer didn't say which they meant, don't guess: do the rest of the job, leave that part, and ask in one short sentence, the component's name in **bold**, with three choices, your suggestion first: "${SHARED_CHOICES.all.label}", "${SHARED_CHOICES.one.label}", "${SHARED_CHOICES.variant.label}" (as the question in your reply's \`pilot\` block). Their answer comes back to you as this job. You can ask once per job: when it changes some copies of several components (or several parts that repeat), ask one question naming each in **bold** ("Every **PlanCard** and **FeatureCard**, or only the ones you changed?"), leave all those parts until the answer, and apply it to each.`,
     ...Object.values(SHARED_CHOICES).map((c) => `**${c.label}**: ${c.means}`),
-    'Don\'t ask when the designer already said (in the comment or note: "only here", "every card", "as a variant"), when every copy is in the job, or when nothing else uses that code: just change it.',
+    'Don\'t ask when the designer already said (in the comment or note: "only here", "every card", "as a variant"), or when nothing else uses that code: just change it.',
+    `**Every copy in the job:** an element's "Every instance" line means the designer picked every instance of its component on the page together (with Pilot's Select similar, or one by one): they mean the component. Change the component itself, in its own file, so the change reaches wherever it's used, other pages included: not each instance where it's used, not a new variant, and don't ask. An "Every copy" line (no component: copies Pilot matched by the page's structure, plain HTML) means every one on this page only: change them here; if the only way is code other pages share too (a class in a global stylesheet, a partial or include), ask first, with the three choices above, before changing it there.`,
   ].join(" ");
 }
 /**
@@ -556,6 +557,13 @@ function targetLines(target: ElementTarget): string[] {
   if (target.lookAlikes) {
     const of = target.lookAlikesOf ? `other instances of \`${target.lookAlikesOf}\`, the same part of each` : "the same part of other copies";
     out.push(`- Look-alikes: ${target.lookAlikes} more on the page (${of}), not in this job`);
+  }
+  if (target.everyCopy) {
+    out.push(
+      target.everyCopy.of
+        ? `- Every instance of \`${target.everyCopy.of}\` on the page is in this job (the same part of each): change the component itself, wherever it's used`
+        : "- Every copy on the page is in this job (the same part of each, matched by the page's structure; no component): keep the change to this page",
+    );
   }
   if (target.style?.length) out.push("- Its style now, as the page has it (no need to look it up; what each comes to after `=`):", ...target.style.map((st) => `  - ${styleLine(st)}`));
   return out;

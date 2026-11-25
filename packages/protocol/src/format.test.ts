@@ -400,7 +400,7 @@ describe("formatPrompt", () => {
     expect(comment).toContain("a comment on the 2 elements below");
     expect(comment).toContain("## The elements (2)\n\n### 1. `main > section.hero > h1`");
     expect(comment).toContain("### 2. `main > section.cta > h2`\n\n- Selector: `section.cta > h2`");
-    expect(comment).toContain("when every copy is in the job");
+    expect(comment).toContain("**Every copy in the job:**");
     // The three answers, and what each asks of the code.
     expect(comment).toContain('"All of them", "Only this", "New variant"');
     expect(comment).toContain("**Only this**: change it where this instance is used");
@@ -427,6 +427,14 @@ describe("formatPrompt", () => {
     });
     expect(instances).toContain("- Component: `ProductCard`, in `src/ProductCard.tsx:12`\n");
     expect(instances).toContain("- Look-alikes: 11 more on the page (other instances of `ProductCard`, the same part of each), not in this job");
+    // Every one in the job (Select similar): a component's instances mean the component, everywhere; plain HTML's copies stay on the page.
+    const edit = changeSet.edits[0] as ChangeSet["edits"][number];
+    const component = formatPrompt({ ...changeSet, edits: [{ ...edit, target: { ...target, everyCopy: { of: "ProductCard" } } }] });
+    expect(component).toContain("- Every instance of `ProductCard` on the page is in this job (the same part of each): change the component itself, wherever it's used");
+    expect(component).toContain("not a new variant, and don't ask");
+    const html = formatPrompt({ ...changeSet, edits: [{ ...edit, target: { ...target, everyCopy: {} } }] });
+    expect(html).toContain("- Every copy on the page is in this job (the same part of each, matched by the page's structure; no component): keep the change to this page");
+    expect(html).toContain("means every one on this page only");
     // One element reads as before.
     expect(formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, others: [], thread, breakpoints: [] } })).toContain("## `main > section.hero > h1`");
   });

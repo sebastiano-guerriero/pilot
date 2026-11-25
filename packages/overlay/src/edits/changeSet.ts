@@ -163,11 +163,14 @@ function withLookAlikes(edits: Map<Element, ElementEdit>): void {
   for (const [element, edit] of edits) if (element.isConnected) Object.assign(edit.target, lookAlikes(element, elements));
 }
 
-function lookAlikes(element: Element, inJob: readonly Element[]): { lookAlikes?: number; lookAlikesOf?: string } {
+function lookAlikes(element: Element, inJob: readonly Element[]): Pick<ElementTarget, "lookAlikes" | "lookAlikesOf" | "everyCopy"> {
   if (!(element instanceof HTMLElement || element instanceof SVGElement)) return {};
   const similar = similarOf(element);
   const n = similar.elements.filter((e) => !inJob.includes(e)).length;
-  return n ? { lookAlikes: n, ...(similar.component ? { lookAlikesOf: similar.component } : {}) } : {};
+  if (n) return { lookAlikes: n, ...(similar.component ? { lookAlikesOf: similar.component } : {}) };
+  // Every one in the job (Select similar): a component's instances mean the component, everywhere it's
+  // used; copies matched by structure (plain HTML) stay on this page (the owner's call).
+  return similar.elements.length ? { everyCopy: similar.component ? { of: similar.component } : {} } : {};
 }
 
 /**

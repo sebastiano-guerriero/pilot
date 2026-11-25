@@ -56,3 +56,21 @@ describe("buildChangeSet", () => {
     expect(prompt).toContain("`div.card`");
   });
 });
+
+describe("look-alikes and every copy", () => {
+  it("plain HTML: some copies changed count the rest; every one changed (Select similar) is every copy, kept to the page", () => {
+    const list = document.createElement("section");
+    list.innerHTML = ["One", "Two", "Three"].map((t) => `<article><h3>${t}</h3><p>${t} text</p></article>`).join("");
+    document.body.append(list);
+    const titles = [...list.querySelectorAll("h3")] as HTMLElement[];
+    history.apply(titles[0] as HTMLElement, "color", "red");
+    const one = buildChangeSet(history)?.edits[0]?.target;
+    expect(one?.lookAlikes).toBe(2);
+    expect(one?.everyCopy).toBeUndefined();
+    for (const t of titles.slice(1)) history.apply(t, "color", "red");
+    const all = buildChangeSet(history)?.edits.map((e) => e.target) ?? [];
+    expect(all.map((t) => t.everyCopy)).toEqual([{}, {}, {}]);
+    expect(all.some((t) => t.lookAlikes)).toBe(false);
+    list.remove();
+  });
+});

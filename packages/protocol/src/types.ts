@@ -40,6 +40,15 @@ export interface ElementTarget {
    * than by the page's structure.
    */
   lookAlikesOf?: string;
+  /**
+   * Every element like it on the page is in the job (Select similar, or each
+   * one picked): the designer means them all. With `of`, they're every
+   * instance of that component (the same part of each): the component itself
+   * changes, wherever it's used, other pages too, never a variant. Without,
+   * copies Pilot matched by the page's structure (plain HTML, no component):
+   * the change stays on this page. Absent: none, or some left out (lookAlikes).
+   */
+  everyCopy?: { of?: string };
   /** The component rendering it and its file, from the framework's dev info (React, Vue), when the page has it; the CLI finds a file the page couldn't name (`componentFile`). */
   source?: {
     component?: string;
