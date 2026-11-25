@@ -125,7 +125,13 @@ export function LayerList({
         </button>
       </div>
       {hasOpen && children && (
-        <PropertyPanel title={panelTitle} beside={() => rowRef.current?.closest(".property-dialog")?.getBoundingClientRect() ?? null} onClose={close} footer={footer}>
+        <PropertyPanel
+          title={panelTitle}
+          beside={() => rowRef.current?.closest(".property-dialog")?.getBoundingClientRect() ?? null}
+          anchor={() => rowRef.current?.closest(".property-row")?.getBoundingClientRect() ?? null}
+          onClose={close}
+          footer={footer}
+        >
           {children}
         </PropertyPanel>
       )}

@@ -8,6 +8,8 @@ interface PropertyPanelProps {
   title: string;
   /** What it opens beside: the property dialog's box, read on every render (it moves with the page). */
   beside(): DOMRect | null;
+  /** The property's row in the dialog, read on every render: the panel's title is level with it. Without one, the dialog's top. */
+  anchor?(): DOMRect | null;
   /** Closed: × or Esc. Focus then goes back to what opened it (the caller's). */
   onClose(): void;
   /** The rows (PropertyRow), first focused when it opens. */
@@ -16,8 +18,12 @@ interface PropertyPanelProps {
   footer?: ComponentChildren;
 }
 
-/** Space between the dialog and the panel, and the closest the panel gets to the window's edges. */
-const GAP = 8;
+/**
+ * How far the panel comes over the dialog's edge (the owner's call): over
+ * its scrollbar and 2px more. The scrollbar is 3px in and 4px wide
+ * (ScrollThumb.css). And the closest the panel gets to the window's edges.
+ */
+const OVERLAP = 3 + 4 + 2;
 const EDGE = 8;
 /** As wide as the property dialog (PropertyDialog.css). */
 const WIDTH = 260;
@@ -28,13 +34,16 @@ const FOCUSABLE = 'button:not([tabindex="-1"]):not(:disabled), input:not(:disabl
  * A property too rich for one row (a mask; later filters, shadows) is edited
  * here, in a panel of its own beside the property dialog, as Figma and
  * Framer do: the dialog's look, a title with ×, its rows under a line. It
- * opens on the side of the dialog with room, follows the dialog (and so the
- * page's scroll), and can be dragged by the strip along its top edge.
+ * opens next to the property's row (its title level with the row's label),
+ * over the dialog's scrollbar and 2px more, on the side with room; it follows the dialog (and
+ * so the page's scroll), and can be dragged by the strip along its top edge.
  * Esc closes it (only it), Tab stays in it.
  */
-export function PropertyPanel({ title, beside, onClose, children, footer }: PropertyPanelProps) {
+export function PropertyPanel({ title, beside, anchor, onClose, children, footer }: PropertyPanelProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(0);
+  // From the panel's top to its title's middle: what's level with the row's middle.
+  const [titleMiddle, setTitleMiddle] = useState(0);
   // Dragged this far from where it opens.
   const [moved, setMoved] = useState({ x: 0, y: 0 });
   const drag = useRef<{ x: number; y: number; from: { x: number; y: number } } | null>(null);
@@ -42,15 +51,24 @@ export function PropertyPanel({ title, beside, onClose, children, footer }: Prop
   const [, redraw] = useReducer((n: number) => n + 1, 0);
 
   useLayoutEffect(() => {
-    const h = ref.current?.offsetHeight ?? 0;
+    const panel = ref.current;
+    const h = panel?.offsetHeight ?? 0;
     if (h !== height) setHeight(h);
+    const title = panel?.querySelector(".panel-title")?.getBoundingClientRect();
+    const middle = panel && title ? title.top + title.height / 2 - panel.getBoundingClientRect().top : 0;
+    if (Math.abs(middle - titleMiddle) > 0.5) setTitleMiddle(middle);
   });
-  // The dialog moves with the page's scroll and the window: so does the panel.
+  // The dialog moves with the page's scroll and the window, and its row with the dialog's list: so does the panel.
+  // The list scrolls in Pilot's shadow root, whose scroll events don't reach the window.
   useEffect(() => {
+    const root = ref.current?.getRootNode();
+    const shadow = root instanceof ShadowRoot ? root : null;
     window.addEventListener("scroll", redraw, true);
+    shadow?.addEventListener("scroll", redraw, true);
     window.addEventListener("resize", redraw);
     return () => {
       window.removeEventListener("scroll", redraw, true);
+      shadow?.removeEventListener("scroll", redraw, true);
       window.removeEventListener("resize", redraw);
     };
   }, []);
@@ -62,8 +80,9 @@ export function PropertyPanel({ title, beside, onClose, children, footer }: Prop
   const box = beside();
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  let left = box ? (box.right + GAP + WIDTH <= vw - EDGE ? box.right + GAP : box.left - GAP - WIDTH) : vw - EDGE - WIDTH;
-  let top = box ? box.top : EDGE;
+  const row = anchor?.() ?? null;
+  let left = box ? (box.right - OVERLAP + WIDTH <= vw - EDGE ? box.right - OVERLAP : box.left + OVERLAP - WIDTH) : vw - EDGE - WIDTH;
+  let top = row ? row.top + row.height / 2 - titleMiddle : box ? box.top : EDGE;
   left = Math.min(Math.max(EDGE, left + moved.x), vw - EDGE - WIDTH);
   top = Math.min(Math.max(EDGE, top + moved.y), Math.max(EDGE, vh - EDGE - height));
 
