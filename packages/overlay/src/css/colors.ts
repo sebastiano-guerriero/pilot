@@ -6,6 +6,8 @@ import { withVars } from "./values.ts";
  *   its hex (`#000000`) and opacity (50).
  * - Any other color (`var(--brand)`, `oklch(…)`, `red`, `currentcolor`) keeps
  *   its text, at 100: Pilot never rewrites how a color is named.
+ * - An oklch() color with its alpha (`oklch(0.7 0.1 280 / 50%)`, the color
+ *   picker's) splits into the color and that opacity, and is written back so.
  * - Writing back: a hex at 100 is just the hex; below 100, 8-digit hex. A
  *   named color below 100 is `color-mix(in srgb, <color> 50%, transparent)`,
  *   which agents read as "this color at 50%" (Tailwind's `text-primary/50`).
@@ -28,6 +30,11 @@ export function splitColor(value: string): ColorParts {
   if (hex) return { color: hex.slice(0, 7), opacity: hex.length === 9 ? Math.round((parseInt(hex.slice(7), 16) / 255) * 100) : 100 };
   const rgb = parseRgb(v);
   if (rgb) return { color: toHex(rgb), opacity: Math.round(rgb.a * 100) };
+  const oklch = v.match(/^oklch\(\s*([^/)]+?)\s*(?:\/\s*(\d+(?:\.\d+)?)(%?)\s*)?\)$/i);
+  if (oklch) {
+    const alpha = oklch[2] === undefined ? 100 : oklch[3] ? Number(oklch[2]) : Number(oklch[2]) * 100;
+    return { color: `oklch(${oklch[1]})`, opacity: Math.round(alpha) };
+  }
   const mix = v.match(/^color-mix\(in srgb,\s*(.+?)\s+(\d+(?:\.\d+)?)%,\s*transparent\)$/i);
   if (mix) return { color: mix[1] as string, opacity: Math.round(Number(mix[2])) };
   return { color: v, opacity: 100 };
@@ -40,6 +47,8 @@ export function joinColor(color: string, opacity: number | null): string {
   if (/^#[0-9a-f]{6}$/i.test(color)) {
     return o >= 100 ? color : `${color}${Math.round((o / 100) * 255).toString(16).padStart(2, "0")}`;
   }
+  const oklch = color.match(/^oklch\(\s*([^/)]+?)\s*\)$/i);
+  if (oklch) return o >= 100 ? color : `oklch(${oklch[1]} / ${o}%)`;
   return o >= 100 ? color : `color-mix(in srgb, ${color} ${o}%, transparent)`;
 }
 

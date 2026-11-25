@@ -1,0 +1,106 @@
+/* The color picker (ColorPicker.tsx), the owner's design: in a headerless
+   property panel (260px), the area 16px from the panel's sides and top (the
+   panel's 12px drag strip above it), lined up with the rows' fields, 2px
+   corners and a 1px ring; the hue strip right under it, as wide; then the
+   rows, 16px below it (PropertyPanel.css). */
+@scope (.color-picker) {
+  :scope {
+    flex: none;
+    padding: 16px 16px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  /* Saturation left to right (white to the hue), brightness top to bottom (to black). */
+  .color-area {
+    position: relative;
+    height: 180px;
+    border-radius: 2px;
+    background:
+      linear-gradient(to top, #000, transparent),
+      linear-gradient(to right, #fff, hsl(var(--_hue) 100% 50%));
+    cursor: crosshair;
+    touch-action: none;
+  }
+
+  /* A 1px ring inside the area, white at 10%, over the colors (the canvas too), under the handle. */
+  .color-area::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.1);
+    pointer-events: none;
+  }
+
+  .color-handle {
+    z-index: 1;
+  }
+
+  /* OKLCH: chroma × lightness, drawn (OklchArea), over every spot. */
+  :scope[data-model="OKLCH"] .color-area {
+    background: none;
+  }
+
+  .color-area-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+  }
+
+  /* Every hue, left to right (OKLCH's own, set inline, in that model). */
+  .hue-strip {
+    position: relative;
+    height: 12px;
+    border-radius: 6px;
+    background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+    cursor: pointer;
+    touch-action: none;
+  }
+
+  /* A handle: its color in a white ring, centered on its spot. */
+  .color-handle,
+  .hue-handle {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--_color);
+    box-shadow: 0 0 0 2px #fff, 0 0 0 3px hsl(0 0% 0% / 0.2), 0 1px 3px hsl(0 0% 0% / 0.4);
+    translate: -50% -50%;
+  }
+
+  /* Pressing a handle drags it (the press reaches its area or strip, which
+     takes it from there), and the area and the strip catch presses a few px
+     past their edges: at an edge, half the handle hangs out over them. The
+     area's reach down stops short of the strip's reach up (8px apart). */
+  .color-area::before,
+  .hue-strip::before {
+    content: "";
+    position: absolute;
+  }
+
+  /* Up 4px only: the panel's drag strip ends there (it's 12px; the area starts at 16px). */
+  .color-area::before {
+    inset: -4px -8px -6px;
+  }
+
+  .hue-strip::before {
+    inset: -2px -8px -8px;
+  }
+
+  .hue-handle {
+    top: 50%;
+  }
+}
+
+/* The picker's rows (in the panel, after the area): OKLCH split into
+   lightness, chroma and hue, its button in the accent. */
+@scope (.property-panel[data-headerless]) {
+  .split-toggle[aria-pressed="true"] {
+    color: var(--plt-color-accent);
+  }
+}

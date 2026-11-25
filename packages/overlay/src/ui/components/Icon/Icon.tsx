@@ -689,6 +689,17 @@ const ICONS = {
   "side-right": sides("right"),
   "side-bottom": sides("bottom"),
   "side-left": sides("left"),
+  // The color picker's split button (OKLCH as lightness, chroma and hue rows). Derived placeholder, for the owner's.
+  "color-split": {
+    size: 12,
+    body: (
+      <g stroke="currentColor" stroke-linecap="round">
+        <path d="M2.5 3H9.5" />
+        <path d="M2.5 6H9.5" />
+        <path d="M2.5 9H9.5" />
+      </g>
+    ),
+  },
   // Border styles, for border's style button and menu: solid, dashed and dotted are the owner's (one color, drawn
   // in currentColor: the style button shows them in the accent); double is derived from solid.
   "border-solid": {

@@ -16,6 +16,10 @@ interface PropertyPanelProps {
   children: ComponentChildren;
   /** A line of help under the rows, in the property dialog's footer (a dotted line above, dimmed text). */
   footer?: ComponentChildren;
+  /** The title with × (default). Without (the color picker): the title is only its accessible name; the drag strip stays. */
+  header?: boolean;
+  /** Above the rows, edge to edge (no rows' padding): the color picker's area. */
+  top?: ComponentChildren;
 }
 
 /**
@@ -39,7 +43,7 @@ const FOCUSABLE = 'button:not([tabindex="-1"]):not(:disabled), input:not(:disabl
  * so the page's scroll), and can be dragged by the strip along its top edge.
  * Esc closes it (only it), Tab stays in it.
  */
-export function PropertyPanel({ title, beside, anchor, onClose, children, footer }: PropertyPanelProps) {
+export function PropertyPanel({ title, beside, anchor, onClose, children, footer, header = true, top: above }: PropertyPanelProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(0);
   // From the panel's top to its title's middle: what's level with the row's middle.
@@ -47,6 +51,8 @@ export function PropertyPanel({ title, beside, anchor, onClose, children, footer
   // Dragged this far from where it opens.
   const [moved, setMoved] = useState({ x: 0, y: 0 });
   const drag = useRef<{ x: number; y: number; from: { x: number; y: number } } | null>(null);
+  // Where it is before the drag, on screen (set each render): the drag stays within the window from there.
+  const baseRef = useRef({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const [, redraw] = useReducer((n: number) => n + 1, 0);
 
@@ -82,9 +88,16 @@ export function PropertyPanel({ title, beside, anchor, onClose, children, footer
   const vh = window.innerHeight;
   const row = anchor?.() ?? null;
   let left = box ? (box.right - OVERLAP + WIDTH <= vw - EDGE ? box.right - OVERLAP : box.left + OVERLAP - WIDTH) : vw - EDGE - WIDTH;
-  let top = row ? row.top + row.height / 2 - titleMiddle : box ? box.top : EDGE;
-  left = Math.min(Math.max(EDGE, left + moved.x), vw - EDGE - WIDTH);
-  top = Math.min(Math.max(EDGE, top + moved.y), Math.max(EDGE, vh - EDGE - height));
+  // By the row: its title level with the row's label; without a header, its top level with the row's.
+  let top = row ? (header ? row.top + row.height / 2 - titleMiddle : row.top) : box ? box.top : EDGE;
+  // On screen, then the drag, then on screen again: a row scrolled out of the window holds the panel at
+  // the edge, and a drag from there must move it at once (added before, it went into the part held off).
+  const onScreenX = (x: number) => Math.min(Math.max(EDGE, x), vw - EDGE - WIDTH);
+  const onScreenY = (y: number) => Math.min(Math.max(EDGE, y), Math.max(EDGE, vh - EDGE - height));
+  const base = { x: onScreenX(left), y: onScreenY(top) };
+  baseRef.current = base;
+  left = onScreenX(base.x + moved.x);
+  top = onScreenY(base.y + moved.y);
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === "Escape") {
@@ -123,7 +136,14 @@ export function PropertyPanel({ title, beside, anchor, onClose, children, footer
   };
   const onDragMove = (e: PointerEvent) => {
     const d = drag.current;
-    if (d) setMoved({ x: d.from.x + e.clientX - d.x, y: d.from.y + e.clientY - d.y });
+    if (!d) return;
+    // No further than the window's edges: what's dragged past them would have to be dragged back first.
+    const { x, y } = baseRef.current;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const dx = Math.min(Math.max(EDGE - x, d.from.x + e.clientX - d.x), vw - EDGE - WIDTH - x);
+    const dy = Math.min(Math.max(EDGE - y, d.from.y + e.clientY - d.y), Math.max(EDGE, vh - EDGE - height) - y);
+    setMoved({ x: dx, y: dy });
   };
   const onDragEnd = () => {
     drag.current = null;
@@ -138,6 +158,7 @@ export function PropertyPanel({ title, beside, anchor, onClose, children, footer
       aria-label={title}
       style={{ left: px(left), top: px(top) }}
       data-dragging={dragging || undefined}
+      data-headerless={header ? undefined : ""}
       tabIndex={-1}
       onKeyDown={onKeyDown}
       onFocusOut={onFocusOut}
@@ -152,12 +173,15 @@ export function PropertyPanel({ title, beside, anchor, onClose, children, footer
       >
         <Icon name="grip" />
       </div>
-      <div class="panel-header">
-        <span class="panel-title">{title}</span>
-        <button type="button" class="panel-close" aria-label={`Close ${title}`} onClick={onClose}>
-          <Icon name="close" />
-        </button>
-      </div>
+      {header && (
+        <div class="panel-header">
+          <span class="panel-title">{title}</span>
+          <button type="button" class="panel-close" aria-label={`Close ${title}`} onClick={onClose}>
+            <Icon name="close" />
+          </button>
+        </div>
+      )}
+      {above}
       <div class="panel-rows">{children}</div>
       {footer && (
         <footer class="footer" aria-live="polite">

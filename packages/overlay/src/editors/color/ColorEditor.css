@@ -37,4 +37,23 @@
     height: 12px;
     box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.3);
   }
+
+  /* The swatch is a button (it opens the color picker): the field's icon slot passes clicks to it. */
+  :scope .input-icon:has(.color-swatch-button) {
+    pointer-events: auto;
+  }
+
+  .color-swatch-button {
+    all: unset;
+    display: block;
+    cursor: pointer;
+
+    &:disabled {
+      cursor: default;
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--plt-color-accent);
+    }
+  }
 }

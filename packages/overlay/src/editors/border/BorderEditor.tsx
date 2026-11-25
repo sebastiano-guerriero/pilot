@@ -1,4 +1,6 @@
-import { useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
+import { joinColor, splitColor } from "../../css/colors.ts";
+import { ColorPicker, pickerPlace } from "../../ui/components/ColorPicker/ColorPicker.tsx";
 import { BORDER_STYLE_VALUES } from "../../css/properties.ts";
 import { displayValue, parseValue } from "../../css/values.ts";
 import { Icon, type IconName } from "../../ui/components/Icon/Icon.tsx";
@@ -49,7 +51,7 @@ const NEW_STYLE = "solid";
 /**
  * border (the owner's, to try): one row. The width (no drag handle: no room for it; a reset's value dimmed),
  * the style (a 24px button showing its icon, the menu listing them) and the
- * color (a 24px swatch; its picker comes later), joined by 1px lines as the
+ * color (a 24px swatch, which opens the color picker), joined by 1px lines as the
  * color field's parts are. On the right, border-radius's split button
  * (split-toggle, SplitEditor.css): one line for every side (border-width…),
  * or a line per side (top, right, bottom, left: border-top-width…), the
@@ -134,6 +136,9 @@ function BorderLine({
   const style = isFromReset(props, styleProperty) ? "" : drawnStyle;
   const color = shown("color");
   const name = all ? "border" : `border ${where}`;
+  // The swatch opens the color picker.
+  const [picking, setPicking] = useState(false);
+  const colorRef = useRef<HTMLButtonElement>(null);
 
   /** A value here; on every side, cleared, each side's too (one undo step). */
   const write = (part: "width" | "style" | "color", next: string, gesture: object = {}) => {
@@ -148,52 +153,71 @@ function BorderLine({
   };
 
   return (
-    <div class="border-line">
-      <PropertyInputText
-        value={width && !widthFromReset ? displayValue(width, at.width) : ""}
-        label={`${name} width`}
-        placeholder={mixedAt("width") ? MIXED : width ? displayValue(width, at.width) : "0"}
-        tokens={tokensFor(at.width)}
-        computed={props.values?.[at.width]}
-        onCommit={(text) => {
-          const next = text.trim() ? parseValue(at.width, text) : "";
-          if (next !== null && (next !== width || mixedAt("width"))) writeWidth(next);
-        }}
-        onStep={(delta, text, gesture) => {
-          const next = stepField(at.width, text || "0px", delta, "0px");
-          if (next && next !== width) writeWidth(next, gesture);
-        }}
-        onSubmit={props.onReturnToSearch}
-      />
-      <PropertySelect
-        value={style}
-        options={BORDER_STYLE_VALUES}
-        label={`${name} style`}
-        placeholder={mixedAt("style") ? MIXED : undefined}
-        iconOnly
-        // No style set ("Select"): the solid line, dimmed.
-        iconFor={(s) =>
-          s ? (
-            <Icon name={STYLE_ICONS[s] ?? "border-solid"} />
-          ) : (
-            <span class="style-unset">
-              <Icon name="border-solid" />
-            </span>
-          )
-        }
-        onChange={(next) => (next !== style || mixedAt("style")) && write("style", next)}
-      />
-      <button
-        type="button"
-        class="border-color field-box"
-        aria-label={`${name} color`}
-        title={mixedAt("color") ? MIXED : color || "currentcolor"}
-        // The color picker comes later: for now, the color only.
-        tabIndex={-1}
-      >
-        <span class="color-preview" style={{ "--_color": color || "currentColor" }} />
-      </button>
-    </div>
+    <>
+      <div class="border-line">
+        <PropertyInputText
+          value={width && !widthFromReset ? displayValue(width, at.width) : ""}
+          label={`${name} width`}
+          placeholder={mixedAt("width") ? MIXED : width ? displayValue(width, at.width) : "0"}
+          tokens={tokensFor(at.width)}
+          computed={props.values?.[at.width]}
+          onCommit={(text) => {
+            const next = text.trim() ? parseValue(at.width, text) : "";
+            if (next !== null && (next !== width || mixedAt("width"))) writeWidth(next);
+          }}
+          onStep={(delta, text, gesture) => {
+            const next = stepField(at.width, text || "0px", delta, "0px");
+            if (next && next !== width) writeWidth(next, gesture);
+          }}
+          onSubmit={props.onReturnToSearch}
+        />
+        <PropertySelect
+          value={style}
+          options={BORDER_STYLE_VALUES}
+          label={`${name} style`}
+          placeholder={mixedAt("style") ? MIXED : undefined}
+          iconOnly
+          // No style set ("Select"): the solid line, dimmed.
+          iconFor={(s) =>
+            s ? (
+              <Icon name={STYLE_ICONS[s] ?? "border-solid"} />
+            ) : (
+              <span class="style-unset">
+                <Icon name="border-solid" />
+              </span>
+            )
+          }
+          onChange={(next) => (next !== style || mixedAt("style")) && write("style", next)}
+        />
+        <button
+          type="button"
+          class="border-color field-box"
+          ref={colorRef}
+          aria-label={`${name} color`}
+          aria-expanded={picking}
+          title={mixedAt("color") ? MIXED : color || "currentcolor"}
+          tabIndex={-1}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => setPicking(!picking)}
+        >
+          <span class="color-preview" style={{ "--_color": color || "currentColor" }} />
+        </button>
+      </div>
+      {/* Outside the line: the line's styles (its parts' corners) mustn't reach the picker's fields. */}
+      {picking && (
+        <ColorPicker
+          property={at.color}
+          color={splitColor(color).color}
+          computed={props.values?.[at.color] || props.values?.[propertiesAt("top").color] || ""}
+          opacity={splitColor(color).opacity}
+          onPick={(next, o, gesture) => write("color", joinColor(next, o), gesture)}
+          onRevert={(gesture) => props.onRevert?.(at.color, gesture)}
+          onClose={() => setPicking(false)}
+          trigger={() => colorRef.current}
+          {...pickerPlace(() => colorRef.current)}
+        />
+      )}
+    </>
   );
 }
 

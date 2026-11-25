@@ -42,6 +42,12 @@
     }
   }
 
+  /* No header (the color picker): 16px between its area's hue strip and the
+     rows, and under the rows (the owner's call). */
+  :scope[data-headerless] .panel-rows {
+    padding-block: 16px;
+  }
+
   :scope[data-dragging],
   :scope[data-dragging] .drag-handle {
     cursor: grabbing;

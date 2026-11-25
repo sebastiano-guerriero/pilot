@@ -41,4 +41,12 @@ describe("colors", () => {
     expect(parseOpacity("150")).toBe(100);
     expect(parseOpacity("x")).toBeNull();
   });
+
+  it("an oklch() color's own alpha: split into the color and its opacity, joined back so", () => {
+    expect(splitColor("oklch(0.7 0.1 280 / 50%)")).toEqual({ color: "oklch(0.7 0.1 280)", opacity: 50 });
+    expect(splitColor("oklch(0.7 0.1 280 / 0.25)")).toEqual({ color: "oklch(0.7 0.1 280)", opacity: 25 });
+    expect(splitColor("oklch(0.7 0.1 280)")).toEqual({ color: "oklch(0.7 0.1 280)", opacity: 100 });
+    expect(joinColor("oklch(0.7 0.1 280)", 50)).toBe("oklch(0.7 0.1 280 / 50%)");
+    expect(joinColor("oklch(0.7 0.1 280)", 100)).toBe("oklch(0.7 0.1 280)");
+  });
 });

@@ -21,8 +21,10 @@
   }
 
   /* With an action: the fields give up its 24px and the 6px gap. Rows with
-     and without one keep the same value area: same left and right edges. */
-  :scope[data-action] .values {
+     and without one keep the same value area: same left and right edges.
+     Its own value area only: a panel opened from the row (the border's color
+     picker) has rows of its own inside it. */
+  :scope[data-action] > .values {
     width: 98px;
     /* Next to the action, not centered between it and the label. */
     margin-inline-start: auto;

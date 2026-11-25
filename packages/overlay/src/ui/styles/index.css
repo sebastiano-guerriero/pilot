@@ -49,3 +49,4 @@
 @import "../../editors/mask/MaskImageEditor.css" layer(components);
 @import "../../editors/box-shadow/BoxShadowEditor.css" layer(components);
 @import "../../editors/border/BorderEditor.css" layer(components);
+@import "../components/ColorPicker/ColorPicker.css" layer(components);

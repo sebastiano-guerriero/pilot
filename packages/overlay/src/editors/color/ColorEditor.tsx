@@ -1,6 +1,7 @@
-import { useLayoutEffect, useRef } from "preact/hooks";
+import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import { joinColor, parseColor, parseOpacity, splitColor } from "../../css/colors.ts";
 import { bareToken } from "../../css/values.ts";
+import { ColorPicker, pickerPlace } from "../../ui/components/ColorPicker/ColorPicker.tsx";
 import { Icon } from "../../ui/components/Icon/Icon.tsx";
 import { PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
 import { allTokens } from "../../dom/tokens.ts";
@@ -73,10 +74,23 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
     if (color && !keyword) write(joinColor(color, o), gesture);
   };
 
-  const swatch = color ? (
-    <span class="color-swatch color-preview" style={{ "--_color": values?.[property] || "transparent" }} />
-  ) : (
-    <Icon name="layout-empty" />
+  // The swatch opens the color picker (none for a keyword: `none` has no color to pick).
+  const [picking, setPicking] = useState(false);
+  const swatchRef = useRef<HTMLButtonElement>(null);
+  const swatch = (
+    <button
+      type="button"
+      class="color-swatch-button"
+      ref={swatchRef}
+      aria-label={`Pick ${label}`}
+      aria-expanded={picking}
+      tabIndex={-1}
+      disabled={keyword}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => setPicking(!picking)}
+    >
+      {color ? <span class="color-swatch color-preview" style={{ "--_color": values?.[property] || "transparent" }} /> : <Icon name="layout-empty" />}
+    </button>
   );
 
   return (
@@ -129,6 +143,19 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
           onTab={(direction) => (direction > 0 ? tabOut(1) : focus(colorRef))}
         />
       </div>
+      {picking && (
+        <ColorPicker
+          property={property}
+          color={keyword ? "" : color}
+          computed={values?.[property] ?? ""}
+          opacity={opacity}
+          onPick={(next, o, gesture) => write(joinColor(next, o), gesture)}
+          onRevert={(gesture) => onRevert?.(property, gesture)}
+          onClose={() => setPicking(false)}
+          trigger={() => swatchRef.current}
+          {...pickerPlace(() => swatchRef.current)}
+        />
+      )}
     </PropertyRow>
   );
 }
