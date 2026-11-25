@@ -33,6 +33,7 @@ The history belongs to `mountPilot` (one per page load), not the UI, so quitting
 - **States** go in rules for those states (`[data-pilot-edit]:hover`), and are drawn unconditionally while their pills are set ([property-dialog.md](property-dialog.md), *States*).
 - **Values** are written by the browser (a scratch style declaration), so one it doesn't accept is left out.
 - An element loses its `data-pilot-edit` when it has no rules left, and the sheet is emptied when there are none.
+- **A value change is written in place:** when only values change (the same rules in the same order: each frame of a drag, a field stepped), they go into the sheet's rules through the CSSOM (`updateValues()`), and the browser restyles only the elements those rules select. Rewriting the sheet's text made it reparse it and restyle the whole page (a new sheet with a cascade layer): ~10ms a change on a 600-element page against ~0.3ms, so a color picker's drag went past its frame. Any other change (a rule added, removed, moved) rewrites the text. The text then lags behind the rules: `previewCss()` reads what's shown, as written (tests; happy-dom doesn't parse `@layer` blocks, so there it's always rewritten). A style rule has `cssRules` too in browsers with CSS nesting (empty), so `@media` is told by having no `style`.
 - Tests can give `EditHistory` another `Preview` ([test/inlinePreview.ts](../packages/overlay/src/test/inlinePreview.ts) writes inline styles, ignoring widths) to read what an edit did from `element.style`.
 
 ## Declared values

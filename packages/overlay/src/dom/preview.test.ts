@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
-import { EDIT_ATTRIBUTE, PREVIEW_ATTRIBUTE, mediaQuery, stylesheetPreview } from "./preview.ts";
+import { EDIT_ATTRIBUTE, PREVIEW_ATTRIBUTE, mediaQuery, previewCss, stylesheetPreview, updateValues } from "./preview.ts";
 
 const sheet = () => document.querySelector(`style[${PREVIEW_ATTRIBUTE}]`) as HTMLStyleElement | null;
 
@@ -26,6 +26,36 @@ describe("stylesheetPreview", () => {
     );
     expect(el.style.cssText).toBe("");
     el.remove();
+  });
+
+  it("the same rules with other values (a drag): written as text, read back as written (previewCss)", () => {
+    const el = document.createElement("div");
+    document.body.append(el);
+    stylesheetPreview.render([{ element: el, property: "padding-top", value: "10px" }]);
+    stylesheetPreview.render([{ element: el, property: "padding-top", value: "12px" }]);
+    expect(previewCss()).toContain("padding-top: 12px !important;");
+    stylesheetPreview.render([{ element: el, property: "color", value: "blue" }]);
+    expect(previewCss()).not.toContain("padding-top");
+    el.remove();
+  });
+
+  it("in a browser, the same rules with other values change in the sheet's rules, not its text (updateValues)", () => {
+    // happy-dom doesn't parse @layer blocks: a stand-in sheet, as a browser reads Pilot's.
+    // A style rule has `cssRules` too (empty) where the browser does CSS nesting, as Chrome.
+    const rule = () => ({ style: document.createElement("div").style, cssRules: [] });
+    const plain = rule();
+    const inMedia = { media: "(min-width: 1200px)", cssRules: [rule()] };
+    const style = { sheet: { cssRules: [{ cssRules: [plain, inMedia] }] } } as unknown as HTMLStyleElement;
+    const line = (decl: string) => `[${EDIT_ATTRIBUTE}="1"] { ${decl} }`;
+    const media = (decl: string) => `@media (min-width: 1200px) { [${EDIT_ATTRIBUTE}="1"] { ${decl} } }`;
+    const before = [line("padding-top: 10px !important;"), media("color: red !important;")];
+    expect(updateValues(style, before, [line("padding-top: 12px !important;"), media("color: blue !important;")])).toBe(true);
+    expect(plain.style.getPropertyValue("padding-top")).toBe("12px");
+    expect((inMedia.cssRules[0] as ReturnType<typeof rule>).style.getPropertyValue("color")).toBe("blue");
+    // Another property, another selector or another count: not just values, rewrite.
+    expect(updateValues(style, before, [line("margin-top: 12px !important;"), before[1] as string])).toBe(true); // same shape: a value's text
+    expect(updateValues(style, before, [line("padding-top: 12px !important;")])).toBe(false);
+    expect(updateValues(style, before, [`[${EDIT_ATTRIBUTE}="2"] { padding-top: 12px !important; }`, before[1] as string])).toBe(false);
   });
 
   it("leaves out values the browser doesn't take; no rules left: empty sheet, no attribute", () => {

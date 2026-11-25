@@ -114,10 +114,55 @@ export const stylesheetPreview: Preview = {
       const lines = byRoot.get(root) ?? [];
       const style = sheetFor(root);
       const text = lines.length ? `@layer ${LAYER} {\n${lines.map((l) => `  ${l}`).join("\n")}\n}\n` : "";
-      if (style.textContent !== text) style.textContent = text;
+      const before = written.get(style);
+      if ((before?.text ?? style.textContent) === text) continue;
+      // The same rules with other values (a drag, a field stepped): those rules' values, in place.
+      if (!before || !updateValues(style, before.lines, lines)) style.textContent = text;
+      written.set(style, { lines, text });
     }
   },
 };
+
+/** Each preview <style>'s rules as last written (its text, and each rule's line), since in-place updates leave its text behind. */
+const written = new WeakMap<HTMLStyleElement, { lines: string[]; text: string }>();
+
+/** The CSS Pilot's preview shows in a root, as written (its <style>'s text can lag behind, see updateValues). */
+export function previewCss(root: Document | ShadowRoot = document): string {
+  for (const style of sheets) if (style.isConnected && style.getRootNode() === root) return written.get(style)?.text ?? style.textContent ?? "";
+  return "";
+}
+
+/** A rule's line split around its declarations: `[data-pilot-edit="1"] { ` · `padding-top: 24px !important;` · ` }`. */
+const LINE = /^(.*\{ )([^{}]*)( \}(?: \})?)$/;
+
+/**
+ * The same rules as before, in the same order, some with other values: the
+ * values go into the sheet's rules (CSSOM), and the browser restyles only the
+ * elements those rules select. Rewriting the sheet's text made it reparse it
+ * and restyle the whole page (a new sheet with a cascade layer): ~10ms a
+ * change on a 600-element page, against ~0.3ms, so each frame of a drag (the
+ * color picker's, a drag handle's) went past its budget. False when the rules
+ * changed (added, removed, moved) or the sheet doesn't read as expected: the
+ * caller rewrites it then.
+ */
+export function updateValues(style: Pick<HTMLStyleElement, "sheet">, before: string[], after: string[]): boolean {
+  if (before.length !== after.length) return false;
+  const layer = style.sheet?.cssRules[0] as (CSSRule & { cssRules?: CSSRuleList }) | undefined;
+  if (!layer?.cssRules || layer.cssRules.length !== after.length) return false;
+  const changes: Array<{ rule: CSSStyleRule; text: string }> = [];
+  for (let i = 0; i < after.length; i++) {
+    if (before[i] === after[i]) continue;
+    const [was, now] = [before[i]?.match(LINE), after[i]?.match(LINE)];
+    if (!was || !now || was[1] !== now[1] || was[3] !== now[3]) return false;
+    let rule = layer.cssRules[i] as CSSRule & { cssRules?: CSSRuleList; style?: CSSStyleDeclaration };
+    // Inside @media. (Not by `cssRules`: a style rule has one too in browsers with CSS nesting, empty.)
+    if (!rule.style && rule.cssRules) rule = rule.cssRules[0] as typeof rule;
+    if (!rule?.style) return false;
+    changes.push({ rule: rule as CSSStyleRule, text: now[2] as string });
+  }
+  for (const { rule, text } of changes) rule.style.cssText = text;
+  return true;
+}
 
 /** The media query for a width range, both ends included: `(min-width: 768px) and (max-width: 1199px)`. */
 export function mediaQuery({ min, max }: WidthRange): string | undefined {
