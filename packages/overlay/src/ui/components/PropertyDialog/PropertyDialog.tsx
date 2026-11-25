@@ -1,13 +1,13 @@
 import { isModifierQuery } from "../../../search/modifiers.ts";
 import type { ElementState, WidthRange } from "@pilot/protocol";
-import { type ComponentChildren, Fragment } from "preact";
+import { Component, type ComponentChildren, Fragment } from "preact";
 import { declaredValues, forcedDeclarations, isFromReset } from "../../../dom/declared.ts";
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import type { BoxArea } from "../../../dom/boxModel.ts";
 import type { EditableElement } from "../../../dom/target.ts";
 import { clearProperty } from "../../../edits/clear.ts";
 import { clickWidth, partialWidth, takeWidths } from "../../../edits/widths.ts";
-import { EditHistory } from "../../../edits/history.ts";
+import { EditHistory, type RecordedChange, longhandsOf } from "../../../edits/history.ts";
 import { editors as allEditors, matchEditors } from "../../../editors/registry.ts";
 import { groupOf, inListOrder } from "../../../editors/listOrder.ts";
 import { type FocusRequest, type PropertyEditor, propertiesOf } from "../../../editors/types.ts";
@@ -232,6 +232,8 @@ export function PropertyDialog({
   const [draggedEditor, setDraggedEditor] = useState<string | null>(null);
   const [changedEditor, setChangedEditor] = useState<string | null>(null);
   const scrubbing = useRef(false);
+  // The row changing a value right now (a drag, a scrub, held arrows): the other rows skip their render then (EditorRow).
+  const live = useRef<{ id: string; at: number } | null>(null);
   const changeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const editing = draggedEditor ?? changedEditor;
   useEffect(() => onEditing?.(editing), [editing]);
@@ -451,7 +453,11 @@ export function PropertyDialog({
             <div class="properties-frame">
               <div class="properties" ref={listRef}>
                 {/* Editors own everything inside `.editor` (see the @scope boundary in the CSS). */}
-                {matches.map((match, index) => {
+                {(() => {
+                  const liveId = live.current && performance.now() - live.current.at < LIVE_MS ? live.current.id : null;
+                  // Pilot's changes, read once for every row's signature (EditorRow).
+                  const changes = history.changes();
+                  return matches.map((match, index) => {
                   // With nothing typed, the list is grouped (LIST_ORDER): each group
                   // starts with its label, after a dotted line between groups.
                   // Searching shows the matches alone, without labels.
@@ -463,7 +469,11 @@ export function PropertyDialog({
                       {startsGroup && previous && <div class="group-divider" aria-hidden="true" />}
                       {startsGroup && <div class="group-label">{group}</div>}
                       <div class="editor" data-editor={match.id}>
-                        <MatchedEditor
+                        <EditorRow
+                          quiet={!!liveId && liveId !== match.id}
+                          changes={changes}
+                          index={index}
+                          count={matches.length}
                           editor={match}
                           element={element}
                           others={others}
@@ -476,12 +486,16 @@ export function PropertyDialog({
                           onTabOut={(direction) => tabOut(index, direction)}
                           onHint={setEditorHint}
                           onInspect={inspectFor(match.id)}
-                          onChanged={() => changedBy(match.id)}
+                          onChanged={() => {
+                            live.current = { id: match.id, at: performance.now() };
+                            changedBy(match.id);
+                          }}
                         />
                       </div>
                     </Fragment>
                   );
-                })}
+                  });
+                })()}
               </div>
               <div class="fade" data-edge="top" aria-hidden="true" />
               <div class="fade" data-edge="bottom" aria-hidden="true" />
@@ -710,6 +724,75 @@ function Hint({ area }: { area: "search" | "editor" }) {
  * Feeds an editor the element's current values and routes its changes through
  * the edit history (which shows them on the page and makes them undoable).
  */
+/** How long after a row's change it counts as changing still (the next frame of a drag comes well within it). */
+const LIVE_MS = 400;
+
+type MatchedEditorProps = Parameters<typeof MatchedEditor>[0];
+
+/**
+ * A row of the dialog that renders again only when what it shows may have
+ * changed. While another row is changing a value (`quiet`: a drag, a scrub,
+ * held arrows), it skips its render unless Pilot's own values for its
+ * properties changed (`signatureOf`), or it moved, or its element, widths,
+ * states, search or focus did: reading its fields (the page's cascade, the
+ * computed style) was most of each frame with every property listed (~12ms
+ * of ~17 for 84 rows). At any other time it renders as before, so nothing
+ * it shows from the page goes stale.
+ */
+type EditorRowProps = MatchedEditorProps & { quiet: boolean; index: number; count: number; changes: RecordedChange[] };
+
+class EditorRow extends Component<EditorRowProps> {
+  private signature = "";
+
+  override shouldComponentUpdate(next: EditorRowProps): boolean {
+    const prev = this.props;
+    const same =
+      next.quiet &&
+      prev.editor === next.editor &&
+      prev.element === next.element &&
+      prev.history === next.history &&
+      prev.index === next.index &&
+      prev.count === next.count &&
+      prev.query === next.query &&
+      prev.focusRequest === next.focusRequest &&
+      prev.widths?.min === next.widths?.min &&
+      prev.widths?.max === next.widths?.max &&
+      (prev.states ?? []).join() === (next.states ?? []).join() &&
+      (prev.others ?? []).length === (next.others ?? []).length &&
+      (prev.others ?? []).every((o, i) => o === next.others?.[i]) &&
+      signatureOf(next) === this.signature;
+    return !same;
+  }
+
+  override render() {
+    this.signature = signatureOf(this.props);
+    const { quiet: _quiet, index: _index, count: _count, changes: _changes, ...props } = this.props;
+    return <MatchedEditor {...props} />;
+  }
+}
+
+/**
+ * Pilot's changes a row could show (and removals): on its elements, for one
+ * of its properties, or a shorthand or longhand of one (`padding` for
+ * padding-top, `border-top-width` for border-width). A change elsewhere
+ * alters it only if this does. From the changes the dialog read once.
+ */
+export function signatureOf({
+  editor,
+  element,
+  others = [],
+  changes,
+}: Pick<EditorRowProps, "editor" | "element" | "others" | "changes">): string {
+  const elements = [element, ...others];
+  const properties = propertiesOf(editor);
+  const related = (property: string) =>
+    properties.some((p) => p === property || longhandsOf(property).includes(p) || longhandsOf(p).includes(property));
+  return changes
+    .filter((c) => elements.includes(c.element) && related(c.property))
+    .map((c) => `${elements.indexOf(c.element)}:${c.property}:${c.value}:${c.removal?.from ?? ""}:${c.widths?.min}-${c.widths?.max}:${c.states?.join() ?? ""}`)
+    .join("|");
+}
+
 function MatchedEditor({
   editor,
   element,

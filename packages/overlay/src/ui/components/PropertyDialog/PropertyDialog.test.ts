@@ -734,5 +734,24 @@ describe("placement", () => {
     expect(ids).not.toContain("gap"); // shown by display, as its row
     expect(ids).not.toContain("size"); // writes nothing of its own
   });
+
+  it("a row's signature: Pilot's changes on its elements for its properties, their shorthands and longhands (what skipping its render could miss)", async () => {
+    const { signatureOf } = await import("./PropertyDialog.tsx");
+    const { editors } = await import("../../../editors/registry.ts");
+    const padding = editors.find((e) => e.id === "padding") as (typeof editors)[number];
+    const el = document.createElement("div");
+    const other = document.createElement("div");
+    const history = new EditHistory();
+    const sig = () => signatureOf({ editor: padding, element: el, changes: history.changes() });
+    const empty = sig();
+    history.apply(el, "color", "red");
+    history.apply(other, "padding-top", "4px");
+    expect(sig()).toBe(empty); // another property, another element
+    history.apply(el, "padding-top", "4px");
+    const longhand = sig();
+    expect(longhand).not.toBe(empty);
+    history.apply(el, "padding", "8px");
+    expect(sig()).not.toBe(longhand); // its shorthand
+  });
 });
 
