@@ -107,16 +107,17 @@
 }
 
 /* The variables button (the page's tokens, TokenMenu): an 8px icon in a
-   16px target, its middle 12px from the field's right edge (28px, left of a
-   scrub handle), showing while the field is hovered or edited; the field's
-   text stops 4px before the icon then, cut with an ellipsis. Placeholder,
-   pending the design. */
+   16px target, its middle 10px from the field's right edge (the owner's
+   call: 2px further right than it was; 28px, left of a scrub handle),
+   showing while the field is hovered or edited; the field's text stops 4px
+   before the icon then, cut with an ellipsis. Placeholder, pending the
+   design. */
 @scope (.input-wrap[data-tokens]) {
   .token-button {
     all: unset;
     position: absolute;
     top: 50%;
-    right: 4px;
+    right: 2px;
     display: grid;
     place-items: center;
     width: 16px;
@@ -146,7 +147,7 @@
     }
 
     .property-input-text {
-      padding-right: 20px;
+      padding-right: 18px;
     }
 
     &.scrub-field .property-input-text {
