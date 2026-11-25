@@ -53,6 +53,75 @@ interface Reader {
   /** Every instance of `type` on the page. */
   instancesOf(element: Element, type: unknown): ComponentInstance[];
   sourceOf(element: Element): ComponentSource | null;
+  /** The page's component instances as a tree, from the app's root (see componentTree). */
+  tree(element: Element): ComponentNode[];
+}
+
+/**
+ * A component instance in the page's component tree (the DOM tree panel's
+ * Components view): its name, what it renders at its top level, and the
+ * components it renders, in order.
+ */
+export interface ComponentNode {
+  /** Stable while the page is open: the same instance keeps it across renders (React's two copies of a fiber share it). */
+  id: number;
+  name: string;
+  /** Its top-level DOM elements (several for a fragment), in order. */
+  roots: Element[];
+  children: ComponentNode[];
+}
+
+const nodeIds = new WeakMap<object, number>();
+let nextNodeId = 1;
+/** One id per instance: for a fiber, its other copy (`alternate`) shares it. */
+function nodeId(key: object, twin?: object | null): number {
+  let id = nodeIds.get(key) ?? (twin ? nodeIds.get(twin) : undefined);
+  if (id === undefined) id = nextNodeId++;
+  nodeIds.set(key, id);
+  if (twin) nodeIds.set(twin, id);
+  return id;
+}
+
+/**
+ * Nodes as the panel lists them: without the instances that render nothing
+ * on the page (a provider whose children are other components still
+ * renders them: it stays) nor those without a name; their children take
+ * their place.
+ */
+function shown(nodes: ComponentNode[]): ComponentNode[] {
+  return nodes.flatMap((node) => {
+    const children = shown(node.children);
+    return node.roots.length && node.name ? [{ ...node, children }] : children;
+  });
+}
+
+/** The first element under `root` a framework Pilot reads renders, if any (a few thousand looked at at most). */
+function frameworkElement(root: Element): Element | null {
+  if (readerFor(root)) return root;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+  for (let i = 0, node = walker.nextNode(); node && i < 5000; i++, node = walker.nextNode()) {
+    if (readerFor(node as Element)) return node as Element;
+  }
+  return null;
+}
+
+/**
+ * The page's components as a tree, from the app's root: every instance the
+ * framework renders that draws something on the page, nested as they render
+ * each other (React, Server Components included; Vue 3). Null when Pilot
+ * reads no components on the page (plain HTML, Svelte, Angular): the panel
+ * then has no Components view.
+ */
+export function componentTree(root: Element = document.body): ComponentNode[] | null {
+  try {
+    const element = frameworkElement(root);
+    const reader = element && readerFor(element);
+    if (!element || !reader) return null;
+    return shown(reader.tree(element));
+  } catch {
+    // A framework's internals Pilot didn't expect: no tree.
+    return null;
+  }
 }
 
 /** The instances rendering `element`, the nearest first; empty when Pilot can't tell. */
@@ -352,6 +421,39 @@ const react: Reader = {
     }
     return (tree.byType.get(type) ?? []).map(reactInstance);
   },
+  tree(element) {
+    const tree = reactTree(element);
+    let fiber = reactFiberOf(element);
+    while (fiber && fiber.tag !== ROOT) fiber = fiber.return;
+    const current = (fiber?.stateNode as { current?: Fiber } | undefined)?.current;
+    if (!tree || !current) return [];
+    const top: ComponentNode[] = [];
+    // A Server Component's output can be several fibers in a row: one node for all of them.
+    const servers = new Map<ServerComponent, ComponentNode>();
+    let visited = 0;
+    const walk = (f: Fiber, into: ComponentNode[], depth: number) => {
+      if (visited++ > 50_000 || depth > 1000) return;
+      // The Server Components whose output starts here, outermost first.
+      for (const info of serversAt(f).reverse()) {
+        let node = servers.get(info);
+        if (!node) {
+          node = { id: nodeId(info), name: info.name, roots: serverInstance(tree, info).roots, children: [] };
+          servers.set(info, node);
+          into.push(node);
+        }
+        into = node.children;
+      }
+      if (isComponent(f) && isAppComponent(f, tree)) {
+        const node: ComponentNode = { id: nodeId(f, f.alternate), name: reactName(f.type), roots: reactRoots(f), children: [] };
+        into.push(node);
+        into = node.children;
+      }
+      // A portal's content isn't on its spot of the page: left out, as in reactRoots.
+      for (let c = f.child; c; c = c.sibling) if (c.tag !== PORTAL) walk(c, into, depth + 1);
+    };
+    walk(current, top, 0);
+    return top;
+  },
   sourceOf(element) {
     const fiber = reactFiberOf(element);
     if (!fiber) return null;
@@ -465,6 +567,25 @@ const vue: Reader = {
     };
     if (root) visit(root);
     return found;
+  },
+  tree(element) {
+    let root = vueOwnerOf(element);
+    while (root?.parent) root = root.parent;
+    let visited = 0;
+    const walk = (vnode: unknown, into: ComponentNode[]) => {
+      if (!vnode || typeof vnode !== "object" || visited++ > 50_000) return;
+      const v = vnode as VNode;
+      if (v.component) return visit(v.component, into);
+      if (Array.isArray(v.children)) for (const c of v.children) walk(c, into);
+    };
+    const visit = (i: VueInstance, into: ComponentNode[]) => {
+      const node: ComponentNode = { id: nodeId(i), name: vueName(i.type), roots: vueRoots(i.subTree), children: [] };
+      into.push(node);
+      walk(i.subTree, node.children);
+    };
+    const top: ComponentNode[] = [];
+    if (root) visit(root, top);
+    return top;
   },
   sourceOf(element) {
     const owner = vueOwnerOf(element);

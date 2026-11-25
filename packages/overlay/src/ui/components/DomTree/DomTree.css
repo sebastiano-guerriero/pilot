@@ -95,6 +95,35 @@
     user-select: none;
   }
 
+  /* DOM / Components (the owner's design): the one shown in full contrast,
+     the other dimmed (contrast-low), clickable. Above the drag strip. */
+  .views {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    gap: 12px;
+  }
+
+  .view {
+    all: unset;
+    color: var(--plt-color-contrast-low);
+    cursor: pointer;
+  }
+
+  .view:hover {
+    color: var(--plt-color-contrast-high);
+  }
+
+  .view[aria-pressed="true"] {
+    color: var(--plt-color-contrast-high);
+    cursor: default;
+  }
+
+  .view:focus-visible {
+    outline: 2px solid var(--plt-color-accent);
+    border-radius: 4px;
+  }
+
   /* Above the drag strip, which its top 2px meet. */
   .close {
     all: unset;

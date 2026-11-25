@@ -75,6 +75,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [x] Element states: `hover:`, `focus:`, `focus-visible:`, `active:` pills, the element shown in those states, states per change
 - [x] The `/` menu of modifiers
 - [x] DOM tree (plumbing; design pending)
+  - [x] DOM / Components switch: the page's component instances as a tree (React, Server Components, Vue 3)
 - [x] Preview from a stylesheet Pilot adds (`@layer` + `!important`, `@media` per width range)
 - [x] The page's breakpoints on the ruler, clickable
 - [ ] `from-md` in the search (breakpoint names, where the page exposes them)

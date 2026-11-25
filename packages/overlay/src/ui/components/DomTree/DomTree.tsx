@@ -1,4 +1,7 @@
-import { useEffect, useLayoutEffect, useReducer, useRef, useState } from "preact/hooks";
+import type { RefObject } from "preact";
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
+import { type ComponentNode, componentTree } from "../../../dom/component.ts";
+import { type ComponentRow, componentRows, nodeOf, pathTo, selectable } from "../../../dom/componentTree.ts";
 import { type DomRow, ancestorsWithin, isSelectableRow, domRows } from "../../../dom/domTree.ts";
 import { scrollWithin } from "../../../dom/reveal.ts";
 import { px } from "../../px.ts";
@@ -40,7 +43,10 @@ type Spot = { left: number; top: number };
  * was left: where it was dragged (null: not dragged, centered again) and the
  * height it was resized to (null: not resized, as tall as its rows).
  */
-const remembered: { spot: Spot | null; maxHeight: number | null } = { spot: null, maxHeight: null };
+const remembered: { spot: Spot | null; maxHeight: number | null; view: View } = { spot: null, maxHeight: null, view: "dom" };
+
+/** What the panel lists: the page's elements, or its components (when Pilot reads them, dom/component.ts). */
+type View = "dom" | "components";
 
 /**
  * Where the panel is drawn: its spot (or, with none, 8px from the left edge,
@@ -92,8 +98,14 @@ export function DomTree({ selected, also = [], onHover, onSelect, onClose, veile
   const [expanded, setExpanded] = useState<Set<Element>>(() =>
     selected ? new Set([...ancestorsWithin(selected, root), selected]) : new Set(),
   );
-  const [, refresh] = useReducer((n: number) => n + 1, 0);
+  const [tick, refresh] = useReducer((n: number) => n + 1, 0);
   const listRef = useRef<HTMLDivElement>(null);
+  // The page's components, read again when the page changes (not on every render: a hover re-renders
+  // the panel, and reading walks the framework's whole tree). Null: none Pilot reads, so no switch.
+  const tree = useMemo(() => componentTree(root), [tick]);
+  const [chosen, setChosen] = useState<View>(remembered.view);
+  const view: View = tree ? chosen : "dom";
+  const choose = (next: View) => setChosen((remembered.view = next));
 
   // Size and place. The panel is as tall as its rows, up to the height it
   // was resized to and the window's (8px from each edge); its rows scroll
@@ -197,16 +209,17 @@ export function DomTree({ selected, also = [], onHover, onSelect, onClose, veile
     };
   }, []);
 
-  const rows = domRows(root, expanded);
+  const rows = view === "dom" ? domRows(root, expanded) : [];
   const selectedIndex = rows.findIndex((r) => !r.pseudo && r.element === selected);
 
   // Keep the selected row in view, sideways too: its name, not the whole
   // row (rows are as wide as the longest, see the CSS). The list scrolls
   // itself, nothing else: scrollIntoView would scroll the page behind it too.
   useLayoutEffect(() => {
+    if (view !== "dom") return;
     const list = listRef.current;
     scrollWithin(list, selectedIndex < 0 ? null : list?.querySelector(`[data-index="${selectedIndex}"] .tag`), "both");
-  }, [selectedIndex, selected]);
+  }, [selectedIndex, selected, view]);
 
   const toggle = (element: Element, open: boolean) =>
     setExpanded((prev) => {
@@ -299,69 +312,93 @@ export function DomTree({ selected, also = [], onHover, onSelect, onClose, veile
         <Icon name="grip" />
       </div>
       <div class="header">
-        <span class="title">DOM tree</span>
+        {/* DOM / Components (the owner's design): the one shown in full contrast, the other dimmed, clickable.
+            Only DOM when Pilot reads no components on the page. */}
+        <div class="views">
+          <button type="button" class="view" aria-pressed={view === "dom"} onClick={() => choose("dom")}>
+            DOM
+          </button>
+          {tree && (
+            <button type="button" class="view" aria-pressed={view === "components"} onClick={() => choose("components")}>
+              Components
+            </button>
+          )}
+        </div>
         <button type="button" class="close" aria-label="Close the DOM tree" title="Close (Alt+D)" onClick={onClose}>
           <Icon name="close" />
         </button>
       </div>
       <div class="frame">
-        <div
-          class="rows"
-          ref={listRef}
-          role="tree"
-          tabIndex={0}
-          aria-label="Page elements"
-          onKeyDown={onKeyDown}
-          onPointerLeave={() => onHover(null)}
-        >
-          {rows.map((row, index) => (
-            <div
-              key={keyOf(row.element, row.pseudo)}
-              class="row"
-              role="treeitem"
-              aria-level={row.depth + 1}
-              aria-expanded={row.expandable ? row.expanded : undefined}
-              aria-selected={index === selectedIndex || (!row.pseudo && also.includes(row.element))}
-              data-index={index}
-              data-pseudo={row.pseudo ? "" : undefined}
-              style={{ paddingLeft: px(8 + row.depth * 12) }}
-              onPointerEnter={() => onHover(row.element)}
-              onClick={(e) => {
-                if (!isSelectableRow(row)) return;
-                if (e.metaKey || e.ctrlKey) {
-                  picked.current = row.element;
-                  onSelect(row.element, { add: true });
-                } else if (e.shiftKey) onSelect(row.element, { range: rangeTo(index) });
-                else selectRow(row);
-              }}
-            >
-              <span
-                class="toggle"
-                data-open={row.expanded || undefined}
-                aria-hidden="true"
+        {view === "components" && tree ? (
+          <ComponentRows
+            nodes={tree}
+            selected={selected}
+            also={also}
+            listRef={listRef}
+            onHover={onHover}
+            onSelect={onSelect}
+            onClose={onClose}
+          />
+        ) : (
+          <div
+            class="rows"
+            ref={listRef}
+            role="tree"
+            tabIndex={0}
+            aria-label="Page elements"
+            onKeyDown={onKeyDown}
+            onPointerLeave={() => onHover(null)}
+          >
+            {rows.map((row, index) => (
+              <div
+                key={keyOf(row.element, row.pseudo)}
+                class="row"
+                role="treeitem"
+                aria-level={row.depth + 1}
+                aria-expanded={row.expandable ? row.expanded : undefined}
+                aria-selected={index === selectedIndex || (!row.pseudo && also.includes(row.element))}
+                data-index={index}
+                data-pseudo={row.pseudo ? "" : undefined}
+                style={{ paddingLeft: px(8 + row.depth * 12) }}
+                onPointerEnter={() => onHover(row.element)}
                 onClick={(e) => {
-                  if (!row.expandable) return;
-                  e.stopPropagation();
-                  toggle(row.element, !row.expanded);
+                  if (!isSelectableRow(row)) return;
+                  if (e.metaKey || e.ctrlKey) {
+                    picked.current = row.element;
+                    onSelect(row.element, { add: true });
+                  } else if (e.shiftKey) onSelect(row.element, { range: rangeTo(index) });
+                  else selectRow(row);
                 }}
               >
-                {row.expandable && <Icon name="chevron-down" />}
-              </span>
-              <span class="label">
-                <span class="tag">{row.tag}</span>
-                {row.identifiers && <span class="identifiers">{row.identifiers}</span>}
-                {row.details && <span class="details">({row.details})</span>}
-                {row.text && <span class="text">{row.text}</span>}
-              </span>
-            </div>
-          ))}
-        </div>
+                <span
+                  class="toggle"
+                  data-open={row.expanded || undefined}
+                  aria-hidden="true"
+                  onClick={(e) => {
+                    if (!row.expandable) return;
+                    e.stopPropagation();
+                    toggle(row.element, !row.expanded);
+                  }}
+                >
+                  {row.expandable && <Icon name="chevron-down" />}
+                </span>
+                <span class="label">
+                  <span class="tag">{row.tag}</span>
+                  {row.identifiers && <span class="identifiers">{row.identifiers}</span>}
+                  {row.details && <span class="details">({row.details})</span>}
+                  {row.text && <span class="text">{row.text}</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
         {/* Rows fade out at the list's top and bottom edges as they scroll, like
             the property dialog's list. Below the scroll thumbs. */}
         <div class="fade" data-edge="top" aria-hidden="true" />
         <div class="fade" data-edge="bottom" aria-hidden="true" />
-        <ScrollThumb target={listRef} />
-        <ScrollThumb target={listRef} axis="x" />
+        {/* Keyed by the view: its list is another element. */}
+        <ScrollThumb key={`y-${view}`} target={listRef} />
+        <ScrollThumb key={`x-${view}`} target={listRef} axis="x" />
       </div>
       {/* The resize strip: 6px along the bottom edge (it adds no height). */}
       <div
@@ -372,6 +409,165 @@ export function DomTree({ selected, also = [], onHover, onSelect, onClose, veile
         onPointerUp={onDragEnd}
         onPointerCancel={onDragEnd}
       />
+    </div>
+  );
+}
+
+/**
+ * The Components view's rows: the page's component instances as a tree
+ * (dom/componentTree.ts), as the DOM view lists elements.
+ * - Opens down to the selection: the components around it opened, and the
+ *   one it's the top of marked (a `<Card>`'s card); inside a component, not
+ *   its top, the innermost one around it is shown, unmarked.
+ * - Hovering a row highlights what the instance draws (its first element);
+ *   clicking it selects its elements (several for a fragment: all of them,
+ *   as a range, with Select on).
+ * - Keys as in the DOM view: ↑/↓ the previous/next row, → opens (or goes to
+ *   the first child), ← closes (or goes to the parent), Esc closes the panel.
+ */
+function ComponentRows({
+  nodes,
+  selected,
+  also,
+  listRef,
+  onHover,
+  onSelect,
+  onClose,
+}: Pick<DomTreeProps, "selected" | "onHover" | "onSelect" | "onClose"> & {
+  nodes: ComponentNode[];
+  also: readonly Element[];
+  listRef: RefObject<HTMLDivElement | null>;
+}) {
+  const around = (element: Element | null) => (element ? pathTo(nodes, element).map((n) => n.id) : []);
+  const [expanded, setExpanded] = useState<Set<number>>(() => new Set(around(selected)));
+
+  // Selected elsewhere (on the page, or in the DOM view before): open down to it. A row picked here stays as it was.
+  const picked = useRef<Element | null>(null);
+  useLayoutEffect(() => {
+    const fromHere = selected === picked.current;
+    picked.current = null;
+    if (!selected || fromHere) return;
+    setExpanded((prev) => new Set([...prev, ...around(selected)]));
+  }, [selected]);
+
+  const rows = componentRows(nodes, expanded);
+  const current = selected ? nodeOf(nodes, selected) : null;
+  const selectedIndex = current ? rows.findIndex((r) => r.node.id === current.id) : -1;
+  // Inside a component, not its top: the innermost one around it, to keep in view.
+  const near = selected ? pathTo(nodes, selected).at(-1) : undefined;
+  const shownIndex = selectedIndex >= 0 ? selectedIndex : near ? rows.findIndex((r) => r.node.id === near.id) : -1;
+  const alsoIds = new Set(also.flatMap((e) => nodeOf(nodes, e)?.id ?? []));
+
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    scrollWithin(list, shownIndex < 0 ? null : list?.querySelector(`[data-index="${shownIndex}"] .tag`), "both");
+  }, [shownIndex, selected]);
+
+  const toggle = (id: number, open: boolean) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (open) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+
+  const pick = (row: ComponentRow | undefined) => {
+    const elements = row ? selectable(row.node) : [];
+    const first = elements[0];
+    if (!first) return;
+    picked.current = first;
+    onSelect(first, elements.length > 1 ? { range: elements } : undefined);
+  };
+  /** The rows' elements from the selected row to row `index`, for Shift+click. */
+  const rangeTo = (index: number): Element[] => {
+    const start = selectedIndex < 0 ? index : selectedIndex;
+    const step = index >= start ? 1 : -1;
+    const range: Element[] = [];
+    for (let i = start; i !== index + step; i += step) for (const e of selectable((rows[i] as ComponentRow).node)) if (!range.includes(e)) range.push(e);
+    return range;
+  };
+
+  const onKeyDown = (e: KeyboardEvent) => {
+    const at = selectedIndex >= 0 ? selectedIndex : shownIndex;
+    const row = rows[at];
+    const step = (from: number, by: 1 | -1) => {
+      for (let i = from + by; i >= 0 && i < rows.length; i += by) if (selectable((rows[i] as ComponentRow).node).length) return rows[i];
+      return undefined;
+    };
+    switch (e.key) {
+      case "ArrowDown":
+        pick(step(at, 1));
+        break;
+      case "ArrowUp":
+        pick(step(at < 0 ? rows.length : at, -1));
+        break;
+      case "ArrowRight":
+        if (!row?.expandable) break;
+        if (!row.expanded) toggle(row.node.id, true);
+        else pick(step(at, 1));
+        break;
+      case "ArrowLeft":
+        if (row?.expanded) toggle(row.node.id, false);
+        else if (row?.path.length) pick(rows.find((r) => r.node.id === row.path.at(-1)));
+        break;
+      case "Escape":
+        onClose();
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  return (
+    <div
+      class="rows"
+      ref={listRef}
+      role="tree"
+      tabIndex={0}
+      aria-label="Page components"
+      onKeyDown={onKeyDown}
+      onPointerLeave={() => onHover(null)}
+    >
+      {rows.map((row, index) => (
+        <div
+          key={row.node.id}
+          class="row"
+          role="treeitem"
+          aria-level={row.depth + 1}
+          aria-expanded={row.expandable ? row.expanded : undefined}
+          aria-selected={index === selectedIndex || alsoIds.has(row.node.id)}
+          data-index={index}
+          style={{ paddingLeft: px(8 + row.depth * 12) }}
+          onPointerEnter={() => onHover(row.node.roots[0] ?? null)}
+          onClick={(e) => {
+            const elements = selectable(row.node);
+            if (!elements[0]) return;
+            if (e.metaKey || e.ctrlKey) {
+              picked.current = elements[0];
+              onSelect(elements[0], { add: true });
+            } else if (e.shiftKey) onSelect(elements[0], { range: rangeTo(index) });
+            else pick(row);
+          }}
+        >
+          <span
+            class="toggle"
+            data-open={row.expanded || undefined}
+            aria-hidden="true"
+            onClick={(e) => {
+              if (!row.expandable) return;
+              e.stopPropagation();
+              toggle(row.node.id, !row.expanded);
+            }}
+          >
+            {row.expandable && <Icon name="chevron-down" />}
+          </span>
+          <span class="label">
+            <span class="tag">{row.node.name}</span>
+          </span>
+        </div>
+      ))}
     </div>
   );
 }

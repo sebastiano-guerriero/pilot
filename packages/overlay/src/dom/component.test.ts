@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
-import { componentName, componentProps, componentSource, fileFromStack, ownersOf } from "./component.ts";
+import { type ComponentNode, componentName, componentProps, componentSource, componentTree, fileFromStack, ownersOf } from "./component.ts";
 import { elementName } from "./name.ts";
 import { similarOf } from "./similar.ts";
 
@@ -336,5 +336,54 @@ describe("an instance's props", () => {
       props: { plan: "Starter", featured: false },
       usedIn: "/app/src/Pricing.vue",
     });
+  });
+});
+
+describe("the component tree (the DOM tree panel's Components view)", () => {
+  /** A node as names, for comparing: `Name` or `Name > [children]`. */
+  const names = (nodes: ComponentNode[]): unknown[] => nodes.map((n) => (n.children.length ? [n.name, names(n.children)] : n.name));
+
+  it("React: the app's components, nested as they render each other; nameless ones and those drawing nothing leave their place to their children", () => {
+    function Empty() {}
+    const card = (text: string) => component(ProductCard, host("article", {}, component(CardTitle, host("h3", { text }))));
+    mountReact(
+      host(
+        "div",
+        { class: "app" },
+        component(Hero, host("h1", { text: "Hero" }), component(Empty)),
+        // A nameless wrapper: its card shows in its place.
+        component(() => {}, card("One")),
+        card("Two"),
+      ),
+    );
+    const tree = componentTree() as ComponentNode[];
+    expect(names(tree)).toEqual(["Hero", ["ProductCard", ["CardTitle"]], ["ProductCard", ["CardTitle"]]]);
+    expect(tree[1]?.roots).toEqual([document.querySelectorAll("article")[0]]);
+    // The same instances keep their ids.
+    expect((componentTree() as ComponentNode[]).map((n) => n.id)).toEqual(tree.map((n) => n.id));
+  });
+
+  it("Vue: the instances from the app's root", () => {
+    const App = { name: "App" };
+    const Card = { __name: "PriceCard" };
+    const app = { type: App, parent: null as unknown, subTree: null as unknown };
+    const card = { type: Card, parent: app, subTree: null as unknown };
+    const div = document.createElement("div");
+    const main = document.createElement("main");
+    main.append(div);
+    for (const [node, owner] of [
+      [div, card],
+      [main, app],
+    ] as const)
+      Object.defineProperty(node, "__vueParentComponent", { value: owner, enumerable: false });
+    card.subTree = { type: "div", el: div, component: null, children: [] };
+    app.subTree = { type: "main", el: main, component: null, children: [{ type: Card, el: div, component: card, children: null }] };
+    document.body.append(main);
+    expect(names(componentTree() as ComponentNode[])).toEqual([["App", ["PriceCard"]]]);
+  });
+
+  it("plain HTML: none (no Components view)", () => {
+    document.body.innerHTML = "<main><h1>Hi</h1></main>";
+    expect(componentTree()).toBeNull();
   });
 });
