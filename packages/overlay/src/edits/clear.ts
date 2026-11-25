@@ -1,5 +1,5 @@
 import type { ElementState, StyleSource, WidthRange } from "@pilot/protocol";
-import { type Declared, declaredValue, declaredWithout, mediaOf } from "../dom/declared.ts";
+import { type Declared, declaredValue, declaredWithout, isFromReset, mediaOf } from "../dom/declared.ts";
 import type { EditableElement } from "../dom/target.ts";
 import type { EditHistory } from "./history.ts";
 
@@ -23,6 +23,11 @@ import type { EditHistory } from "./history.ts";
  *   (`also`), for the agent to stop them all.
  *   The field shows nothing either way.
  *
+ * - When only a reset declares it (a rule for every element, `*`: Tailwind's
+ *   preflight `border: 0 solid`, `margin: 0`), the element doesn't set it
+ *   either: Pilot's value is just dropped, no removal. Removing it would ask
+ *   the agent to change the reset, for every element, to clear one field.
+ *
  * Declared values are the page's own (Pilot's preview sheet is left out), and
  * Pilot never writes the element's `style`, so the page's value is simply the
  * declared one.
@@ -38,7 +43,7 @@ export function clearProperty(
   states?: readonly ElementState[],
 ): void {
   const page = declaredValue(element, property, states);
-  if (!page) return history.apply(element, property, "", gesture, { widths, states });
+  if (!page || isFromReset(page)) return history.apply(element, property, "", gesture, { widths, states });
 
   // Without the removed declaration: for the app's style attribute, the
   // stylesheets' value; for a rule, everything else (the style attribute

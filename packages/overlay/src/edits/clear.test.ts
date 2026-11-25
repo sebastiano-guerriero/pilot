@@ -31,6 +31,15 @@ describe("clearProperty", () => {
     expect(history.removalOf(element, "gap")).toBeNull();
   });
 
+  it("only a reset sets it (`*`, Tailwind's preflight): Pilot's value is dropped, the reset left alone", async () => {
+    style.textContent = "*, ::before, ::after { border: 0 solid; }";
+    await nextTask();
+    history.apply(element, "border-width", "1px");
+    clearProperty(history, element, "border-width");
+    expect(history.valueOf(element, "border-width")).toBeNull();
+    expect(history.removalOf(element, "border-width")).toBeNull();
+  });
+
   it("a stylesheet sets it: a removal, previewed with revert when no other rule declares it", () => {
     style.textContent = ".card { gap: 16px; }";
     clearProperty(history, element, "gap");
