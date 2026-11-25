@@ -3,7 +3,7 @@
  * they match). `update` and `init` compare
  * a project's installed Pilot with it.
  */
-export const VERSION = "0.15.0";
+export const VERSION = "0.16.0";
 
 /** Whether version `a` is older than `b` (x.y.z, prerelease tags ignored). */
 export function olderThan(a: string, b: string): boolean {
