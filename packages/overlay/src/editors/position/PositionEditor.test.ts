@@ -92,7 +92,7 @@ describe("z-index, border-radius and visibility", () => {
     }
   });
 
-  it("Position (position, inset, z-index, isolation), then Appearance (bg-color, border, border-radius, opacity), Effects (box-shadow, the outline, the blend modes, filter, backdrop-filter), Transform (rotate), then Typography (color first)", () => {
+  it("Position (position, inset, z-index, isolation), then Appearance (bg-color, border, border-radius, opacity), Effects (box-shadow, the outline, the blend modes, filter, backdrop-filter), Transform (rotate, perspective, perspective-origin, transform-style, backface-visibility), then Typography (color first)", () => {
     const ids = inListOrder(editors).map((e) => e.id);
     const at = ids.indexOf("position");
     const order = [
@@ -114,6 +114,10 @@ describe("z-index, border-radius and visibility", () => {
       "filter",
       "backdrop-filter",
       "rotate",
+      "perspective",
+      "perspective-origin",
+      "transform-style",
+      "backface-visibility",
       "color",
     ];
     expect(ids.slice(at, at + order.length)).toEqual(order);
@@ -121,7 +125,7 @@ describe("z-index, border-radius and visibility", () => {
       ...Array(4).fill("Position"),
       ...Array(4).fill("Appearance"),
       ...Array(9).fill("Effects"),
-      "Transform",
+      ...Array(5).fill("Transform"),
       "Typography",
     ]);
   });

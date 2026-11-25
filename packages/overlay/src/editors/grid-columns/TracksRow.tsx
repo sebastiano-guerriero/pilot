@@ -36,7 +36,7 @@ interface TracksRowProps {
 /**
  * `grid-template-columns` or `grid-template-rows` (`axis`): a mode select,
  * plus a field for the modes that take a value. With a field, the two share
- * the value area (60px each); without one, the select fills it.
+ * the value area (61px each); without one, the select fills it.
  * - repeat (the default): a track count. `3` writes
  *   `repeat(3, minmax(0, 1fr))`, three equal tracks that can shrink below
  *   their content (Tailwind's grid-cols-3, grid-rows-3). Whole numbers from 1

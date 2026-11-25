@@ -29,6 +29,8 @@ export interface PresetConfig {
   icons?: Record<string, IconName>;
   /** A word after each preset, dimmed (font-weight's 700 → bold). */
   hints?: Record<string, string>;
+  /** The row's label, when the property's name doesn't fit (perspective-origin → persp-origin). */
+  name?: string;
 }
 
 export const CUSTOM = "custom";
@@ -47,7 +49,7 @@ export function presetOption(config: Pick<PresetConfig, "property" | "presets">,
 /**
  * A select with the presets and `custom`, which adds a field next to it for
  * any other value (what every Pilot field accepts for the property, see
- * css/values.ts). With the field, the two share the value area (60px each),
+ * css/values.ts). With the field, the two share the value area (61px each),
  * like grid-columns.
  * - A value set some other way that means a preset shows as that option;
  *   anything else shows as custom, with its value in the field.
@@ -84,11 +86,12 @@ export function PresetEditor({ config, ...props }: PropertyEditorProps & { confi
   const tabOut = (direction: 1 | -1) => (onTabOut ? onTabOut(direction) : onReturnToSearch?.());
 
   return (
-    <PropertyRow label={property}>
+    <PropertyRow label={config.name ?? property}>
       <PropertySelect
         value={option}
-        options={[...config.presets, CUSTOM]}
-        label={property}
+        // none last, after custom too (the rule for every select).
+        options={[...config.presets.filter((p) => p !== "none"), CUSTOM, ...(config.presets.includes("none") ? ["none"] : [])]}
+        label={config.name ?? property}
         placeholder={isMixed(props, property) ? MIXED : undefined}
         triggerRef={selectRef}
         iconFor={

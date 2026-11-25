@@ -6,7 +6,7 @@ type PropertyRowProps = Omit<HTMLAttributes<HTMLDivElement>, "label"> & {
   label: ComponentChildren;
   /**
    * The value fields, on the right, in a 128px area. One field fills it; two
-   * share it with an 8px gap (60px each).
+   * share it with a 6px gap (61px each).
    */
   children: ComponentChildren;
   /**

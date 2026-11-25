@@ -1,5 +1,5 @@
 /* Value control in an editor row: a box that fills the width of its slot
-   (PropertyRow's value area: 128px for one field, 60px each for two). The box
+   (PropertyRow's value area: 128px for one field, 61px each for two). The box
    itself (height, fill, radius, inner shadow) is `.field-box` in base.css,
    shared with PropertySelect. An empty box means nothing is set. */
 @scope (.property-input-text) {
