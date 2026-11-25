@@ -1,12 +1,8 @@
 /* The agent's props list, inside its reply (CommentWidget's agent message,
-   whose list and code styles it takes): a line per prop, the name as code,
-   its value, then what it takes, dimmed; under it, how to change one, dimmed. */
+   whose list and code styles it takes, bullets included: the owner's call):
+   a bullet per prop, the name as code, its value, then what it takes,
+   dimmed; under it, how to change one, dimmed, its example in full contrast. */
 @scope (.props-list) {
-  /* No bullets: the names start the lines (the reply's list indent is taken off there, CommentWidget.css). */
-  :scope {
-    list-style: none;
-  }
-
   .prop-value {
     margin-left: 6px;
   }
@@ -20,5 +16,10 @@
 @scope (.props-how) {
   :scope {
     color: var(--plt-color-contrast-low);
+  }
+
+  /* The line to type stands out from the dimmed words around it. */
+  code {
+    color: var(--plt-color-contrast-high);
   }
 }

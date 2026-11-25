@@ -271,11 +271,6 @@
       padding-left: 16px;
     }
 
-    /* The /props list (PropsList): lines, not bullets, flush with the words. */
-    & ul.props-list {
-      padding-left: 0;
-    }
-
     & li + li {
       margin-top: 2px;
     }

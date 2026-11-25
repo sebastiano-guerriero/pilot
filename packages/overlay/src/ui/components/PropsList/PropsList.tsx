@@ -35,7 +35,7 @@ export function propExample(p: PropSpec, now: PropValue | undefined): string {
 
 /**
  * The agent's reply to `/props`, in its own message (the owner's call,
- * 2026-11-25: light, a line per prop, no box of fields): the prop's name,
+ * 2026-11-25: light, a bullet per prop, no box of fields): the prop's name,
  * its value on this instance (else its default), and what it takes, dimmed.
  * Then how to change one: a `name: value` line in the reply, which goes to
  * the agent exact (propsInText). Before: a box of the property dialog's
