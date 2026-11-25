@@ -57,6 +57,12 @@ interface PropertyInputTextProps {
    */
   onScrub?(steps: number, startText: string, gesture: object): number | void;
   /**
+   * The drag handle is always the dial (an angle field: rotate), turned to
+   * the angle the value ends with (`x 30deg` → 30), at 0 when there's none.
+   * Without it, the dial shows only for a value that's an angle alone.
+   */
+  dial?: boolean;
+  /**
    * Dimmed text shown while the field is empty, for a field that stands for
    * several values that differ ("Mixed"). Boxed fields have none otherwise:
    * an empty box means nothing is set.
@@ -113,6 +119,7 @@ export function PropertyInputText({
   mirror,
   onDraft,
   onScrub,
+  dial: alwaysDial = false,
   icon,
   placeholder,
   tokens,
@@ -404,7 +411,9 @@ export function PropertyInputText({
   const needsWrap = !!onScrub || !!icon || drawnSelection || withTokens;
 
   // An angle (`200deg`): the scrub handle is a dial, turned to it.
-  const dial = !!onScrub && degreesOf(value) !== null;
+  // The angle the value ends with (`x 30deg` → 30), for an always-dial field.
+  const endDegrees = alwaysDial ? (degreesOf(value.trim().split(/\s+/).at(-1) ?? "") ?? 0) : null;
+  const dial = !!onScrub && (alwaysDial || degreesOf(value) !== null);
   // With an icon, a scrub handle, a drawn selection or variables: a wrapper
   // the input fills, with them on top.
   const wrapped = (
@@ -430,7 +439,7 @@ export function PropertyInputText({
             return true;
           }}
           onScrub={(steps, gesture) => onScrub(steps, scrubStart.current, gesture)}
-          degrees={dial ? degreesOf(value) : null}
+          degrees={dial ? (degreesOf(value) ?? endDegrees) : null}
         />
       )}
       {withTokens && (

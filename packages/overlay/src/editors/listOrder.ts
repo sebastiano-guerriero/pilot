@@ -89,6 +89,11 @@ export const LIST_ORDER: ReadonlyArray<{ group: string; entries: readonly ListEn
     ],
   },
   {
+    // How the element is moved, turned and sized as a whole (translate, scale… will join it).
+    group: "Transform",
+    entries: ["rotate"],
+  },
+  {
     group: "Typography",
     entries: [
       "color",

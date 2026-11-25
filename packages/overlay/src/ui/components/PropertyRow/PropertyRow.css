@@ -19,10 +19,11 @@
     gap: 8px;
   }
 
-  /* With an action: the fields give up its 24px and the 8px gap. Rows with
-     and without one keep the same value area: same left and right edges. */
+  /* With an action: the fields give up its 24px and a 6px gap (the row's
+     8px, less the action's -2px margin). Rows with and without one keep the
+     same value area: same left and right edges. */
   :scope[data-action] .values {
-    width: 96px;
+    width: 98px;
     /* Next to the action, not centered between it and the label. */
     margin-inline-start: auto;
   }
@@ -30,5 +31,6 @@
   .action {
     flex: none;
     width: 24px;
+    margin-inline-start: -2px;
   }
 }

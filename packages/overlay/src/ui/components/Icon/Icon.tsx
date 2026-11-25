@@ -870,6 +870,16 @@ const ICONS = {
   "corner-top-right": corners(["top-right"]),
   "corner-bottom-right": corners(["bottom-right"]),
   "corner-bottom-left": corners(["bottom-left"]),
+  // rotate's angle (its select): derived from the dial (ScrubHandle), its ring and tick at 12px.
+  "rotate-angle": {
+    size: 12,
+    body: (
+      <>
+        <circle cx="6" cy="6" r="5.5" stroke="var(--plt-color-contrast-high)" stroke-opacity="0.2" />
+        <path d="M6 4V2.5" stroke="var(--plt-color-contrast-high)" stroke-linecap="round" />
+      </>
+    ),
+  },
   // box-shadow: the designed icons. Outer and custom are 12×14 (the shadow
   // hangs below the 12px frame), the outer ring 14×14 (it rings the frame).
   "shadow-outer": {

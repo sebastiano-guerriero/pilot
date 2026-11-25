@@ -23,6 +23,7 @@ import { listStylePositionEditor, listStyleTypeEditor } from "./list-style/ListS
 import { overscrollEditor } from "./overscroll/OverscrollEditor.tsx";
 import { fillEditor, strokeEditor, strokeWidthEditor } from "./svg/SvgEditors.tsx";
 import { backdropFilterEditor, filterEditor } from "./filter/FilterEditor.tsx";
+import { rotateEditor } from "./rotate/RotateEditor.tsx";
 import { boxShadowEditor } from "./box-shadow/BoxShadowEditor.tsx";
 import { aspectRatioEditor } from "./aspect-ratio/AspectRatioEditor.tsx";
 import { borderEditor } from "./border/BorderEditor.tsx";
@@ -137,6 +138,7 @@ export const editors: PropertyEditor[] = [
   boxShadowEditor,
   filterEditor,
   backdropFilterEditor,
+  rotateEditor,
   visibilityEditor,
   maskImageEditor,
   maskCompositeEditor,

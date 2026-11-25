@@ -10,8 +10,8 @@ type PropertyRowProps = Omit<HTMLAttributes<HTMLDivElement>, "label"> & {
    */
   children: ComponentChildren;
   /**
-   * A 24px control at the end of the value area (e.g. a view toggle), 8px
-   * after the fields, which give up its width (96px left for them). Its right
+   * A 24px control at the end of the value area (e.g. a view toggle), 6px
+   * after the fields, which give up its width (98px left for them). Its right
    * edge lines up with the other rows' fields.
    */
   action?: ComponentChildren;

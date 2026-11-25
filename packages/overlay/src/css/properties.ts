@@ -372,6 +372,7 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   "mask-image": { initial: "none", keywords: ["none"], negative: false },
   "box-shadow": { initial: "none", keywords: ["none"], negative: false },
   filter: { initial: "none", keywords: ["none"], negative: false },
+  rotate: { initial: "none", keywords: ["none"], negative: true },
   "backdrop-filter": { initial: "none", keywords: ["none"], negative: false },
   "mask-composite": { initial: "add", keywords: [...MASK_COMPOSITE_VALUES], negative: false },
   "border-radius": { initial: "0", keywords: [], negative: false, named: { full: "calc(infinity * 1px)" } },
