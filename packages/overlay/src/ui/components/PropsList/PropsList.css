@@ -1,33 +1,24 @@
-/* The agent's props list in a comment thread, in its own box under the
-   reply (CommentWidget's .agent-reply): the property dialog's rows, on the
-   darkest background, so the selects and fields read as they do there. */
+/* The agent's props list, inside its reply (CommentWidget's agent message,
+   whose list and code styles it takes): a line per prop, the name as code,
+   its value, then what it takes, dimmed; under it, how to change one, dimmed. */
 @scope (.props-list) {
+  /* No bullets: the names start the lines (the reply's list indent is taken off there, CommentWidget.css). */
   :scope {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding: 8px;
-    border-radius: 0 0 6px 6px;
-    background: var(--plt-color-background-dark);
-    box-shadow: 0 1px 0 hsl(0 0% 100% / 10%);
+    list-style: none;
   }
 
-  /* A long name is cut, with its whole name in a tooltip (PropName). */
-  .property-label {
-    flex: 1;
-    min-width: 0;
+  .prop-value {
+    margin-left: 6px;
   }
 
-  /* The tooltip's anchor is inline-flex (its own styles): held to the label's width, so the name inside can shrink. */
-  .tooltip-anchor {
-    max-width: 100%;
+  .prop-hint {
+    margin-left: 6px;
+    color: var(--plt-color-contrast-low);
   }
+}
 
-  .prop-name {
-    display: block;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+@scope (.props-how) {
+  :scope {
+    color: var(--plt-color-contrast-low);
   }
 }

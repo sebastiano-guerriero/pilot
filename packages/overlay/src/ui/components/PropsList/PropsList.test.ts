@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PropsList } from "./PropsList.tsx";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { PropsList, propExample, propHint } from "./PropsList.tsx";
 
 let container: HTMLElement;
 beforeEach(() => {
@@ -22,35 +22,26 @@ const props = [
 ];
 
 describe("PropsList", () => {
-  it("a row per prop, with the instance's value on the page (else the default)", () => {
+  it("a line per prop: its name, its value on the page (else the default), what it takes; then how to change one", () => {
     act(() => render(h(PropsList, { props, current: { tone: "light", count: 3 } }), container));
-    const rows = [...container.querySelectorAll(".property-row")];
-    expect(rows.map((r) => r.querySelector(".property-label, label, span")?.textContent)).toEqual(["tone", "featured", "badge", "count"]);
-    expect((rows[0]?.querySelector(".trigger") as HTMLElement).textContent).toContain("light");
-    expect((rows[1]?.querySelector(".trigger") as HTMLElement).textContent).toContain("false");
-    expect((rows[3]?.querySelector("input") as HTMLInputElement).value).toBe("3");
+    const lines = [...container.querySelectorAll(".props-list li")].map((li) => [
+      li.querySelector("code")?.textContent,
+      li.querySelector(".prop-value")?.textContent,
+      li.querySelector(".prop-hint")?.textContent,
+    ]);
+    expect(lines).toEqual([
+      ["tone", "light", "light, dark or outline"],
+      ["featured", "false", "true or false"],
+      ["badge", undefined, "text"],
+      ["count", "3", "a number"],
+    ]);
+    expect(container.querySelector(".props-how")?.textContent).toBe("Reply tone: dark to change one.");
   });
 
-  it("a pick is reported (typed as the prop is) and nothing else; a picked value shows over the page's", () => {
-    const onPick = vi.fn();
-    act(() => render(h(PropsList, { props, current: { tone: "light", count: 3 }, picked: { tone: "outline" }, onPick }), container));
-    const [tone, featured] = [...container.querySelectorAll(".trigger")] as HTMLElement[];
-    expect(tone?.textContent).toContain("outline");
-    act(() => tone?.click());
-    act(() => ([...container.querySelectorAll('[role="option"]')].find((o) => o.textContent?.includes("dark")) as HTMLElement).click());
-    expect(onPick).toHaveBeenLastCalledWith("tone", "dark");
-    act(() => featured?.click());
-    act(() => ([...container.querySelectorAll('[role="option"]')].find((o) => o.textContent?.includes("true")) as HTMLElement).click());
-    expect(onPick).toHaveBeenLastCalledWith("featured", true);
-    const count = container.querySelectorAll("input")[1] as HTMLInputElement;
-    act(() => count.focus());
-    act(() => {
-      count.value = "5";
-      count.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    act(() => {
-      count.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-    });
-    expect(onPick).toHaveBeenLastCalledWith("count", 5);
+  it("the agent's description first, its values after; an example for each kind", () => {
+    expect(propHint({ name: "size", type: "options", options: ["sm", "md"], description: "how big" })).toBe("how big: sm or md");
+    expect(propHint({ name: "value", type: "number", description: "how full, 0–100" })).toBe("how full, 0–100");
+    expect(propExample({ name: "featured", type: "boolean" }, true)).toBe("featured: false");
+    expect(propExample({ name: "count", type: "number" }, 3)).toBe("count: …");
   });
 });

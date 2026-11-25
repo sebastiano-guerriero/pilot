@@ -218,10 +218,10 @@ function formatProps(changeSet: ChangeSet, request: PropsRequest): string {
     "## What to list",
     "",
     "- **The props that change how it looks or what it shows:** variants, sizes, tones, on-off flags (`disabled`, `loading`), short texts (a label, a title), numbers (a count). Not event handlers, refs, children, class names or styles.",
-    "- **For each:** `name`; `type`: `options` (one of a set of values), `boolean`, `text` or `number`; for `options`, every value it accepts, from its types (a union like `\"primary\" | \"ghost\"`), its variants config (cva, tailwind-variants, a variants object), its prop validation (a Vue `validator`, `PropTypes.oneOf`), or how the component uses it; `default` when it has one; `description` in a few words when the name doesn't say.",
+    "- **For each:** `name`; `type`: `options` (one of a set of values), `boolean`, `text` or `number`; for `options`, every value it accepts, from its types (a union like `\"primary\" | \"ghost\"`), its variants config (cva, tailwind-variants, a variants object), its prop validation (a Vue `validator`, `PropTypes.oneOf`), or how the component uses it; `default` when it has one; `description` in a few words when the name doesn't say, with what it takes when its type doesn't say (a number's range, `how full the bar is, 0–100`; a text's form, `the fill, a Tailwind bg class`).",
     "- The most useful first (the main variant, then the size, then the rest); 12 at most.",
     "",
-    "Reply with one short sentence for the designer, like a chat message (\"Button has 3 props you can change\"), and the list as `props` in your reply's `pilot` block. Pilot shows the props in the designer's thread, each with its value on this instance; what they pick comes back to you as a comment, a `name: value` line per prop (`tone: dark`), to set where this instance is written. If none is worth listing, say so and leave the block out.",
+    "Reply with one short sentence for the designer, like a chat message (\"Button has 3 props you can change\"), without describing them (Pilot lists them right under it), and the list as `props` in your reply's `pilot` block. Pilot lists the props under your sentence, each with its value on this instance and what it takes; the designer changes one by replying with a `name: value` line (`tone: dark`), which comes back to you as their comment, to set where this instance is written. If none is worth listing, say so and leave the block out.",
   ];
   return `${lines.join("\n")}\n`;
 }

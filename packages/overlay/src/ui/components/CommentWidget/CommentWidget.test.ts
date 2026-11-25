@@ -291,26 +291,24 @@ describe("CommentWidget's props", () => {
     );
     return onSend;
   };
-  const chooseTone = (value: string) => {
-    act(() => (container.querySelector(".props-list .trigger") as HTMLElement).click());
-    act(() => ([...container.querySelectorAll('[role="option"]')].find((o) => o.textContent?.includes(value)) as HTMLElement).click());
-  };
-
-  it("a pick sends nothing: it writes a name: value line in the comment, which goes, exact, when it's sent", async () => {
-    const onSend = drawThread();
-    await type("A calmer card");
-    chooseTone("dark");
-    expect(onSend).not.toHaveBeenCalled();
-    expect(field().value).toBe("A calmer card\ntone: dark");
-    expect(container.querySelector(".props-list .trigger")?.textContent).toContain("dark");
-    // Picked again: the same line, a new value.
-    chooseTone("outline");
-    expect(field().value).toBe("A calmer card\ntone: outline");
-    await press("Enter");
-    expect(onSend).toHaveBeenCalledWith("A calmer card\ntone: outline", [], undefined, [], false, [{ name: "tone", from: "light", to: "outline" }]);
+  it("the list is in the agent's words: a line per prop, its value on the page, what it takes; then how to change one", () => {
+    drawThread();
+    const lines = [...container.querySelectorAll(".agent-reply .props-list li")].map((li) => li.textContent);
+    expect(lines).toEqual(["tonelightlight, dark or outline"]);
+    expect(container.querySelector(".agent-reply .props-how")?.textContent).toBe("Reply tone: dark to change it.");
+    // No fields: nothing to pick, no box of its own.
+    expect(container.querySelector(".agent-reply input, .agent-reply .trigger")).toBeNull();
   });
 
-  it("answered (the designer wrote after it), the list's rows go; its words stay", () => {
+  it("a name: value line typed in the reply goes with it, exact", async () => {
+    const onSend = drawThread();
+    await type("A calmer card\ntone: Dark,");
+    expect(onSend).not.toHaveBeenCalled();
+    await press("Enter");
+    expect(onSend).toHaveBeenCalledWith("A calmer card\ntone: Dark,", [], undefined, [], false, [{ name: "tone", from: "light", to: "dark" }]);
+  });
+
+  it("answered, the list stays with its words", () => {
     const answered = { ...thread, messages: [...thread.messages, { from: "designer" as const, text: "tone: dark", at: "2" }] };
     act(() =>
       render(
@@ -318,20 +316,8 @@ describe("CommentWidget's props", () => {
         container,
       ),
     );
-    expect(container.querySelector(".props-list")).toBeNull();
     expect(container.querySelector(".agent-reply")?.textContent).toContain("ProductCard has 1 prop.");
-  });
-
-  it("the page's value again takes the line out; a line typed by hand counts as a pick", async () => {
-    const onSend = drawThread();
-    chooseTone("dark");
-    chooseTone("light");
-    expect(field().value).toBe("");
-    await type("Tone: Dark,");
-    await type("tone: Dark,");
-    expect(container.querySelector(".props-list .trigger")?.textContent).toContain("dark");
-    await press("Enter");
-    expect(onSend).toHaveBeenCalledWith("tone: Dark,", [], undefined, [], false, [{ name: "tone", from: "light", to: "dark" }]);
+    expect(container.querySelector(".agent-reply .props-list")).not.toBeNull();
   });
 });
 

@@ -23,7 +23,7 @@ import { ScrollThumb } from "../ScrollThumb/ScrollThumb.tsx";
 import { Tooltip } from "../Tooltip/Tooltip.tsx";
 import { actionAt, actionCommand, actionName, matchActions, matchSkills, PILOT_AUTHOR, withoutQuery } from "./actions.ts";
 import { renderMarkdown } from "./markdown.tsx";
-import { propsInText, withPropLine } from "./propLines.ts";
+import { propsInText } from "./propLines.ts";
 import { insertMention, matchMentions, type MentionOption, mentionAt, mentionsIn, projectOptions, splitMentions } from "./mentions.ts";
 
 /** How sending went: to the agent, or not at all. */
@@ -522,15 +522,8 @@ export function CommentWidget({
   const propList = [...(thread?.messages ?? [])].reverse().find((m) => m.propList?.length)?.propList ?? [];
   const pageProps = currentProps?.() ?? {};
   // A props list is for the comment that answers it: once the designer wrote after it, its rows go (`/props` again for a new one).
-  const liveProps = (index: number) =>
-    !!thread?.messages[index]?.propList?.length && !thread.messages.slice(index + 1).some((m) => m.from === "designer");
+  // `name: value` lines typed in the reply (the props list says how): sent with it, exact.
   const written = propList.length ? propsInText(text, propList) : {};
-  const pickProp = (name: string, value: PropValue) => {
-    const next = withPropLine(text, name, String(value) === String(pageProps[name]) ? null : value);
-    nextCaret.current = next.length;
-    setText(next);
-    fieldRef.current?.focus();
-  };
   const pendingProps: PropChange[] = action
     ? []
     : Object.entries(written)
@@ -729,9 +722,11 @@ export function CommentWidget({
                     )}
                   </div>
                 ) : (
-                  <div key={m.at + m.from} class="agent-reply" data-split={liveProps(i) ? "" : undefined}>
+                  <div key={m.at + m.from} class="agent-reply">
                     <div class="message" data-from="agent" aria-label={`${agentName ?? "Agent"}: ${m.text}`}>
                       {renderMarkdown(m.text)}
+                      {/* The agent's reply to /props: a line per prop in its words' style, its value on the page, and how to change one. */}
+                      {m.propList?.length ? <PropsList props={m.propList} current={pageProps} /> : null}
                       {/* The agent's question, not answered yet: its one-click answers (or write one), the agent's suggestion first. */}
                       {m.choices?.length && i === count - 1 ? (
                         <div class="choices" role="group" aria-label="Answers">
@@ -764,10 +759,6 @@ export function CommentWidget({
                         ) : null;
                       })()}
                     </div>
-                    {/* The agent's reply to /props, in a box of its own under its words: a row per prop, its value on the page; a pick joins the comment being written. Answered, only the words stay. */}
-                    {liveProps(i) && m.propList ? (
-                      <PropsList props={m.propList} current={pageProps} picked={written} onPick={pickProp} />
-                    ) : null}
                   </div>
                 ),
               )}
