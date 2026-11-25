@@ -104,6 +104,13 @@ describe("border", () => {
     expect(changes).toEqual([]);
     expect(container.querySelector(".split-toggle")?.getAttribute("aria-pressed")).toBe("true");
     expect(container.querySelectorAll(".split-toggle .icon")).toHaveLength(4);
+    // Each line labeled by its side's property, as inset's.
+    expect([...container.querySelectorAll(".row-labels > span")].map((l) => l.textContent)).toEqual([
+      "border-top",
+      "border-right",
+      "border-bottom",
+      "border-left",
+    ]);
     for (const side of ["top", "right", "bottom", "left"]) expect(field(`border ${side} width`).value).toBe("1px");
     typeAndEnter("border bottom width", "4");
     pick("border left style", "dotted");

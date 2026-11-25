@@ -3,6 +3,7 @@
    like the DOM tree's (DomTree.css), its rows spaced as the dialog's. Its
    spot is set inline. Its rows own their styles (the boundary). */
 @scope (.property-panel) to (.panel-rows > *) {
+  /* Fixed in the window, or in the page in the dialog's PageAnchor (set inline, PropertyPanel.tsx). */
   :scope {
     position: fixed;
     z-index: var(--plt-z-ui);

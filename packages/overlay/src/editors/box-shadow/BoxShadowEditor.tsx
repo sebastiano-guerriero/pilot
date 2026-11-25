@@ -5,6 +5,7 @@ import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { PropertySelect } from "../../ui/components/PropertySelect/PropertySelect.tsx";
 import { Icon, type IconName } from "../../ui/components/Icon/Icon.tsx";
 import { declaredOf, isMixed } from "../declared.ts";
+import { useHeldDrag } from "../heldDrag.ts";
 import { BLUR, OFFSET, ShadowRows } from "../shadow/ShadowRows.tsx";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
 import { closeParens } from "../../css/values.ts";
@@ -188,6 +189,8 @@ function BoxShadowEditor(props: PropertyEditorProps) {
       open={open}
       onOpen={setOpen}
       onAdd={add}
+      // `none` is the whole value: nothing can be added to it (× takes it off).
+      noAdd={shadows === "none"}
       onRemove={remove}
       noun="shadow"
       panelTitle="Box Shadow"
@@ -292,11 +295,21 @@ function SmoothRows({
 }) {
   const { smooth } = shadow;
   const set = (part: Partial<Smooth>, gesture?: object) => onUpdate({ ...shadow, smooth: { ...smooth, ...part } }, gesture);
-  /** A drag: from where it started, `steps` on; back at the start, the earlier value. */
-  const drag = (apply: (steps: number, startText: string, gesture: object) => void) => (steps: number, startText: string, gesture: object) => {
-    if (steps === 0) return void onRevert(gesture);
-    apply(steps, startText, gesture);
-  };
+  const held = useHeldDrag();
+  /**
+   * A drag: from where it started (`fallback` when the field has no number), `per` a step, held
+   * between `min` and `max` (past them, the handle stretches); back at the start, the earlier value.
+   */
+  const drag =
+    (fallback: number, apply: (n: number, gesture: object) => void, { per = 1, min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY } = {}) =>
+    (steps: number, startText: string, gesture: object) => {
+      const n = Number.parseFloat(startText);
+      const from = Number.isFinite(n) ? n : fallback;
+      const { offset, overflow } = held(gesture, steps, from, per, min, max);
+      if (offset === 0) onRevert(gesture);
+      else apply(Math.round((from + offset * per) * 100) / 100, gesture);
+      return overflow;
+    };
   return (
     <>
       <PropertyRow label="direction">
@@ -309,7 +322,7 @@ function SmoothRows({
             if (deg !== null && deg !== smooth.direction) set({ direction: deg });
           }}
           onStep={(delta, text, gesture) => set({ direction: stepNumber(text, delta, smooth.direction, Number.NEGATIVE_INFINITY) }, gesture)}
-          onScrub={drag((steps, start, gesture) => set({ direction: stepNumber(start, steps, smooth.direction, Number.NEGATIVE_INFINITY) }, gesture))}
+          onScrub={drag(smooth.direction, (direction, gesture) => set({ direction }, gesture))}
         />
       </PropertyRow>
       <PropertyRow label="distance">
@@ -322,7 +335,7 @@ function SmoothRows({
             if (n !== null && n >= 0 && n !== smooth.distance) set({ distance: n });
           }}
           onStep={(delta, text, gesture) => set({ distance: stepNumber(text, delta, smooth.distance, 0) }, gesture)}
-          onScrub={drag((steps, start, gesture) => set({ distance: stepNumber(start, steps, smooth.distance, 0) }, gesture))}
+          onScrub={drag(smooth.distance, (distance, gesture) => set({ distance }, gesture), { min: 0 })}
         />
       </PropertyRow>
       <PropertyRow label="elevation">
@@ -335,7 +348,7 @@ function SmoothRows({
             if (n !== null && n >= 0 && n !== smooth.elevation) set({ elevation: n });
           }}
           onStep={(delta, text, gesture) => set({ elevation: stepNumber(text, delta, smooth.elevation, 0) }, gesture)}
-          onScrub={drag((steps, start, gesture) => set({ elevation: stepNumber(start, steps, smooth.elevation, 0) }, gesture))}
+          onScrub={drag(smooth.elevation, (elevation, gesture) => set({ elevation }, gesture), { min: 0 })}
         />
       </PropertyRow>
       <PropertyRow label="layers">
@@ -347,7 +360,8 @@ function SmoothRows({
             if (n !== null && n !== smooth.layers) set({ layers: n });
           }}
           onStep={(delta, text, gesture) => set({ layers: stepNumber(text, Math.sign(delta), smooth.layers, MIN_LAYERS, MAX_LAYERS) }, gesture)}
-          onScrub={drag((steps, start, gesture) => set({ layers: Math.round(stepNumber(start, steps / 4, smooth.layers, MIN_LAYERS, MAX_LAYERS)) }, gesture))}
+          // A layer every 4 steps.
+          onScrub={drag(smooth.layers, (layers, gesture) => set({ layers: Math.round(layers) }, gesture), { per: 1 / 4, min: MIN_LAYERS, max: MAX_LAYERS })}
         />
       </PropertyRow>
       <ShadowRows

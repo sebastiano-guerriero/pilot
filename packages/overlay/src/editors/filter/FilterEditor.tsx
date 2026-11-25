@@ -5,6 +5,7 @@ import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { PropertySelect } from "../../ui/components/PropertySelect/PropertySelect.tsx";
 import { closeParens } from "../../css/values.ts";
 import { declaredOf, isMixed } from "../declared.ts";
+import { useHeldDrag } from "../heldDrag.ts";
 import { BLUR, OFFSET, ShadowRows } from "../shadow/ShadowRows.tsx";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
 import {
@@ -12,6 +13,7 @@ import {
   type Filter,
   type FilterFunction,
   FILTERS,
+  filterRange,
   type FilterType,
   formatFilter,
   formatShadow,
@@ -113,6 +115,8 @@ function FilterEditor({ config, ...props }: PropertyEditorProps & { config: Filt
       open={open}
       onOpen={setOpen}
       onAdd={add}
+      // `none` is the whole value: nothing can be added to it (× takes it off).
+      noAdd={filters === "none"}
       onRemove={remove}
       noun={config.noun}
       panelTitle={config.title}
@@ -144,6 +148,7 @@ function FilterRows(
   const { config, filter, onUpdate, onRevert } = props;
   const PROPERTY = config.property;
   const type = typeOf(filter);
+  const held = useHeldDrag();
   const shadow = filter !== "none" && filter.fn === "drop-shadow" ? parseShadow(filter.value || FILTERS["drop-shadow"].start) : null;
   const setPart = (part: keyof Shadow, next: string, gesture?: object) => {
     if (shadow && filter !== "none" && filter.fn === "drop-shadow") onUpdate({ ...filter, value: formatShadow({ ...shadow, [part]: next }) }, gesture);
@@ -192,10 +197,17 @@ function FilterRows(
               if (next) onUpdate({ ...filter, value: next }, gesture);
             }}
             onScrub={(steps, startText, gesture) => {
+              // Held in the function's range (grayscale's 0–100%): past it, the handle stretches.
+              const { min, max } = filterRange(filter.fn);
+              const start = Number.parseFloat(stepFilterValue(filter.fn, startText, 0) ?? "");
+              const { offset, overflow } = held(gesture, steps, start, 1, min, max);
               // Back where the drag started: the earlier value, not a fake edit.
-              if (steps === 0) return void onRevert?.(PROPERTY, gesture);
-              const next = stepFilterValue(filter.fn, startText, steps);
-              if (next) onUpdate({ ...filter, value: next }, gesture);
+              if (offset === 0) onRevert?.(PROPERTY, gesture);
+              else {
+                const next = stepFilterValue(filter.fn, startText, offset);
+                if (next) onUpdate({ ...filter, value: next }, gesture);
+              }
+              return overflow;
             }}
           />
         </PropertyRow>

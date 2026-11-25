@@ -5,7 +5,7 @@ import { PropertyInputText } from "../../ui/components/PropertyInputText/Propert
 import { tokensFor } from "../../ui/components/TokenMenu/tokens.ts";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { PropertySelect } from "../../ui/components/PropertySelect/PropertySelect.tsx";
-import { declaredOf, isMixed, MIXED } from "../declared.ts";
+import { declaredOf, isMixed, MIXED, resetValueOf } from "../declared.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
 
 /** A property picked from a few values, or typed (aspect-ratio, flex-grow). */
@@ -61,7 +61,9 @@ export function presetOption(config: Pick<PresetConfig, "property" | "presets">,
 export function PresetEditor({ config, ...props }: PropertyEditorProps & { config: PresetConfig }) {
   const { onChange, focusRequest, onReturnToSearch, onTabOut } = props;
   const { property } = config;
-  const value = declaredOf(props, property);
+  // A value only a reset gives shows dimmed, as the placeholder.
+  const fromReset = resetValueOf(props, property);
+  const value = fromReset ? "" : declaredOf(props, property);
   const selectRef = useRef<HTMLButtonElement>(null);
   const fieldRef = useRef<HTMLInputElement>(null);
 
@@ -92,7 +94,7 @@ export function PresetEditor({ config, ...props }: PropertyEditorProps & { confi
         // none last, after custom too (the rule for every select).
         options={[...config.presets.filter((p) => p !== "none"), CUSTOM, ...(config.presets.includes("none") ? ["none"] : [])]}
         label={config.name ?? property}
-        placeholder={isMixed(props, property) ? MIXED : undefined}
+        placeholder={isMixed(props, property) ? MIXED : fromReset || undefined}
         triggerRef={selectRef}
         iconFor={
           config.icons

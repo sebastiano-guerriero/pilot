@@ -19,7 +19,9 @@ export interface SidesConfig {
    * The view button's icons: `<icons>-all` for one value, `<icons>-top`… for
    * each side. Defaults to the box sides (`sides-all`, `side-top`…).
    */
-  icons?: "inset" | "margin";
+  icons?: "inset" | "margin" | "padding";
+  /** Split, each row labeled by its side's property (`padding-top`…), as gap's (the owner's, to try); else the title on the first. */
+  rowLabels?: boolean;
   /** The box-model area each side's field shows on the page; none when absent. */
   box?: SideArea["box"];
   /** Tailwind's aliases: all sides, each side, each axis, the logical sides (start/end). */
@@ -47,6 +49,7 @@ export function sidesEditor(config: SidesConfig): PropertyEditor {
     key: side,
     property: config.sideProperty?.(side) ?? `${s}-${side}`,
     label: `${config.title} ${side}`,
+    rowLabel: config.rowLabels ? (config.sideProperty?.(side) ?? `${s}-${side}`) : undefined,
     icon: (config.icons ? `${config.icons}-${side}` : `side-${side}`) as IconName,
     area: config.box ? { box: config.box, side } : undefined,
     aliases: [a[side], ...logical[side]],

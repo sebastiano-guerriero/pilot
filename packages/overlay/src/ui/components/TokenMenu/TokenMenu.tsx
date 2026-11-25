@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useCloseOnScroll } from "../../useCloseOnScroll.ts";
 import type { Token } from "../../../dom/tokens.ts";
 import { scrollWithin } from "../../../dom/reveal.ts";
 import { px } from "../../px.ts";
@@ -18,6 +19,8 @@ interface TokenMenuProps {
   anchor: DOMRect;
   onActive(index: number): void;
   onPick(token: Token): void;
+  /** Anything else scrolled: it closes (useCloseOnScroll). */
+  onClose(): void;
 }
 
 /** Space between the field and the list, and the closest the list gets to the window's edges. */
@@ -35,11 +38,12 @@ const CHECK = 16;
  * look (PropertySelect); placeholder, pending the design. Picking never
  * takes focus from the field.
  */
-export function TokenMenu({ tokens, any, active, current, anchor, onActive, onPick }: TokenMenuProps) {
+export function TokenMenu({ tokens, any, active, current, anchor, onActive, onPick, onClose }: TokenMenuProps) {
   // A checkmark column only when the field holds one of them, as a select's.
   const checks = !!current && tokens.some((t) => t.name === current);
   const ref = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  useCloseOnScroll(ref, true, onClose);
   const [height, setHeight] = useState(0);
   useLayoutEffect(() => {
     const h = ref.current?.offsetHeight ?? 0;

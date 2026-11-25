@@ -159,6 +159,15 @@ const STEP_UNITS: Record<Exclude<FilterKind, "shadow">, string> = { length: "px"
  * from 0, shares from 0 to 100%. A factor (`1.5`) steps as its percentage.
  * Null when it doesn't step (a shadow, var()).
  */
+/** The values a function takes, in its unit: an angle any, the others from 0, a share (grayscale…) up to 100%. */
+export function filterRange(fn: FilterFunction): { min: number; max: number } {
+  const { kind } = FILTERS[fn];
+  return {
+    min: kind === "angle" ? Number.NEGATIVE_INFINITY : 0,
+    max: kind === "share" ? 100 : Number.POSITIVE_INFINITY,
+  };
+}
+
 export function stepFilterValue(fn: FilterFunction, text: string, delta: number): string | null {
   const { kind, start } = FILTERS[fn];
   if (kind === "shadow") return null;
@@ -168,9 +177,8 @@ export function stepFilterValue(fn: FilterFunction, text: string, delta: number)
   if (!m) return null;
   // Another unit (rem, turn): it keeps its unit and steps by one of it.
   const own = (m[2] as string) || unit;
-  let n = round2(Number(m[1]) + delta);
-  if (kind !== "angle") n = Math.max(0, n);
-  if (kind === "share") n = Math.min(100, n);
+  const { min, max } = filterRange(fn);
+  const n = Math.min(max, Math.max(min, round2(Number(m[1]) + delta)));
   return `${n}${own}`;
 }
 

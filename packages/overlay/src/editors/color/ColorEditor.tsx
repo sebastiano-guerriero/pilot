@@ -8,7 +8,8 @@ import { allTokens } from "../../dom/tokens.ts";
 import { stepToken, tokensFor } from "../../ui/components/TokenMenu/tokens.ts";
 
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
-import { declaredOf, isMixed, MIXED } from "../declared.ts";
+import { declaredOf, isMixed, MIXED, resetValueOf } from "../declared.ts";
+import { useHeldDrag } from "../heldDrag.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
 
 /** Whether a color carries its own alpha (8-digit hex, rgba / slash syntax): it then sets the opacity too. */
@@ -48,7 +49,9 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
   const { onChange, onRevert, values, focusRequest, onReturnToSearch, onTabOut } = props;
   const { property } = config;
   const label = config.name ?? property;
-  const value = declaredOf(props, property);
+  // A color only a reset gives shows dimmed, as the placeholder (the swatch still shows it).
+  const fromReset = resetValueOf(props, property);
+  const value = fromReset ? "" : declaredOf(props, property);
   const keyword = config.keywords?.includes(value.trim().toLowerCase()) ?? false;
   const { color, opacity } = keyword ? { color: value.trim(), opacity: null } : splitColor(value);
   // Just `transparent`: no color to make more or less opaque, so the opacity
@@ -70,6 +73,7 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
   const write = (next: string, gesture?: object) => {
     if (next !== value) onChange(property, next, gesture ? { gesture } : undefined);
   };
+  const held = useHeldDrag();
   const setOpacity = (o: number, gesture?: object) => {
     if (color && !keyword) write(joinColor(color, o), gesture);
   };
@@ -99,7 +103,7 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
         <PropertyInputText
           value={bareToken(color)}
           label={label}
-          placeholder={isMixed(props, property) ? MIXED : undefined}
+          placeholder={isMixed(props, property) ? MIXED : fromReset ? bareToken(fromReset) : undefined}
           icon={swatch}
           inputRef={colorRef}
           tokens={tokensFor(property)}
@@ -133,11 +137,11 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
           onStep={clear ? undefined : (delta, text, gesture) => setOpacity((parseOpacity(text) ?? opacity ?? 100) + delta, gesture)}
           onScrub={(steps, startText, gesture) => {
             const start = parseOpacity(startText) ?? opacity ?? 100;
-            const next = Math.min(100, Math.max(0, start + steps));
-            if (next === start) onRevert?.(property, gesture);
-            else setOpacity(next, gesture);
-            // Past 0 or 100: the handle stretches by how far (ScrubHandle).
-            return start + steps - next;
+            // Held at 0 and 100: past them, the handle stretches (heldDrag).
+            const { offset, overflow } = held(gesture, steps, start, 1, 0, 100);
+            if (offset === 0) onRevert?.(property, gesture);
+            else setOpacity(start + offset, gesture);
+            return overflow;
           }}
           onSubmit={onReturnToSearch}
           onTab={(direction) => (direction > 0 ? tabOut(1) : focus(colorRef))}

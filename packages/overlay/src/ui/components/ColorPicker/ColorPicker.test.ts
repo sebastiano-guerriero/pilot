@@ -48,7 +48,12 @@ afterEach(() => {
 
 const picker = () => container.querySelector('.property-panel[aria-label="Color"]');
 const open = () => act(() => (container.querySelector(".color-swatch-button") as HTMLButtonElement).click());
-const labels = () => [...(picker()?.querySelectorAll(".panel-rows .property-label") ?? [])].map((l) => l.textContent);
+// A row's label, or each of its parts' (split: lightness, chroma, hue in one row).
+const labels = () =>
+  [...(picker()?.querySelectorAll(".panel-rows .property-label") ?? [])].flatMap((l) => {
+    const parts = [...l.querySelectorAll(".row-labels > span")];
+    return parts.length ? parts.map((p) => p.textContent) : [l.textContent];
+  });
 const field = (label: string) => picker()?.querySelector(`input[aria-label="${label}"]`) as HTMLInputElement;
 const typeAndEnter = (label: string, text: string) => {
   const input = field(label);
@@ -112,8 +117,10 @@ describe("color picker", () => {
     expect(labels()).toEqual(["model", "value", "opacity"]);
     expect(field("color value").value).toBe("oklch(0.628 0.258 29.2)");
     const toggle = () => picker()?.querySelector(".split-toggle") as HTMLButtonElement;
+    expect(toggle().textContent).toBe("lch");
     act(() => toggle().click());
     expect(toggle().getAttribute("aria-pressed")).toBe("true");
+    expect([...toggle().querySelectorAll(".lch-letter")].map((l) => l.textContent)).toEqual(["l", "c", "h"]);
     expect(labels()).toEqual(["model", "lightness", "chroma", "hue", "opacity"]);
     expect(Number(field("lightness").value)).toBeCloseTo(0.628, 2);
     typeAndEnter("lightness", "0.5");

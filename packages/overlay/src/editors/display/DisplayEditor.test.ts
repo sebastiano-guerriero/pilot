@@ -180,9 +180,10 @@ describe("grid rows", () => {
     act(() => {
       row.dispatchEvent(new PointerEvent("pointerenter"));
     });
+    // Both, in the parts' order: x (columns), then y (rows).
     const both = [
-      { box: "gap", axis: "row" },
       { box: "gap", axis: "column" },
+      { box: "gap", axis: "row" },
     ];
     expect(inspects.at(-1)).toEqual(both);
     act(() => {

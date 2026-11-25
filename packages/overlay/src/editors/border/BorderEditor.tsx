@@ -4,6 +4,7 @@ import { ColorPicker, pickerPlace } from "../../ui/components/ColorPicker/ColorP
 import { BORDER_STYLE_VALUES } from "../../css/properties.ts";
 import { displayValue, parseValue } from "../../css/values.ts";
 import { Icon, type IconName } from "../../ui/components/Icon/Icon.tsx";
+import { Tooltip } from "../../ui/components/Tooltip/Tooltip.tsx";
 import { PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { PropertySelect } from "../../ui/components/PropertySelect/PropertySelect.tsx";
@@ -18,12 +19,13 @@ type Side = (typeof SIDES)[number];
 type Where = "all" | Side;
 const WHERE: readonly Where[] = ["all", ...SIDES];
 
+/** Border's own icons (the owner's): the frame, in the accent where the border is. */
 const WHERE_ICONS: Record<Where, IconName> = {
-  all: "sides-all",
-  top: "side-top",
-  right: "side-right",
-  bottom: "side-bottom",
-  left: "side-left",
+  all: "border-all",
+  top: "border-top",
+  right: "border-right",
+  bottom: "border-bottom",
+  left: "border-left",
 };
 
 /** Each style's icon (derived placeholders, Icon.tsx); none and hidden draw nothing. */
@@ -76,19 +78,20 @@ function BorderEditor(props: PropertyEditorProps) {
   const [view, setView] = useState<"all" | "sides">(same ? "all" : "sides");
 
   const toggle = (
-    <button
-      type="button"
-      class="split-toggle"
-      aria-label={view === "all" ? "Set each side of border" : "One value for all of border"}
-      aria-pressed={view === "sides"}
-      title={view === "all" ? "Split" : "One value"}
-      tabIndex={-1}
-      // Keep focus where it is (a field, or the search) while clicking.
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={() => setView(view === "all" ? "sides" : "all")}
-    >
-      {view === "all" ? <Icon name="sides-all" /> : SIDES.map((side) => <Icon key={side} name={WHERE_ICONS[side]} />)}
-    </button>
+    <Tooltip text={view === "all" ? "Split" : "One value"}>
+      <button
+        type="button"
+        class="split-toggle"
+        aria-label={view === "all" ? "Set each side of border" : "One value for all of border"}
+        aria-pressed={view === "sides"}
+        tabIndex={-1}
+        // Keep focus where it is (a field, or the search) while clicking.
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => setView(view === "all" ? "sides" : "all")}
+      >
+        {view === "all" ? <Icon name={WHERE_ICONS.all} /> : SIDES.map((side) => <Icon key={side} name={WHERE_ICONS[side]} />)}
+      </button>
+    </Tooltip>
   );
 
   return (
@@ -98,7 +101,18 @@ function BorderEditor(props: PropertyEditorProps) {
           <BorderLine {...props} where="all" read={read} sidesMatch={sidesMatch} />
         </PropertyRow>
       ) : (
-        <PropertyRow label="border" class="parts" action={toggle}>
+        <PropertyRow
+          // Each side's own label, level with its line (border-top…), as inset's and padding's.
+          label={
+            <span class="row-labels">
+              {SIDES.map((side) => (
+                <span key={side}>{`border-${side}`}</span>
+              ))}
+            </span>
+          }
+          class="parts"
+          action={toggle}
+        >
           <div class="stack">
             {SIDES.map((side) => (
               <BorderLine key={side} {...props} where={side} read={read} sidesMatch={sidesMatch} />

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { Tooltip } from "../../ui/components/Tooltip/Tooltip.tsx";
 import { Icon } from "../../ui/components/Icon/Icon.tsx";
 import { PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
@@ -93,27 +94,20 @@ function RotateEditor(props: PropertyEditorProps) {
     setPending(next === "axes" ? "x" : mode === "angle" ? "one" : "select");
   };
   const toggleButton = (
-    <button
-      type="button"
-      class="split-toggle"
-      aria-label={view === "one" ? "Rotate each axis" : "One rotate value"}
-      aria-pressed={view === "axes"}
-      title={view === "one" ? "Split" : "One value"}
-      tabIndex={-1}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={toggle}
-    >
-      {/* Placeholders: the owner's icons to come. */}
-      {view === "one" ? (
-        <Icon name="object-custom" />
-      ) : (
-        AXES.map((a) => (
-          <span key={a} class="rotate-axis-letter">
-            {a}
-          </span>
-        ))
-      )}
-    </button>
+    <Tooltip text={view === "one" ? "Split" : "One value"}>
+      <button
+        type="button"
+        class="split-toggle"
+        aria-label={view === "one" ? "Rotate each axis" : "One rotate value"}
+        aria-pressed={view === "axes"}
+        tabIndex={-1}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={toggle}
+      >
+        {/* The owner's icons: one value (a turn on the screen), or each axis's, level with its field. */}
+        {view === "one" ? <Icon name="rotate-all" /> : AXES.map((a) => <Icon key={a} name={`rotate-${a}`} />)}
+      </button>
+    </Tooltip>
   );
 
   if (view === "one") {
@@ -178,7 +172,19 @@ function RotateEditor(props: PropertyEditorProps) {
 
   return (
     <div class="split-editor rotate-editor" data-view="axes">
-      <PropertyRow label={PROPERTY} class="parts" action={toggleButton}>
+      <PropertyRow
+        // Each axis's own label, level with its field, as padding's sides: Tailwind's names (rotate has no
+        // longhand per axis), as gap's gap-x and gap-y.
+        label={
+          <span class="row-labels">
+            {AXES.map((axis) => (
+              <span key={axis}>{`rotate-${axis}`}</span>
+            ))}
+          </span>
+        }
+        class="parts"
+        action={toggleButton}
+      >
         <div class="stack">
           {AXES.map((axis, i) => (
             <span key={axis} class="field">

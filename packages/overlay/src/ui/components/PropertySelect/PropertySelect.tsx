@@ -4,6 +4,7 @@ import { px } from "../../px.ts";
 import { Icon } from "../Icon/Icon.tsx";
 import { ScrollThumb } from "../ScrollThumb/ScrollThumb.tsx";
 import { scrollWithin } from "../../../dom/reveal.ts";
+import { useCloseOnScroll } from "../../useCloseOnScroll.ts";
 
 interface PropertySelectProps {
   /** The value set on the element (e.g. "grid"), or "" when none is: the trigger then says "Select", dimmed. */
@@ -104,6 +105,8 @@ export function PropertySelect({
     setOpen(true);
   };
   const close = () => setOpen(false);
+  // Anything else scrolling (the dialog's list, the page) closes it, as a native select: it doesn't follow its trigger.
+  useCloseOnScroll(menu, open, close);
   const choose = (index: number) => {
     close();
     const next = list[index];

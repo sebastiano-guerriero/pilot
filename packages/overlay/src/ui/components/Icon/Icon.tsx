@@ -36,6 +36,42 @@ const BARS = {
 } as const;
 const sides = (...names: Array<keyof typeof BARS>) => layout(names.map((n) => BARS[n]));
 
+/** A border's side (the owner's `border-top`, the others turned): the frame dimmed, that side's 1px edge in the accent. */
+const BORDER_EDGES = {
+  top: { x: 0, y: 0, width: 12, height: 1 },
+  right: { x: 11, y: 0, width: 1, height: 12 },
+  bottom: { x: 0, y: 11, width: 12, height: 1 },
+  left: { x: 0, y: 0, width: 1, height: 12 },
+} as const;
+const borders = (side: keyof typeof BORDER_EDGES) => ({
+  size: 12,
+  body: (
+    <>
+      <path d="M12 0V12H0V0H12ZM1 11H11V1H1V11Z" fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+      <rect {...BORDER_EDGES[side]} fill="var(--plt-color-accent)" />
+    </>
+  ),
+});
+
+/** Padding's sides (the owner's icons): each a 2px bar inside the 12px frame. */
+const PADDING_BARS = {
+  top: "M1 1H11V3H1V1Z",
+  right: "M11 1L11 11L9 11L9 1L11 1Z",
+  bottom: "M1 9H11V11H1V9Z",
+  left: "M3 1L3 11L1 11L1 1L3 1Z",
+} as const;
+const paddings = (...names: Array<keyof typeof PADDING_BARS>) => ({
+  size: 12,
+  body: (
+    <>
+      <path d="M12 0V12H0V0H12ZM1 11H11V1H1V11Z" fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
+      {names.map((n) => (
+        <path key={n} d={PADDING_BARS[n]} fill="var(--plt-color-accent)" />
+      ))}
+    </>
+  ),
+});
+
 /**
  * A mask direction icon: the frame, and the fade's way as accent arrows.
  * To right, to top right and both edges of an axis (left and right) are
@@ -265,16 +301,17 @@ const corners = (which: Array<keyof typeof CORNER_PATHS>) => ({
   ),
 });
 
-/** text-transform's "Ag" (capitalize, and none in contrast-low): an A, then a g. */
-const capitalizeAg = (stroke: string) => ({
+/**
+ * text-transform's icons: their letters, set in Geist (Pilot's font), one size for all (the owner's call,
+ * 2026-11-25; before, drawn paths, each its own size). 8.5px at 500 is the most "AG", the widest, takes in
+ * the 12px: 11.6px. One baseline, the capitals' middle on the icon's: so "ag" sits as lower case does.
+ */
+const caseLetters = (text: string, color: string) => ({
   size: 12,
   body: (
-    <g stroke={stroke} stroke-linecap="round" stroke-linejoin="round">
-      <path d="M6.04541 8.16667L3.66541 2.5H3.54675L1.16675 8.16667" />
-      <path d="M1.72681 6.83337H5.48547" />
-      <path d="M8.96674 4.5H9.1034C9.87476 4.5 10.5001 5.12531 10.5001 5.89667V6.43667C10.5001 7.20802 9.87476 7.83333 9.1034 7.83333H8.96674C8.19538 7.83333 7.57007 7.20802 7.57007 6.43667V5.89667C7.57007 5.12531 8.19538 4.5 8.96674 4.5Z" />
-      <path d="M10.4999 4.5V8.702C10.4999 9.51133 9.84394 10.1667 9.03527 10.1667C8.54994 10.1667 8.11994 9.93067 7.85327 9.56733" />
-    </g>
+    <text x="6" y="9.1" text-anchor="middle" style={{ fill: color, fontFamily: "var(--plt-font-main)", fontSize: "8.5px", fontWeight: 500 }}>
+      {text}
+    </text>
   ),
 });
 
@@ -785,6 +822,24 @@ const ICONS = {
   "mask-left-and-right": turned(0, AXIS_ARROWS),
   "mask-top-and-bottom": turned(90, AXIS_ARROWS),
   // Margin sides: all four and top are designed; right, bottom and left are derived from top.
+  // Padding's own (the owner's): the box's frame, and inside it the padded sides in the accent.
+  // `padding-all` and `padding-top` are the owner's; right, bottom and left are derived (each the
+  // matching bar of `padding-all`).
+  "padding-all": paddings("top", "right", "bottom", "left"),
+  "padding-top": paddings("top"),
+  "padding-right": paddings("right"),
+  "padding-bottom": paddings("bottom"),
+  "padding-left": paddings("left"),
+  // Border's own (the owner's): the box's frame, in the accent where the border is. `border-all` and
+  // `border-top` are the owner's; right, bottom and left are derived (the top's 1px bar, turned to its side).
+  "border-all": {
+    size: 12,
+    body: <path d="M12 0V12H0V0H12ZM1 11H11V1H1V11Z" fill="var(--plt-color-accent)" />,
+  },
+  "border-top": borders("top"),
+  "border-right": borders("right"),
+  "border-bottom": borders("bottom"),
+  "border-left": borders("left"),
   "margin-all": margins("top", "bottom", "left", "right"),
   "margin-top": margins("top"),
   "margin-right": margins("right"),
@@ -851,30 +906,11 @@ const ICONS = {
   },
   "flex-wrap": layout([item3(1, 2.5), item3(5, 2.5), item3(1, 6.5)]),
   "flex-wrap-reverse": layout([item3(1, 6.5), item3(5, 6.5), item3(1, 2.5)]),
-  // text-transform: the designed icons. none is capitalize's "Ag" in contrast-low.
-  "text-transform-uppercase": {
-    size: 12,
-    body: (
-      <g stroke="var(--plt-color-accent)" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M5.54541 8.83329L3.16541 3.16663H3.04675L0.666748 8.83329" />
-        <path d="M1.22681 7.5H4.98547" />
-        <path d="M11.0199 4.03196C10.8006 3.74329 10.2406 3.16663 9.26992 3.16663C7.84592 3.16663 6.83325 4.18129 6.83325 6.03596C6.83325 7.66529 7.82792 8.83329 9.12592 8.83329C9.87592 8.83329 11.3033 8.71796 11.3033 6.19463H9.19792" />
-      </g>
-    ),
-  },
-  "text-transform-lowercase": {
-    size: 12,
-    body: (
-      <g stroke="var(--plt-color-accent)" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M2.15601 4.82271C2.48001 4.47404 2.94134 4.33337 3.41001 4.33337C4.19601 4.33337 4.83267 4.97071 4.83267 5.75604V8.16671" />
-        <path d="M4.83333 6.33331C4.83333 7.34531 4.012 8.16664 3 8.16664H2.8924C2.39953 8.16664 2 7.76711 2 7.27424C2 6.84518 2.30533 6.47684 2.72693 6.39731L4.24513 6.13071C4.60413 6.06298 4.8384 5.72064 4.77927 5.36658" />
-        <path d="M8.29999 4.5H8.43665C9.20801 4.5 9.83332 5.12531 9.83332 5.89667V6.43667C9.83332 7.20802 9.20801 7.83333 8.43665 7.83333H8.29999C7.52863 7.83333 6.90332 7.20802 6.90332 6.43667V5.89667C6.90332 5.12531 7.52863 4.5 8.29999 4.5Z" />
-        <path d="M9.83343 4.5V8.702C9.83343 9.51133 9.17743 10.1667 8.36877 10.1667C7.88343 10.1667 7.45343 9.93067 7.18677 9.56733" />
-      </g>
-    ),
-  },
-  "text-transform-capitalize": capitalizeAg("var(--plt-color-accent)"),
-  "text-transform-none": capitalizeAg("var(--plt-color-contrast-low)"),
+  // text-transform: its letters in Geist (caseLetters). none is capitalize's "Ag" in contrast-low.
+  "text-transform-uppercase": caseLetters("AG", "var(--plt-color-accent)"),
+  "text-transform-lowercase": caseLetters("ag", "var(--plt-color-accent)"),
+  "text-transform-capitalize": caseLetters("Ag", "var(--plt-color-accent)"),
+  "text-transform-none": caseLetters("Ag", "var(--plt-color-contrast-low)"),
   // border-radius: every corner is the designed icon; each corner alone is derived from it.
   "corners-all": corners(["top-left", "top-right", "bottom-right", "bottom-left"]),
   "corner-top-left": corners(["top-left"]),
@@ -882,12 +918,52 @@ const ICONS = {
   "corner-bottom-right": corners(["bottom-right"]),
   "corner-bottom-left": corners(["bottom-left"]),
   // rotate's angle (its select): derived from the dial (ScrubHandle), its ring and tick at 12px.
+  // rotate's split button: the owner's. One value (`rotate: 30deg`, a turn on the screen): the square
+  // turned, in the frame. Split, each axis: the accent line (x, y) or dot (z, toward you) it turns on, and
+  // the square as it turns on it, in perspective.
+  "rotate-all": {
+    size: 12,
+    body: (
+      <>
+        <path opacity="0.2" d="M1.5 1.49988L10.5 1.49988V10.4999H1.5L1.5 1.49988Z" fill="var(--plt-color-contrast-high)" />
+        <rect x="6" width="8.48527" height="8.48527" transform="rotate(45 6 0)" fill="var(--plt-color-accent)" />
+      </>
+    ),
+  },
+  "rotate-x": {
+    size: 12,
+    body: (
+      <>
+        <path opacity="0.2" d="M9.5 2L12 10L6.03983e-07 10L2.5 2L9.5 2Z" fill="var(--plt-color-contrast-high)" />
+        <path d="M0.5 5.5H11.5" stroke-linecap="round" stroke="var(--plt-color-accent)" />
+      </>
+    ),
+  },
+  "rotate-y": {
+    size: 12,
+    body: (
+      <>
+        <path opacity="0.2" d="M2 2.5L10 5.24537e-07L10 12L2 9.5L2 2.5Z" fill="var(--plt-color-contrast-high)" />
+        <path d="M5.5 11.5L5.5 0.500001" stroke-linecap="round" stroke="var(--plt-color-accent)" />
+      </>
+    ),
+  },
+  "rotate-z": {
+    size: 12,
+    body: (
+      <>
+        <rect opacity="0.2" x="6" y="0.34314" width="8" height="8" transform="rotate(45 6 0.34314)" fill="var(--plt-color-contrast-high)" />
+        <circle cx="6" cy="6" r="0.75" fill="var(--plt-color-accent)" />
+      </>
+    ),
+  },
   "rotate-angle": {
     size: 12,
     body: (
       <>
         <circle cx="6" cy="6" r="5.5" stroke="var(--plt-color-contrast-high)" stroke-opacity="0.2" />
-        <path d="M6 4V2.5" stroke="var(--plt-color-contrast-high)" stroke-linecap="round" />
+        {/* As dim as the circle (the owner's call): the select's icon, not the dial that drags (full white). */}
+        <path d="M6 4V2.5" stroke="var(--plt-color-contrast-high)" stroke-opacity="0.2" stroke-linecap="round" />
       </>
     ),
   },
@@ -898,7 +974,7 @@ const ICONS = {
     body: (
       <>
         <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
-        <rect y="12" width="12" height="2" fill="var(--plt-color-accent)" fill-opacity="0.4" />
+        <rect y="12" width="12" height="2" fill="var(--plt-color-accent)" fill-opacity="0.5" />
       </>
     ),
   },
@@ -916,7 +992,7 @@ const ICONS = {
     body: (
       <>
         <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
-        <rect x="1" y="1" width="10" height="2" fill="var(--plt-color-accent)" fill-opacity="0.4" />
+        <rect x="1" y="1" width="10" height="2" fill="var(--plt-color-accent)" fill-opacity="0.5" />
       </>
     ),
   },
@@ -934,7 +1010,7 @@ const ICONS = {
     body: (
       <>
         <path d={FRAME} fill="var(--plt-color-contrast-high)" fill-opacity="0.2" />
-        <rect y="12" width="12" height="2" fill="var(--plt-color-background-dark)" fill-opacity="0.12" />
+        <rect y="12" width="12" height="2" fill="var(--plt-color-background-dark)" />
       </>
     ),
   },

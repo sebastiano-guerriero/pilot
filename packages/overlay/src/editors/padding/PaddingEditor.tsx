@@ -14,6 +14,10 @@ export const paddingEditor = sidesEditor({
   label: "Padding",
   title: "padding",
   shorthand: "padding",
+  // Its own icons (the owner's): the frame with its padded sides.
+  icons: "padding",
+  // Split, each row is labeled by its side's property (padding-top…), as gap's.
+  rowLabels: true,
   box: "padding",
   aliases: { all: "p", top: "pt", right: "pr", bottom: "pb", left: "pl", x: "px", y: "py", start: "ps", end: "pe" },
 });

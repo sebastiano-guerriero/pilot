@@ -55,7 +55,7 @@ interface PropertyInputTextProps {
    * Returns how many steps the drag is past a limit the value stops at (see
    * ScrubHandle's onScrub), so the handle stretches.
    */
-  onScrub?(steps: number, startText: string, gesture: object): number | void;
+  onScrub?(steps: number, startText: string, gesture: object, shift?: boolean): number | void;
   /**
    * The drag handle is always the dial (an angle field: rotate), turned to
    * the angle the value ends with (`x 30deg` → 30), at 0 when there's none.
@@ -176,8 +176,20 @@ export function PropertyInputText({
     setCut(!!el && el.scrollWidth > el.clientWidth + 1);
   };
   useLayoutEffect(measure);
+  // A variable alone (`--color-white`): its name, whole, and what it comes to, dimmed (`#ffffff`), the owner's
+  // call: the field never shows its value. Read when the pointer comes (`onEnter`), not at every render.
+  const variable = draft === null ? soleVariable(value) : null;
+  const [resolved, setResolved] = useState("");
+  const onEnter = () => {
+    measure();
+    setResolved(variable ? variableValue(variable, computed) : "");
+  };
   const result = draft === null ? mathResult(value, computed) : null;
-  const tip = draft !== null ? "" : cut && value ? (result ? `${value} = ${result}` : value) : result ? `= ${result}` : "";
+  const tip =
+    draft !== null ? "" : variable ? variable : cut && value ? (result ? `${value} = ${result}` : value) : result ? `= ${result}` : "";
+  // A length's px too, when it's defined otherwise (`0.75rem = 12px`): what it comes to on the element.
+  const px = result && /px$/.test(result) && result !== resolved ? ` = ${result}` : "";
+  const aside = variable && resolved ? `${resolved}${px}` : undefined;
 
   // Also before a step or a drag: what the field shows (a variable just
   // picked, a value typed) is applied first, so the step goes from it, the
@@ -438,7 +450,7 @@ export function PropertyInputText({
             scrubStart.current = ref.current?.value ?? value;
             return true;
           }}
-          onScrub={(steps, gesture) => onScrub(steps, scrubStart.current, gesture)}
+          onScrub={(steps, gesture, shift) => onScrub(steps, scrubStart.current, gesture, shift)}
           degrees={dial ? (degreesOf(value) ?? endDegrees) : null}
         />
       )}
@@ -464,15 +476,38 @@ export function PropertyInputText({
           anchor={ref.current.getBoundingClientRect()}
           onActive={setActive}
           onPick={pickToken}
+          onClose={() => setMenu(null)}
         />
       )}
     </span>
   );
   return (
-    <Tooltip text={tip} block align="end" onEnter={measure}>
+    <Tooltip text={tip} aside={aside} block align="end" onEnter={onEnter}>
       {needsWrap ? wrapped : input}
     </Tooltip>
   );
+}
+
+/**
+ * The variable a value is, when it's one alone (`--a`, `var(--a)`), else null. Not one with a fallback
+ * (`var(--a, 4px)`): which one counts depends on the element, so the tooltip shows the whole text.
+ */
+export function soleVariable(value: string): string | null {
+  const v = value.trim();
+  return /^--[\w-]+$/.exec(v)?.[0] ?? /^var\(\s*(--[\w-]+)\s*\)$/.exec(v)?.[1] ?? null;
+}
+
+/** The most of a variable's value the tooltip shows (a font stack can be long): then an ellipsis. */
+const VALUE_MAX = 40;
+
+/**
+ * What `name` comes to: as the page's root defines it, other variables in it resolved (Tailwind's
+ * `oklch(…)`, as the code reads), else the field's computed value (a variable set on an element, not
+ * the root). Cut at VALUE_MAX characters.
+ */
+export function variableValue(name: string, computed = "", root: Element = document.documentElement): string {
+  const value = getComputedStyle(root).getPropertyValue(name).trim() || computed.trim();
+  return value.length > VALUE_MAX ? `${value.slice(0, VALUE_MAX - 1).trimEnd()}…` : value;
 }
 
 /**

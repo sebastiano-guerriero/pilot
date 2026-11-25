@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import { parseValue } from "../../css/values.ts";
 import { Icon, type IconName } from "../../ui/components/Icon/Icon.tsx";
 import { PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
@@ -105,7 +105,14 @@ function MaskImageEditor(props: PropertyEditorProps) {
   const value = declaredOf(props, PROPERTY);
   const mixed = isMixed(props, PROPERTY);
   const masks = mixed ? null : parseMask(value);
-  const list: Array<Mask | "none"> = masks === "none" ? ["none"] : (masks ?? []);
+  // Masks picked as custom: their CSS is a linear or radial one's, so it would be read back as that
+  // (and the type select would seem not to take custom). Shown as custom while the editor's open, as
+  // box-shadow's customs.
+  const customs = useRef(new Set<number>());
+  const read: Array<Mask | "none"> = masks === "none" ? ["none"] : (masks ?? []);
+  const list = read.map((mask, i): Mask | "none" =>
+    customs.current.has(i) && mask !== "none" && mask.type !== "custom" ? { type: "custom", text: maskLayers(mask).join(", ") } : mask,
+  );
   const [open, setOpen] = useState<number | null>(null);
 
   // Every write is the whole value, with its mask-composite, as one undo step.
@@ -119,12 +126,15 @@ function MaskImageEditor(props: PropertyEditorProps) {
     setOpen(next.length - 1);
   };
   const remove = (index: number) => {
+    customs.current.clear();
     const next = list.filter((_, i) => i !== index);
     if (next.length) write(next);
     else for (const [p, val] of maskChanges("", (p) => declaredOf(props, p))) props.onChange(p, val, { gesture: {} });
     setOpen(null);
   };
   const update = (index: number, mask: Mask | "none", gesture?: object) => {
+    if (mask !== "none" && mask.type === "custom") customs.current.add(index);
+    else customs.current.delete(index);
     // `none` is the whole value: the other masks go.
     if (mask === "none") return write(["none"], gesture);
     write(list.map((m, i) => (i === index ? mask : m)).filter((m) => m !== "none"), gesture);
@@ -140,6 +150,8 @@ function MaskImageEditor(props: PropertyEditorProps) {
       open={open}
       onOpen={setOpen}
       onAdd={add}
+      // `none` is the whole value: nothing can be added to it (× takes it off).
+      noAdd={masks === "none"}
       onRemove={remove}
       noun="mask"
       panelTitle="Mask Image"

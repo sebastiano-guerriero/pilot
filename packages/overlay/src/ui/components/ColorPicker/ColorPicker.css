@@ -1,6 +1,6 @@
 /* The color picker (ColorPicker.tsx), the owner's design: in a headerless
    property panel (260px), the area 16px from the panel's sides and top (the
-   panel's 12px drag strip above it), lined up with the rows' fields, 2px
+   panel's 12px drag strip above it), lined up with the rows' fields, 6px
    corners and a 1px ring; the hue strip right under it, as wide; then the
    rows, 16px below it (PropertyPanel.css). */
 @scope (.color-picker) {
@@ -9,14 +9,16 @@
     padding: 16px 16px 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    /* 16px between the area and the hue strip (the owner's call): the area's handle hangs 8px below it at
+       the bottom, the strip's 2px above it, so they never overlap. */
+    gap: 16px;
   }
 
   /* Saturation left to right (white to the hue), brightness top to bottom (to black). */
   .color-area {
     position: relative;
     height: 180px;
-    border-radius: 2px;
+    border-radius: 6px;
     background:
       linear-gradient(to top, #000, transparent),
       linear-gradient(to right, #fff, hsl(var(--_hue) 100% 50%));
@@ -24,13 +26,13 @@
     touch-action: none;
   }
 
-  /* A 1px ring inside the area, white at 10%, over the colors (the canvas too), under the handle. */
+  /* A 1px ring inside the area, white at 20%, over the colors (the canvas too), under the handle. */
   .color-area::after {
     content: "";
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.1);
+    box-shadow: inset 0 0 0 1px hsl(0 0% 100% / 0.2);
     pointer-events: none;
   }
 
@@ -55,6 +57,7 @@
   .hue-strip {
     position: relative;
     height: 12px;
+    /* As the area's (the owner's call): a pill at 12px tall. */
     border-radius: 6px;
     background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
     cursor: pointer;
@@ -76,7 +79,7 @@
   /* Pressing a handle drags it (the press reaches its area or strip, which
      takes it from there), and the area and the strip catch presses a few px
      past their edges: at an edge, half the handle hangs out over them. The
-     area's reach down stops short of the strip's reach up (8px apart). */
+     area's reach down stops short of the strip's reach up (16px apart). */
   .color-area::before,
   .hue-strip::before {
     content: "";
@@ -98,9 +101,12 @@
 }
 
 /* The picker's rows (in the panel, after the area): OKLCH split into
-   lightness, chroma and hue, its button in the accent. */
+   lightness, chroma and hue. The button's letters, dimmed:
+   "lch", or l, c and h level with their fields. */
 @scope (.property-panel[data-headerless]) {
-  .split-toggle[aria-pressed="true"] {
-    color: var(--plt-color-accent);
+  .lch-letter {
+    line-height: 12px;
+    text-align: center;
+    color: var(--plt-color-contrast-low);
   }
 }

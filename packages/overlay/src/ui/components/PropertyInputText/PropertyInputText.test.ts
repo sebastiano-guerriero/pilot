@@ -3,7 +3,7 @@ import { h, render } from "preact";
 import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { autoCloseParens, PropertyInputText } from "./PropertyInputText.tsx";
+import { autoCloseParens, PropertyInputText, soleVariable, variableValue } from "./PropertyInputText.tsx";
 
 let commits: string[];
 let steps: Array<[number, string]>;
@@ -375,3 +375,38 @@ describe("PropertyInputText's variables", () => {
   });
 });
 
+
+describe("a variable's tooltip", () => {
+  it("finds a variable alone, not one in math or a list", () => {
+    expect(soleVariable("--color-white")).toBe("--color-white");
+    expect(soleVariable("var(--space-4)")).toBe("--space-4");
+    expect(soleVariable("var(--space-4, 8px)")).toBeNull();
+    expect(soleVariable("--space-4 * 2")).toBeNull();
+    expect(soleVariable("12px")).toBeNull();
+  });
+
+  it("its value as the root defines it, else the computed one; a long one cut", () => {
+    document.documentElement.style.setProperty("--brand", "oklch(0.7 0.2 150)");
+    document.documentElement.style.setProperty("--stack", `"Inter Display", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji"`);
+    expect(variableValue("--brand")).toBe("oklch(0.7 0.2 150)");
+    expect(variableValue("--scoped", "rgb(1, 2, 3)")).toBe("rgb(1, 2, 3)");
+    expect(variableValue("--stack")).toHaveLength(40);
+    expect(variableValue("--stack").endsWith("…")).toBe(true);
+    document.documentElement.style.removeProperty("--brand");
+    document.documentElement.style.removeProperty("--stack");
+  });
+
+  it("hovered, the tooltip says the variable's name, then its value, dimmed (a length's px too)", () => {
+    document.documentElement.style.setProperty("--radius-card", "0.75rem");
+    act(() => {
+      render(h(PropertyInputText, { value: "--radius-card", label: "radius", computed: "12px", onCommit: () => {} }), container);
+    });
+    act(() => {
+      container.querySelector(".tooltip-anchor")?.dispatchEvent(new PointerEvent("pointerenter", { pointerType: "mouse" }));
+    });
+    const tip = container.querySelector(".tooltip");
+    expect(tip?.firstChild?.textContent).toBe("--radius-card");
+    expect(tip?.querySelector(".shortcut")?.textContent).toBe("0.75rem = 12px");
+    document.documentElement.style.removeProperty("--radius-card");
+  });
+});

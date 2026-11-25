@@ -14,7 +14,10 @@
   }
 
   .tooltip {
-    position: absolute;
+    /* Fixed, also before it first opens (Tooltip.tsx then places it): absolute, hidden, it still
+       widened a scrolling list whose edge its trigger sits at (a split button's), which then
+       scrolled sideways. */
+    position: fixed;
     /* Above what comes after its trigger: the next items of a list (the shadow chips), whose
        own tooltip anchors (position: relative) would otherwise draw over it. */
     z-index: 1;

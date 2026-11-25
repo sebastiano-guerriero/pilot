@@ -19,5 +19,15 @@ export function isFromReset(props: Pick<PropertyEditorProps, "reset">, property:
   return !!props.reset?.has(property);
 }
 
+/**
+ * A value only a reset gives (`* { padding: 0 }`, Tailwind's preflight): what
+ * the field shows dimmed, as its placeholder, the field itself empty, since
+ * the element doesn't set it (the owner's call: a cleared field read as
+ * still set). "" otherwise.
+ */
+export function resetValueOf(props: Pick<PropertyEditorProps, "element" | "declared" | "reset">, property: string): string {
+  return isFromReset(props, property) ? declaredOf(props, property) : "";
+}
+
 /** What an empty field reads when the selected elements differ on its property. */
 export const MIXED = "Mixed";

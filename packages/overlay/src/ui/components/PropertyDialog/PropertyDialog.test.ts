@@ -419,6 +419,21 @@ describe("declared values", () => {
     });
     expect(editorIds()).toEqual(["display"]);
   });
+
+  it("listing every editor: a revealed one is left out only while it's shown (gap without display: on its own)", () => {
+    const gap = stub("gap", ["gap"]);
+    const display: PropertyEditor = { ...stub("display", ["display"]), embeds: [gap] };
+    const open = () =>
+      act(() => {
+        render(null, container);
+        render(h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors: [display, gap], listAll: true }), container);
+      });
+    open();
+    expect(editorIds()).toEqual(["display", "gap"]);
+    element.style.display = "grid";
+    open();
+    expect(editorIds()).toEqual(["display"]); // display's row: not twice
+  });
 });
 
 describe("width chip", () => {
@@ -728,10 +743,15 @@ describe("placement", () => {
     });
     const ids = editorIds();
     expect(ids[0]).toBe("display");
-    expect(ids.slice(0, 8)).toEqual(["display", "float", "width", "min-width", "max-width", "height", "min-height", "max-height"]);
+    // No display set: its grid and flex rows aren't shown by it, so they're listed on their own, right after it.
+    for (const row of ["grid-columns", "gap", "flex-direction", "justify-content", "align-items"]) {
+      expect(ids.indexOf(row)).toBeGreaterThan(0);
+      expect(ids.indexOf(row)).toBeLessThan(ids.indexOf("float"));
+    }
+    expect(ids.slice(ids.indexOf("float"), ids.indexOf("float") + 7)).toEqual(["float", "width", "min-width", "max-width", "height", "min-height", "max-height"]);
     expect(ids).toContain("padding");
     expect(ids).toContain("aspect-ratio");
-    expect(ids).not.toContain("gap"); // shown by display, as its row
+    expect(ids).not.toContain("inset"); // position shows it always, as its row
     expect(ids).not.toContain("size"); // writes nothing of its own
   });
 

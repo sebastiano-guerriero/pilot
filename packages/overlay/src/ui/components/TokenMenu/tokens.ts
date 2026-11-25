@@ -156,6 +156,26 @@ export function tokenScale(tokens: readonly Token[], name: string): Token[] | nu
 }
 
 /**
+ * A drag with Shift on a field holding one token (`--space-3`): the token
+ * `offset` places along its scale (tokenScale), held at either end. Null
+ * when the field holds no token of `kinds` with a scale, or the scale has
+ * none in that direction (at its end already): the drag steps the number
+ * then, as without Shift (the owner's call).
+ */
+export function tokenAlong(text: string, offset: number, tokens: readonly Token[], kinds: readonly TokenKind[]): string | null {
+  const m = /^(?:var\(\s*(--[\w-]+)\s*(?:,[^()]*)?\)|(--[\w-]+))$/.exec(text.trim());
+  const name = m?.[1] ?? m?.[2];
+  const token = name ? tokens.find((t) => t.name === name) : undefined;
+  if (!name || !token || !kinds.includes(token.kind)) return null;
+  const scale = tokenScale(tokens, name);
+  if (!scale) return null;
+  const at = scale.indexOf(token);
+  if (offset !== 0 && !scale[at + Math.sign(offset)]) return null;
+  const next = scale[Math.min(scale.length - 1, Math.max(0, at + offset))] as Token;
+  return `var(${next.name})`;
+}
+
+/**
  * ↑/↓ (and the wheel) on a field holding one token, `--space-3`: the
  * next one along its scale (tokenScale), up or down by one whatever the step
  * (Shift too). At either end it stays (`text` as is): stepping never leaves

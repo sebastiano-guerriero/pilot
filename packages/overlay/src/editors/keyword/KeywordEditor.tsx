@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef } from "preact/hooks";
 import { Icon, type IconName } from "../../ui/components/Icon/Icon.tsx";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { PropertySelect } from "../../ui/components/PropertySelect/PropertySelect.tsx";
-import { declaredOf, isMixed, MIXED } from "../declared.ts";
+import { declaredOf, isMixed, MIXED, resetValueOf } from "../declared.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
 
 interface KeywordOptions {
@@ -29,7 +29,9 @@ export function KeywordEditor({
   ...props
 }: PropertyEditorProps & { property: string; config: KeywordOptions }) {
   const { onChange, focusRequest, onTabOut, onReturnToSearch } = props;
-  const value = declaredOf(props, property);
+  // A value only a reset gives (`box-sizing: border-box` on every element) shows dimmed, as the placeholder.
+  const fromReset = resetValueOf(props, property);
+  const value = fromReset ? "" : declaredOf(props, property);
   const ref = useRef<HTMLButtonElement>(null);
   useLayoutEffect(() => {
     if (focusRequest) ref.current?.focus();
@@ -42,7 +44,7 @@ export function KeywordEditor({
         value={value}
         options={config.options}
         label={name}
-        placeholder={isMixed(props, property) ? MIXED : undefined}
+        placeholder={isMixed(props, property) ? MIXED : fromReset || undefined}
         triggerRef={ref}
         iconFor={
           icons

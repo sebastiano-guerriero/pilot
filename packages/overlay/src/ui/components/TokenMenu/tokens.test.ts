@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
-import { currentToken, insertToken, matchTokens, stepToken, tokenAt, tokenKindsFor, tokenScale } from "./tokens.ts";
+import { currentToken, insertToken, matchTokens, stepToken, tokenAlong, tokenAt, tokenKindsFor, tokenScale } from "./tokens.ts";
 
 const tokens = [
   { name: "--space-2", value: "8px", kind: "length" as const },
@@ -83,6 +83,17 @@ describe("stepping a token along its scale", () => {
     expect(stepToken("var(--space-4)", 1, scale, ["length"])).toBe("var(--space-4)");
     expect(stepToken("var(--gray-100)", 1, scale, ["color"])).toBe("var(--gray-500)");
     expect(stepToken("--space-1", 1, scale, ["length"])).toBe("var(--space-2)"); // as the field shows it
+  });
+
+  it("a Shift drag goes `offset` tokens along it, held at the ends; none that way (at an end), or no scale: null, the number then", () => {
+    expect(tokenAlong("var(--space-1)", 2, scale, ["length"])).toBe("var(--space-4)");
+    expect(tokenAlong("var(--space-1)", 9, scale, ["length"])).toBe("var(--space-4)"); // held at the end
+    expect(tokenAlong("--space-2", -1, scale, ["length"])).toBe("var(--space-1)");
+    expect(tokenAlong("var(--space-2)", 0, scale, ["length"])).toBe("var(--space-2)");
+    expect(tokenAlong("var(--space-4)", 1, scale, ["length"])).toBeNull(); // nothing further: the number
+    expect(tokenAlong("var(--space-1)", -3, scale, ["length"])).toBeNull();
+    expect(tokenAlong("var(--gutter)", 1, scale, ["length"])).toBeNull();
+    expect(tokenAlong("12px", 1, scale, ["length"])).toBeNull();
   });
 
   it("anything else steps its number instead: no scale, math, a token of another kind", () => {

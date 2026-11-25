@@ -317,3 +317,20 @@ describe("icon variant", () => {
     expect(container.querySelector(".option-icon")).toBeNull();
   });
 });
+
+describe("PropertySelect: scrolling", () => {
+  it("anything else scrolling closes the menu, as a native select; its own list scrolling doesn't", () => {
+    const list = document.createElement("div"); // the dialog's list, say
+    document.body.append(list);
+    mount("flex");
+    act(() => trigger().click());
+    expect(menu()).toBeTruthy();
+    act(() => void menu()?.dispatchEvent(new Event("scroll")));
+    expect(menu()).toBeTruthy();
+    act(() => void list.dispatchEvent(new Event("scroll")));
+    expect(menu()).toBeNull();
+    expect(changes).toEqual([]); // nothing picked
+    list.remove();
+  });
+});
+

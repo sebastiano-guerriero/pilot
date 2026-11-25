@@ -3,10 +3,11 @@ import { displayValue, parseValue } from "../../css/values.ts";
 import { stepField } from "../step.ts";
 import type { BoxArea } from "../../dom/boxModel.ts";
 import { Icon, type IconName } from "../../ui/components/Icon/Icon.tsx";
+import { Tooltip } from "../../ui/components/Tooltip/Tooltip.tsx";
 import { type InputDraft, PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
 import { tokensFor } from "../../ui/components/TokenMenu/tokens.ts";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
-import { declaredOf, isMixed, MIXED } from "../declared.ts";
+import { declaredOf, isMixed, MIXED, resetValueOf } from "../declared.ts";
 import { useScrub } from "../length/useScrub.ts";
 import { normalizeQuery } from "../query.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
@@ -21,6 +22,11 @@ export interface SplitPart {
   label: string;
   /** Its icon in the view button (sides view): `side-top`, `gap-row`. */
   icon: IconName;
+  /**
+   * Its own label in the parts view, level with its field (gap's `gap-x`,
+   * `gap-y`), instead of the title on the first line.
+   */
+  rowLabel?: string;
   /** What its field shows on the page while hovered or focused; nothing when absent (inset). */
   area?: BoxArea;
   /**
@@ -106,6 +112,7 @@ export function SplitEditor({
   values,
   declared,
   mixed: differing,
+  reset,
   onChange,
   onRevert,
   query = "",
@@ -127,6 +134,9 @@ export function SplitEditor({
   const partMixed = (part: SplitPart) => isMixed({ mixed: differing }, part.property);
   const same = parts.every((p) => value[p.key] === value[first.key]) && !parts.some(partMixed);
   const mixed = !same;
+  // A part only a reset gives (Tailwind's `padding: 0`) shows dimmed, as the placeholder; the one value too, when every part's is.
+  const resetOf = (part: SplitPart) => resetValueOf({ element, declared, reset }, part.property);
+  const allReset = same && parts.every((p) => resetOf(p));
 
   // The search picks the view as it's typed (`px` → each part); otherwise
   // it opens on the parts when they differ, on one value when they match.
@@ -246,19 +256,20 @@ export function SplitEditor({
     if (focused) setPending({ field: next === "all" ? "all" : first.key });
   };
   const toggleButton = (
-    <button
-      type="button"
-      class="split-toggle"
-      aria-label={view === "all" ? `Set each part of ${title}` : `One value for all of ${title}`}
-      aria-pressed={view === "parts"}
-      title={view === "all" ? "Split" : "One value"}
-      tabIndex={-1}
-      // Keep focus where it is (a field, or the search) while clicking.
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={toggle}
-    >
-      {view === "all" ? <Icon name={config.icon} /> : parts.map((p) => <Icon key={p.key} name={p.icon} />)}
-    </button>
+    <Tooltip text={view === "all" ? "Split" : "One value"}>
+      <button
+        type="button"
+        class="split-toggle"
+        aria-label={view === "all" ? `Set each part of ${title}` : `One value for all of ${title}`}
+        aria-pressed={view === "parts"}
+        tabIndex={-1}
+        // Keep focus where it is (a field, or the search) while clicking.
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={toggle}
+      >
+        {view === "all" ? <Icon name={config.icon} /> : parts.map((p) => <Icon key={p.key} name={p.icon} />)}
+      </button>
+    </Tooltip>
   );
 
   return (
@@ -267,8 +278,8 @@ export function SplitEditor({
         <PropertyRow label={title} action={toggleButton}>
           <span class="field" {...fieldEvents("all")}>
             <PropertyInputText
-              value={same && value[first.key] ? displayValue(value[first.key] as string, first.property) : ""}
-              placeholder={mixed ? MIXED : undefined}
+              value={same && value[first.key] && !allReset ? displayValue(value[first.key] as string, first.property) : ""}
+              placeholder={mixed ? MIXED : allReset ? displayValue(value[first.key] as string, first.property) : undefined}
               label={title}
               inputRef={refs.current.all}
               tokens={tokensFor(first.property)}
@@ -278,8 +289,8 @@ export function SplitEditor({
                 const next = stepField(first.property, text, delta, baseOf(first)());
                 if (next && next !== text) onChange(config.shorthand, next, gesture && { gesture });
               }}
-              onScrub={(steps, text, gesture) =>
-                scrub({ property: first.property, writes: config.shorthand, base: baseOf(first) }, steps, text, gesture)
+              onScrub={(steps, text, gesture, shift) =>
+                scrub({ property: first.property, writes: config.shorthand, base: baseOf(first) }, steps, text, gesture, shift)
               }
               onSubmit={onReturnToSearch}
               onTab={(direction) => tab("all", direction)}
@@ -287,14 +298,29 @@ export function SplitEditor({
           </span>
         </PropertyRow>
       ) : (
-        <PropertyRow label={title} class="parts" action={toggleButton}>
+        <PropertyRow
+          // Each part's own label, when they have one (gap-x, gap-y), stacked as the fields are.
+          label={
+            parts.every((p) => p.rowLabel) ? (
+              <span class="row-labels">
+                {parts.map((p) => (
+                  <span key={p.key}>{p.rowLabel}</span>
+                ))}
+              </span>
+            ) : (
+              title
+            )
+          }
+          class="parts"
+          action={toggleButton}
+        >
           <div class="stack">
             {parts.map((part) => (
               <span key={part.key} class="field" {...fieldEvents(part.key)}>
                 <PropertyInputText
-                  value={value[part.key] ? displayValue(value[part.key] as string, part.property) : ""}
+                  value={value[part.key] && !resetOf(part) ? displayValue(value[part.key] as string, part.property) : ""}
                   label={part.label}
-                  placeholder={partMixed(part) ? MIXED : undefined}
+                  placeholder={partMixed(part) ? MIXED : resetOf(part) ? displayValue(resetOf(part), part.property) : undefined}
                   inputRef={refs.current[part.key]}
                   tokens={tokensFor(part.property)}
                   computed={values[part.property]}
@@ -303,8 +329,8 @@ export function SplitEditor({
                     const next = stepField(part.property, text, delta, baseOf(part)());
                     if (next && next !== value[part.key]) onChange(part.property, next, gesture && { gesture });
                   }}
-                  onScrub={(steps, text, gesture) =>
-                    scrub({ property: part.property, base: baseOf(part) }, steps, text, gesture)
+                  onScrub={(steps, text, gesture, shift) =>
+                    scrub({ property: part.property, base: baseOf(part) }, steps, text, gesture, shift)
                   }
                   onSubmit={onReturnToSearch}
                   onTab={(direction) => tab(part.key, direction)}

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { PropertySelect } from "../../ui/components/PropertySelect/PropertySelect.tsx";
-import { declaredOf, isMixed, MIXED } from "../declared.ts";
+import { declaredOf, isMixed, MIXED, resetValueOf } from "../declared.ts";
 import { rowsOf } from "../listOrder.ts";
 import type { FocusRequest, PropertyEditor, PropertyEditorProps } from "../types.ts";
 
@@ -52,6 +52,8 @@ export function RevealEditor({ config, ...props }: PropertyEditorProps & { confi
   const { onChange, focusRequest, onReturnToSearch, onTabOut } = props;
   const value = declaredOf(props, config.property);
   const rows = revealedRows(config, value);
+  // A value only a reset gives shows dimmed in the select, as its placeholder (its rows still show).
+  const fromReset = resetValueOf(props, config.property);
 
   // From the search, land on the select; from the previous/next editor, on
   // the first/last row.
@@ -77,6 +79,7 @@ export function RevealEditor({ config, ...props }: PropertyEditorProps & { confi
         property={config.property}
         options={typeof config.options === "function" ? config.options(value) : config.options}
         value={value}
+        fromReset={fromReset}
         mixed={isMixed(props, config.property)}
         focusRequest={requestFor(0)}
         onChange={(next) => onChange(config.property, next)}
@@ -96,6 +99,8 @@ interface SelectRowProps {
   property: string;
   options: readonly string[];
   value: string;
+  /** The value, when only a reset gives it: shown dimmed, as the placeholder. */
+  fromReset?: string;
   /** The selected elements differ on it: the select reads "Mixed". */
   mixed?: boolean;
   focusRequest?: FocusRequest;
@@ -107,7 +112,7 @@ interface SelectRowProps {
  * The select. Picking keeps focus here (Enter picks in the menu), so Tab
  * goes on to the rows that just appeared.
  */
-function SelectRow({ property, options, value, mixed, focusRequest, onChange, onTab }: SelectRowProps) {
+function SelectRow({ property, options, value, fromReset, mixed, focusRequest, onChange, onTab }: SelectRowProps) {
   const ref = useRef<HTMLButtonElement>(null);
   useLayoutEffect(() => {
     if (focusRequest) ref.current?.focus();
@@ -115,10 +120,10 @@ function SelectRow({ property, options, value, mixed, focusRequest, onChange, on
   return (
     <PropertyRow label={property}>
       <PropertySelect
-        value={value}
+        value={fromReset ? "" : value}
         options={options}
         label={property}
-        placeholder={mixed ? MIXED : undefined}
+        placeholder={mixed ? MIXED : fromReset || undefined}
         triggerRef={ref}
         onChange={(next) => next !== value && onChange(next)}
         onTab={onTab}

@@ -14,8 +14,10 @@ interface ScrubHandleProps {
    * are past a limit the value stops at (0, or a percent's 100), counted
    * from where it got there and negative below a minimum: let go there, the
    * wheel springs back a little (`recoil()`).
+   * `shift`: whether Shift is held now (a field holding a variable steps
+   * along its scale then, useScrub).
    */
-  onScrub(steps: number, gesture: object): number | void;
+  onScrub(steps: number, gesture: object, shift: boolean): number | void;
   /**
    * The field's value as an angle, in degrees, when it is one: the handle is
    * then a dial instead of the wheel (DIAL), turned to it. Drags the same way.
@@ -223,7 +225,7 @@ export function ScrubHandle({ onStart, onScrub, degrees }: ScrubHandleProps) {
       if (m.shiftKey && startDegrees != null) next = Math.round((startDegrees + next) / SNAP_DEGREES) * SNAP_DEGREES - startDegrees;
       if (next !== steps) {
         steps = next;
-        const overflow = latest.current.onScrub(steps, gesture);
+        const overflow = latest.current.onScrub(steps, gesture, m.shiftKey);
         past = typeof overflow === "number" ? (overflow * PX_PER_STEP) / scale : 0;
       }
       // The drum follows the pointer, past a limit too: no resistance.

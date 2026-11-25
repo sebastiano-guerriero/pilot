@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
-import type { ComponentChildren } from "preact";
+import { useHeldDrag } from "../../../editors/heldDrag.ts";
 import { parseColor, parseOpacity, splitColor } from "../../../css/colors.ts";
 import { bareToken } from "../../../css/values.ts";
-import { Icon } from "../Icon/Icon.tsx";
 import { tokensFor } from "../TokenMenu/tokens.ts";
+import { Tooltip } from "../Tooltip/Tooltip.tsx";
 import {
   type Color,
   type Hsv,
@@ -146,6 +146,7 @@ function readColor(color: string, computed: string): Color {
  * and its trigger.
  */
 export function ColorPicker({ property, color, computed, opacity, onPick, onRevert, onClose, trigger, beside, anchor }: ColorPickerProps) {
+  const held = useHeldDrag();
   const read = readColor(color, computed);
   const alpha = opacity ?? Math.round(read.alpha * 100);
   const [model, setModel] = useState<ColorModel>(() => (/^oklch\(/i.test(color.trim()) ? "OKLCH" : lastModel));
@@ -171,7 +172,8 @@ export function ColorPicker({ property, color, computed, opacity, onPick, onReve
   const panel = useRef<HTMLDivElement>(null);
   // A click outside the picker and its trigger closes it (in the page or in Pilot's own UI).
   useEffect(() => {
-    const root = panel.current?.getRootNode();
+    // From the trigger: the picker itself is drawn a render later (PropertyPanel's portal).
+    const root = trigger()?.getRootNode();
     const onDown = (e: Event) => {
       const path = e.composedPath();
       const inside = (el: Element | null | undefined) => !!el && path.includes(el);
@@ -254,43 +256,43 @@ export function ColorPicker({ property, color, computed, opacity, onPick, onReve
   };
 
   /** A number field of OKLCH: typed, stepped, dragged. */
-  const oklchField = (name: keyof typeof FIELDS, action?: ComponentChildren) => {
+  const oklchField = (name: keyof typeof FIELDS) => {
     const { step, min, max, digits } = FIELDS[name];
     const key = name === "lightness" ? "l" : name === "chroma" ? "c" : "h";
     const clamp = (n: number) => Math.min(max, Math.max(min, Number(n.toFixed(digits))));
     const set = (n: number, gesture?: object) => pickOklch({ ...oklch, [key]: name === "hue" ? ((n % 360) + 360) % 360 : clamp(n) }, gesture);
     return (
-      <PropertyRow key={name} label={name} action={action}>
-        <PropertyInputText
-          value={String(Number(oklch[key].toFixed(digits)))}
-          label={name}
-          onCommit={(text) => {
-            const n = Number.parseFloat(text);
-            if (Number.isFinite(n)) set(n);
-          }}
-          onStep={(delta, text, gesture) => set((Number.parseFloat(text) || 0) + delta * step, gesture)}
-          onScrub={(steps, startText, gesture) => {
-            const start = Number.parseFloat(startText) || 0;
-            const next = name === "hue" ? start + steps * step : clamp(start + steps * step);
-            if (next === start) onRevert(gesture);
-            else set(next, gesture);
-            return name === "hue" ? 0 : (start + steps * step - next) / step;
-          }}
-        />
-      </PropertyRow>
+      <PropertyInputText
+        key={name}
+        value={String(Number(oklch[key].toFixed(digits)))}
+        label={name}
+        onCommit={(text) => {
+          const n = Number.parseFloat(text);
+          if (Number.isFinite(n)) set(n);
+        }}
+        onStep={(delta, text, gesture) => set((Number.parseFloat(text) || 0) + delta * step, gesture)}
+        onScrub={(steps, startText, gesture) => {
+          const start = Number.parseFloat(startText) || 0;
+          // Lightness and chroma held at their ends (past them, the handle stretches: heldDrag); the hue goes round.
+          const { offset, overflow } = name === "hue" ? { offset: steps, overflow: 0 } : held(gesture, steps, start, step, min, max);
+          if (offset === 0) onRevert(gesture);
+          else set(start + offset * step, gesture);
+          return overflow;
+        }}
+      />
     );
   };
 
   const hex = hexOf(fromHsv(hsv)).toUpperCase();
-  // OKLCH: one value, or lightness, chroma and hue (border-radius's split button; the icon a placeholder).
+  // OKLCH: one value, or lightness, chroma and hue (border-radius's split button).
+  // Letters (as rotate's axes were, before their icons): "lch" on one value, then l, c and h, each level with its field (to try).
   const splitButton = (
-    <span class="split-editor">
+    <Tooltip text={split ? "One value" : "Split"}>
       <button
         type="button"
         class="split-toggle"
         aria-label={split ? "One value for the color" : "Lightness, chroma and hue apart"}
         aria-pressed={split}
-        title={split ? "One value" : "Split"}
         tabIndex={-1}
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => {
@@ -298,9 +300,17 @@ export function ColorPicker({ property, color, computed, opacity, onPick, onReve
           setSplit(!split);
         }}
       >
-        <Icon name="color-split" />
+        {split ? (
+          (["l", "c", "h"] as const).map((letter) => (
+            <span key={letter} class="lch-letter">
+              {letter}
+            </span>
+          ))
+        ) : (
+          <span class="lch-letter">lch</span>
+        )}
       </button>
-    </span>
+    </Tooltip>
   );
   const rows = (
     <>
@@ -317,10 +327,24 @@ export function ColorPicker({ property, color, computed, opacity, onPick, onReve
         />
       </PropertyRow>
       {model === "OKLCH" && split ? (
-        // Split: a row each, the button on the first (the others keep its room, so the fields line up).
-        (["lightness", "chroma", "hue"] as const).map((name, i) => oklchField(name, i === 0 ? splitButton : <span aria-hidden="true" />))
+        // Split: a field each, stacked, each label level with its field, and the button as tall as the three (as border-radius's).
+        <div class="split-editor">
+          <PropertyRow
+            class="parts"
+            label={
+              <span class="row-labels">
+                <span>lightness</span>
+                <span>chroma</span>
+                <span>hue</span>
+              </span>
+            }
+            action={splitButton}
+          >
+            <div class="stack">{(["lightness", "chroma", "hue"] as const).map((name) => oklchField(name))}</div>
+          </PropertyRow>
+        </div>
       ) : (
-        <PropertyRow label="value" action={model === "OKLCH" ? splitButton : undefined}>
+        <PropertyRow label="value" action={model === "OKLCH" ? <span class="split-editor">{splitButton}</span> : undefined}>
           <PropertyInputText
             value={variable ? bareToken(color) : model === "Hex" ? hex : formatOklch(oklch)}
             label="color value"
@@ -340,10 +364,10 @@ export function ColorPicker({ property, color, computed, opacity, onPick, onReve
           onStep={(delta, text, gesture) => onPick(currentText(), Math.min(100, Math.max(0, (parseOpacity(text) ?? alpha) + delta)), gesture)}
           onScrub={(steps, startText, gesture) => {
             const start = parseOpacity(startText) ?? alpha;
-            const next = Math.min(100, Math.max(0, start + steps));
-            if (next === start) onRevert(gesture);
-            else onPick(currentText(), next, gesture);
-            return start + steps - next;
+            const { offset, overflow } = held(gesture, steps, start, 1, 0, 100);
+            if (offset === 0) onRevert(gesture);
+            else onPick(currentText(), start + offset, gesture);
+            return overflow;
           }}
         />
       </PropertyRow>

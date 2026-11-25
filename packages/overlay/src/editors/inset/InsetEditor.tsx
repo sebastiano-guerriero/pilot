@@ -15,6 +15,8 @@ export const insetEditor = sidesEditor({
   shorthand: "inset",
   sideProperty: (side) => side,
   icons: "inset",
+  // Split, each row is labeled by its side's property (top, right, bottom, left), as padding's.
+  rowLabels: true,
   // Tailwind's inset utilities: `inset`, `top`/`right`/`bottom`/`left`,
   // `inset-x`/`inset-y`, and `start`/`end` (inset-inline-start/end).
   aliases: {

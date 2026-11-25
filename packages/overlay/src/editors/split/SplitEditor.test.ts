@@ -286,14 +286,15 @@ describe("gap", () => {
   });
   const icons = () => [...container.querySelectorAll(".split-toggle svg")].length;
 
-  it("two parts: row-gap and column-gap; different values open split", () => {
+  it("two parts, x then y: column-gap and row-gap; different values open split; each row labeled gap-x and gap-y, the button with their icons", () => {
     element.style.rowGap = "8px";
     element.style.columnGap = "16px";
     mount();
     expect(view()).toBe("parts");
-    expect(inputs().map((i) => i.getAttribute("aria-label"))).toEqual(["row-gap", "column-gap"]);
-    expect(inputs().map((i) => i.value)).toEqual(["8px", "16px"]);
+    expect(inputs().map((i) => i.getAttribute("aria-label"))).toEqual(["column-gap", "row-gap"]);
+    expect(inputs().map((i) => i.value)).toEqual(["16px", "8px"]);
     expect(icons()).toBe(2);
+    expect([...container.querySelectorAll(".row-labels > span")].map((l) => l.textContent)).toEqual(["gap-x", "gap-y"]);
   });
 
   it("gap-y splits as it's typed and lands on the row gap; gap-x on the column gap", () => {
@@ -302,10 +303,10 @@ describe("gap", () => {
     act(() => setQuery("gap-y"));
     expect(view()).toBe("parts");
     act(() => requestFocus({ query: "gap-y" }));
-    expect(document.activeElement).toBe(inputs()[0]);
-    act(() => requestFocus({ query: "column-gap" }));
     expect(document.activeElement).toBe(inputs()[1]);
-    commit(inputs()[1] as HTMLInputElement, "12");
+    act(() => requestFocus({ query: "column-gap" }));
+    expect(document.activeElement).toBe(inputs()[0]);
+    commit(inputs()[0] as HTMLInputElement, "12");
     expect(changes).toEqual([["column-gap", "12px"]]);
   });
 
@@ -327,12 +328,12 @@ describe("gap", () => {
   it("one value writes gap; its field shows both gaps on the page, a part only its own", () => {
     mount();
     act(() => inputs()[0]?.focus());
-    expect(inspects.at(-1)).toEqual(["gap-row", "gap-column"]);
+    expect(inspects.at(-1)).toEqual(["gap-column", "gap-row"]);
     commit(inputs()[0] as HTMLInputElement, "10");
     expect(changes).toEqual([["gap", "10px"]]);
     expect(icons()).toBe(1);
     act(() => toggle().click());
-    act(() => inputs()[1]?.focus());
+    act(() => inputs()[0]?.focus());
     expect(inspects.at(-1)).toEqual(["gap-column"]);
   });
 });
@@ -355,6 +356,13 @@ describe("border-radius", () => {
     ]);
     expect(inputs().map((i) => i.value)).toEqual(["8px", "4px", "8px", "4px"]);
     expect(icons()).toBe(4);
+    // Each row labeled by its corner.
+    expect([...container.querySelectorAll(".row-labels > span")].map((l) => l.textContent)).toEqual([
+      "top-left",
+      "top-right",
+      "bottom-right",
+      "bottom-left",
+    ]);
   });
 
   it("one value writes the shorthand; full is Tailwind's rounded-full", () => {

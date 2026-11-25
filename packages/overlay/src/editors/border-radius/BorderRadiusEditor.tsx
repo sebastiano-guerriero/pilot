@@ -49,6 +49,8 @@ export const borderRadiusEditor = splitEditor({
     property: `border-${key}-radius`,
     label: `border-radius ${key.replace("-", " ")}`,
     icon: `corner-${key}` as const,
+    // Split, each row labeled by its corner (border-top-left-radius… doesn't fit the label column).
+    rowLabel: key,
     aliases: [tailwind, `rounded-${logical}`, `border-${LOGICAL[logical]}-radius`],
   })),
   pairs: [

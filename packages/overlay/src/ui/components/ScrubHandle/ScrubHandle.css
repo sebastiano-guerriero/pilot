@@ -20,11 +20,12 @@
     touch-action: none;
 
     /* A larger target than the 8×16 drawing: the field's full height, from
-       4px left of the wheel to the field's right edge (8px past the wheel). */
+       2px left of the wheel (the owner's call: 4px pushed the variables
+       button away) to the field's right edge (8px past the wheel). */
     &::before {
       content: "";
       position: absolute;
-      inset: -4px -8px -4px -4px;
+      inset: -4px -8px -4px -2px;
     }
 
     svg {
@@ -38,7 +39,7 @@
       width: 16px;
 
       &::before {
-        inset: -4px -4px -4px -4px;
+        inset: -4px -4px -4px -2px;
       }
     }
 

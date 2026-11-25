@@ -10,6 +10,8 @@ interface TooltipProps {
   detail?: string;
   /** The trigger's keyboard shortcut, as it reads (`⌥C`, from `keyLabel()`): after `text`, dimmed. Not with a `detail`. */
   shortcut?: string;
+  /** After `text`, dimmed, as a shortcut: what it stands for (a variable's value, `#ffffff`). Not with a `detail`. */
+  aside?: string;
   /** Above the trigger (default), or below it when there's no room above. */
   side?: "top" | "bottom";
   /**
@@ -90,6 +92,7 @@ export function Tooltip({
   text,
   detail,
   shortcut,
+  aside,
   side = "top",
   align = "center",
   gap,
@@ -232,10 +235,10 @@ export function Tooltip({
             <span class="title">{text}</span>
             <span class="detail">{detail}</span>
           </>
-        ) : shortcut ? (
+        ) : shortcut || aside ? (
           <>
             {text}
-            <span class="shortcut">{shortcut}</span>
+            <span class="shortcut">{shortcut || aside}</span>
           </>
         ) : (
           text

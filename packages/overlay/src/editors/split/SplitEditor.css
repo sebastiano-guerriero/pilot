@@ -27,6 +27,12 @@
     & > .action {
       align-self: stretch;
     }
+
+    /* The button's tooltip (Tooltip) wraps it: as tall as the action, so the button is too. */
+    & > .action > .tooltip-anchor {
+      display: flex;
+      height: 100%;
+    }
   }
 
   /* No background at rest; on hover, drawn like a field at rest (.field-box
@@ -59,5 +65,12 @@
     height: 100%;
     justify-content: space-between;
     padding-block: 6px;
+  }
+
+  /* Each part's own label (gap-x, gap-y), level with its field: 24px lines, as far apart as the fields. */
+  .row-labels {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
   }
 }

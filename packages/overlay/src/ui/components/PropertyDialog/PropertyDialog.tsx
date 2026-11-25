@@ -9,7 +9,7 @@ import { clearProperty } from "../../../edits/clear.ts";
 import { clickWidth, partialWidth, takeWidths } from "../../../edits/widths.ts";
 import { EditHistory, type RecordedChange, longhandsOf } from "../../../edits/history.ts";
 import { editors as allEditors, matchEditors } from "../../../editors/registry.ts";
-import { groupOf, inListOrder } from "../../../editors/listOrder.ts";
+import { groupOf, inListOrder, rowsOf } from "../../../editors/listOrder.ts";
 import { type FocusRequest, type PropertyEditor, propertiesOf } from "../../../editors/types.ts";
 import type { PlacedRect } from "../../../select/useElementRect.ts";
 import { px } from "../../px.ts";
@@ -162,9 +162,11 @@ export function PropertyDialog({
   // list is taken when the search becomes empty and kept while you edit, so
   // clearing a value doesn't make its row vanish under the cursor.
   const empty = !query.trim();
+  // Listing every editor: what the revealing ones (display, position) show as rows depends on their value, so the list follows it.
+  const revealing = listAll ? revealingValues(element, editors, history) : "";
   const withValues = useMemo(
-    () => (!empty ? [] : listAll ? listedEditors(editors) : editorsWithValues(element, editors, history)),
-    [element, empty, listAll],
+    () => (!empty ? [] : listAll ? listedEditors(element, editors, history) : editorsWithValues(element, editors, history)),
+    [element, empty, listAll, revealing],
   );
   const matches = empty ? withValues : matchEditors(query, editors);
   const matchKey = matches.map((m) => m.id).join(",");
@@ -530,6 +532,9 @@ export function PropertyDialog({
           />
         )}
       </div>
+      {/* Where the dialog's panels are drawn (PropertyPanel, a portal): beside it, in its anchor, not
+          clipped by it, and scrolled with the page by the browser. */}
+      <div class="panel-layer" />
     </PageAnchor>
   );
 }
@@ -548,12 +553,35 @@ const NO_STATES: ElementState[] = [];
  * another editor shows as its rows (display's grid and flex rows) is left to
  * that one, as in editorsWithValues.
  */
-function listedEditors(editors: PropertyEditor[]): PropertyEditor[] {
+/**
+ * Every editor, for the design review (LIST_ALL_EDITORS). An editor another
+ * one shows as a row is left out only while it shows it, for the element's
+ * value now (display: grid shows gap, position always shows inset): else
+ * it's listed on its own, right after the one that would show it, as the
+ * list of set properties does. Before, every revealed editor was left out,
+ * so with no display set, gap and the flex and grid rows weren't anywhere.
+ */
+function listedEditors(element: EditableElement, editors: PropertyEditor[], history: EditHistory): PropertyEditor[] {
   // Only rows of editors that are listed themselves count: size shows width
   // and height as rows, but isn't listed (it writes nothing of its own).
   const listable = editors.filter((e) => e.properties.length > 0);
-  const embedded = new Set(listable.flatMap((e) => e.embeds ?? []));
-  return inListOrder(listable.filter((e) => !embedded.has(e)));
+  const values = revealedRowsBy(element, listable, history);
+  return inListOrder(listable.filter((e) => !values.has(e.id)));
+}
+
+/** The ids of the editors the revealing ones (display, position) show as rows now, for the element's values. */
+function revealedRowsBy(element: EditableElement, editors: PropertyEditor[], history: EditHistory): Set<string> {
+  // Revealing by a value of their own (display, position): size shows width and height but writes nothing.
+  const revealing = editors.filter((e) => e.embeds?.length && e.properties.length);
+  const values = fieldValues(element, revealing.map((e) => e.properties[0] as string), history);
+  return new Set(revealing.flatMap((e) => rowsOf(e.id, values[e.properties[0] as string] ?? "")));
+}
+
+/** The revealing editors' values now (display's, position's), as a key: the listed rows change with them. */
+function revealingValues(element: EditableElement, editors: PropertyEditor[], history: EditHistory): string {
+  const properties = editors.filter((e) => e.embeds?.length && e.properties.length).map((e) => e.properties[0] as string);
+  const values = fieldValues(element, properties, history);
+  return properties.map((p) => values[p]).join("|");
 }
 
 /**

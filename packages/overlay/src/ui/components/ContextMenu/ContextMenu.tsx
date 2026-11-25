@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useCloseOnScroll } from "../../useCloseOnScroll.ts";
 import { px } from "../../px.ts";
 
 export interface ContextMenuItem {
@@ -39,20 +40,20 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
   useEffect(() => {
     const before = (ref.current?.getRootNode() as ShadowRoot | Document | undefined)?.activeElement as HTMLElement | null;
     ref.current?.focus();
-    // A click anywhere else, or a scroll, closes it.
+    // A click anywhere else closes it (a scroll too: useCloseOnScroll, below).
     const away = (e: Event) => {
       if (!ref.current || !e.composedPath().includes(ref.current)) onClose();
     };
     window.addEventListener("pointerdown", away, true);
-    window.addEventListener("scroll", onClose, true);
     window.addEventListener("resize", onClose);
     return () => {
       window.removeEventListener("pointerdown", away, true);
-      window.removeEventListener("scroll", onClose, true);
       window.removeEventListener("resize", onClose);
       if (before?.isConnected) before.focus();
     };
   }, []);
+
+  useCloseOnScroll(ref, true, onClose);
 
   const pick = (index: number) => {
     const item = items[index];

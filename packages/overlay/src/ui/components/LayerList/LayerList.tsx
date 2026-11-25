@@ -28,6 +28,8 @@ interface LayerListProps {
   open: number | null;
   onOpen(index: number | null): void;
   onAdd(): void;
+  /** No + (default: one): the value is `none`, the whole value, so another item couldn't join it. */
+  noAdd?: boolean;
   onRemove(index: number): void;
   /** What an item is called, for screen readers: `mask` → "Edit mask: linear", "Remove mask", "Add a mask". */
   noun: string;
@@ -57,6 +59,7 @@ export function LayerList({
   open,
   onOpen,
   onAdd,
+  noAdd = false,
   onRemove,
   noun,
   panelTitle,
@@ -70,11 +73,11 @@ export function LayerList({
     if (focusRequest) firstRef.current?.focus();
   }, [focusRequest]);
 
-  const close = () => {
+  const close = (replaced = false) => {
     const at = open;
     onOpen(null);
-    // Focus back where the panel was opened from.
-    requestAnimationFrame(() => rowRef.current?.querySelectorAll<HTMLElement>(".layer-chip-open")[at ?? 0]?.focus());
+    // Focus back where the panel was opened from (not when another panel opened: it has the focus).
+    if (!replaced) requestAnimationFrame(() => rowRef.current?.querySelectorAll<HTMLElement>(".layer-chip-open")[at ?? 0]?.focus());
   };
 
   const hasOpen = open !== null && open < items.length;
@@ -120,9 +123,11 @@ export function LayerList({
             </button>
           </div>
         ))}
-        <button type="button" class="layer-add" ref={items.length || mixed ? undefined : firstRef} aria-label={`Add a ${noun}`} onClick={onAdd}>
-          <Icon name="plus" />
-        </button>
+        {!noAdd && (
+          <button type="button" class="layer-add" ref={items.length || mixed ? undefined : firstRef} aria-label={`Add a ${noun}`} onClick={onAdd}>
+            <Icon name="plus" />
+          </button>
+        )}
       </div>
       {hasOpen && children && (
         <PropertyPanel

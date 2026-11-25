@@ -50,6 +50,12 @@ const add = () => act(() => (container.querySelector(".layer-add") as HTMLButton
 const chips = () => [...container.querySelectorAll(".layer-chip-name")].map((e) => e.textContent);
 const panel = () => container.querySelector(".property-panel");
 
+const pickType = (name: string) => {
+  act(() => (container.querySelector('[role="combobox"][aria-label="mask type"]') as HTMLButtonElement).click());
+  const option = [...container.querySelectorAll('[role="option"]')].find((o) => o.querySelector(".label")?.firstChild?.textContent === name);
+  act(() => (option as HTMLElement).click());
+};
+
 describe("mask-image", () => {
   it("+ adds Tailwind's mask-b-from-50%, with mask-composite: intersect, as one undo step, and opens its panel", () => {
     mount();
@@ -91,6 +97,26 @@ describe("mask-image", () => {
     declared["mask-image"] = "none";
     mount();
     expect(chips()).toEqual(["none"]);
+  });
+
+  it("custom can be picked from linear: it stays custom (its CSS would read back as linear), with that CSS as text", () => {
+    mount();
+    add();
+    pickType("custom");
+    expect(chips()).toEqual(["custom"]);
+    const text = panel()?.querySelector('input[aria-label="custom mask"], input') as HTMLInputElement;
+    expect(text.value).toBe("linear-gradient(to bottom, black 50%, transparent)");
+    pickType("radial");
+    expect(chips()).toEqual(["radial"]);
+  });
+
+  it("none has no +: it's the whole value, nothing can join it", () => {
+    declared["mask-image"] = "none";
+    mount();
+    expect(container.querySelector(".layer-add")).toBeNull();
+    declared["mask-image"] = "linear-gradient(to bottom, black 50%, transparent)";
+    mount();
+    expect(container.querySelector(".layer-add")).not.toBeNull();
   });
 
   it("is found by mask-image, mask and Tailwind's mask classes", () => {

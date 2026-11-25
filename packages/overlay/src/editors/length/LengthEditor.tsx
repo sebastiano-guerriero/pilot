@@ -6,7 +6,7 @@ import type { BoxArea } from "../../dom/boxModel.ts";
 import { type InputDraft, PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
 import { tokensFor } from "../../ui/components/TokenMenu/tokens.ts";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
-import { declaredOf, isMixed, MIXED } from "../declared.ts";
+import { declaredOf, isMixed, MIXED, resetValueOf } from "../declared.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
 import { useScrub } from "./useScrub.ts";
 
@@ -49,6 +49,7 @@ export function LengthEditor({
   values,
   declared,
   mixed,
+  reset,
   onChange,
   onRevert,
   focusRequest,
@@ -61,7 +62,9 @@ export function LengthEditor({
   const computed = values[property];
   // The declared value (from any source), without its outer calc(); ""
   // leaves the field empty.
-  const current = declaredOf({ element, declared }, property);
+  // A value only a reset gives shows dimmed, as the placeholder: the element doesn't set it.
+  const fromReset = resetValueOf({ element, declared, reset }, property);
+  const current = fromReset ? "" : declaredOf({ element, declared }, property);
   const shown = current ? displayValue(current, property) : "";
   const name = options.name ?? property;
 
@@ -110,7 +113,7 @@ export function LengthEditor({
       <PropertyInputText
         value={shown}
         label={name}
-        placeholder={isMixed({ mixed }, property) ? MIXED : undefined}
+        placeholder={isMixed({ mixed }, property) ? MIXED : fromReset ? displayValue(fromReset, property) : undefined}
         inputRef={inputRef}
         tokens={tokensFor(property)}
         computed={computed}
@@ -133,7 +136,7 @@ export function LengthEditor({
         // Drag the handle: steps from the value the drag started at, in the
         // same unit, as one undo step. Back at the start, the exact earlier
         // value is restored (no fake edit).
-        onScrub={options.scrub ? (steps, text, gesture) => scrub({ property, base: stepBase }, steps, text, gesture) : undefined}
+        onScrub={options.scrub ? (steps, text, gesture, shift) => scrub({ property, base: stepBase }, steps, text, gesture, shift) : undefined}
         onSubmit={onReturnToSearch}
         // One field: Tab moves on to the next editor in the dialog (or back to
         // the search when there's none).

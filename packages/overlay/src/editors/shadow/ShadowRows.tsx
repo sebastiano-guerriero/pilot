@@ -60,7 +60,9 @@ export function ShadowRows({ element, lengths, values, onChange, onRevert }: Sha
               const next = stepField(kind, text || "0px", delta, "0px");
               if (next) onChange(part, next, gesture);
             }}
-            onScrub={(steps, startText, gesture) => scrub({ property: kind, writes: part, base: () => "0px" }, steps, startText || "0px", gesture)}
+            onScrub={(steps, startText, gesture, shift) =>
+              scrub({ property: kind, writes: part, base: () => "0px" }, steps, startText || "0px", gesture, shift)
+            }
           />
         </PropertyRow>
       ))}
