@@ -28,6 +28,7 @@ import {
   backfaceVisibilityEditor,
   perspectiveEditor,
   perspectiveOriginEditor,
+  transformOriginEditor,
   transformStyleEditor,
 } from "./perspective/PerspectiveEditors.tsx";
 import { boxShadowEditor } from "./box-shadow/BoxShadowEditor.tsx";
@@ -145,10 +146,11 @@ export const editors: PropertyEditor[] = [
   filterEditor,
   backdropFilterEditor,
   rotateEditor,
-  perspectiveEditor,
-  perspectiveOriginEditor,
+  transformOriginEditor,
   transformStyleEditor,
   backfaceVisibilityEditor,
+  perspectiveEditor,
+  perspectiveOriginEditor,
   visibilityEditor,
   maskImageEditor,
   maskCompositeEditor,

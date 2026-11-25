@@ -4,6 +4,10 @@ import { keywordEditor } from "../keyword/KeywordEditor.tsx";
 import { presetEditor } from "../preset/PresetEditor.tsx";
 
 /**
+ * transform-origin: the point the element turns and scales around (its
+ * center unless set), object-position's nine with their icons, and custom
+ * (a length, or a third value for depth).
+ *
  * 3D for what's inside an element (the Transform group, after rotate). Set
  * on the parent of what tilts: perspective gives its children depth (an X or
  * Y rotation leans back instead of squashing), perspective-origin is where
@@ -41,7 +45,7 @@ export const perspectiveEditor = presetEditor({
   ],
 });
 
-/** perspective-origin's presets: object-position's nine, with their icons. */
+/** transform-origin's and perspective-origin's presets: object-position's nine, with their icons. */
 const ORIGIN_ICONS: Record<string, IconName> = {
   "": "layout-empty",
   "top left": "object-top-left",
@@ -55,6 +59,27 @@ const ORIGIN_ICONS: Record<string, IconName> = {
   "bottom right": "object-bottom-right",
   custom: "object-custom",
 };
+
+export const transformOriginEditor = presetEditor({
+  property: "transform-origin",
+  label: "Transform origin",
+  presets: OBJECT_POSITION_VALUES,
+  icons: ORIGIN_ICONS,
+  placeholder: "25% 75%",
+  customLabel: "custom transform-origin",
+  // Tailwind's origin-*.
+  aliases: [
+    "origin-center",
+    "origin-top",
+    "origin-top-right",
+    "origin-right",
+    "origin-bottom-right",
+    "origin-bottom",
+    "origin-bottom-left",
+    "origin-left",
+    "origin-top-left",
+  ],
+});
 
 export const perspectiveOriginEditor = presetEditor({
   property: "perspective-origin",

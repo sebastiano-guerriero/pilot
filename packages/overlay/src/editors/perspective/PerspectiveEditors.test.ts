@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { groupOf } from "../listOrder.ts";
 import { matchEditors } from "../registry.ts";
 import type { PropertyEditor } from "../types.ts";
-import { backfaceVisibilityEditor, perspectiveEditor, perspectiveOriginEditor, transformStyleEditor } from "./PerspectiveEditors.tsx";
+import { backfaceVisibilityEditor, perspectiveEditor, perspectiveOriginEditor, transformOriginEditor, transformStyleEditor } from "./PerspectiveEditors.tsx";
 
 let element: HTMLElement;
 let container: HTMLElement;
@@ -61,6 +61,14 @@ describe("3D for what's inside", () => {
     ]);
   });
 
+  it("transform-origin: object-position's nine with their icons, then custom", () => {
+    mount(transformOriginEditor);
+    expect(label()).toBe("transform-origin");
+    const menu = options();
+    expect(menu).toEqual(expect.arrayContaining(["top left", "center", "bottom right"]));
+    expect(menu.at(-1)).toBe("custom");
+  });
+
   it("rows named to fit: persp-origin (object-position's nine), backface; transform-style as it is", () => {
     mount(perspectiveOriginEditor);
     expect(label()).toBe("persp-origin");
@@ -75,6 +83,8 @@ describe("3D for what's inside", () => {
 
   it("Tailwind's names find each one; all in the Transform group", () => {
     for (const [q, id] of [
+      ["origin-top-left", "transform-origin"],
+      ["transform-origin", "transform-origin"],
       ["perspective-near", "perspective"],
       ["perspective-origin-top", "perspective-origin"],
       ["persp-origin", "perspective-origin"],

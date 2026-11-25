@@ -380,6 +380,12 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
     negative: true,
     kind: "position",
   },
+  "transform-origin": {
+    initial: "50% 50% 0",
+    keywords: ["top", "right", "bottom", "left", "center"],
+    negative: true,
+    kind: "position",
+  },
   "transform-style": { initial: "flat", keywords: ["flat", "preserve-3d"], negative: false },
   "backface-visibility": { initial: "visible", keywords: ["visible", "hidden"], negative: false },
   "backdrop-filter": { initial: "none", keywords: ["none"], negative: false },
