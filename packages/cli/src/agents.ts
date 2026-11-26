@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { statSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
@@ -456,9 +456,13 @@ export function exec(
     let stdout = "";
     let stderr = "";
     let killed = false;
+    // Stop (the designer took the job back) and the run's timeout end the agent, not only what Pilot started: on
+    // Windows a `.cmd` runs in a shell, and killing the shell leaves the agent running (and its output open, so the
+    // run never ends). The whole tree goes there, as it does for a process of its own elsewhere.
     const kill = () => {
       killed = true;
-      child.kill();
+      if (process.platform === "win32" && child.pid) spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+      else child.kill();
     };
     child.stdout?.on("data", (d: Buffer) => {
       const text = d.toString();

@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { devGuard, projectFolder, RUNNER_ENV, startWithDevServer } from "./dev.ts";
 
-let nextPort = 51000 + Math.floor(Math.random() * 900);
+// Below 49152: Windows reserves blocks of the dynamic range above it (listening there fails with EACCES).
+let nextPort = 44000 + Math.floor(Math.random() * 900);
 const cleanup: Array<() => Promise<void> | void> = [];
 afterEach(async () => {
   for (const fn of cleanup.splice(0).reverse()) await fn();

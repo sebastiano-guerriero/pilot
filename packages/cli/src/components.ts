@@ -1,6 +1,7 @@
 import { type Dirent, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, dirname, extname, join, relative } from "node:path";
+import { basename, dirname, extname, join } from "node:path";
 import type { ProjectComponent } from "@pilot/protocol";
+import { relPath } from "./paths.ts";
 
 /**
  * The project's components, for the comment box's `@` list: the ones the
@@ -130,7 +131,7 @@ function scan(root: string, deadline: number): ProjectComponent[] {
       const before = known.get(path);
       const cached = before && before.mtime === stat.mtimeMs ? before : { mtime: stat.mtimeMs, components: read(path) };
       now.set(path, cached);
-      const file = relative(root, path);
+      const file = relPath(root, path);
       for (const c of cached.components) out.push({ name: c.name, file, line: c.line });
     }
   };

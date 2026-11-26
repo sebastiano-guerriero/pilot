@@ -1,11 +1,12 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { dirname, join } from "node:path";
 import { AGENTS as AGENT_CLIS, type AgentKind, agentFromEnv, detectAgents, type FoundAgent, installCommand, isAgentKind } from "./agents.ts";
 import { projectName, saveAgent } from "./config.ts";
 import { removeOldSetup } from "./legacy.ts";
 import { olderThan, VERSION } from "./version.ts";
+import { relPath } from "./paths.ts";
 
 /**
  * `usepilot init`: sets Pilot up in a project. The user pastes one prompt
@@ -137,8 +138,8 @@ export function devServerStep(framework: Framework, cwd: string, pkg: PackageJso
   if (viteLike || framework.kind === "astro" || framework.kind === "nuxt") {
     const name = framework.kind === "astro" ? "astro.config" : framework.kind === "nuxt" ? "nuxt.config" : "vite.config";
     const file = config([name]);
-    if (has(file, "usepilot/vite")) return { done: `Pilot starts with the dev server (\`usepilot/vite\` in \`${relative(cwd, file as string)}\`).` };
-    const at = file ? `\`${relative(cwd, file)}\`` : `its config (create \`${name}.ts\` if there's none)`;
+    if (has(file, "usepilot/vite")) return { done: `Pilot starts with the dev server (\`usepilot/vite\` in \`${relPath(cwd, file as string)}\`).` };
+    const at = file ? `\`${relPath(cwd, file)}\`` : `its config (create \`${name}.ts\` if there's none)`;
     const where = viteLike ? "its `plugins` (keep the others)" : "its `vite.plugins` (create `vite: { plugins: [] }` if there's none, keep the others)";
     return {
       todo: `${intro} in ${at}, add Pilot's Vite plugin to ${where}:${code("ts", 'import { pilot } from "usepilot/vite";\n\n// in the config:\nplugins: [pilot()],')}\n\n   Vite applies it only while it serves: never in a build or on a server.`,
@@ -146,8 +147,8 @@ export function devServerStep(framework: Framework, cwd: string, pkg: PackageJso
   }
   if (framework.kind === "next-app" || framework.kind === "next-pages") {
     const file = config(["next.config"]);
-    if (has(file, "usepilot/next")) return { done: `Pilot starts with the dev server (\`withPilot\` in \`${relative(cwd, file as string)}\`).` };
-    const at = file ? `\`${relative(cwd, file)}\`` : "`next.config.ts` (create it if there's none)";
+    if (has(file, "usepilot/next")) return { done: `Pilot starts with the dev server (\`withPilot\` in \`${relPath(cwd, file as string)}\`).` };
+    const at = file ? `\`${relPath(cwd, file)}\`` : "`next.config.ts` (create it if there's none)";
     return {
       todo: `${intro} in ${at}, wrap the exported config with \`withPilot\`:${code("ts", 'import { withPilot } from "usepilot/next";\n\nexport default withPilot(nextConfig);')}\n\n   In a CommonJS config (\`module.exports\`): \`module.exports = withPilot(nextConfig)\`, with \`const { withPilot } = require("usepilot/next")\`.${end} Pilot starts only in \`next dev\`.`,
     };
@@ -234,7 +235,7 @@ ${cwd} is a monorepo's root, not an app. Run \`npx usepilot@latest init\` again 
   if (framework.loads) {
     const naming = namingStep(framework.loads, cwd);
     if (naming) todo.push(naming);
-    else done.push(`The app already loads Pilot (\`${relative(cwd, framework.loads)}\`).`);
+    else done.push(`The app already loads Pilot (\`${relPath(cwd, framework.loads)}\`).`);
   } else todo.push(loadStep(framework, cwd));
 
   // 5. Starting Pilot with the dev server: written by the agent too.
@@ -471,7 +472,7 @@ function workspaceApps(cwd: string): string[] {
 /** Where and how to load Pilot in this app: in the browser, in development only. */
 function baseLoadStep(framework: Framework, cwd: string): string {
   // The file when it was found; otherwise what to look for, never a path that may not exist.
-  const at = (file: string | undefined, otherwise: string) => (file ? `\`${relative(cwd, file)}\`` : otherwise);
+  const at = (file: string | undefined, otherwise: string) => (file ? `\`${relPath(cwd, file)}\`` : otherwise);
   const code = (lang: string, text: string) => `\n\n   \`\`\`${lang}\n${text.replace(/^(?=.)/gm, "   ")}\n   \`\`\``;
   const intro = "**Load Pilot in the app, in development only** (it must never reach production), the way this project writes code.";
   switch (framework.kind) {
@@ -593,7 +594,7 @@ export function namingStep(file: string, cwd: string): string | null {
   const name = projectName(cwd);
   const text = readText(file);
   if (new RegExp(`project:\\s*["'\`]${name.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")}["'\`]`).test(text)) return null;
-  return `**Name this project in Pilot's loader** (\`${relative(cwd, file)}\`): \`npx usepilot\` runs only for pages that say which project they are. Replace \`import("usepilot/auto")\` with \`${loaderCall(name)}\` (keep its development-only check), or set \`project: ${JSON.stringify(name)}\` where it calls \`mountPilot\`.`;
+  return `**Name this project in Pilot's loader** (\`${relPath(cwd, file)}\`): \`npx usepilot\` runs only for pages that say which project they are. Replace \`import("usepilot/auto")\` with \`${loaderCall(name)}\` (keep its development-only check), or set \`project: ${JSON.stringify(name)}\` where it calls \`mountPilot\`.`;
 }
 
 // ── Files ────────────────────────────────────────────────────────────────

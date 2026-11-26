@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ChangeSet, Job, PageEvent } from "@pilot/protocol";
 import { afterEach, describe, expect, it } from "vitest";
-import { AGENTS, type FoundAgent } from "./agents.ts";
+import { AGENTS, type FoundAgent, installCommand } from "./agents.ts";
 import { activityOf, errorFor, outdatedNote, replyOf, sessionToResume, startRunner } from "./run.ts";
 
 const APP = "http://localhost:5173";
@@ -66,7 +66,8 @@ function standIn(dir: string): string {
   return bin;
 }
 
-let nextPort = 49000 + Math.floor(Math.random() * 900);
+// Below 49152: Windows reserves blocks of the dynamic range above it (listening there fails with EACCES).
+let nextPort = 43000 + Math.floor(Math.random() * 900);
 const cleanup: Array<() => Promise<void> | void> = [];
 afterEach(async () => {
   for (const fn of cleanup.splice(0).reverse()) await fn();
@@ -332,7 +333,8 @@ describe("before the agent is ready (waitForAgent: Pilot started with the dev se
     const { page, runner, shown, become, lines } = await waiting([]);
     expect(runner.agent).toBeNull();
     await until(() => shown()[0]?.setup?.state === "not-installed");
-    expect(shown()[0]?.setup?.command).toContain("Claude Code: curl -fsSL https://claude.ai/install.sh | bash, then claude auth login");
+    // This platform's command: PowerShell's on Windows.
+    expect(shown()[0]?.setup?.command).toContain(`Claude Code: ${installCommand(AGENTS.claude)}, then claude auth login`);
     expect(lines.some((l) => l.startsWith("Pilot is on http://localhost:5173, every page. Install your coding agent's command-line tool"))).toBe(true);
     // The designer sends: the hub takes it (Pilot runs for the site), and it waits.
     expect((await page.post("/jobs", { id: "w1", changeSet: changeSet("w1") })).status).toBe(202);

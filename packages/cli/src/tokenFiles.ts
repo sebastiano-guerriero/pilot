@@ -1,7 +1,8 @@
 import { type Dirent, readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, dirname, extname, join, relative } from "node:path";
+import { basename, dirname, extname, join } from "node:path";
 import type { FileToken } from "@pilot/protocol";
 import { SKIP, workspaceRoot } from "./components.ts";
+import { relPath } from "./paths.ts";
 
 /**
  * The project's design tokens that only live in files, for the page's
@@ -92,7 +93,7 @@ function scan(root: string, deadline: number): FileToken[] {
       }
       if (stat.size > MAX_FILE_BYTES) continue;
       const before = known.get(path);
-      const file = relative(root, path);
+      const file = relPath(root, path);
       const cached = before && before.mtime === stat.mtimeMs ? before : { mtime: stat.mtimeMs, tokens: read(path, file, json) };
       now.set(path, cached);
       out.push(...cached.tokens);
