@@ -21,7 +21,9 @@ One line per item. Tick it when it ships; the details go in the doc for its area
   - [x] Pilot before the agent is ready: it opens on the page with the agent not installed or signed in, what's sent waits, the page says what to do, and the jobs run once it's ready, with no restart; sending starts the agent's sign-in in the browser ([handoff.md](handoff.md), *Before the agent is ready*). Bridge 9
   - [x] `init` has the setup chat's agent install its own command-line tool (after asking the user), with the platform's command (PowerShell's on Windows); signing in is no longer a step before Pilot works
   - [x] Checked on Windows, Linux and macOS with a stand-in agent, in real Vite, Next.js 16 and plain projects with the packed package (`scripts/dev-server-check.mjs`, the Tests workflow); the unit tests run on Windows and Linux too
-  - [ ] Sign-in from the page with each real agent: what its sign-in does without a terminal is checked on all three (the Sign-in workflow); signing in with a real account, to the end, not yet
+  - [x] Each real agent's sign-in, started as Pilot starts it from the page, prints its page's address and waits for the browser: Claude Code, Codex and Cursor on macOS, Windows and Linux (the Sign-in workflow)
+  - [ ] Signing in from the page with a real account, to the end (a person, once per agent)
+  - [ ] Cursor's resumed follow-up in the Agent runs check: since 2026-11-26 Cursor's model sometimes asks what "a bit more" means instead of applying it, on `main` too (its session is resumed; the check's prompt, or Cursor, to look at)
   - [ ] The Vite plugin in SvelteKit, Astro and Nuxt projects, and `usepilot dev` with Angular's `ng serve`
   - [ ] Where the setup shows: a checklist in the toolbar (app, Pilot, agent installed, signed in), each with its fix; the owner's design (it's in the stuck messages now)
   - [ ] More agents with the same three abilities (one task and exit, a session id, resume by id): Gemini (`gemini -p`), Copilot (`copilot -p`), opencode (`opencode run`)
