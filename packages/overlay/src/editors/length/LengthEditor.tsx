@@ -65,7 +65,9 @@ export function LengthEditor({
   // A value only a reset gives shows dimmed, as the placeholder: the element doesn't set it.
   const fromReset = resetValueOf({ element, declared, reset }, property);
   const current = fromReset ? "" : declaredOf({ element, declared }, property);
-  const shown = current ? displayValue(current, property) : "";
+  // content through a variable (Tailwind's `var(--tw-content)`, set by `content-['Popular']`): what it comes to.
+  const resolved = cssProperty(property).kind === "content" && /^var\(/.test(current) && computed ? computed : current;
+  const shown = resolved ? displayValue(resolved, property) : "";
   const name = options.name ?? property;
 
   // Jumped in from the search (or tabbed in from another editor): focus it, selected.

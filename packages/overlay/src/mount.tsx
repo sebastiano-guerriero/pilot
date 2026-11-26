@@ -139,7 +139,10 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
     if (hidden === next) return;
     hidden = next;
     store(HIDDEN_KEY, next);
-    if (next) focusBefore = shadow.activeElement instanceof HTMLElement ? shadow.activeElement : null;
+    // Not a toolbar button (Hide, reached with Tab): given back, it held the focus, and Esc, which the
+    // dialog handles in Pilot, did nothing there (the selection stayed, with its panel).
+    const active = shadow.activeElement;
+    if (next) focusBefore = active instanceof HTMLElement && !active.closest(".toolbar") ? active : null;
     container.toggleAttribute("data-hidden", next);
     draw();
     if (!next && focusBefore?.isConnected) focusBefore.focus({ preventScroll: true });

@@ -452,16 +452,6 @@ const ICONS = {
       />
     ),
   },
-  // TEMPORARY (ui/testPrompt.ts): the comment box's Copy prompt (Nucleo UI copy, outline, 12px, as attach).
-  "copy-small": {
-    size: 12,
-    body: (
-      <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3.25" y=".75" width="8" height="8" rx="1.5" ry="1.5" transform="translate(14.5 9.5) rotate(180)" />
-        <path d="m8.25,11.25H2.25c-.828,0-1.5-.672-1.5-1.5V3.75" />
-      </g>
-    ),
-  },
   "arrow-up": {
     size: 12,
     body: (

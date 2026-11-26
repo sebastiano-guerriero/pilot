@@ -93,19 +93,6 @@ interface CommentWidgetProps {
     skill?: string,
   ): Promise<CommentOutcome> | CommentOutcome;
   /**
-   * TEMPORARY (ui/testPrompt.ts): copy the prompt this draft would make if
-   * sent now, with what onSend takes; nothing is sent. Whether it copied.
-   */
-  onCopyPrompt?(
-    text: string,
-    files: File[],
-    action?: CommentAction,
-    mentions?: MentionOption[],
-    withEdits?: boolean,
-    props?: PropChange[],
-    skill?: string,
-  ): Promise<boolean>;
-  /**
    * The selected elements' edits not sent yet (the editor's): they go with
    * the comment, shown as a chip the designer can take off (then they wait
    * for Send). Not with an action: a task goes apart from the changes.
@@ -224,7 +211,6 @@ export function CommentWidget({
   error,
   agentName,
   onSend,
-  onCopyPrompt,
   onResolve,
   onAdjust,
   onClose,
@@ -674,40 +660,6 @@ export function CommentWidget({
     }
   };
 
-  // TEMPORARY (ui/testPrompt.ts): the prompt this draft would make, copied; with or without an agent, nothing sent.
-  const [promptCopied, setPromptCopied] = useState(false);
-  useEffect(() => {
-    if (!promptCopied) return;
-    const timer = setTimeout(() => setPromptCopied(false), 1500);
-    return () => clearTimeout(timer);
-  }, [promptCopied]);
-  const hasDraft = !!text.trim() || attachments.length > 0 || !!action || !!skill;
-  const copyPromptButton = onCopyPrompt && (
-    <Tooltip text={promptCopied ? "Prompt copied" : hasDraft ? "Copy the prompt (test)" : "Write something first"} align="end" forceOpen={promptCopied}>
-      <button
-        type="button"
-        class="attach"
-        aria-label="Copy the prompt this comment would send (test)"
-        disabled={!hasDraft}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={async () => {
-          const copied = await onCopyPrompt(
-            text.trim(),
-            attachments.map((a) => a.file),
-            action ?? undefined,
-            /@|--/.test(text) ? mentionsIn(text, picked, pool ?? withProject(mentions?.() ?? [])) : [],
-            editsGo,
-            pendingProps,
-            ...((skill ? [skill] : []) as [string?]),
-          );
-          if (copied) setPromptCopied(true);
-        }}
-      >
-        <Icon name={promptCopied ? "copied" : "copy-small"} />
-      </button>
-    </Tooltip>
-  );
-
   const sendButton = (
     <button
       type="button"
@@ -1076,7 +1028,6 @@ export function CommentWidget({
                   </button>
                 </Tooltip>
               )}
-              {copyPromptButton}
               {agentOn ? (
                 sendButton
               ) : (

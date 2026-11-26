@@ -53,6 +53,7 @@ export function withVars(text: string): string {
  * the %: `50%` and `0.5` both show as `50`.
  */
 export function displayValue(value: string, property?: string): string {
+  if (property && cssProperty(property).kind === "content") return displayContent(value);
   if (property && cssProperty(property).kind === "percent") {
     const percent = percentOf(value.trim());
     if (percent !== null) return String(percent);
@@ -107,6 +108,7 @@ export function parseValue(property: string, typed: string): string | null {
   if (named) return supported(property, named);
   if (info.kind === "font-family") return supported(property, parseFontFamily(text, t));
   if (info.kind === "marker") return supported(property, parseMarker(text, t));
+  if (info.kind === "content") return supported(property, parseContent(text, t));
   t = unwrapCalc(t) ?? t; // typed calc(): we add it back where needed
 
   const isKeyword = info.keywords.includes(t) || (GLOBAL_KEYWORDS as readonly string[]).includes(t);
@@ -157,6 +159,36 @@ function parseMarker(text: string, lower: string): string | null {
   if (/^-?[a-z][a-z0-9-]*$/.test(lower) || FUNCTION.test(lower)) return lower;
   if (/^(["']).*\1$/.test(typed)) return typed;
   return JSON.stringify(typed);
+}
+
+/** A function content takes (`attr(data-label)`, `counter(step)`, `url(…)`, `var(…)`), maybe followed by more. */
+const CONTENT_FUNCTION = /^[a-z-]+\(/;
+
+/**
+ * A ::before's or ::after's content (kind "content"): CSS as typed when it is
+ * (a quoted string, `none`, `normal`, a global keyword, a function such as
+ * `attr()` or `url()`), else the text quoted, case kept (`Popular` →
+ * `"Popular"`).
+ */
+function parseContent(text: string, lower: string): string | null {
+  const typed = text.trim();
+  if (lower === "none" || lower === "normal" || (GLOBAL_KEYWORDS as readonly string[]).includes(lower)) return lower;
+  if (/^["']/.test(typed) || CONTENT_FUNCTION.test(lower)) return typed;
+  return JSON.stringify(typed);
+}
+
+/**
+ * A content value as the field shows it: one string without its quotes
+ * (`"Popular"` → `Popular`). Kept quoted where the bare text would read as
+ * something else when typed back: `""` (the empty box), a keyword, a function.
+ */
+function displayContent(value: string): string {
+  const match = /^(["'])((?:\\.|(?!\1).)*)\1$/.exec(value.trim());
+  if (!match) return value.trim();
+  const text = (match[2] as string).replace(/\\(.)/g, "$1");
+  const lower = text.trim().toLowerCase();
+  const ambiguous = !text || /^["']/.test(text) || lower === "none" || lower === "normal" || (GLOBAL_KEYWORDS as readonly string[]).includes(lower) || CONTENT_FUNCTION.test(lower);
+  return ambiguous ? value.trim() : text;
 }
 
 /** Split on commas that aren't inside quotes or parentheses. */
@@ -222,7 +254,8 @@ function parseOther(kind: NonLengthKind, negative: boolean, t: string): string |
       return parts.every((p) => /^-?[a-z][a-z0-9-]*$/.test(p)) ? parts.join(", ") : null;
     }
     case "marker":
-      return null; // parsed before (parseMarker)
+    case "content":
+      return null; // parsed before (parseMarker, parseContent)
     case "position": {
       // Up to four parts: side keywords, lengths (a bare number is px) and
       // percentages, by spaces or Tailwind's `_`.
@@ -256,6 +289,7 @@ type NonLengthKind =
   | "percent"
   | "idents"
   | "marker"
+  | "content"
   | "position";
 
 const POSITION_KEYWORDS = ["top", "right", "bottom", "left", "center"];
@@ -379,6 +413,7 @@ function stepOther(
     case "ratio":
     case "idents":
     case "marker":
+    case "content":
     case "position":
       return null;
     case "percent": {

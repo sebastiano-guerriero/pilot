@@ -16,6 +16,8 @@ interface HighlightProps {
   label?: boolean;
   /** The project's own naming attributes, tried first (see elementName). */
   nameAttributes?: readonly string[];
+  /** The label's name instead of the element's (a pseudo-element's: `::before`). */
+  name?: string;
   /**
    * How wide the label may be, in px, when something sits further along its
    * row: icons on the element's top-right corner (a job's loader, a
@@ -62,6 +64,7 @@ export function Highlight({
   variant,
   label = true,
   nameAttributes,
+  name,
   labelRoom,
   labelShift = 0,
   working = false,
@@ -122,7 +125,7 @@ export function Highlight({
             }}
           >
             <span class="name" ref={nameRef}>
-              {elementName(element, nameAttributes)}
+              {name ?? elementName(element, nameAttributes)}
             </span>
             <span class="size" ref={sizeRef}>
               {size}

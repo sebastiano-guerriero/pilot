@@ -129,6 +129,7 @@ Start the search with a state, Tailwind style, or type `/` to pick one:
 | `before:` `after:` `placeholder:` | the element's `::before`, `::after`, or a field's placeholder |
 
 - They combine with each other and with widths: `hover:from-768 `, `dark:hover:`.
+- **`before:` and `after:`** add `content: ""` with your first change when the element has no `::before` (`::after`) yet, so it's drawn; one Cmd+Z takes both back. Type its text in **content** (`Popular`, `✓`): Pilot adds the quotes.
 - **Pilot doesn't force the state on the page.** The fields show and edit what's set for that state; to see it, hide Pilot (Option+P) and hover or focus the element, or switch your system or site to dark mode.
 - **`/` at the start of the search** lists every modifier, and first the combinations this element already uses, with what each sets.
 
@@ -191,7 +192,7 @@ With an element selected, **hold Alt (Option)** and move the pointer: Pilot show
 
 ## The DOM tree
 
-**Alt+D** (or Show in DOM) opens a tree of the page's elements, to select what's hard to click: overlapping, zero-size or hidden elements. Click a row to select it, **↑/↓** to move, **→/←** to open and close. Cmd/Ctrl+click adds a row, Shift+click selects a range. In a React or Vue app, **Components** at the top switches to the tree of component instances.
+**Alt+D** (or Show in DOM) opens a tree of the page's elements, to select what's hard to click: overlapping, zero-size or hidden elements. Click a row to select it, **↑/↓** to move, **→/←** to open and close. Cmd/Ctrl+click adds a row, Shift+click selects a range. In a React or Vue app, **Components** at the top switches to the tree of component instances. `::before` and `::after` are listed too, not selectable: hover one to see its box on the page.
 
 ## Keyboard shortcuts
 

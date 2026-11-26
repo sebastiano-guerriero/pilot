@@ -52,9 +52,13 @@ export interface Declared {
 /**
  * A selector that matches every element, as a CSS reset writes it: `*`
  * (`* { box-sizing: border-box }`; Tailwind's preflight is `*, ::before,
- * ::after…`, whose matching part is `*`), or `:where(*)` / `:is(*)`.
+ * ::after…`, whose matching part is `*`), or `:where(*)` / `:is(*)`; and
+ * every element's pseudo-element (`::before`, `*::after`, `::placeholder`),
+ * the part that matches with a before or after pill. Without them, the
+ * preflight's margin, padding, border and box-sizing listed on every ::after.
  */
-const UNIVERSAL = /^(?:\*|:(?:where|is)\(\s*\*\s*\))$/;
+const UNIVERSAL =
+  /^(?:(?:\*|:(?:where|is)\(\s*\*\s*\))(?:::?(?:before|after)|::(?:placeholder|backdrop|marker|file-selector-button))?|::?(?:before|after)|::(?:placeholder|backdrop|marker|file-selector-button))$/;
 
 /**
  * Whether a declared value comes from a reset: its winning rule's selector

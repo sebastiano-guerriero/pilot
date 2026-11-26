@@ -167,7 +167,9 @@
    "this updated". The names, not the row's background: a tint can be lost
    on some rows (the owner's call, 2026-11-26). */
 @scope (.property-dialog) {
-  .editor[data-updated] .property-label {
+  /* The names that changed: a row's, or one of a split row's stacked ones (margin-top). */
+  .property-label[data-updated],
+  .row-labels > [data-updated] {
     animation: row-updated 1s ease-out;
   }
 

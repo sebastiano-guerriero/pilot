@@ -17,6 +17,11 @@ export type ListEntry = string | { id: string; rows: Readonly<Record<string, rea
 
 export const LIST_ORDER: ReadonlyArray<{ group: string; entries: readonly ListEntry[] }> = [
   {
+    // A ::before's or ::after's content, first: it's what makes one drawn (placed first, 2026-11-26, for the owner to move).
+    group: "Content",
+    entries: ["content"],
+  },
+  {
     group: "Layout",
     entries: [
       {

@@ -875,7 +875,8 @@ describe("placement", () => {
       render(h(PropertyDialog, { element, anchor: element.getBoundingClientRect(), editors: registry, listAll: true }), container);
     });
     const ids = editorIds();
-    expect(ids[0]).toBe("display");
+    // Content's group first (what draws a ::before or ::after), then Layout's display.
+    expect(ids.slice(0, 2)).toEqual(["content", "display"]);
     // No display set: its grid and flex rows aren't shown by it, so they're listed on their own, right after it.
     for (const row of ["grid-columns", "gap", "flex-direction", "justify-content", "align-items"]) {
       expect(ids.indexOf(row)).toBeGreaterThan(0);

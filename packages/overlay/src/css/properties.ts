@@ -81,6 +81,11 @@ export interface CssPropertyInfo {
    * - "marker": a list marker (list-style-type): a counter style's name
    *   (`lower-greek`), or any text as the marker (`—`, `"→ "`), quoted as
    *   typed, case kept. Not stepped.
+   * - "content": a ::before's or ::after's content: text typed as it reads
+   *   (`Popular` → `"Popular"`, quotes inside escaped), shown back without
+   *   its quotes; `""` (the empty box), `none`, `normal` and functions
+   *   (`attr(data-label)`, `counter(step)`, `url(…)`, `var(…)`) as typed.
+   *   Not stepped.
    * - "position": where a box sits inside another (object-position): up to
    *   four parts, each a side keyword (`top`, `left`, `center`…), a length
    *   (a bare number is px) or a percentage, separated by spaces, or by `_`
@@ -98,6 +103,7 @@ export interface CssPropertyInfo {
     | "percent"
     | "idents"
     | "marker"
+    | "content"
     | "position";
 }
 
@@ -411,6 +417,7 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   color: { initial: "canvastext", keywords: ["currentcolor", "transparent"], negative: false },
   "background-color": { initial: "transparent", keywords: ["currentcolor", "transparent"], negative: false },
   float: { initial: "none", keywords: [...FLOAT_VALUES], negative: false },
+  content: { initial: "normal", keywords: ["none", "normal"], negative: false, kind: "content" },
   "list-style-type": { initial: "disc", keywords: [...LIST_STYLE_TYPE_VALUES], negative: false, kind: "marker" },
   "list-style-position": { initial: "outside", keywords: [...LIST_STYLE_POSITION_VALUES], negative: false },
   "box-sizing": { initial: "content-box", keywords: [...BOX_SIZING_VALUES], negative: false },

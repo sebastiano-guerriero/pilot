@@ -41,6 +41,22 @@ describe("parseValue", () => {
     expect(stepValue("list-style-type", "disc", 1, undefined)).toBeNull();
   });
 
+  it("content (::before, ::after): text quoted with its case, CSS as typed; shown without the quotes", () => {
+    expect(parseValue("content", "Popular")).toBe('"Popular"');
+    expect(parseValue("content", 'New "beta"')).toBe('"New \\"beta\\""');
+    expect(parseValue("content", "✓")).toBe('"✓"');
+    expect(parseValue("content", '""')).toBe('""');
+    expect(parseValue("content", "None")).toBe("none");
+    expect(parseValue("content", "attr(data-label)")).toBe("attr(data-label)");
+    expect(displayValue('"Popular"', "content")).toBe("Popular");
+    expect(displayValue('"New \\"beta\\""', "content")).toBe('New "beta"');
+    // Kept quoted where the bare text would read as something else typed back.
+    expect(displayValue('""', "content")).toBe('""');
+    expect(displayValue('"none"', "content")).toBe('"none"');
+    expect(displayValue("attr(data-label)", "content")).toBe("attr(data-label)");
+    expect(stepValue("content", '"a"', 1, undefined)).toBeNull();
+  });
+
   it("vertical-align: its keywords, or a length (negatives too) or percentage", () => {
     expect(parseValue("vertical-align", "middle")).toBe("middle");
     expect(parseValue("vertical-align", "-2")).toBe("-2px");

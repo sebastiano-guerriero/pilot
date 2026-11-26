@@ -381,13 +381,31 @@ export function PropertyDialog({
   const listRef = useRef<HTMLDivElement>(null);
   // A row whose value the window's resize changed (another rule applies now, edits/reach.ts): a brief
   // tint says "this updated" (PropertyDialog.css), started over if it changes again.
-  const flashRow = (id: string) => {
-    const row = listRef.current?.querySelector<HTMLElement>(`.editor[data-editor="${CSS.escape(id)}"]`);
-    if (!row) return;
-    row.removeAttribute("data-updated");
-    void row.offsetWidth;
-    row.setAttribute("data-updated", "");
-    row.addEventListener("animationend", () => row.removeAttribute("data-updated"), { once: true });
+  // Only the rows whose values changed: a revealing editor (display) shows other editors as its rows, and
+  // flashing it whole turned every name green when only grid-columns changed (the owner, 2026-11-26). Its
+  // own value changing changes its rows too: then the whole of it.
+  const flashRow = (editor: PropertyEditor, properties: string[]) => {
+    const block = listRef.current?.querySelector<HTMLElement>(`.editor[data-editor="${CSS.escape(editor.id)}"]`);
+    if (!block) return;
+    const own = [...editor.properties, ...(editor.reads ?? [])];
+    const rows = (editor.embeds ?? []).filter((row) => propertiesOf(row).some((p) => properties.includes(p)));
+    const targets =
+      !editor.embeds?.length || properties.some((p) => own.includes(p))
+        ? [block]
+        : rows.flatMap((row) => [...block.querySelectorAll<HTMLElement>(`[data-row="${CSS.escape(row.id)}"]`)]);
+    // Within each, the names of the properties that changed (margin's sides, stacked in one row: only
+    // margin-top), else every name in it (one row with a name of its own: grid-columns, a shorthand's value).
+    const names = (target: HTMLElement) => {
+      const all = [...target.querySelectorAll<HTMLElement>(".row-labels > span, .property-label")].filter((l) => !l.querySelector(".row-labels"));
+      const changed = all.filter((label) => properties.includes(label.textContent?.trim() ?? ""));
+      return changed.length ? changed : [...target.querySelectorAll<HTMLElement>(".property-label")];
+    };
+    for (const target of targets.flatMap(names)) {
+      target.removeAttribute("data-updated");
+      void target.offsetWidth;
+      target.setAttribute("data-updated", "");
+      target.addEventListener("animationend", () => target.removeAttribute("data-updated"), { once: true });
+    }
   };
   const [size, setSize] = useState({ width: 0, height: 0 });
   useLayoutEffect(() => {
@@ -552,7 +570,7 @@ export function PropertyDialog({
                             live.current = { id: match.id, at: performance.now() };
                             changedBy(match.id);
                           }}
-                          onResized={() => flashRow(match.id)}
+                          onResized={(properties) => flashRow(match, properties)}
                         />
                       </div>
                     </Fragment>
@@ -643,6 +661,20 @@ function revealingValues(element: EditableElement, editors: PropertyEditor[], hi
   const properties = editors.filter((e) => e.embeds?.length && e.properties.length).map((e) => e.properties[0] as string);
   const values = fieldValues(element, properties, history);
   return properties.map((p) => values[p]).join("|");
+}
+
+/**
+ * Whether a change to a ::before or ::after (its pill on) needs `content: ""`
+ * with it: the pseudo-element has none now (`none`, or `normal`, which draws
+ * nothing on them), so nothing would show. Not for content itself, a
+ * clearing, or a placeholder (always drawn). Read from the page as it is,
+ * Pilot's previews included, so it's added once.
+ */
+export function needsContent(element: Element, states: readonly ElementState[] | undefined, property: string, value: string): boolean {
+  const pseudo = states?.find((s) => s === "before" || s === "after");
+  if (!pseudo || property === "content" || value === "") return false;
+  const content = getComputedStyle(element, `::${pseudo}`).getPropertyValue("content").trim();
+  return content === "" || content === "none" || content === "normal";
 }
 
 /**
@@ -989,8 +1021,8 @@ function MatchedEditor({
   onInspect?(areas: BoxArea[] | null): void;
   /** The editor changed a value (or took one back). */
   onChanged?(): void;
-  /** The window's resize changed what the fields show (another rule applies there now). */
-  onResized?(): void;
+  /** The window's resize changed what the fields show (another rule applies there now): those properties. */
+  onResized?(properties: string[]): void;
 }) {
   const [, rerender] = useReducer((n: number) => n + 1, 0);
   // A pseudo-element's pill: its own computed values (`::before`'s), for steps and drags.
@@ -1011,11 +1043,12 @@ function MatchedEditor({
   const reset = resetValues(element, properties, history, states, widths, width);
   // What the fields show changed with the window's width, not an edit: say so (the dialog's flashRow).
   const shownKey = JSON.stringify(declared);
-  const shown = useRef({ width, values: shownKey });
+  const shown = useRef({ width, values: shownKey, declared });
   useEffect(() => {
     const before = shown.current;
-    shown.current = { width, values: shownKey };
-    if (before.width !== width && before.values !== shownKey) onResized?.();
+    shown.current = { width, values: shownKey, declared };
+    if (before.width === width || before.values === shownKey) return;
+    onResized?.(properties.filter((p) => before.declared[p] !== declared[p]));
   }, [width, shownKey]);
   const Editor = editor.component;
   return (
@@ -1026,11 +1059,16 @@ function MatchedEditor({
       mixed={mixed}
       reset={reset}
       onChange={(property, value, options) => {
-        // Every selected element, with one gesture: one undo step for all of them.
-        const gesture = options?.gesture ?? (others.length ? {} : undefined);
+        // Every selected element, with one gesture: one undo step for all of them (and the content added below).
+        const gesture = options?.gesture ?? {};
         // Each element where the chip sends it (no chip: its rule that applies at the window's
         // width, each element its own); cleared, the element doesn't set it (a removal, when the page's CSS does).
-        for (const el of all) applyChange(history, el, property, value, gesture, { chip: widths, states, width });
+        for (const el of all) {
+          // A ::before or ::after isn't drawn without content: its first change brings `content: ""`, in the
+          // same step, when nothing gives it one (the owner's call, 2026-11-26).
+          if (needsContent(el, states, property, value)) applyChange(history, el, "content", '""', gesture, { chip: widths, states, width });
+          applyChange(history, el, property, value, gesture, { chip: widths, states, width });
+        }
         onChanged?.();
         rerender(0);
       }}

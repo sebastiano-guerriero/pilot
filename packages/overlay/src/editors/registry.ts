@@ -80,6 +80,7 @@ import {
   whiteSpaceEditor,
 } from "./typography/TypographyEditors.tsx";
 import { visibilityEditor } from "./visibility/VisibilityEditor.tsx";
+import { contentEditor } from "./content/ContentEditor.tsx";
 import { maskCompositeEditor } from "./mask/MaskCompositeEditor.tsx";
 import { maskImageEditor } from "./mask/MaskImageEditor.tsx";
 import { zIndexEditor } from "./z-index/ZIndexEditor.tsx";
@@ -94,6 +95,7 @@ import { maxWidthEditor, minWidthEditor, widthEditor } from "./width/WidthEditor
  * `ui/styles/index.css`.
  */
 export const editors: PropertyEditor[] = [
+  contentEditor,
   paddingEditor,
   marginEditor,
   widthEditor,

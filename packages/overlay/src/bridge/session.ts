@@ -536,68 +536,6 @@ export class PilotSession {
     return { thread: this.threads.find((t) => t.id === thread.id) as CommentThread, job, changeSet, waiting };
   }
 
-  /**
-   * TEMPORARY (ui/testPrompt.ts): the change set Send would post now, without
-   * sending anything: the unsent changes, less those on an element a job is
-   * on (they'd wait). Null when there's none.
-   */
-  previewSend(): ChangeSet | null {
-    const only = (change: RecordedChange) => !this.jobOn(change.element);
-    if (!this.history.changes({ unsent: true }).some(only)) return null;
-    return buildChangeSet(this.history, { unsent: true, id: "job_preview", only });
-  }
-
-  /**
-   * TEMPORARY (ui/testPrompt.ts): the change set a comment would make if sent
-   * now, as comment() would build it, without sending or saving anything:
-   * the thread with this draft added; its `/` task as that task (the unsent
-   * words as its note); the edits it takes. Files go by name (they're
-   * uploaded only when sent).
-   */
-  previewComment(
-    element: Element,
-    text: string,
-    attachments: Array<{ id: string; name: string }>,
-    action?: CommentAction,
-    others: Element[] = [],
-    references: CommentReference[] = [],
-    takesEdits = false,
-    props?: CommentMessage["props"],
-    skill?: string,
-  ): ChangeSet {
-    const thread = this.threadFor(element);
-    const message: ThreadMessage = { from: "designer", text: text.trim(), at: new Date().toISOString() };
-    if (attachments.length) message.attachments = attachments;
-    if (action) message.action = action;
-    else if (skill) message.skill = skill;
-    if (references.length) message.references = references;
-    if (props?.set.length && !action) message.props = props;
-    const messages = [...(thread?.messages ?? []), message];
-    const unsent = messages.filter((m) => m.from === "designer" && (m.waiting || !m.jobId));
-    const task = unsent.find((m) => m.action)?.action;
-    const id = "job_preview";
-    if (task) {
-      const note = unsent
-        .map((m) => m.text)
-        .filter(Boolean)
-        .join("\n\n");
-      return buildRequest(element, task, {
-        id,
-        note,
-        attachments: unsent.flatMap((m) => m.attachments ?? []).map(({ id, name }) => ({ id, name })),
-        references: unsent.flatMap((m) => m.references ?? []),
-        others,
-      });
-    }
-    const set = this.commentSet(element, messages, others, id, thread?.session);
-    if (!takesEdits) return set;
-    const elements = [element, ...others];
-    const only = (change: RecordedChange) => elements.includes(change.element);
-    if (!this.history.changes({ unsent: true }).some(only)) return set;
-    const taken = buildChangeSet(this.history, { unsent: true, id, only });
-    return { ...set, edits: taken.edits, ...(taken.fileTokens ? { fileTokens: taken.fileTokens } : {}) };
-  }
-
   /** A comment job's change set: the thread so far, as the agent reads it. */
   private commentSet(element: Element, messages: ThreadMessage[], others: Element[], id?: string, session?: AgentSession): ChangeSet {
     // Attachments go by id (the hub adds where it saved them); their previews stay here.

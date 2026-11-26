@@ -14,7 +14,7 @@ interface DomTreeProps {
   /** The other selected elements, when several are: their rows are marked too. */
   also?: readonly Element[];
   /** A row is hovered (null: none): its element is highlighted on the page. */
-  onHover(element: Element | null): void;
+  onHover(element: Element | null, pseudo?: "::before" | "::after"): void;
   /**
    * A row was picked (clicked, or reached with the arrow keys): select its
    * element. Cmd/Ctrl+click: `add` it to the selection (or take it out);
@@ -360,7 +360,7 @@ export function DomTree({ selected, also = [], onHover, onSelect, onClose, veile
                 data-index={index}
                 data-pseudo={row.pseudo ? "" : undefined}
                 style={{ paddingLeft: px(8 + row.depth * 12) }}
-                onPointerEnter={() => onHover(row.element)}
+                onPointerEnter={() => onHover(row.element, row.pseudo)}
                 onClick={(e) => {
                   if (!isSelectableRow(row)) return;
                   if (e.metaKey || e.ctrlKey) {

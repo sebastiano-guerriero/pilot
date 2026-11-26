@@ -36,8 +36,6 @@ interface ToolbarProps {
   discardCount?: number;
   /** Discard the changes not sent yet (one undo step). */
   onDiscard?(): void;
-  /** TEMPORARY (ui/testPrompt.ts): copy the prompt Send would make now; whether it copied. None: no button. */
-  onCopyPrompt?(): Promise<boolean>;
   /** Jobs not finished yet (waiting, an agent applying, checking): the jobs button shows while there are any. */
   pending: number;
   /** The jobs button: scroll to the next job's elements (see App's nextJob). */
@@ -92,7 +90,6 @@ export function Toolbar({
   onSend,
   discardCount = 0,
   onDiscard,
-  onCopyPrompt,
   pending,
   onNextJob,
   onQuit,
@@ -104,13 +101,6 @@ export function Toolbar({
 }: ToolbarProps) {
   // After a send, the tooltip says so for a moment.
   const [done, setDone] = useState<boolean | string>(false);
-  // After copying the prompt (TEMPORARY, ui/testPrompt.ts), the same.
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (!copied) return;
-    const timer = setTimeout(() => setCopied(false), SENT_FOR);
-    return () => clearTimeout(timer);
-  }, [copied]);
   useEffect(() => {
     if (!done) return;
     const timer = setTimeout(() => setDone(false), SENT_FOR);
@@ -293,22 +283,6 @@ export function Toolbar({
           </button>
         </Tooltip>
       )}
-      {/* TEMPORARY (ui/testPrompt.ts): the prompt Send would make now, copied; nothing is sent. */}
-      {onCopyPrompt && (
-        <Tooltip text={copied ? "Prompt copied" : discardCount ? "Copy the prompt (test)" : "Nothing to send"} gap={TIP_GAP} forceOpen={copied}>
-          <button
-            type="button"
-            class="button"
-            aria-label="Copy the prompt Send would send (test)"
-            disabled={!discardCount}
-            onClick={async () => {
-              if (await onCopyPrompt()) setCopied(true);
-            }}
-          >
-            <Icon name={copied ? "copied" : "copy"} />
-          </button>
-        </Tooltip>
-      )}
       {jobs && (
         <span class="jobs-slot" data-leaving={jobs.leaving || undefined}>
           <Tooltip text={`${jobs.count} ${jobs.count === 1 ? "job" : "jobs"} running`} gap={TIP_GAP}>
@@ -337,6 +311,8 @@ export function Toolbar({
             class="button"
             aria-label="Hide Pilot"
             aria-keyshortcuts={hideShortcut ? ariaShortcut(hideShortcut) : undefined}
+            // The focus stays where it was (the search, a field), given back when Pilot shows again.
+            onMouseDown={(e) => e.preventDefault()}
             onClick={onHide}
           >
             <Icon name="hide" />
