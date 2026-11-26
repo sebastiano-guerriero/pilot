@@ -386,7 +386,10 @@ describe("declared values", () => {
     expect(received).toEqual({ gap: "16px" });
     act(() => change?.("gap", ""));
     expect(received).toEqual({ gap: "" });
-    expect(previewText()).toContain("gap: revert !important");
+    // A base value: previewed beside the page's own rule, in its stylesheet (dom/anchored.ts).
+    const rules = (list: CSSRuleList | undefined): string[] =>
+      Array.from(list ?? []).flatMap((r) => [r.cssText, ...rules((r as CSSRule & { cssRules?: CSSRuleList }).cssRules)]);
+    expect(rules(style.sheet?.cssRules).join("\n")).toMatch(/data-pilot-edit="\d+"\]\) \{ gap: revert; \}/);
     style.remove();
   });
 
@@ -456,6 +459,7 @@ describe("width chip", () => {
         states,
         onStatesChange: setStates,
         viewportWidth,
+        listAll: false,
       });
     }
     act(() => {
@@ -487,6 +491,18 @@ describe("width chip", () => {
     expect(chip()).not.toBeNull();
     key(search(), "Backspace");
     expect(chip()).toBeNull();
+  });
+
+  it("with a state pill, the list shows what's set for that state, not the element's own (its fields would be empty)", () => {
+    const history = new EditHistory();
+    history.apply(element, "padding", "8px");
+    history.apply(element, "opacity", "0.5", undefined, { states: ["hover"] });
+    mountWithWidths(history);
+    expect(editorIds()).toEqual(["padding"]);
+    type("hover:");
+    expect(statePills()).toEqual(["hover"]);
+    expect(editorIds()).toEqual(["opacity"]);
+    history.clear();
   });
 
   it("a change made with state pills is for those states", () => {

@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { inlinePreview } from "../test/inlinePreview.ts";
 import { EditHistory } from "./history.ts";
 import { PREVIEW_ATTRIBUTE } from "../dom/preview.ts";
-import { checkJob, isPageMutation, watchJob } from "./verify.ts";
+import { isPageMutation } from "../dom/preview.ts";
+import { checkJob, watchJob } from "./verify.ts";
 
 // The page's own CSS, as a stylesheet the "agent" edits.
 let sheet: HTMLStyleElement;
@@ -91,6 +92,14 @@ describe("checking a done job", () => {
 
   it("a change for other widths than the window's can't be checked now", () => {
     history.apply(el, "padding-top", "20px", undefined, { widths: { min: 5000 } });
+    history.send("j1");
+    expect(checkJob(history, "j1").results[0]?.outcome).toBe("unchecked");
+  });
+
+  it("a base change where the project's breakpoint wins at this width can't be seen here: unchecked, not landed", () => {
+    // The project's own breakpoint applies at the window's width (the agent keeps it): the base value doesn't show here.
+    pageCss(".card { padding-top: 10px; border-radius: 4px; } @media (min-width: 1px) { .card { padding-top: 30px; } }");
+    history.apply(el, "padding-top", "20px");
     history.send("j1");
     expect(checkJob(history, "j1").results[0]?.outcome).toBe("unchecked");
   });

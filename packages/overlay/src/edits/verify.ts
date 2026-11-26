@@ -1,5 +1,6 @@
 import type { ChangeResult } from "@pilot/protocol";
-import { PREVIEW_ATTRIBUTE } from "../dom/preview.ts";
+import { baseValue, declaredValue } from "../dom/declared.ts";
+import { isPageMutation } from "../dom/preview.ts";
 import { normalizeText, textRunOf } from "../dom/text.ts";
 import type { EditHistory, RecordedChange } from "./history.ts";
 import { inWidths } from "./widths.ts";
@@ -37,7 +38,11 @@ export interface JobCheck {
 
 export function checkJob(history: EditHistory, jobId: string, width = window.innerWidth): JobCheck {
   const changes = history.changes({ job: jobId });
-  const checkable = changes.filter((c) => c.element.isConnected && !c.states?.length && inWidths(c.widths ?? null, width));
+  // Base changes the project's own breakpoints or conditions hide at this width (read on the page alone, Pilot's changes left out).
+  const hidden = new Set(
+    history.probe([], () => changes.filter((c) => !c.widths && !c.states?.length && c.element.isConnected && !baseAppliesHere(c.element, c.property))),
+  );
+  const checkable = changes.filter((c) => c.element.isConnected && !c.states?.length && inWidths(c.widths ?? null, width) && !hidden.has(c));
   const isText = (c: RecordedChange) => textRunOf(c.property) !== null;
   const css = checkable.filter((c) => !isText(c));
   const read = () => css.map((c) => computed(c.element, c.property));
@@ -65,6 +70,22 @@ export function checkJob(history: EditHistory, jobId: string, width = window.inn
     }
   }
   return check;
+}
+
+/**
+ * Whether the element's base value for `property` is what applies at this
+ * width: no media query or condition of the project's wins here. A base
+ * change (no widths) is checked only then. Where one wins, the change can't
+ * show here, by design (the project's breakpoints are kept), and the page
+ * would read the same with or without it: it's left unchecked, settled on
+ * the agent's word, like a change for widths the window isn't at.
+ */
+function baseAppliesHere(element: Element, property: string): boolean {
+  const now = declaredValue(element, property);
+  if (!now) return true;
+  const base = baseValue(element, property);
+  if (!base) return false;
+  return now.source === "inline" ? base.source === "inline" : now.rule === base.rule;
 }
 
 /**
@@ -220,17 +241,6 @@ export function watchJob(
     finished = true;
     stop();
   };
-}
-
-/**
- * A change in the head that's the page's, not Pilot's. Pilot's preview sheet
- * lives in the head too, and every check rewrites it: if those rewrites
- * counted, each check would trigger the next one, forever.
- */
-export function isPageMutation(r: Pick<MutationRecord, "type" | "target" | "addedNodes" | "removedNodes">): boolean {
-  const ours = (node: Node | null) => !!(node instanceof Element ? node : node?.parentElement)?.closest(`[${PREVIEW_ATTRIBUTE}]`);
-  if (ours(r.target)) return false;
-  return r.type !== "childList" || [...r.addedNodes, ...r.removedNodes].some((n) => !ours(n));
 }
 
 function same(a: RecordedChange, b: RecordedChange): boolean {

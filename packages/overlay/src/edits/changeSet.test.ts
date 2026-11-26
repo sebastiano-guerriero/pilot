@@ -52,7 +52,7 @@ describe("buildChangeSet", () => {
   it("formats into the prompt the agent gets", () => {
     history.apply(card, "padding-top", "24px");
     const prompt = formatPrompt(buildChangeSet(history));
-    expect(prompt).toContain("| `padding-top` | `10px` | `24px` | every width |");
+    expect(prompt).toContain("| `padding-top` | `10px` | `24px` | base |");
     expect(prompt).toContain("`div.card`");
   });
 });
@@ -72,5 +72,23 @@ describe("look-alikes and every copy", () => {
     expect(all.map((t) => t.everyCopy)).toEqual([{}, {}, {}]);
     expect(all.some((t) => t.lookAlikes)).toBe(false);
     list.remove();
+  });
+});
+
+describe("a base change's source", () => {
+  it("is the base value, where it's declared without a media query, even where a breakpoint wins at this width", () => {
+    const media = document.createElement("style");
+    media.textContent = "@media (min-width: 1px) { .card { padding-top: 30px; } }";
+    document.head.append(media);
+    history.apply(card, "padding-top", "24px");
+    const change = buildChangeSet(history).edits[0]?.changes[0];
+    expect(change?.from).toBe("10px");
+    expect(change?.source).toMatchObject({ kind: "rule", selector: ".card" });
+    expect(change?.source && "media" in change.source ? change.source.media : undefined).toBeUndefined();
+    // For a width: what applies there (the breakpoint's rule).
+    history.apply(card, "padding-top", "40px", undefined, { widths: { min: 768 } });
+    const forWidth = buildChangeSet(history).edits[0]?.changes.find((c) => c.widths);
+    expect(forWidth?.from).toBe("30px");
+    media.remove();
   });
 });

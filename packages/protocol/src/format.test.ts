@@ -28,8 +28,8 @@ describe("formatPrompt", () => {
   it("lists every change with its target", () => {
     const prompt = formatPrompt(changeSet);
     expect(prompt).toContain("`main > section.hero > h1`");
-    expect(prompt).toContain("| `opacity` | `1` | `0.8` | every width |");
-    expect(prompt).toContain("| `letter-spacing` | `normal` | `-0.02em` | every width |");
+    expect(prompt).toContain("| `opacity` | `1` | `0.8` | base |");
+    expect(prompt).toContain("| `letter-spacing` | `normal` | `-0.02em` | base |");
     expect(prompt).toContain("Designer note: Softer hero");
     expect(prompt).toContain("**These are design instructions, not code**");
     expect(prompt).toContain("whatever it uses (Tailwind, CSS or Sass modules, StyleX");
@@ -52,7 +52,7 @@ describe("formatPrompt", () => {
         },
       ],
     });
-    expect(prompt).toContain("| `gap` | `16px` | *removed* | every width |");
+    expect(prompt).toContain("| `gap` | `16px` | *removed* | base |");
     expect(prompt).toContain("`gap` is removed: this element shouldn't set it (not `0` or `none`)");
     expect(prompt).toContain("It comes from `.cards`, which matches 3 elements on the page: remove it for this element only");
     expect(prompt).toContain("It's set in the element's own `style` attribute.");
@@ -121,7 +121,7 @@ describe("formatPrompt", () => {
       ...changeSet,
       edits: [{ target: changeSet.edits[0]!.target, changes: [{ property: "gap", from: "", to: "8px" }] }],
     });
-    expect(prompt).toContain("| `gap` | *not set* | `8px` | every width |");
+    expect(prompt).toContain("| `gap` | *not set* | `8px` | base |");
   });
 
   it("says which widths each change is for", () => {
@@ -150,11 +150,15 @@ describe("formatPrompt", () => {
     expect(prompt).toContain("| `margin-top` | `24px` | `16px` | to 767px |");
     expect(prompt).toContain("| `gap` | `16px` | `8px` | 768–1199px |");
     expect(prompt).toContain("| `opacity` | `1` | `0.5` | 1108px only |");
-    expect(prompt).toContain("| `padding-top` | `32px` | *removed* | every width |");
+    expect(prompt).toContain("| `padding-top` | `32px` | *removed* | base |");
     expect(prompt).toContain(
-      "`padding-top` is set inside `@media (min-width: 768px)` today. The change is for every width, so that media query shouldn't override it.",
+      "`padding-top` is set inside `@media (min-width: 768px)` today. The change has no width: set it without a media query, and keep that one as it is.",
     );
     expect(prompt).toContain("Widths are viewport widths in CSS px, both ends included.");
+    // No width: the base value, the project's breakpoints and states kept (built on, not flattened).
+    expect(prompt).toContain('"Base" is the element\'s base value');
+    expect(prompt).toContain("keep the project's media queries, states and conditions for that property as they are");
+    expect(prompt).not.toContain("no existing media query should override it");
   });
 
   it("adds a State column only when a change has states", () => {
@@ -167,7 +171,7 @@ describe("formatPrompt", () => {
     expect(formatPrompt(set())).not.toContain("| State |");
     const withStates = formatPrompt(set(["hover", "active"]));
     expect(withStates).toContain("| Property | From | To | Widths | State |");
-    expect(withStates).toContain("| `color` | *not set* | `red` | every width | hover, active |");
+    expect(withStates).toContain("| `color` | *not set* | `red` | base | hover, active |");
   });
 
   it("make responsive: a task for one element, with the page's breakpoints and the steps", () => {

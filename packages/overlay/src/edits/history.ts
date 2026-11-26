@@ -326,9 +326,10 @@ export class EditHistory {
    * (the window's, by default), or null where it sets nothing: the latest
    * preview rule that sets it there, a longhand read out of a shorthand
    * (`grid-column-start` from `grid-column`). What a field shows over the
-   * page's own CSS.
+   * page's own CSS. `"base"`: Pilot's base change only (no widths), what a
+   * field shows with no width chip, whatever the window's width.
    */
-  valueOf(element: EditableElement, property: string, width = window.innerWidth, states?: readonly ElementState[]): string | null {
+  valueOf(element: EditableElement, property: string, width: number | "base" = window.innerWidth, states?: readonly ElementState[]): string | null {
     const rule = this.activeRule(element, property, width, states);
     return rule ? valueIn(rule, property) || null : null;
   }
@@ -338,7 +339,7 @@ export class EditHistory {
    * (the window's, by default): the change in effect there is a removal. The
    * field then shows nothing, and the change set says "remove".
    */
-  removalOf(element: EditableElement, property: string, width = window.innerWidth, states?: readonly ElementState[]): Removal | null {
+  removalOf(element: EditableElement, property: string, width: number | "base" = window.innerWidth, states?: readonly ElementState[]): Removal | null {
     const rule = this.activeRule(element, property, width, states);
     return rule?.property === property ? (rule.removal ?? null) : null;
   }
@@ -484,11 +485,12 @@ export class EditHistory {
   }
 
   /** The rule that wins for `property` on `element` at `width`: the latest that sets it there. */
-  private activeRule(element: EditableElement, property: string, width: number, states?: readonly ElementState[]): Entry | undefined {
+  private activeRule(element: EditableElement, property: string, width: number | "base", states?: readonly ElementState[]): Entry | undefined {
     const rules = this.rules();
     for (let i = rules.length - 1; i >= 0; i--) {
       const r = rules[i] as Entry;
-      if (r.element === element && sameStates(r.states, states) && sets(r, property) && inWidths(r.widths ?? null, width)) return r;
+      const there = width === "base" ? !r.widths : inWidths(r.widths ?? null, width);
+      if (r.element === element && sameStates(r.states, states) && sets(r, property) && there) return r;
     }
     return undefined;
   }

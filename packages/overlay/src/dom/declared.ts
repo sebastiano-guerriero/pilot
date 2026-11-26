@@ -1,5 +1,5 @@
 import { type ElementState, STATES, sortStates } from "@pilot/protocol";
-import { isPilotSheet } from "./preview.ts";
+import { EDIT_ATTRIBUTE, isPilotSheet } from "./preview.ts";
 
 /**
  * Declared values: the CSS that actually applies to an element for a
@@ -185,6 +185,27 @@ export function declaredValue(element: Element, property: string, states?: reado
 }
 
 /**
+ * The base value of each property: what the element declares without a
+ * media query or a state (`pt-4`, `.card { padding: 40px }`, its style
+ * attribute), whatever the window's width: the value an edit without the
+ * width chip or a state pill changes, the project's breakpoint, state and
+ * condition rules keeping theirs (the owner's call, 2026-11-26). Rules in
+ * `@media` (nested ones too, Tailwind v4's `md:`) and `@container` don't
+ * count; `@supports` does (it's the browser's, not a modifier). Conditions on
+ * an ancestor that hold right now count as base (not told apart yet).
+ */
+export function baseValues(element: Element, properties: string[]): Record<string, Declared | null> {
+  const rules = matchedRules(element, undefined, { base: true });
+  const inline = (element as HTMLElement).style as CSSStyleDeclaration | undefined;
+  return Object.fromEntries(properties.map((p) => [p, resolve(p, inline, rules)]));
+}
+
+/** The base value of one property (see baseValues), or null. */
+export function baseValue(element: Element, property: string): Declared | null {
+  return baseValues(element, [property])[property] ?? null;
+}
+
+/**
  * What the page's own CSS gives the element while it's in `states` (hovered
  * and pressed…), from its rules for those states: each property they set,
  * with the cascade's winner. How Pilot shows the state while the designer
@@ -212,10 +233,10 @@ export function forcedDeclarations(element: Element, states: readonly ElementSta
 export function declaredWithout(
   element: Element,
   property: string,
-  without: { inline: boolean; skip?: CSSStyleDeclaration[] },
+  without: { inline: boolean; skip?: CSSStyleDeclaration[]; base?: boolean },
   states?: readonly ElementState[],
 ): Declared | null {
-  const rules = matchedRules(element, states?.length ? { states, mode: "exact" } : undefined).filter(
+  const rules = matchedRules(element, states?.length ? { states, mode: "exact" } : undefined, { base: !!without.base }).filter(
     (r) => !without.skip?.includes(r.style),
   );
   // A state's rules come on top of the element's own: without them, it's the
@@ -334,10 +355,10 @@ function compare(a: number[], b: number[]): number {
  */
 let cache: { element: Element; signature: string; rules: MatchedRule[] } | null = null;
 
-export function matchedRules(element: Element, filter?: StateFilter): MatchedRule[] {
-  const signature = `${signatureOf(element)}|${filter ? `${filter.mode}:${filter.states.join(",")}` : ""}`;
+export function matchedRules(element: Element, filter?: StateFilter, options: { base?: boolean } = {}): MatchedRule[] {
+  const signature = `${signatureOf(element)}|${filter ? `${filter.mode}:${filter.states.join(",")}` : ""}|${options.base ? "base" : ""}`;
   if (cache?.element === element && cache.signature === signature) return cache.rules;
-  const rules = collect(element, filter);
+  const rules = collect(element, filter, !!options.base);
   cache = { element, signature, rules };
   queueMicrotask(() => {
     cache = null;
@@ -390,17 +411,19 @@ interface Walk {
   anonymous: number;
   /** Media query results, so repeated queries (`@media (min-width: 768px)`) are evaluated once. */
   media: Map<string, boolean>;
+  /** Only the rules without a media query, whatever the width (see baseValues). */
+  base: boolean;
 }
 
-function collect(element: Element, filter?: StateFilter): MatchedRule[] {
-  const walk: Walk = { element, filter, out: [], order: 0, layers: new Map(), anonymous: 0, media: new Map() };
+function collect(element: Element, filter?: StateFilter, base = false): MatchedRule[] {
+  const walk: Walk = { element, filter, out: [], order: 0, layers: new Map(), anonymous: 0, media: new Map(), base };
   for (const sheet of sheetsOf(element)) walkSheet(walk, sheet, "", null);
   return walk.out;
 }
 
 function walkSheet(walk: Walk, sheet: CSSStyleSheet, layer: string, parents: string[] | null) {
   if (sheet.disabled) return;
-  if (sheet.media?.mediaText && !mediaMatches(walk, sheet.media.mediaText)) return;
+  if (sheet.media?.mediaText && !conditionHolds(walk, sheet.media.mediaText)) return;
   let rules: CSSRuleList;
   try {
     rules = sheet.cssRules;
@@ -431,6 +454,8 @@ function walkRule(walk: Walk, rule: CSSRule, layer: string, parents: string[] | 
 
   // A style rule (possibly nested: its selector is relative to the parents').
   if (typeof r.selectorText === "string" && r.style) {
+    // Pilot's own preview of a base edit, beside the page's rule (preview.ts): not the page's.
+    if (r.selectorText.includes(`[${EDIT_ATTRIBUTE}`)) return;
     const selectors = resolveNesting(splitTopLevel(r.selectorText, ","), parents);
     addIfMatching(walk, r.style, selectors, layer);
     if (r.cssRules?.length) walkRules(walk, r.cssRules, layer, selectors);
@@ -442,7 +467,7 @@ function walkRule(walk: Walk, rule: CSSRule, layer: string, parents: string[] | 
     return;
   }
   if (kind === "CSSImportRule" || (r.styleSheet !== undefined && "href" in r)) {
-    if (r.media?.mediaText && !mediaMatches(walk, r.media.mediaText)) return;
+    if (r.media?.mediaText && !conditionHolds(walk, r.media.mediaText)) return;
     const importLayer = r.layerName == null ? layer : declareLayer(walk, layer, r.layerName);
     if (r.styleSheet) walkSheet(walk, r.styleSheet, importLayer, parents);
     return;
@@ -457,7 +482,7 @@ function walkRule(walk: Walk, rule: CSSRule, layer: string, parents: string[] | 
     return;
   }
   if (kind === "CSSMediaRule" || (r.media && r.cssRules)) {
-    if (mediaMatches(walk, r.media?.mediaText ?? "") && r.cssRules) walkRules(walk, r.cssRules, layer, parents);
+    if (conditionHolds(walk, r.media?.mediaText ?? "") && r.cssRules) walkRules(walk, r.cssRules, layer, parents);
     return;
   }
   if (kind === "CSSSupportsRule") {
@@ -582,6 +607,13 @@ function resolveNesting(selectors: string[], parents: string[] | null): string[]
   const only = parents.length === 1 ? (parents[0] as string) : null;
   const wrapped = only && /^[\w-]*(?:[.#][\w-]+)*$/.test(only) ? only : `:is(${parents.join(", ")})`;
   return selectors.map((s) => (s.includes("&") ? s.replaceAll("&", wrapped) : `${wrapped} ${s}`));
+}
+
+/** Whether a media condition counts: for the base value, only none (or `all`); else whether it matches now. */
+function conditionHolds(walk: Walk, text: string): boolean {
+  const t = text.trim();
+  if (walk.base) return !t || t === "all";
+  return mediaMatches(walk, t);
 }
 
 function mediaMatches(walk: Walk, text: string): boolean {

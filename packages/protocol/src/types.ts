@@ -124,7 +124,8 @@ export interface StyleChange {
   source?: StyleSource;
   /**
    * The viewport widths the change is for, as the designer set them (the
-   * width chip in Pilot's search). Absent: every width.
+   * width chip in Pilot's search). Absent: the base value, the one declared
+   * without a media query (the project's breakpoints keep theirs).
    */
   widths?: WidthRange;
   /**

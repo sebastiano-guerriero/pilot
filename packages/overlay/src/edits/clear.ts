@@ -1,5 +1,5 @@
 import type { ElementState, StyleSource, WidthRange } from "@pilot/protocol";
-import { type Declared, declaredValue, declaredWithout, isFromReset, mediaOf } from "../dom/declared.ts";
+import { type Declared, baseValue, declaredValue, declaredWithout, isFromReset, mediaOf } from "../dom/declared.ts";
 import type { EditableElement } from "../dom/target.ts";
 import type { EditHistory } from "./history.ts";
 
@@ -42,7 +42,9 @@ export function clearProperty(
   /** The element states it's for (the search's state pills). None: the element as it is. */
   states?: readonly ElementState[],
 ): void {
-  const page = declaredValue(element, property, states);
+  // No width chip and no state: the base value is what's removed (the project's breakpoint and state rules stay).
+  const base = !widths && !states?.length;
+  const page = base ? baseValue(element, property) : declaredValue(element, property, states);
   if (!page || isFromReset(page)) return history.apply(element, property, "", gesture, { widths, states });
 
   // Without the removed declaration: for the app's style attribute, the
@@ -54,13 +56,13 @@ export function clearProperty(
   const skip = rule ? [rule] : [];
   const also: string[] = [];
   let next = rule
-    ? declaredWithout(element, property, { inline: false, skip }, states)
-    : declaredWithout(element, property, { inline: true }, states);
+    ? declaredWithout(element, property, { inline: false, skip, base }, states)
+    : declaredWithout(element, property, { inline: true, base }, states);
   // The same value declared again by another rule: the same declaration, gone with it.
   while (rule && next?.rule && next.source !== "inline" && next.value.trim() === page.value.trim() && !skip.includes(next.rule)) {
     skip.push(next.rule);
     also.push(next.source.selector);
-    next = declaredWithout(element, property, { inline: false, skip }, states);
+    next = declaredWithout(element, property, { inline: false, skip, base }, states);
   }
   const source = sourceOf(element, page);
   // For a state, nothing left for it means the element's own value: `revert-layer`

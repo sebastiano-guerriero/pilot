@@ -1,6 +1,7 @@
 import type { ElementState } from "@pilot/protocol";
 import { stateSelector } from "../edits/states.ts";
 import type { WidthRange } from "@pilot/protocol";
+import { type AnchorRequest, anchoredElements, renderAnchored } from "./anchored.ts";
 
 /**
  * How Pilot shows its edits on the page: as rules in a stylesheet it adds,
@@ -13,6 +14,12 @@ import type { WidthRange } from "@pilot/protocol";
  *       [data-pilot-edit="1"] { padding-top: 24px !important; }
  *       @media (min-width: 1200px) { [data-pilot-edit="1"] { padding-top: 40px !important; } }
  *     }
+ *
+ * A change with no widths and no states is the element's base value, and is
+ * shown beside the page's own declaration instead, in the page's stylesheet,
+ * so the project's breakpoint, state and condition rules still win where
+ * they apply (dom/anchored.ts). What follows is the rest: changes for some
+ * widths or states, removals, and base values the element declares nowhere.
  *
  * Every declaration is `!important` in a layer declared before any of the
  * page's (the <style> is the first in its root), and important declarations
@@ -66,8 +73,31 @@ const marked = new Set<Element>();
 /** The stylesheet preview. One per page: every EditHistory shares the same sheets. */
 export const stylesheetPreview: Preview = {
   render(rules, forced) {
+    last = { rules, forced };
+    draw(rules, forced, false);
+  },
+};
+
+/** What was last shown, to show again when the page's stylesheets or an element's classes change. */
+let last: { rules: PreviewRule[]; forced?: Forced | null } = { rules: [] };
+
+/** A base change (no widths, no states, not a removal): shown beside the page's own declaration. */
+const isBase = (rule: PreviewRule) => !rule.widths && !rule.states?.length && rule.value !== "revert-layer";
+
+function draw(rules: PreviewRule[], forced: Forced | null | undefined, check: boolean) {
     const byRoot = new Map<Document | ShadowRoot, string[]>();
     const used = new Set<Element>();
+    // Base changes beside the page's declarations; those with nothing to sit beside stay in the layer below.
+    const requests: Array<AnchorRequest & { rule: PreviewRule }> = [];
+    for (const rule of rules) {
+      if (!isBase(rule) || !rule.element.isConnected) continue;
+      const text = plainDeclaration(rule.property, rule.value);
+      if (text) requests.push({ element: rule.element, property: rule.property, text, id: idOf(rule.element), rule });
+    }
+    const left = new Set(renderAnchored(requests, check));
+    const anchored = new Set(requests.filter((r) => !left.has(r)).map((r) => r.rule));
+    for (const rule of anchored) used.add(rule.element);
+    watch(anchored.size > 0);
     const add = (element: Element, text: string, widths?: WidthRange, states = "") => {
       const root = element.getRootNode() as Document | ShadowRoot;
       if (!byRoot.has(root)) byRoot.set(root, []);
@@ -79,6 +109,7 @@ export const stylesheetPreview: Preview = {
     // A change for some states is a rule for those states (`:hover:active`),
     // more specific than the element's own, as the agent's will be.
     for (const rule of rules) {
+      if (anchored.has(rule)) continue;
       const text = declaration(rule.property, rule.value);
       if (text) add(rule.element, text, rule.widths, stateSelector(rule.states));
     }
@@ -120,8 +151,68 @@ export const stylesheetPreview: Preview = {
       if (!before || !updateValues(style, before.lines, lines)) style.textContent = text;
       written.set(style, { lines, text });
     }
-  },
-};
+}
+
+/**
+ * Base changes lean on the page's stylesheets and the elements' classes,
+ * which change under them: a hot reload replaces a stylesheet (Pilot's rule
+ * goes with it), a component restyled with other props gets another class.
+ * While any is shown, both are watched, and the preview is drawn again,
+ * checked, once a frame at most.
+ */
+let styles: MutationObserver | null = null;
+let classes: MutationObserver | null = null;
+let frame = 0;
+
+function recheck() {
+  if (frame) return;
+  frame = requestAnimationFrame(() => {
+    frame = 0;
+    draw(last.rules, last.forced, true);
+  });
+}
+
+function onLinkLoad(e: Event) {
+  if (e.target instanceof HTMLLinkElement) recheck();
+}
+
+function watch(on: boolean) {
+  if (typeof MutationObserver === "undefined" || typeof requestAnimationFrame === "undefined") return;
+  if (!on) {
+    styles?.disconnect();
+    classes?.disconnect();
+    styles = classes = null;
+    document.removeEventListener("load", onLinkLoad, true);
+    return;
+  }
+  if (!styles) {
+    styles = new MutationObserver((records) => {
+      if (records.some(isPageMutation)) recheck();
+    });
+    styles.observe(document.head, { childList: true, subtree: true, characterData: true, attributes: true });
+    document.addEventListener("load", onLinkLoad, true);
+  }
+  // The elements shown so: their classes (observed again each draw, as they change).
+  classes?.disconnect();
+  classes = new MutationObserver(recheck);
+  for (const element of anchoredElements()) {
+    classes.observe(element, { attributes: true, attributeFilter: ["class"] });
+    // In a shadow root: its stylesheets live there.
+    const root = element.getRootNode();
+    if (root instanceof ShadowRoot) styles.observe(root, { childList: true, subtree: true, characterData: true });
+  }
+}
+
+/**
+ * A change in the head that's the page's, not Pilot's. Pilot's preview sheet
+ * lives in the head too, and every check rewrites it: if those rewrites
+ * counted, each check would trigger the next one, forever.
+ */
+export function isPageMutation(r: Pick<MutationRecord, "type" | "target" | "addedNodes" | "removedNodes">): boolean {
+  const ours = (node: Node | null) => !!(node instanceof Element ? node : node?.parentElement)?.closest(`[${PREVIEW_ATTRIBUTE}]`);
+  if (ours(r.target)) return false;
+  return r.type !== "childList" || [...r.addedNodes, ...r.removedNodes].some((n) => !ours(n));
+}
 
 /** Each preview <style>'s rules as last written (its text, and each rule's line), since in-place updates leave its text behind. */
 const written = new WeakMap<HTMLStyleElement, { lines: string[]; text: string }>();
@@ -175,6 +266,13 @@ export function mediaQuery({ min, max }: WidthRange): string | undefined {
 function declaration(property: string, value: string): string {
   const style = document.createElement("div").style;
   style.setProperty(property, value, "important");
+  return style.cssText.trim();
+}
+
+/** `padding-top: 24px;`, without `!important` (a base change beside the page's CSS), or "". */
+function plainDeclaration(property: string, value: string): string {
+  const style = document.createElement("div").style;
+  style.setProperty(property, value);
   return style.cssText.trim();
 }
 

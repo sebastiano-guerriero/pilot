@@ -169,7 +169,7 @@ export function editGuidelines(): string[] {
   `- ${sharedCode()}`,
   "- A removed property means the element shouldn't declare it at all: not `0` or `none`, the declaration gone.",
   "- No screenshots, builds or tests for these edits: hot reload shows them, and Pilot checks the page itself.",
-  '- Widths are viewport widths in CSS px, both ends included. Use this project\'s breakpoints when one matches (or is within a few pixels), else a custom media query, and say which. "Every width" means no media query: the value holds at every viewport width, and no existing media query should override it.',
+  '- Widths are viewport widths in CSS px, both ends included. Use this project\'s breakpoints when one matches (or is within a few pixels), else a custom media query, and say which. "Base" is the element\'s base value: change it where it\'s declared without a media query or a state (its From and source above), and keep the project\'s media queries, states and conditions for that property as they are: they still win where they apply, as they did before. Build on what\'s there; don\'t flatten it.',
   "- A Text change is the element's copy (all of its text, or the part between its child elements): replace the old text with the new one where it comes from (the markup, a prop, a translation file, a CMS fixture), the rest of the element as it is. If the same text is used elsewhere, change only this element's, unless the designer's note says otherwise.",
   "- A State is the element state the change is for, all of them together (\"hover, active\": hovered and pressed). Use the project's own form: Tailwind's variants (`hover:`, `focus-visible:`, `hover:active:`), `:hover` and the like in CSS. Without a state, the change is for the element as it is (any state).",
   ];
@@ -424,7 +424,7 @@ function formatComment(changeSet: ChangeSet, request: CommentRequest): string {
     "- **A specific, small ask** (a color, a size, a spacing, a text): make it right away, in the project's conventions (its tokens, utilities, components). Speed matters: no screenshots or builds.",
     "- **An open-ended ask that needs design judgment** (make it calmer, rework this layout): it's an advanced task. If you can hand work to a more capable model than the one you run on (a subagent, or another model your agent offers), do: give it this prompt (with the job id), and report back with its notes.",
     `- ${UNCLEAR_ASK}`,
-    `- The designer was looking at the page ${page.viewport.width}px wide. If the comment is about how it looks at that width only, scope the change with the project's breakpoints; otherwise it's for every width.`,
+    `- The designer was looking at the page ${page.viewport.width}px wide. If the comment is about how it looks at that width only, scope the change with the project's breakpoints; otherwise change the base value, keeping the project's breakpoints as they are.`,
     `- ${PROJECT_CODE}`,
     several > 1 ? "- Change only what the comment is about, on each of these elements." : "- Change only what the comment is about.",
     `- ${sharedCode()}`,
@@ -595,7 +595,7 @@ function formatEdit(edit: ElementEdit, n: number): string[] {
   for (const c of changes) {
     const to = c.removed ? "*removed*" : `\`${c.to}\``;
     const from = c.from ? `\`${c.from}\`` : "*not set*";
-    const widths = c.widths ? describeWidths(c.widths) : "every width";
+    const widths = c.widths ? describeWidths(c.widths) : "base";
     out.push(`| \`${c.property}\` | ${from} | ${to} | ${widths} |${withStates ? ` ${describeStates(c.states)} |` : ""}`);
   }
   const notes = changes.flatMap((c) => [c.removed && removalNote(c), mediaNote(c), equivalentsNote(c)].filter((n): n is string => !!n));
@@ -621,8 +621,10 @@ export function describeWidths({ min, max }: WidthRange): string {
 }
 
 /**
- * Where the old value sits in a media query: for every width, that query
- * must not undo the change.
+ * Where the old value sits in a media query. A change with no widths is the
+ * base value (set without a media query), and that query stays: the
+ * project's breakpoints are built on, not flattened (the owner's call,
+ * 2026-11-26).
  */
 function mediaNote(c: StyleChange): string | null {
   const media = c.source?.kind === "rule" ? c.source.media : undefined;
@@ -630,7 +632,7 @@ function mediaNote(c: StyleChange): string | null {
   const today = `\`${c.property}\` is set inside \`@media ${media}\` today.`;
   return c.widths
     ? `${today} The change is for ${describeWidths(c.widths)}.`
-    : `${today} The change is for every width, so that media query shouldn't override it.`;
+    : `${today} The change has no width: set it without a media query, and keep that one as it is.`;
 }
 
 /**

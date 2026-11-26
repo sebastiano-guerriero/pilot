@@ -1,7 +1,7 @@
 import { isModifierQuery } from "../../../search/modifiers.ts";
 import type { ElementState, WidthRange } from "@pilot/protocol";
 import { Component, type ComponentChildren, Fragment } from "preact";
-import { declaredValues, forcedDeclarations, isFromReset } from "../../../dom/declared.ts";
+import { baseValues, declaredValues, forcedDeclarations, isFromReset } from "../../../dom/declared.ts";
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import type { BoxArea } from "../../../dom/boxModel.ts";
 import type { EditableElement } from "../../../dom/target.ts";
@@ -165,8 +165,8 @@ export function PropertyDialog({
   // Listing every editor: what the revealing ones (display, position) show as rows depends on their value, so the list follows it.
   const revealing = listAll ? revealingValues(element, editors, history) : "";
   const withValues = useMemo(
-    () => (!empty ? [] : listAll ? listedEditors(element, editors, history) : editorsWithValues(element, editors, history)),
-    [element, empty, listAll, revealing],
+    () => (!empty ? [] : listAll ? listedEditors(element, editors, history) : editorsWithValues(element, editors, history, states, widths)),
+    [element, empty, listAll, revealing, stateKey, `${widths?.min}-${widths?.max}`],
   );
   const matches = empty ? withValues : matchEditors(query, editors);
   const matchKey = matches.map((m) => m.id).join(",");
@@ -662,14 +662,25 @@ export function raisedSpot(
  * under display: grid) is left to that one. A page value that only a reset
  * gives (a `*` rule: box-sizing, margin: 0 on every element, isFromReset)
  * doesn't count; Pilot's own edits always do. Searching still finds them.
+ * With state pills (hover…), the values set for exactly those states, as the
+ * fields read them (fieldValues): before, the element's own were listed, each
+ * field empty for the state; none set for it, the list is empty, and the
+ * search adds one.
  */
-function editorsWithValues(element: EditableElement, editors: PropertyEditor[], history: EditHistory): PropertyEditor[] {
+function editorsWithValues(
+  element: EditableElement,
+  editors: PropertyEditor[],
+  history: EditHistory,
+  states?: readonly ElementState[],
+  widths?: WidthRange | null,
+): PropertyEditor[] {
   const properties = [...new Set(editors.flatMap((e) => e.properties))];
-  const page = declaredValues(element, properties);
+  // With neither pills nor the chip, the page's base values (see fieldValues); Pilot's at the window's width.
+  const { page } = pageValues(element, properties, states, widths);
   const width = window.innerWidth;
   const isSet = (p: string) => {
-    if (history.removalOf(element, p, width)) return false;
-    if (history.valueOf(element, p, width) !== null) return true;
+    if (history.removalOf(element, p, width, states)) return false;
+    if (history.valueOf(element, p, width, states) !== null) return true;
     const declared = page[p];
     return !!declared?.value && !isFromReset(declared);
   };
@@ -699,11 +710,14 @@ function fieldValues(
   properties: string[],
   history: EditHistory,
   states?: readonly ElementState[],
+  widths?: WidthRange | null,
 ): Record<string, string> {
   // With state pills: the values for exactly those states (Pilot's, else the
-  // page's rules for them); empty when nothing sets one for them.
-  const page = declaredValues(element, properties, states);
-  const width = window.innerWidth;
+  // page's rules for them); empty when nothing sets one for them. With
+  // neither pills nor the width chip: the base value (Pilot's base change,
+  // else the page's, without media queries), whatever the window's width:
+  // what an edit there changes (the owner's call, 2026-11-26).
+  const { page, width } = pageValues(element, properties, states, widths);
   return Object.fromEntries(
     properties.map((p) => [
       p,
@@ -712,15 +726,28 @@ function fieldValues(
   );
 }
 
+/**
+ * The page's values the fields show, and the width Pilot's own are read at:
+ * the base values (and Pilot's base changes) with neither state pills nor
+ * the width chip, else what applies at the window's width for those states.
+ */
+function pageValues(element: EditableElement, properties: string[], states?: readonly ElementState[], widths?: WidthRange | null) {
+  const base = !states?.length && !widths;
+  return {
+    page: base ? baseValues(element, properties) : declaredValues(element, properties, states),
+    width: base ? ("base" as const) : window.innerWidth,
+  };
+}
+
 /** The properties whose field value only a reset gives: Pilot sets none there, and the page's comes from a `*` rule. */
 function resetValues(
   element: EditableElement,
   properties: string[],
   history: EditHistory,
   states?: readonly ElementState[],
+  widths?: WidthRange | null,
 ): Set<string> {
-  const page = declaredValues(element, properties, states);
-  const width = window.innerWidth;
+  const { page, width } = pageValues(element, properties, states, widths);
   return new Set(
     properties.filter(
       (p) => !history.removalOf(element, p, width, states) && history.valueOf(element, p, width, states) === null && isFromReset(page[p]),
@@ -856,16 +883,16 @@ function MatchedEditor({
   const properties = propertiesOf(editor);
   const values = Object.fromEntries(properties.map((p) => [p, computed.getPropertyValue(p)]));
   const all = [element, ...others];
-  const declared = fieldValues(element, properties, history, states);
+  const declared = fieldValues(element, properties, history, states, widths);
   // Several selected: a property whose value differs across them is "Mixed" (an empty field).
   const mixed = new Set<string>();
   for (const other of others) {
-    const theirs = fieldValues(other, properties, history, states);
+    const theirs = fieldValues(other, properties, history, states, widths);
     for (const p of properties) if (theirs[p] !== declared[p]) mixed.add(p);
   }
   for (const p of mixed) declared[p] = "";
   // Values only a reset gives (Pilot sets none, the page's comes from a `*` rule).
-  const reset = resetValues(element, properties, history, states);
+  const reset = resetValues(element, properties, history, states, widths);
   const Editor = editor.component;
   return (
     <Editor

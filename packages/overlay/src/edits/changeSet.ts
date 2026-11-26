@@ -2,7 +2,7 @@ import type { AgentRequest, ChangeSet, CommentAttachment, CommentMessage, Commen
 import { pageBreakpoints } from "../dom/breakpoints.ts";
 import { componentProps } from "../dom/component.ts";
 import { fileTokensNow } from "../dom/tokens.ts";
-import { declaredValue } from "../dom/declared.ts";
+import { baseValue, declaredValue } from "../dom/declared.ts";
 import { equivalentsOf } from "../dom/equivalents.ts";
 import { currentStyle, tokensNow } from "../dom/currentStyle.ts";
 import { similarOf } from "../dom/similar.ts";
@@ -47,7 +47,10 @@ export function buildChangeSet(
       (edit.texts ??= []).push({ from: normalizeText(from), to: normalizeText(value) });
       continue;
     }
-    const page = removal ? null : element.isConnected ? declaredValue(element, property, states) : null;
+    // No widths and no states: the base value, where it's declared without a media query (the agent changes
+    // it there, keeping the project's breakpoints); else what applies at the window's width for those states.
+    const base = !widths && !states?.length;
+    const page = removal || !element.isConnected ? null : base ? baseValue(element, property) : declaredValue(element, property, states);
     const styleChange: StyleChange = removal
       ? { property, from: removal.from, to: "", removed: true, source: removal.source }
       : { property, from: page?.value ?? "", to: value, ...(page && { source: sourceOf(element, page) }) };

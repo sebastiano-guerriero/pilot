@@ -115,7 +115,7 @@ export function followUp(job: Job): string {
   }
   lines.push(
     "",
-    "Fix them: the usual causes are a rule that overrides yours (more specific, later, or in a media query), an edit in the wrong file or component, or a missed change. If you chose a different value on purpose (a token or the nearest step in the project's scale), keep it and say so in your notes. Pilot takes what the code gives after this.",
+    "Fix them: the usual causes are a rule that overrides yours (more specific, later, or in a media query), an edit in the wrong file or component, or a missed change. A media query, state or condition the project already had for a base change is meant to win where it applies (Pilot checks a base change only where it doesn't): keep it, don't flatten it. If you chose a different value on purpose (a token or the nearest step in the project's scale), keep it and say so in your notes. Pilot takes what the code gives after this.",
   );
   // A comment's edits: where the agent followed the comment instead of an edit, the comment stands (COMMENT_WINS).
   if (job.changeSet.request?.kind === "comment")
