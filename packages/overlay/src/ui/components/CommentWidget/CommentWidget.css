@@ -373,11 +373,45 @@
     flex-direction: column;
     padding: 0 16px 12px;
   }
-  /* A list open (`/`, `@`), the buttons hidden: its rows' highlight 8px from
-     the box's bottom edge, as from its sides (the rows sit 8px into the
-     composer's 16px). */
-  .composer:has(.actions-menu) {
-    padding-bottom: 8px;
+  /* A list open (`/`, `@`), the buttons hidden: the list's frame reaches the
+     box's bottom edge (its own padding makes the space under the last row). */
+  .composer:has(.menu-frame) {
+    padding-bottom: 0;
+  }
+
+  /* An open list (`/`, `@`): a line across the box above it, as under the
+     property dialog's search, and its rows scrolling inside past eight rows
+     or so, with Pilot's scroll thumb and fades (the owner's call, 2026-11-26).
+     Out to the box's edges, right under the 40px field (as under the
+     dialog's 40px search); the rows 8px in, as before. */
+  .menu-frame {
+    position: relative;
+    margin: 0 -16px;
+    border-top: 1px solid var(--plt-color-border);
+  }
+
+  .menu-fade {
+    position: absolute;
+    left: 1px;
+    right: 1px;
+    height: 12px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 150ms ease-out;
+
+    &[data-shown] {
+      opacity: 1;
+    }
+
+    &[data-edge="top"] {
+      top: 0;
+      background: linear-gradient(to bottom, var(--plt-color-background), transparent);
+    }
+
+    &[data-edge="bottom"] {
+      bottom: 0;
+      background: linear-gradient(to top, var(--plt-color-background), transparent);
+    }
   }
 
 
@@ -545,10 +579,15 @@
     /* The modifier menu's text: Pilot's base size, single-spaced (the box's own is 12px on 16px lines). */
     font-size: var(--plt-text-base);
     line-height: 1;
-    margin: 0 -8px;
-    /* The buttons hide while it's open: the composer's bottom padding then
-       makes the space under the last row (see .composer:has(.actions-menu)). */
-    padding-bottom: 0;
+    max-height: 300px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: none;
+    padding: 8px;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
   }
 
   .action-option {
@@ -670,8 +709,11 @@
     padding-inline: 16px;
   }
 
+  /* A block: 40px on one line, as the dialog's search (inline, the textarea
+     left a 4px gap under it, the frame 44px). */
   .field {
     all: unset;
+    display: block;
     box-sizing: border-box;
     width: 100%;
     min-height: 40px;

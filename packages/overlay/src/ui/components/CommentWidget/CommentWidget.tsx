@@ -20,6 +20,7 @@ import { dialogAnchor, dialogPosition, dialogSpot, raisedSpot } from "../Propert
 import { type ChangeCounts, changesLabel } from "../../changesLabel.ts";
 import { PropsList } from "../PropsList/PropsList.tsx";
 import { ScrollThumb } from "../ScrollThumb/ScrollThumb.tsx";
+import { scrollWithin } from "../../../dom/reveal.ts";
 import { Tooltip } from "../Tooltip/Tooltip.tsx";
 import { actionAt, actionCommand, actionName, matchActions, matchSkills, PILOT_AUTHOR, withoutQuery } from "./actions.ts";
 import { renderMarkdown } from "./markdown.tsx";
@@ -91,6 +92,19 @@ interface CommentWidgetProps {
     props?: PropChange[],
     skill?: string,
   ): Promise<CommentOutcome> | CommentOutcome;
+  /**
+   * TEMPORARY (ui/testPrompt.ts): copy the prompt this draft would make if
+   * sent now, with what onSend takes; nothing is sent. Whether it copied.
+   */
+  onCopyPrompt?(
+    text: string,
+    files: File[],
+    action?: CommentAction,
+    mentions?: MentionOption[],
+    withEdits?: boolean,
+    props?: PropChange[],
+    skill?: string,
+  ): Promise<boolean>;
   /**
    * The selected elements' edits not sent yet (the editor's): they go with
    * the comment, shown as a chip the designer can take off (then they wait
@@ -210,6 +224,7 @@ export function CommentWidget({
   error,
   agentName,
   onSend,
+  onCopyPrompt,
   onResolve,
   onAdjust,
   onClose,
@@ -444,6 +459,34 @@ export function CommentWidget({
   const menuOpen = menuCount > 0;
   const [active, setActive] = useState(0);
   useEffect(() => setActive(0), [text]);
+  // The open list (`/`, `@`) scrolls past its max height (CommentWidget.css), as the property dialog's `/`
+  // menu: the highlighted row kept in view, and a fade on each edge with more to scroll to.
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuMore, setMenuMore] = useState({ above: false, below: false });
+  const readMenuMore = () => {
+    const list = menuRef.current;
+    const next = list
+      ? { above: list.scrollTop > 0, below: list.scrollTop + list.clientHeight < list.scrollHeight - 1 }
+      : { above: false, below: false };
+    setMenuMore((current) => (current.above === next.above && current.below === next.below ? current : next));
+  };
+  useLayoutEffect(readMenuMore);
+  useLayoutEffect(() => {
+    const list = menuRef.current;
+    if (!list) return;
+    const rows = list.querySelectorAll("[role=option]");
+    // The first and last rows: to the very edge, past the padding, so no fade lies over them.
+    if (active === 0) list.scrollTop = 0;
+    else if (active === rows.length - 1) list.scrollTop = list.scrollHeight;
+    else scrollWithin(list, list.querySelector("[role=option][data-active]"));
+  }, [active, text]);
+  const fades = (
+    <>
+      <div class="menu-fade" data-edge="top" data-shown={menuMore.above || undefined} aria-hidden="true" />
+      <div class="menu-fade" data-edge="bottom" data-shown={menuMore.below || undefined} aria-hidden="true" />
+      <ScrollThumb target={menuRef} />
+    </>
+  );
   const pick = (index: number) => {
     if (!slash) return;
     const chosen = options[index];
@@ -630,6 +673,40 @@ export function CommentWidget({
       else void send();
     }
   };
+
+  // TEMPORARY (ui/testPrompt.ts): the prompt this draft would make, copied; with or without an agent, nothing sent.
+  const [promptCopied, setPromptCopied] = useState(false);
+  useEffect(() => {
+    if (!promptCopied) return;
+    const timer = setTimeout(() => setPromptCopied(false), 1500);
+    return () => clearTimeout(timer);
+  }, [promptCopied]);
+  const hasDraft = !!text.trim() || attachments.length > 0 || !!action || !!skill;
+  const copyPromptButton = onCopyPrompt && (
+    <Tooltip text={promptCopied ? "Prompt copied" : hasDraft ? "Copy the prompt (test)" : "Write something first"} align="end" forceOpen={promptCopied}>
+      <button
+        type="button"
+        class="attach"
+        aria-label="Copy the prompt this comment would send (test)"
+        disabled={!hasDraft}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={async () => {
+          const copied = await onCopyPrompt(
+            text.trim(),
+            attachments.map((a) => a.file),
+            action ?? undefined,
+            /@|--/.test(text) ? mentionsIn(text, picked, pool ?? withProject(mentions?.() ?? [])) : [],
+            editsGo,
+            pendingProps,
+            ...((skill ? [skill] : []) as [string?]),
+          );
+          if (copied) setPromptCopied(true);
+        }}
+      >
+        <Icon name={promptCopied ? "copied" : "copy-small"} />
+      </button>
+    </Tooltip>
+  );
 
   const sendButton = (
     <button
@@ -881,7 +958,8 @@ export function CommentWidget({
             <ScrollThumb target={fieldRef} />
           </div>
           {mentionOpen && pool && (
-            <div class="actions-menu" id="pilot-mentions" role="listbox" aria-label="Mention">
+            <div class="menu-frame">
+            <div ref={menuRef} class="actions-menu" id="pilot-mentions" role="listbox" aria-label="Mention" onScroll={readMenuMore}>
               {mentionMatches.length ? (
                 mentionMatches.map((o, i) => (
                   <Fragment key={o.group + o.label}>
@@ -911,9 +989,12 @@ export function CommentWidget({
                 <div class="action-none">{pool.length ? "Nothing matches" : "Nothing to mention on this page"}</div>
               )}
             </div>
+            {fades}
+            </div>
           )}
           {menuOpen && (
-            <div class="actions-menu" id="pilot-actions" role="listbox" aria-label="Skills">
+            <div class="menu-frame">
+            <div ref={menuRef} class="actions-menu" id="pilot-actions" role="listbox" aria-label="Skills" onScroll={readMenuMore}>
               {options.map((a, i) => (
                 <div
                   key={a.id}
@@ -957,6 +1038,8 @@ export function CommentWidget({
                 </div>
               ))}
             </div>
+            {fades}
+            </div>
           )}
           {/* While a list is open (`/`, `@`), only it and the field show: picking is the next step, not sending or attaching. */}
           <div class="buttons" hidden={menuOpen || (mentionOpen && !!pool)}>
@@ -993,6 +1076,7 @@ export function CommentWidget({
                   </button>
                 </Tooltip>
               )}
+              {copyPromptButton}
               {agentOn ? (
                 sendButton
               ) : (

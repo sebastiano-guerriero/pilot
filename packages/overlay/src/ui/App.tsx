@@ -22,6 +22,7 @@ import { BoxAreas } from "./components/BoxAreas/BoxAreas.tsx";
 import { GridOverlay } from "./components/GridOverlay/GridOverlay.tsx";
 import { Highlight } from "./components/Highlight/Highlight.tsx";
 import { PropertyDialog, type Reach, type WidthPick } from "./components/PropertyDialog/PropertyDialog.tsx";
+import { TEST_PROMPT_COPY, copyPrompt } from "./testPrompt.ts";
 import { awaitsAnswer, type CommentThread, type JobRecord, needsYou, type PilotSession } from "../bridge/session.ts";
 import { elapsed, jobAbout, statusText, whatText } from "./components/JobList/JobList.tsx";
 import { DomTree } from "./components/DomTree/DomTree.tsx";
@@ -618,6 +619,23 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     session.comment(element, text, attachments, action, othersRef.current, mentions.flatMap(toReference), withEdits, setting, skill);
     return "sent";
   };
+  // TEMPORARY (ui/testPrompt.ts): the prompt the comment would make if sent now, copied. Files by name, not uploaded.
+  const copyCommentPrompt = (
+    element: Element,
+    text: string,
+    files: File[],
+    action?: CommentAction,
+    mentions: MentionOption[] = [],
+    withEdits = false,
+    props: PropChange[] = [],
+    skill?: string,
+  ): Promise<boolean> => {
+    if (!session) return Promise.resolve(false);
+    const instance = props.length ? componentProps(element) : null;
+    const setting = instance ? { component: instance.component, ...(instance.usedIn ? { usedIn: instance.usedIn } : {}), set: props } : undefined;
+    const attachments = files.map((f) => ({ id: `(not uploaded) ${f.name}`, name: f.name }));
+    return copyPrompt(session.previewComment(element, text, attachments, action, othersRef.current, mentions.flatMap(toReference), withEdits, setting, skill));
+  };
   // How many of them there are, for the chip (the history's changes re-render this).
   const unsentOnSelection = countChanges(
     selected ? history.changes({ unsent: true }).filter((c) => c.element === selected.element || others.includes(c.element)) : [],
@@ -767,6 +785,12 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
               agentName={agentName(threadJob?.agent?.label ?? session?.state.agents[0]?.label)}
               agentOn={sendToAgent}
               onSend={(text, files, action, mentions, withEdits, props, skill) => sendComment(selected.element, text, files, action, mentions, withEdits, props, skill)}
+              onCopyPrompt={
+                TEST_PROMPT_COPY
+                  ? (text, files, action, mentions, withEdits, props, skill) =>
+                      copyCommentPrompt(selected.element, text, files, action, mentions, withEdits, props, skill)
+                  : undefined
+              }
               edits={unsentOnSelection}
               // `/props` for one component instance, alone (a list for several would mix their props).
               component={others.length ? undefined : (componentName(selected.element) ?? undefined)}
@@ -873,6 +897,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
         onSend={sendChanges}
         discardCount={session?.unsent ?? history.changes({ unsent: true }).length}
         onDiscard={() => (session ? session.discard() : history.discard())}
+        onCopyPrompt={TEST_PROMPT_COPY && session ? () => copyPrompt(session.previewSend()) : undefined}
         pending={running}
         alerts={toolbarAlerts}
         onNextJob={nextJob}
