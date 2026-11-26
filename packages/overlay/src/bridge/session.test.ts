@@ -757,6 +757,33 @@ describe("PilotSession", () => {
     wrap.remove();
   });
 
+  it("a question about all of a job's elements: a thread of its own about them all, on one without a thread", async () => {
+    vi.useFakeTimers();
+    const icon = document.createElement("span");
+    icon.className = "icon";
+    document.body.append(icon);
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    // The card has a thread already (an earlier comment, answered).
+    const earlier = s.comment(el, "Rounder corners");
+    hub().emit({ type: "job", job: job({ id: earlier.job?.id as string, status: "done", agent, notes: "Done." }) });
+    await vi.advanceTimersByTimeAsync(0);
+    history.apply(el, "border-radius", "12px");
+    history.apply(icon, "padding-top", "4px");
+    const sent = s.send() as { id: string };
+    const question = { text: "Every **Card** and **Icon**, or only the ones you changed?", choices: ["All of them", "Only this"] };
+    hub().emit({ type: "job", job: job({ id: sent.id, status: "done", agent, question }) });
+    await vi.advanceTimersByTimeAsync(0);
+    // Not under the card's thread: one of its own, on the icon, about both.
+    expect(s.threadFor(el)?.messages.length).toBeGreaterThan(0);
+    expect(s.threadFor(el)?.messages.some((m) => m.asks === sent.id)).toBe(false);
+    const thread = s.threadFor(icon) as NonNullable<ReturnType<typeof s.threadFor>>;
+    expect(thread.messages).toMatchObject([{ from: "agent", asks: sent.id }]);
+    expect(thread.others?.map((t) => t.selector)).toEqual([expect.stringContaining("card")]);
+    s.destroy();
+    icon.remove();
+  });
+
   it("a job on several elements: the question goes on the one it names, not the first", async () => {
     vi.useFakeTimers();
     const link = document.createElement("a");

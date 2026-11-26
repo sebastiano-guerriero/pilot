@@ -937,9 +937,10 @@ export class PilotSession {
    * The agent asked the designer something (pilot_done's question, mostly
    * "all of them, or only this one?"): Pilot asks it in a comment thread,
    * the job's own (a comment's), else the thread on the element it's about
-   * (the question's `element`, its number in the prompt), or on its first
-   * element, else a new one there (about that element, or all of them when
-   * it names none). The job isn't checked
+   * (the question's `element`, its number in the prompt), else a new one
+   * there. Naming none on a job about several elements, it's about all of
+   * them: a thread of its own about them all, on the first that has no
+   * thread yet (`askAnchor`). The job isn't checked
    * meanwhile, and stays on its elements; the designer's next message in
    * the thread is the answer (see comment), and the job goes back to the
    * agent with it.
@@ -952,15 +953,19 @@ export class PilotSession {
     // The element it's about, when it names one of them (the prompt numbers them from 1).
     const about = question.element ? targets[question.element - 1] : undefined;
     const aboutElement = about ? findTarget(about) : null;
-    const [first] = aboutElement ? [aboutElement] : this.elementsOf(job);
-    let thread = this.threads.find((t) => t.messages.some((m) => m.jobId === job.id || m.asks === job.id)) ?? (first ? this.threadFor(first) : null);
+    let thread = this.threads.find((t) => t.messages.some((m) => m.jobId === job.id || m.asks === job.id)) ?? null;
     if (thread?.messages.some((m) => m.asks === job.id)) return;
     if (!thread) {
-      const [target, ...others] = about ? [about] : targets;
-      if (!target) return;
-      thread = { id: `thread_${newJobId().slice(4)}`, target, ...(others.length ? { others } : {}), messages: [] };
-      this.threads = [...this.threads, thread];
-      if (first) this.threadElements.set(thread.id, first);
+      const anchor = aboutElement && about ? { target: about, element: aboutElement } : this.askAnchor(targets);
+      if (!anchor) return;
+      // About one element, or all of them on an element whose thread is taken: that thread.
+      if (about || targets.length < 2 || anchor.taken) thread = this.threadFor(anchor.element);
+      if (!thread) {
+        const others = about ? [] : targets.filter((t) => t !== anchor.target);
+        thread = { id: `thread_${newJobId().slice(4)}`, target: anchor.target, ...(others.length ? { others } : {}), messages: [] };
+        this.threads = [...this.threads, thread];
+        this.threadElements.set(thread.id, anchor.element);
+      }
     }
     const message: ThreadMessage = {
       from: "agent",
@@ -970,6 +975,30 @@ export class PilotSession {
       ...(question.choices?.length ? { choices: question.choices } : {}),
     };
     this.patchThread(thread.id, { messages: [...thread.messages, message] });
+  }
+
+  /**
+   * Where a question about all of a job's elements goes: the first of them
+   * without a thread, so it starts one of its own about them all. Before, it
+   * went into the first element's thread, which is about that element only,
+   * and may hold another job's question still waiting (the modes lab,
+   * 2026-11-26: a card's, a heading's and an icon's edits asked about on the
+   * card, under its earlier thread). Each has a thread: the first's that
+   * waits for no answer, else the first's (`taken`: it goes in that thread).
+   */
+  private askAnchor(targets: ElementTarget[]): { target: ElementTarget; element: Element; taken?: boolean } | null {
+    const found = targets.flatMap((target) => {
+      const element = findTarget(target);
+      return element ? [{ target, element }] : [];
+    });
+    const free = found.find((f) => !this.threadFor(f.element));
+    if (free) return free;
+    const quiet = found.find((f) => {
+      const thread = this.threadFor(f.element);
+      return thread && !this.openQuestion(thread);
+    });
+    const taken = quiet ?? found[0];
+    return taken ? { ...taken, taken: true } : null;
   }
 
   /** The job whose question is waiting for the designer's answer in `thread`, if any. */

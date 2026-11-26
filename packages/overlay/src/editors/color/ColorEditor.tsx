@@ -10,6 +10,7 @@ import { stepToken, tokensFor } from "../../ui/components/TokenMenu/tokens.ts";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { declaredOf, isMixed, MIXED, resetValueOf } from "../declared.ts";
 import { useHeldDrag } from "../heldDrag.ts";
+import { shownColor } from "./shownColor.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
 
 /** Whether a color carries its own alpha (8-digit hex, rgba / slash syntax): it then sets the opacity too. */
@@ -35,7 +36,9 @@ interface ColorConfig {
  * its hex, or how the page names it: `var(--brand)`) and its opacity, 0–100,
  * in a 45px field with a drag handle. Both write one value (css/colors.ts):
  * `#000000`, `#00000080` at 50%, or `color-mix(…)` for a named color below
- * 100. The swatch shows the color the element ends up with (computed); with
+ * 100. The swatch shows the field's color (its variables resolved, shownColor:
+ * for the pills' state or width, which the page isn't showing), else the
+ * element's computed one; with
  * no color set, the field shows the "nothing set" icon instead, like a select
  * with icons does.
  * - A typed hex with alpha (`00000080`) sets the opacity too; any other color
@@ -58,6 +61,7 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
   // shows 0, dimmed, and can't be edited (the drag handle stays, inactive;
   // Tab skips it).
   const clear = !keyword && color.trim().toLowerCase() === "transparent";
+  const shown = shownColor(props.element, keyword ? "" : value, values?.[property] ?? "");
   const colorRef = useRef<HTMLInputElement>(null);
   const opacityRef = useRef<HTMLInputElement>(null);
 
@@ -93,7 +97,7 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
       onMouseDown={(e) => e.preventDefault()}
       onClick={() => setPicking(!picking)}
     >
-      {color ? <span class="color-swatch color-preview" style={{ "--_color": values?.[property] || "transparent" }} /> : <Icon name="layout-empty" />}
+      {color ? <span class="color-swatch color-preview" style={{ "--_color": shown || "transparent" }} /> : <Icon name="layout-empty" />}
     </button>
   );
 
@@ -151,7 +155,7 @@ function ColorEditor({ config, ...props }: PropertyEditorProps & { config: Color
         <ColorPicker
           property={property}
           color={keyword ? "" : color}
-          computed={values?.[property] ?? ""}
+          computed={shown}
           opacity={opacity}
           onPick={(next, o, gesture) => write(joinColor(next, o), gesture)}
           onRevert={(gesture) => onRevert?.(property, gesture)}
