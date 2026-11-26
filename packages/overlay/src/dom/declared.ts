@@ -29,11 +29,14 @@ import { EDIT_ATTRIBUTE, isPilotSheet } from "./preview.ts";
  * `:focus`, `:focus-visible`, `:active` on the element itself):
  * - none (the default): rules for the element as it is, without states, even
  *   while it happens to be hovered;
- * - `exact`: rules for exactly these states (what a field shows with state pills).
+ * - `exact`: rules for exactly these states (what a field shows with state pills);
+ * - `any`: rules for any states, none included, one entry per states a rule's
+ *   selectors put on the element (`.a:hover, .a:focus` is two): what's used on
+ *   it (search/used.ts).
  */
 export interface StateFilter {
   states: readonly ElementState[];
-  mode: "exact";
+  mode: "exact" | "any";
 }
 
 export interface Declared {
@@ -60,7 +63,12 @@ const UNIVERSAL = /^(?:\*|:(?:where|is)\(\s*\*\s*\))$/;
  * (`.card { box-sizing: border-box }`, a `box-border` class) still counts.
  */
 export function isFromReset(declared: Declared | null | undefined): boolean {
-  return !!declared && declared.source !== "inline" && UNIVERSAL.test(declared.source.selector.trim());
+  return !!declared && declared.source !== "inline" && isUniversal(declared.source.selector);
+}
+
+/** The selector matches every element (see UNIVERSAL). */
+export function isUniversal(selector: string): boolean {
+  return UNIVERSAL.test(selector.trim());
 }
 
 /** A style rule that matches the element, with what the cascade needs to rank it. */
@@ -617,6 +625,8 @@ function layerPath(walk: Walk, layer: string): number[] {
 function addIfMatching(walk: Walk, style: CSSStyleDeclaration, selectors: string[], layer: string) {
   const order = walk.order++;
   let best: { selector: string; specificity: Specificity } | null = null;
+  // `any`: the best selector for each states the rule's selectors put on the element.
+  const bestByStates = new Map<string, { selector: string; specificity: Specificity }>();
   for (const selector of selectors) {
     // The states on the element itself decide whether the rule counts; the
     // rest of the selector must match the element as it is.
@@ -632,8 +642,15 @@ function addIfMatching(walk: Walk, style: CSSStyleDeclaration, selectors: string
     }
     if (!matches) continue;
     const s = specificity(selector);
+    if (filter?.mode === "any") {
+      const key = subject.states.join(",");
+      const there = bestByStates.get(key);
+      if (!there || compare(s, there.specificity) > 0) bestByStates.set(key, { selector, specificity: s });
+      continue;
+    }
     if (!best || compare(s, best.specificity) > 0) best = { selector, specificity: s };
   }
+  for (const b of bestByStates.values()) walk.out.push({ style, selector: b.selector, specificity: b.specificity, layer: layerPath(walk, layer), order });
   if (best) walk.out.push({ style, selector: best.selector, specificity: best.specificity, layer: layerPath(walk, layer), order });
 }
 

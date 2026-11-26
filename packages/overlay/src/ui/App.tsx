@@ -139,15 +139,20 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // The width chip: the viewport widths changes are for (null: the rule that applies at the window's width).
   // Set in the search (`from-1200 `) or by clicking the viewport width; it
   // stays, across selections and with nothing selected, until it's removed.
-  const [widths, setWidths] = useState<WidthChip | null>(null);
+  const [widths, setWidthChip] = useState<WidthChip | null>(null);
   // Where the property in use has values among the widths (PropertyDialog's onReach), for the ruler.
   const [reach, setReach] = useState<Reach | null>(null);
   // The state pills: the element states changes are for, together. Kept across selections, like the chip.
   const [states, setStateList] = useState<ElementState[]>([]);
-  // The `default` pill on instead of the states' (PropertySearch): back to the states' when they change.
+  // The `default` pill on instead of the modifiers' (PropertySearch): no width chip and no states meanwhile,
+  // both kept to switch back; back to them when either changes.
   const [defaultState, setDefaultState] = useState(false);
   const setStates = useCallback((next: ElementState[]) => {
     setStateList(next);
+    setDefaultState(false);
+  }, []);
+  const setWidths = useCallback((next: WidthChip | null | ((current: WidthChip | null) => WidthChip | null)) => {
+    setWidthChip(next);
     setDefaultState(false);
   }, []);
   const viewportWidth = useViewportWidth();
@@ -853,7 +858,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
       )}
       <ViewportWidth
         width={viewportWidth}
-        widths={widths}
+        widths={defaultState ? null : widths}
         reach={selected ? reach : null}
         onPick={(width, shift) =>
           selected ? setWidthPick({ width, shift }) : setWidths((current) => clickWidth(current, width, shift))

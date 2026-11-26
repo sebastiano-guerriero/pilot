@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clickWidth, inWidths, partialWidth, takeWidths, widthSuggestion } from "./widths.ts";
+import { clickWidth, inWidths, partialWidth, takeWidths, widthSuggestion, widthToFinish } from "./widths.ts";
 
 describe("takeWidths", () => {
   it("takes a token once it's followed by a space", () => {
@@ -88,5 +88,14 @@ describe("Base and All widths", () => {
     expect(clickWidth("all", 1200, true)).toEqual({ max: 1200 });
     expect(inWidths({}, 300)).toBe(true);
     expect(inWidths("all", 300)).toBe(true);
+  });
+});
+
+describe("widthToFinish", () => {
+  it("once the dash is typed; not a plain word (it may be a search), nor the / menu's word (From width is picked first)", () => {
+    expect(widthToFinish("from-")).toEqual({ end: "from", digits: "" });
+    expect(widthToFinish("to-76")).toEqual({ end: "to", digits: "76" });
+    expect(widthToFinish("from")).toBeNull();
+    expect(widthToFinish("/from")).toBeNull();
   });
 });

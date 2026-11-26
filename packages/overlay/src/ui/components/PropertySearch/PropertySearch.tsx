@@ -2,8 +2,9 @@ import type { ElementState } from "@pilot/protocol";
 import type { RefObject } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { takeStates } from "../../../edits/states.ts";
-import { type WidthChip, chipLabel, inWidths, takeWidths, widthSuggestion } from "../../../edits/widths.ts";
-import { isModifierQuery, matchModifiers } from "../../../search/modifiers.ts";
+import { pageBreakpoints } from "../../../dom/breakpoints.ts";
+import { ALL_WIDTHS, type PartialWidth, type WidthChip, chipRange, inWidths, isBaseChip, takeWidths, widthSuggestion, widthToFinish } from "../../../edits/widths.ts";
+import { MODIFIERS, type Modifier, isModifierQuery, matchModifiers } from "../../../search/modifiers.ts";
 import { Icon } from "../Icon/Icon.tsx";
 
 interface PropertySearchProps {
@@ -26,6 +27,11 @@ interface PropertySearchProps {
   defaultState?: boolean;
   /** `default` or the states' pill was clicked. */
   onDefaultStateChange?(on: boolean): void;
+  /**
+   * The modifiers used on the element (search/used.ts), listed first in the
+   * `/` menu, marked; a state used alone takes its general row's place.
+   */
+  used?: Modifier[];
   /** Take focus when it appears (default). False when the selection came from somewhere that keeps focus (the DOM tree). */
   autoFocus?: boolean;
 }
@@ -47,6 +53,7 @@ export function PropertySearch({
   onStatesChange,
   defaultState = false,
   onDefaultStateChange,
+  used = NO_MODIFIERS,
   autoFocus = true,
 }: PropertySearchProps) {
   useEffect(() => {
@@ -89,28 +96,49 @@ export function PropertySearch({
     onChange(rest);
   };
 
-  // `from-` (or `to-`) suggests the window's width, dimmed after the text.
-  const suggestion = onWidthsChange && viewportWidth !== undefined ? widthSuggestion(value, viewportWidth) : null;
-
   // The `/` menu: typing `/` at the start lists the modifiers (see
   // search/modifiers.ts), filtered by what follows. ↑/↓ move, Enter or Tab
   // picks (its syntax goes in the search, to finish typing), Esc closes it by
   // clearing the `/…` text (it's not a property search).
-  const menuOpen = !!onWidthsChange && isModifierQuery(value);
-  const options = menuOpen ? matchModifiers(value) : [];
+  // `from-` (or `to-`) lists the widths to finish it with, the same way: the
+  // window's first, then the page's breakpoints (widthOptions).
+  const typedWidth = onWidthsChange ? widthToFinish(value) : null;
+  const widthList = !!typedWidth;
+  const menuOpen = !!onWidthsChange && (isModifierQuery(value) || widthList);
+  const options = !menuOpen ? [] : widthList && typedWidth ? widthOptions(typedWidth, viewportWidth, used) : matchModifiers(value, menuList(used));
   const [active, setActive] = useState(0);
   useEffect(() => setActive(0), [value]);
+  // The `/` menu's text when From width or To width was picked from it: Esc in the widths goes back there.
+  const [cameFrom, setCameFrom] = useState<string | null>(null);
+  useEffect(() => {
+    if (!typedWidth) setCameFrom(null);
+  }, [!!typedWidth]);
+  // `from-` (or `to-`) suggests the rest of the width Enter or Tab would take, dimmed after the text: the
+  // highlighted row's (the window's at first, a breakpoint's once moved to).
+  const suggested = widthList ? options[active]?.width?.value : viewportWidth;
+  const suggestion = onWidthsChange && suggested !== undefined ? widthSuggestion(value, suggested) : null;
   const pick = (index: number) => {
     const modifier = options[index];
     if (!modifier) return;
     // A state, Base and All widths are complete as picked: their pill right away. A width needs its number typed.
-    if (modifier.state) {
+    // One used on the element sets exactly its pills (its states, its widths or none).
+    if (modifier.width) {
+      onWidthsChange?.(takeWidths(`${modifier.width.end}-${modifier.width.value} `, widths).range);
+      onChange("");
+    } else if (modifier.used) {
+      onStatesChange?.(modifier.used.states);
+      onWidthsChange?.(modifier.used.widths ?? null);
+      onChange("");
+    } else if (modifier.state) {
       onStatesChange?.(takeStates(modifier.insert, states).states ?? states);
       onChange("");
     } else if (modifier.chip) {
       onWidthsChange?.(modifier.chip === "base" ? {} : modifier.chip);
       onChange("");
-    } else onChange(modifier.insert);
+    } else {
+      setCameFrom(value);
+      onChange(modifier.insert);
+    }
     inputRef.current?.focus();
   };
 
@@ -132,7 +160,9 @@ export function PropertySearch({
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation(); // only the menu closes, not a step of the dialog
-        onChange("");
+        // From the widths, a step back: the `/` menu they were picked from, as it was. Else it closes.
+        onChange(widthList && cameFrom !== null ? cameFrom : "");
+        setCameFrom(null);
         return;
       }
     }
@@ -159,78 +189,54 @@ export function PropertySearch({
       {/* Pills: the search's modifiers (today the width chip), in a row of their
           own above the field, so more can sit side by side. */}
       {(widths || states.length > 0) && (
+        // The modifiers as a pair: `default`, the element with none (its fields following the rule that
+        // applies at the window's width), and the modifiers together as one pill, written as they're typed
+        // (`from-988:hover:focus`), one of the two on, a click switching. To compare a property with and
+        // without them, or see what each sets, without retyping them (the owner's design, 2026-11-26).
         <div class="pills">
-          {widths && (
-            <span
-              class="pill"
-              data-pill="widths"
-              data-outside={outside || undefined}
-              title={
-                outside
-                  ? `The window (${viewportWidth}px) is outside this range: what you see isn't what these changes are for`
-                  : widths === "all"
-                    ? "Changes are for every width: the base value, with the property's breakpoint rules removed. Backspace at the start of the field removes it."
-                    : "Changes are for these viewport widths. Backspace at the start of the field removes it."
-              }
-            >
-              <span class="pill-label">{chipLabel(widths)}</span>
-              <button
-                type="button"
-                class="pill-remove"
-                aria-label="Changes where the rule applies at this width"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  onWidthsChange?.(null);
-                  inputRef.current?.focus();
-                }}
-              >
-                <Icon name="close-small" />
-              </button>
-            </span>
-          )}
-          {/* The states, as a pair: `default` (the element as it is) and the states together as one pill
-              (`hover:focus`), one of them on, a click switching. To compare a property in both, or see what
-              each sets, without retyping the states (the owner's design, 2026-11-26). */}
-          {states.length > 0 && (
+          <button
+            type="button"
+            class="pill pill-toggle"
+            data-pill="default"
+            data-off={!defaultState || undefined}
+            aria-pressed={defaultState}
+            title="Changes are for the element with no modifier, where the rule applies at the window's width. Click the modifiers to switch back."
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onDefaultStateChange?.(true)}
+          >
+            default
+          </button>
+          <span class="pill" data-pill="modifiers" data-off={defaultState || undefined} data-outside={(outside && !defaultState) || undefined}>
             <button
               type="button"
-              class="pill pill-toggle"
-              data-pill="default"
-              data-off={!defaultState || undefined}
-              aria-pressed={defaultState}
-              title="Changes are for the element as it is, without these states. Click the states to switch back."
+              class="pill-label pill-switch"
+              aria-pressed={!defaultState}
+              title={
+                outside
+                  ? `The window (${viewportWidth}px) is outside these widths: what you see isn't what these changes are for`
+                  : widths === "all"
+                    ? "Changes are for every width: the base value, with the property's breakpoint rules removed. Backspace at the start of the field removes the last modifier."
+                    : "Changes are for these modifiers, together. Click default to switch. Backspace at the start of the field removes the last one."
+              }
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => onDefaultStateChange?.(true)}
+              onClick={() => onDefaultStateChange?.(false)}
             >
-              default
+              {modifiersLabel(widths, states)}
             </button>
-          )}
-          {states.length > 0 && (
-            <span class="pill" data-pill="state" data-off={defaultState || undefined}>
-              <button
-                type="button"
-                class="pill-label pill-switch"
-                aria-pressed={!defaultState}
-                title="Changes are for these element states, together. Click default to switch. Backspace at the start of the field removes the last state."
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => onDefaultStateChange?.(false)}
-              >
-                {states.join(":")}
-              </button>
-              <button
-                type="button"
-                class="pill-remove"
-                aria-label={`Not ${states.join(":")}`}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  onStatesChange?.([]);
-                  inputRef.current?.focus();
-                }}
-              >
-                <Icon name="close-small" />
-              </button>
-            </span>
-          )}
+            <button
+              type="button"
+              class="pill-remove"
+              aria-label={`No ${modifiersLabel(widths, states)}`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onWidthsChange?.(null);
+                onStatesChange?.([]);
+                inputRef.current?.focus();
+              }}
+            >
+              <Icon name="close-small" />
+            </button>
+          </span>
         </div>
       )}
       <div class="field">
@@ -258,13 +264,15 @@ export function PropertySearch({
         )}
       </div>
       {menuOpen && (
-        <div class="modifiers" id="pilot-modifiers" role="listbox" aria-label="Modifiers">
+        <div class="modifiers" id="pilot-modifiers" role="listbox" aria-label={widthList ? "Widths" : "Modifiers"} data-list={widthList ? "widths" : undefined}>
           {options.length ? (
             options.map((m, i) => (
               <div
                 key={m.id}
                 id={`pilot-modifier-${m.id}`}
                 class="modifier"
+                data-used={!!m.used || undefined}
+                data-window={m.width?.window || undefined}
                 role="option"
                 aria-selected={i === active}
                 data-active={i === active || undefined}
@@ -279,10 +287,81 @@ export function PropertySearch({
               </div>
             ))
           ) : (
-            <div class="modifier-none">No modifier matches</div>
+            <div class="modifier-none">{widthList ? "Any width: type it, then a space" : "No modifier matches"}</div>
           )}
         </div>
       )}
     </div>
   );
+}
+
+const NO_MODIFIERS: Modifier[] = [];
+
+/**
+ * The `/` menu's list: the ones used on the element first, then the general
+ * ones, less a state used alone (its used row stands for it).
+ */
+function menuList(used: readonly Modifier[]): Modifier[] {
+  const alone = new Set(used.filter((u) => u.used && !u.used.widths && u.used.states.length === 1).map((u) => u.used?.states[0]));
+  return [...used, ...MODIFIERS.filter((m) => !m.state || !alone.has(m.state))];
+}
+
+/** The modifiers as typed, together: `from-988:hover:focus`, `base:hover`, `all-widths`. */
+function modifiersLabel(widths: WidthChip | null, states: readonly ElementState[]): string {
+  const range = chipRange(widths);
+  const width =
+    widths === ALL_WIDTHS
+      ? ["all-widths"]
+      : isBaseChip(widths)
+        ? ["base"]
+        : range
+          ? [range.min !== undefined ? `from-${range.min}` : "", range.max !== undefined ? `to-${range.max}` : ""].filter(Boolean)
+          : [];
+  return [...width, ...states].join(":");
+}
+
+/**
+ * The widths to finish `from-` or `to-` with, under the search: the window's
+ * width first (what's suggested after the text, and what Tab takes), then the
+ * page's breakpoints, with No breakpoint where it falls on the number line
+ * (from 0px first, to ∞ last; until digits are typed), the ones the ruler shows (pageBreakpoints). A
+ * breakpoint `to` ends a pixel before it (`to-767` for 768). Filtered by the
+ * digits typed (`from-7` → 768). Those the element uses are marked, with what
+ * they set there (search/used.ts).
+ */
+function widthOptions(typed: PartialWidth, viewportWidth: number | undefined, used: readonly Modifier[]): Modifier[] {
+  const { end } = typed;
+  const digits = typed.digits ?? "";
+  const rows: Modifier[] = [];
+  if (viewportWidth !== undefined) {
+    rows.push({
+      id: "width-window",
+      name: "Window width",
+      description: "The width you're looking at now",
+      syntax: `${end}-${viewportWidth}`,
+      insert: "",
+      width: { end, value: viewportWidth, window: true },
+    });
+  }
+  // No breakpoint, on the number line: from 0px (first), up to ∞ (last). It holds at every width, as the
+  // value without a media query does; it sets that, `base`, not a media query (the owner's call, 2026-11-26).
+  const base = MODIFIERS.find((m) => m.chip === "base");
+  const noBreakpoint = !digits && base ? { ...base, id: "width-base", name: end === "from" ? "0px" : "∞", description: "No breakpoint" } : null;
+  if (noBreakpoint && end === "from") rows.push(noBreakpoint);
+  for (const b of pageBreakpoints()) {
+    const value = end === "from" ? b : b - 1;
+    const here = used.filter((u) => (end === "from" ? u.used?.widths?.min === value : u.used?.widths?.max === value));
+    rows.push({
+      id: `width-${value}`,
+      // Named by the breakpoint, as the ruler shows it: `to-767` is "Below 768px".
+      name: end === "from" ? `${b}px` : `Below ${b}px`,
+      description: here.length ? here.map((u) => (u.used?.states.length ? `${u.used.states.join(":")}: ${u.description}` : u.description)).join(" · ") : "A breakpoint of the page",
+      syntax: `${end}-${value}`,
+      insert: "",
+      width: { end, value },
+      ...(here.length && { used: { states: [] } }),
+    });
+  }
+  if (noBreakpoint && end === "to") rows.push(noBreakpoint);
+  return rows.filter((r) => !r.width || String(r.width.value).startsWith(digits));
 }

@@ -14,7 +14,7 @@
   }
 
   /* A pill: the accent, with the background's color for its text, 10px,
-     18px tall with a 4px radius (and the fields' 1px top highlight). Its
+     18px tall with a 4px radius and a 1px top highlight, white at 50%. Its
      remove button is the right end: an 8px × whose target is bigger than the
      icon, with the icon 5px from the pill's edge. */
   .pill {
@@ -24,7 +24,7 @@
     padding-inline: 4px 1px;
     border-radius: 4px;
     background: var(--plt-color-accent);
-    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 7%);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 50%);
     color: var(--plt-color-background);
     font-size: 10px;
     line-height: 18px;
@@ -57,9 +57,9 @@
   }
 
   /* The state pair (PropertySearch.tsx): `default` and the states' pill, a
-     button each, one on. Off: the fields' dark look, its text dimmed, the
-     accent's on hover. `default` has no ×, so even padding. First pass,
-     pending the owner's design. */
+     button each, one on. Off: contrast-high at 20%, contrast-high for its
+     text, a dimmer top highlight (the owner's design, 2026-11-26). `default`
+     has no ×, so even padding. */
   .pill-toggle {
     appearance: none;
     margin: 0;
@@ -76,15 +76,12 @@
   }
 
   .pill[data-off] {
-    background: var(--plt-color-background-light);
-    color: var(--plt-color-contrast-low);
-
-    &:hover {
-      color: var(--plt-color-contrast-high);
-    }
+    background: hsl(from var(--plt-color-contrast-high) h s l / 20%);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 15%);
+    color: var(--plt-color-contrast-high);
 
     .pill-remove {
-      color: var(--plt-color-contrast-low);
+      color: var(--plt-color-contrast-high);
     }
   }
 
@@ -132,9 +129,37 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* One line, cut with an ellipsis where it doesn't fit (a used modifier's
+     properties can be many: search/used.ts). */
   .modifier-description {
     grid-column: 1 / -1;
+    min-width: 0;
+    overflow: hidden;
     color: var(--plt-color-contrast-low);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Used on the element (search/used.ts): listed first, the name in the
+     accent, what it sets as the description; a line before the general ones.
+     First pass, pending the owner's design. */
+  .modifier[data-used] .modifier-name {
+    color: var(--plt-color-accent);
+  }
+
+  /* The width list (`from-`, `to-`): the window's width first, set apart from
+     the page's breakpoints by the same line. */
+  .modifier[data-window] + .modifier,
+  :not([data-list="widths"]) > .modifier[data-used] + .modifier:not([data-used]) {
+    position: relative;
+    margin-top: 9px;
+
+    &::before {
+      content: "";
+      position: absolute;
+      inset: -5px 8px auto;
+      border-top: 1px solid var(--plt-color-border);
+    }
   }
 
   .modifier-none {

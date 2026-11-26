@@ -80,6 +80,18 @@ export function partialWidth(text: string): PartialWidth | null {
 }
 
 /**
+ * A width end being finished, whose widths the search lists (PropertySearch's
+ * width list): `from-`, `to-76`, the dash typed (picking From width in the `/`
+ * menu types it). Null for anything else, plain `from` included (it may be a
+ * search). The `/` menu's `/from` doesn't open them: From width is picked
+ * first, then the width (the owner's call, 2026-11-26, after trying it).
+ */
+export function widthToFinish(text: string): PartialWidth | null {
+  const typed = partialWidth(text);
+  return typed && typed.digits !== null ? typed : null;
+}
+
+/**
  * The rest of the viewport width to suggest after a token being typed, dimmed
  * after the text (Tab takes it): `from-` → `1108`, `from-11` → `08`. Only once
  * the dash is typed, and only while the digits typed so far start the width.

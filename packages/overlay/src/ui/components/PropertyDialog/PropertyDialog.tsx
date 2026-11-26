@@ -1,4 +1,5 @@
 import { isModifierQuery } from "../../../search/modifiers.ts";
+import { usedModifiers } from "../../../search/used.ts";
 import type { ElementState, WidthRange } from "@pilot/protocol";
 import { Component, type ComponentChildren, Fragment } from "preact";
 import { type Declared, isFromReset } from "../../../dom/declared.ts";
@@ -6,7 +7,7 @@ import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } fro
 import type { BoxArea } from "../../../dom/boxModel.ts";
 import type { EditableElement } from "../../../dom/target.ts";
 import { type Span, type WidthKey, applyChange, hasWidthRules, keyFor, pageValueAt, spansOf } from "../../../edits/reach.ts";
-import { type WidthChip, clickWidth, partialWidth, sameChip, takeWidths } from "../../../edits/widths.ts";
+import { type WidthChip, clickWidth, partialWidth, sameChip, takeWidths, widthToFinish } from "../../../edits/widths.ts";
 import { EditHistory, type RecordedChange, longhandsOf } from "../../../edits/history.ts";
 import { editors as allEditors, matchEditors } from "../../../editors/registry.ts";
 import { groupOf, inListOrder, rowsOf } from "../../../editors/listOrder.ts";
@@ -161,7 +162,7 @@ export function PropertyDialog({
   onInspect,
   onEditing,
   onReach,
-  widths = null,
+  widths: pillWidths = null,
   onWidthsChange,
   states: pillStates = NO_STATES,
   defaultState = false,
@@ -176,8 +177,10 @@ export function PropertyDialog({
   const history = sharedHistory ?? ownHistory;
   // The window's width: with no chip, where each property's edits go (the rule that applies there).
   const windowWidth = viewportWidth ?? window.innerWidth;
-  // The states edits are for: the pill's, or none while `default` is on (the element as it is).
+  // The modifiers edits are for: the pill's, or none while `default` is on (the element with no modifier,
+  // its fields following the rule that applies at the window's width; a width modifier drops that).
   const states = defaultState ? NO_STATES : pillStates;
+  const widths = defaultState ? null : pillWidths;
   // State pills only say where edits go: the element isn't shown in those states (the owner's call,
   // 2026-11-26: forcing them over the page hid how its other states behave). Hide Pilot (Option+P) and hover.
   const stateKey = states.join(",");
@@ -193,7 +196,9 @@ export function PropertyDialog({
     () => (!empty ? [] : listAll ? listedEditors(element, editors, history) : editorsWithValues(element, editors, history, states, widths, windowWidth)),
     [element, empty, listAll, revealing, stateKey, JSON.stringify(widths)],
   );
-  const matches = empty ? withValues : matchEditors(query, editors);
+  // `from-` / `to-` being finished: its widths are listed (PropertySearch), not properties.
+  const finishingWidth = !!widthToFinish(query);
+  const matches = empty ? withValues : finishingWidth ? [] : matchEditors(query, editors);
   const matchKey = matches.map((m) => m.id).join(",");
 
   const searchRef = useRef<HTMLInputElement>(null);
@@ -217,9 +222,9 @@ export function PropertyDialog({
     handledPick.current = widthPick;
     const typed = partialWidth(query);
     if (typed) {
-      onWidthsChange?.(takeWidths(`${typed.end}-${widthPick.width} `, widths).range);
+      onWidthsChange?.(takeWidths(`${typed.end}-${widthPick.width} `, pillWidths).range);
       setQuery("");
-    } else onWidthsChange?.(clickWidth(widths, widthPick.width, widthPick.shift));
+    } else onWidthsChange?.(clickWidth(pillWidths, widthPick.width, widthPick.shift));
   }, [widthPick]);
 
   // Tab past an editor's last field (or Shift+Tab before its first): on to the
@@ -490,12 +495,13 @@ export function PropertyDialog({
           onChange={setQuery}
           onKeyDown={onSearchKeyDown}
           inputRef={searchRef}
-          widths={widths}
+          widths={pillWidths}
           onWidthsChange={onWidthsChange}
           states={pillStates}
           onStatesChange={onStatesChange}
           defaultState={defaultState}
           onDefaultStateChange={onDefaultStateChange}
+          used={isModifierQuery(query) || finishingWidth ? usedModifiers(element, history) : undefined}
           viewportWidth={viewportWidth}
           autoFocus={autoFocus}
         />
@@ -564,7 +570,7 @@ export function PropertyDialog({
           </>
         )}
         {/* Something typed that no property matches (not the `/` modifiers, which have their own menu): say so, rather than nothing. */}
-        {!empty && !matches.length && !isModifierQuery(query) && (
+        {!empty && !matches.length && !isModifierQuery(query) && !finishingWidth && (
           <div class="properties-frame">
             <p class="no-match" role="status">
               No property matches “{query.trim()}”

@@ -478,8 +478,17 @@ describe("width chip", () => {
       render(h(Host, {}), container);
     });
   };
-  const chip = () => container.querySelector('.pill[data-pill="widths"]');
-  const statePills = () => [...container.querySelectorAll('.pill[data-pill="state"] .pill-label')].map((p) => p.textContent);
+  // The modifiers are one pill (`from-768:hover:active`): its width part is the chip, the rest the states.
+  const modifiers = () => container.querySelector('.pill[data-pill="modifiers"]');
+  const label = () => modifiers()?.querySelector(".pill-label")?.textContent ?? "";
+  const isWidth = (t: string) => /^(from|to)-\d|^base$|^all-widths$/.test(t);
+  const chip = () => (label().split(":").some(isWidth) ? modifiers() : null);
+  const statePills = () => {
+    const states = label()
+      .split(":")
+      .filter((t) => t && !isWidth(t));
+    return states.length ? [states.join(":")] : [];
+  };
 
   it("`hover:` at the start becomes a state pill; states combine, with widths too, in any order", () => {
     mountWithWidths(new EditHistory());
@@ -488,7 +497,7 @@ describe("width chip", () => {
     type("active:hover:from-768 opa");
     // The states together are one pill.
     expect(statePills()).toEqual(["hover:active"]);
-    expect(chip()?.textContent).toContain("from 768px");
+    expect(chip()?.textContent).toContain("from-768:hover:active");
     expect(search().value).toBe("opa");
   });
 
@@ -538,9 +547,22 @@ describe("width chip", () => {
     expect(history.valueOf(element, "opacity", "base")).toBe("0.5");
     expect(history.valueOf(element, "opacity", "base", ["hover"])).toBe("0.3");
     // The states' pill switches back.
-    act(() => (container.querySelector('.pill[data-pill="state"] .pill-label') as HTMLButtonElement).click());
+    act(() => (container.querySelector('.pill[data-pill="modifiers"] .pill-label') as HTMLButtonElement).click());
     expect(defaultPill()?.getAttribute("aria-pressed")).toBe("false");
     expect(field()).toContain("0.3");
+    history.clear();
+  });
+
+  it("default drops a width modifier too: the element with none, where the rule applies at the window's width", () => {
+    const history = new EditHistory();
+    mountWithWidths(history);
+    type("from-1200 hover:opacity");
+    expect(label()).toBe("from-1200:hover");
+    act(() => (container.querySelector('.pill[data-pill="default"]') as HTMLButtonElement).click());
+    act(() => (container.querySelector('[data-editor="opacity"] .stub') as HTMLButtonElement).click());
+    expect(history.changes().map((c) => [c.property, c.value, c.widths ?? null, c.states ?? null])).toEqual([["opacity", "0.5", null, null]]);
+    // The modifiers are kept, to switch back.
+    expect(label()).toBe("from-1200:hover");
     history.clear();
   });
 
@@ -563,7 +585,7 @@ describe("width chip", () => {
     type("from-1200");
     expect(chip()).toBeNull();
     type("from-1200 opa");
-    expect(chip()?.textContent).toContain("from 1200px");
+    expect(chip()?.textContent).toContain("from-1200");
     expect(search().value).toBe("opa");
     expect(editorIds()).toEqual(["opacity"]);
   });
@@ -592,7 +614,7 @@ describe("width chip", () => {
     mountWithWidths(new EditHistory(), 1108);
     const rows = () => [...container.querySelectorAll(".modifier .modifier-name")].map((n) => n.textContent);
     type("/");
-    expect(rows()).toEqual(["From width", "To width", "Base", "All widths", "Hover", "Focus", "Focus visible", "Active"]);
+    expect(rows()).toEqual(["From width", "To width", "No breakpoint", "All widths", "Hover", "Focus", "Focus visible", "Active"]);
     expect(search().getAttribute("aria-expanded")).toBe("true");
     type("/to");
     expect(rows()).toEqual(["To width"]);
@@ -609,10 +631,52 @@ describe("width chip", () => {
     expect(container.querySelector(".modifier[data-active] .modifier-name")?.textContent).toBe("To width");
     key(search(), "Enter");
     expect(search().value).toBe("to-");
-    expect(container.querySelector(".modifiers")).toBeNull();
+    // The widths to finish it with: the window's first, the one Tab takes (and suggested after the text).
+    expect(container.querySelector(".modifier[data-active] .modifier-name")?.textContent).toBe("Window width");
     expect(container.querySelector(".suggestion")?.textContent).toBe("to-1108");
     key(search(), "Tab");
-    expect(chip()?.textContent).toContain("to 1108px");
+    expect(chip()?.textContent).toContain("to-1108");
+  });
+
+  it("Esc in the widths picked from the / menu goes back to the menu, as it was", () => {
+    mountWithWidths(new EditHistory(), 1108);
+    type("/fro");
+    key(search(), "Enter");
+    expect(search().value).toBe("from-");
+    key(search(), "Escape");
+    expect(search().value).toBe("/fro");
+    expect(container.querySelector(".modifier .modifier-name")?.textContent).toBe("From width");
+    // Typed straight, Esc clears it.
+    type("from-");
+    key(search(), "Escape");
+    expect(search().value).toBe("");
+  });
+
+  it("`from-` lists the window's width, then the page's breakpoints, filtered by the digits typed", () => {
+    const style = document.createElement("style");
+    style.textContent = "@media (min-width: 768px) { .nothing { color: red; } } @media (min-width: 1200px) { .nothing { color: blue; } }";
+    document.head.append(style);
+    try {
+      mountWithWidths(new EditHistory(), 1108);
+      const rows = () => [...container.querySelectorAll(".modifier .modifier-syntax")].map((n) => n.textContent);
+      type("from-");
+      // No breakpoint is from 0px: first.
+      expect(rows()).toEqual(["from-1108", "base", "from-768", "from-1200"]);
+      expect(container.querySelectorAll(".modifier .modifier-name")[1]?.textContent).toBe("0px");
+      type("from-7");
+      expect(rows()).toEqual(["from-768"]);
+      type("to-");
+      // No breakpoint is up to ∞: last.
+      expect(rows()).toEqual(["to-1108", "to-767", "to-1199", "base"]);
+      // ↓ to a breakpoint: the suggestion after the text is its width now, and Enter takes it.
+      key(search(), "ArrowDown");
+      expect(container.querySelector(".suggestion")?.textContent).toBe("to-767");
+      key(search(), "Enter");
+      expect(chip()?.textContent).toContain("to-767");
+      expect(search().value).toBe("");
+    } finally {
+      style.remove();
+    }
   });
 
   it("Esc closes the menu and clears the / text; the dialog stays", () => {
@@ -646,7 +710,7 @@ describe("width chip", () => {
     type("from-1");
     expect(container.querySelector(".suggestion")?.textContent).toBe("from-1108");
     key(search(), "Tab");
-    expect(chip()?.textContent).toContain("from 1108px");
+    expect(chip()?.textContent).toContain("from-1108");
     expect(search().value).toBe("");
     type("to-9");
     expect(container.querySelector(".suggestion")).toBeNull();
@@ -656,14 +720,14 @@ describe("width chip", () => {
     mountWithWidths(new EditHistory(), 1108, { min: 768 });
     type("to");
     act(() => pick({ width: 1108, shift: false }));
-    expect(chip()?.textContent).toContain("768–1108px");
+    expect(chip()?.textContent).toContain("from-768:to-1108");
   });
 
   it("the same width at both ends reads `1108px only`", () => {
     mountWithWidths(new EditHistory(), 1108, { min: 1108 });
     type("to");
     act(() => pick({ width: 1108, shift: false }));
-    expect(chip()?.textContent).toContain("1108px only");
+    expect(chip()?.textContent).toContain("from-1108:to-1108");
     expect(search().value).toBe("");
   });
 
@@ -671,7 +735,7 @@ describe("width chip", () => {
     mountWithWidths(new EditHistory(), 1108);
     type("pad");
     act(() => pick({ width: 1108, shift: true }));
-    expect(chip()?.textContent).toContain("to 1108px");
+    expect(chip()?.textContent).toContain("to-1108");
     expect(search().value).toBe("pad");
   });
 });

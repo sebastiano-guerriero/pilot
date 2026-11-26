@@ -1,4 +1,4 @@
-import type { ElementState } from "@pilot/protocol";
+import type { ElementState, WidthRange } from "@pilot/protocol";
 import { normalizeQuery } from "../editors/query.ts";
 
 /**
@@ -29,6 +29,16 @@ export interface Modifier {
   state?: ElementState;
   /** For Base and All widths: picking it sets the width chip right away. */
   chip?: "base" | "all";
+  /**
+   * One used on the element (search/used.ts): picking it sets exactly these
+   * pills, the states and the width chip (none: no chip). Listed first, marked.
+   */
+  used?: { states: ElementState[]; widths?: WidthRange };
+  /**
+   * A width to finish `from-` or `to-` with (PropertySearch's width list):
+   * the window's, or one of the page's breakpoints. Picking it sets that end.
+   */
+  width?: { end: "from" | "to"; value: number; window?: boolean };
 }
 
 export const MODIFIERS: Modifier[] = [
@@ -46,7 +56,8 @@ export const MODIFIERS: Modifier[] = [
     syntax: "to-767",
     insert: "to-",
   },
-  { id: "base", name: "Base", description: "The value without a breakpoint", syntax: "base", insert: "base ", chip: "base" },
+  // Named as a breakpoint choice, which it is (the owner found "Base" unclear): the value no media query holds.
+  { id: "base", name: "No breakpoint", description: "Where no breakpoint applies", syntax: "base", insert: "base ", chip: "base" },
   {
     id: "all-widths",
     name: "All widths",
