@@ -72,6 +72,8 @@ export interface PilotInstance {
 
 const HOST_TAG = "pilot-root";
 const STORAGE_KEY = "pilot:running";
+/** Hidden in this tab, while running (see setHidden). */
+const HIDDEN_KEY = "pilot:hidden";
 
 /**
  * Mount the Pilot overlay into the current page. Mounting is invisible:
@@ -126,6 +128,24 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
     onQuit: () => setRunning(false),
   });
 
+  // Hidden: running, but out of sight in this tab (the shortcut, or the toolbar's Hide), everything kept as
+  // it is: the selection, its panel with its search and pills, the edits on the page. A look at the page,
+  // its hover and focus tried for real, and back to where you were. Remembered over reloads, like running.
+  let hidden = running && (readStored(HIDDEN_KEY) ?? false);
+  container.toggleAttribute("data-hidden", hidden);
+  // Where the focus was (the search, a field), given back when it's back: typing goes on there.
+  let focusBefore: HTMLElement | null = null;
+  const setHidden = (next: boolean) => {
+    if (hidden === next) return;
+    hidden = next;
+    store(HIDDEN_KEY, next);
+    if (next) focusBefore = shadow.activeElement instanceof HTMLElement ? shadow.activeElement : null;
+    container.toggleAttribute("data-hidden", next);
+    draw();
+    if (!next && focusBefore?.isConnected) focusBefore.focus({ preventScroll: true });
+    if (!next) focusBefore = null;
+  };
+
   const setRunning = (next: boolean) => {
     if (running === next) return;
     running = next;
@@ -145,20 +165,26 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
           nameAttributes={options.nameAttributes}
           onReattach={reattach}
           onQuit={() => instance.quit()}
+          hidden={hidden}
+          onHide={() => setHidden(true)}
+          hideShortcut={shortcut ? (options.shortcut || "alt+p") : undefined}
         />
       ) : null,
       container,
     );
 
   // The launch shortcut, from anywhere on the page (not while typing in the
-  // page's own fields). Matched on the physical key, since Option+P types π.
-  // Pressed while Pilot is open, it hides it (a look at the bare page): the
-  // agents keep listening, unlike Quit. Again, it's back.
+  // page's own fields; in Pilot's own, like Option+C and V: its search always
+  // has the focus). Matched on the physical key, since Option+P types π.
+  // Pressed while Pilot is open, it hides it, everything kept (setHidden): the
+  // agents keep listening, unlike Quit. Again, it's back as it was.
   const shortcut = options.shortcut === false ? null : parseShortcut(options.shortcut ?? "alt+p");
   const onKeyDown = (e: KeyboardEvent) => {
-    if (!shortcut || !matchesShortcut(e, shortcut) || isTyping(e)) return;
+    if (!shortcut || !matchesShortcut(e, shortcut)) return;
+    if (isTyping(e) && !e.composedPath().includes(host)) return;
     e.preventDefault();
-    if (running) setRunning(false);
+    e.stopPropagation();
+    if (running) setHidden(!hidden);
     else instance.launch();
   };
   window.addEventListener("keydown", onKeyDown, true);
@@ -166,7 +192,10 @@ export function mountPilot(options: PilotOptions = {}): PilotInstance {
   window.addEventListener("popstate", reattach);
 
   const instance: PilotInstance = {
-    launch: () => setRunning(true),
+    launch: () => {
+      setHidden(false);
+      setRunning(true);
+    },
     // Quit, as the toolbar's button: for the whole site, the agents stop listening (PilotSession.quit).
     quit: () => {
       session.quit();
@@ -233,17 +262,25 @@ function isTyping(e: KeyboardEvent): boolean {
 // files, HMR full reloads) don't relaunch or kill Pilot behind the user's back.
 // Storage can throw (privacy modes, sandboxed iframes): fall back to defaults.
 function readStoredRunning(): boolean | undefined {
+  return readStored(STORAGE_KEY);
+}
+
+function storeRunning(running: boolean): void {
+  store(STORAGE_KEY, running);
+}
+
+function readStored(key: string): boolean | undefined {
   try {
-    const value = sessionStorage.getItem(STORAGE_KEY);
+    const value = sessionStorage.getItem(key);
     return value === null ? undefined : value === "1";
   } catch {
     return undefined;
   }
 }
 
-function storeRunning(running: boolean): void {
+function store(key: string, value: boolean): void {
   try {
-    sessionStorage.setItem(STORAGE_KEY, running ? "1" : "0");
+    sessionStorage.setItem(key, value ? "1" : "0");
   } catch {
     // Not persisted; Pilot still works for this page load.
   }

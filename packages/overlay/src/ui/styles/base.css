@@ -35,6 +35,12 @@ img, picture, video, canvas, svg {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Hidden (the shortcut, or the toolbar's Hide: mount.tsx): out of sight, every
+   panel and highlight kept as it is for when it's back. */
+.root[data-hidden] {
+  display: none;
+}
+
 /* Selected text anywhere in Pilot (search field, editable values). */
 .root ::selection {
   background: hsl(from var(--plt-color-accent) h s l / 20%);

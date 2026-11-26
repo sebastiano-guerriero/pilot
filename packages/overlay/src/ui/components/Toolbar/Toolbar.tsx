@@ -42,6 +42,10 @@ interface ToolbarProps {
   onNextJob(): void;
   /** Close: closes Pilot on every tab of the site (jobs go on; the shortcut opens it again). */
   onQuit(): void;
+  /** Hide: out of sight in this tab, everything kept, until the shortcut brings it back (mountPilot). None: no button. */
+  onHide?(): void;
+  /** That shortcut (`alt+p`), for the tooltip. */
+  hideShortcut?: string;
   /**
    * Jobs stuck (nothing will move them by itself, see PilotSession.stuck),
    * on the button they belong to: `comment` for comments and tasks asked in
@@ -89,6 +93,8 @@ export function Toolbar({
   pending,
   onNextJob,
   onQuit,
+  onHide,
+  hideShortcut,
   alerts = {},
   spot = null,
   onMove,
@@ -285,6 +291,21 @@ export function Toolbar({
         </span>
       )}
       <span class="divider" aria-hidden="true" />
+      {onHide && (
+        // Out of sight, everything kept: the page as it is, to try a hover or a focus for real. Back with the
+        // shortcut.
+        <Tooltip text="Hide Pilot" shortcut={hideShortcut ? keyLabel(hideShortcut) : undefined} gap={TIP_GAP}>
+          <button
+            type="button"
+            class="button"
+            aria-label="Hide Pilot"
+            aria-keyshortcuts={hideShortcut ? ariaShortcut(hideShortcut) : undefined}
+            onClick={onHide}
+          >
+            <Icon name="hide" />
+          </button>
+        </Tooltip>
+      )}
       <Tooltip text="Close Pilot" gap={TIP_GAP}>
         <button type="button" class="button" aria-label="Close Pilot" onClick={onQuit}>
           <Icon name="power" />
@@ -292,4 +313,13 @@ export function Toolbar({
       </Tooltip>
     </div>
   );
+}
+
+/** `alt+p` as `aria-keyshortcuts` writes it: `Alt+P`. */
+function ariaShortcut(shortcut: string): string {
+  return shortcut
+    .split("+")
+    .map((p) => p.trim())
+    .map((p) => (p.length === 1 ? p.toUpperCase() : p[0]?.toUpperCase() + p.slice(1).toLowerCase()))
+    .join("+");
 }

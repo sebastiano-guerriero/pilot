@@ -55,6 +55,16 @@ interface AppProps {
   /** Find again the elements of changes that aren't on the page (see EditHistory.reattach). */
   onReattach?(): void;
   onQuit(): void;
+  /**
+   * Out of sight in this tab (mountPilot's setHidden): everything stays as it
+   * is, but nothing picks, measures or takes keys from the page meanwhile, so
+   * its hover, focus and clicks are the page's own.
+   */
+  hidden?: boolean;
+  /** Hide it (the toolbar's button), as the shortcut does. */
+  onHide?(): void;
+  /** The shortcut that hides it and brings it back (`alt+p`), for the button's tooltip. */
+  hideShortcut?: string;
 }
 
 /**
@@ -69,7 +79,9 @@ const REFIND_EVERY = 150;
 const REFIND_TRIES = 8;
 const RESTORE_TRIES = 20;
 
-export function App({ host, dev, nameAttributes, history, session, onReattach, onQuit }: AppProps) {
+export function App({ host, dev, nameAttributes, history, session, onReattach, onQuit, hidden = false, onHide, hideShortcut }: AppProps) {
+  const hiddenRef = useRef(hidden);
+  hiddenRef.current = hidden;
   // The tool that picks elements: Select (the property dialog) or Comment
   // (the comment widget); null: the page as it is.
   const [tool, setTool] = useState<Tool>(dev ? "select" : null);
@@ -171,7 +183,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   }, [domOpen]);
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!e.altKey || e.metaKey || e.ctrlKey || e.code !== "KeyD") return;
+      if (!e.altKey || e.metaKey || e.ctrlKey || e.code !== "KeyD" || hiddenRef.current) return;
       // Typing a comment: Alt+D types a character there.
       if (e.composedPath()[0] instanceof HTMLTextAreaElement) return;
       // Not while typing in the page's own fields (Pilot's are fine: Alt+D types nothing there).
@@ -192,7 +204,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // the page's own fields.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey || hiddenRef.current) return;
       const next = toolShortcut(e.code);
       if (!next) return;
       if (!e.composedPath().includes(host) && isTextField(document.activeElement)) return;
@@ -387,7 +399,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   }, [editing, selected?.element, tool]);
   useEffect(() => () => editingRef.current?.finish(true), []);
 
-  const hovered = useElementPicker(selecting, host, onPick, { editing: editing?.host ?? null, onDoubleClick });
+  const hovered = useElementPicker(selecting && !hidden, host, onPick, { editing: editing?.host ?? null, onDoubleClick });
   const hoverRect = useElementRect(hovered !== selected?.element ? hovered : null);
   // While the selected element is being found again (it left the page, see
   // below), its last box: the panel stays mounted, with what's in it.
@@ -400,7 +412,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // element under the pointer, or to its parent when that's the selection itself (or nothing). The green
   // selection (outline, dots, actions, grid lines) and the hover highlight give way to them meanwhile.
   const alt = useAltHeld();
-  const measuring = alt && !!selected && !!tool;
+  const measuring = alt && !!selected && !!tool && !hidden;
   const measureTo = !measuring ? null : hovered && hovered !== selected?.element ? hovered : (selected?.element.parentElement ?? null);
   const measureRect = useElementRect(measureTo);
   const domHoverRect = useElementRect(domHover);
@@ -509,7 +521,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   useEffect(() => {
     if (!selected && !selecting) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (e.key !== "Escape" || hiddenRef.current) return;
       if (editingRef.current) return; // cancels the inline text edit (select/inlineText.ts)
       if (selected) {
         if (e.composedPath().includes(host)) return;
@@ -852,6 +864,8 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
         alerts={toolbarAlerts}
         onNextJob={nextJob}
         onQuit={onQuit}
+        onHide={onHide}
+        hideShortcut={hideShortcut}
         spot={toolbarSpot}
         onMove={moveToolbar}
       />
