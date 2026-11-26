@@ -28,6 +28,14 @@
     "./auto": {
       "types": "./types/auto.d.ts",
       "default": "./dist/pilot-auto.js"
+    },
+    "./vite": {
+      "types": "./types/vite.d.ts",
+      "default": "./cli/vite.js"
+    },
+    "./next": {
+      "types": "./types/next.d.ts",
+      "default": "./cli/next.js"
     }
   },
   "sideEffects": [
@@ -41,7 +49,7 @@
     "LICENSE.md"
   ],
   "scripts": {
-    "build": "pnpm --filter @pilot/overlay build && pnpm --filter @pilot/cli build && rm -rf dist cli && cp -R ../overlay/dist ./dist && mkdir cli && cp ../cli/dist/index.js cli/index.js",
+    "build": "pnpm --filter @pilot/overlay build && pnpm --filter @pilot/cli build && rm -rf dist cli && cp -R ../overlay/dist ./dist && cp -R ../cli/dist ./cli",
     "prepack": "pnpm run build && cp ../../LICENSE.md ./LICENSE.md",
     "postpack": "rm -f ./LICENSE.md"
   }

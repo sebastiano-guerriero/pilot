@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { BRIDGE_VERSION } from "@pilot/protocol";
-import { detectFramework, installArgs, installedVersion, namingStep, packageManager, projectRoot } from "./init.ts";
+import { detectFramework, devServerStep, installArgs, installedVersion, namingStep, packageManager, projectRoot } from "./init.ts";
 import { removeOldSetup } from "./legacy.ts";
 import { olderThan, VERSION } from "./version.ts";
 
@@ -16,9 +16,10 @@ import { olderThan, VERSION } from "./version.ts";
  *
  * It prints what changed and the next steps, plain enough for a designer
  * running it in a terminal, and for an agent to pass on: restart the app
- * (its bundler may keep the old Pilot) and `npx usepilot`, and, when the
- * bridge changed, update Pilot in the other projects too (their Pilots
- * can't join this one).
+ * (its bundler may keep the old Pilot, and Pilot starts with it) or `npx
+ * usepilot`; `init` again for what's new to set up (starting with the dev
+ * server); and, when the bridge changed, update Pilot in the other projects
+ * too (their Pilots can't join this one).
  *
  * Why a command of its own, not `init` again: `init` is setup, safe to run
  * any time, and never changes a version you have (the convention of
@@ -41,7 +42,7 @@ export async function update(options: UpdateOptions = {}): Promise<string> {
   const cwd = options.cwd ?? process.cwd();
   const run = options.run ?? runCommand;
   const home = options.home ?? homedir();
-  const pkg = readJson<{ dependencies?: Record<string, string>; devDependencies?: Record<string, string> }>(join(cwd, "package.json"));
+  const pkg = readJson<{ scripts?: Record<string, string>; dependencies?: Record<string, string>; devDependencies?: Record<string, string> }>(join(cwd, "package.json"));
   const deps = { ...pkg?.dependencies, ...pkg?.devDependencies };
   if (!pkg || !deps.usepilot) {
     return `# Pilot isn't installed here
@@ -75,16 +76,22 @@ ${pm} ${args.join(" ")}
   }
 
   // A loader that doesn't name this project yet (from before 0.15): `npx usepilot` wouldn't take its pages.
-  const loader = detectFramework(cwd, deps).loads;
+  const framework = detectFramework(cwd, deps);
+  const loader = framework.loads;
   const unnamed = loader ? !!namingStep(loader, cwd) : oldBridge !== null && oldBridge < 8;
+  // Pilot can start with the dev server (the Vite plugin, withPilot, `usepilot dev`): one the project doesn't have yet
+  // is init's to set up, as the loader's name is.
+  const devServer = devServerStep(framework, cwd, pkg);
   const bumped = !!before && !!after && olderThan(before, after);
   const changed = bumped || removed.length > 0 || unnamed;
+  const initFor = [
+    ...(unnamed ? ["names this project in Pilot's loader, so Pilot knows the app's pages are this project's"] : []),
+    ...(devServer.todo ? ["sets Pilot to start with your dev server, so there's no `npx usepilot` to run"] : []),
+  ];
   const steps = [
-    ...(unnamed
-      ? ["Ask your agent to run `npx usepilot@latest init` in the app's folder: it names this project in Pilot's loader, so `npx usepilot` knows the app's pages are this project's (new in 0.15)."]
-      : []),
+    ...(initFor.length ? [`Ask your agent to run \`npx usepilot@latest init\` in the app's folder: it ${initFor.join(", and ")}.`] : []),
     "Restart your app's dev server, so the page loads the new Pilot.",
-    "Restart `npx usepilot` in the app's folder (Ctrl+C, then run it again), so Pilot runs the new version.",
+    ...(devServer.done ? [] : ["Restart `npx usepilot` in the app's folder, if you run it (Ctrl+C, then run it again), so Pilot runs the new version."]),
   ];
   if (oldBridge !== null && oldBridge !== BRIDGE_VERSION) {
     steps.push(
@@ -100,13 +107,19 @@ ${removedLine}
 ${changed ? `Next:\n${steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n` : "Nothing else to do.\n"}`;
 }
 
-/** The bridge version of the installed Pilot (read from its CLI bundle), before it's replaced; null when unknown. */
+/**
+ * The bridge version of the installed Pilot (read from its CLI bundle: one file before 0.17, a few since, the shared
+ * code in a chunk), before it's replaced; null when unknown.
+ */
 function bridgeOf(cwd: string, root: string): number | null {
   for (let dir = cwd; ; dir = dirname(dir)) {
-    const file = join(dir, "node_modules", "usepilot", "cli", "index.js");
-    if (existsSync(file)) {
-      const match = /BRIDGE_VERSION = (\d+)/.exec(readFileSync(file, "utf8"));
-      return match ? Number(match[1]) : null;
+    const folder = join(dir, "node_modules", "usepilot", "cli");
+    if (existsSync(join(folder, "index.js"))) {
+      for (const name of readdirSync(folder).filter((f) => f.endsWith(".js"))) {
+        const match = /BRIDGE_VERSION = (\d+)/.exec(readFileSync(join(folder, name), "utf8"));
+        if (match) return Number(match[1]);
+      }
+      return null;
     }
     if (dir === root || dirname(dir) === dir) return null;
   }

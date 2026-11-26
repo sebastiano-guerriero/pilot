@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { AgentInfo, AgentQuestion, AgentSession, ChangeResult, ChangeSet, Job, JobError, OpenPage, PageEvent, PropSpec, WidthCheck } from "@pilot/protocol";
-import { originKey } from "@pilot/protocol";
+import { originKey, setupOf } from "@pilot/protocol";
 import { AGENTS, type AgentKind, isAgentKind } from "./agents.ts";
 import { skillFolders } from "./skills.ts";
 
@@ -65,6 +65,8 @@ interface Agent {
   folder?: string;
   /** The agent's tool, for its skills' folders (see skillFolders). */
   kind?: AgentKind;
+  /** The designer asked, from the page, to sign the agent in (see requestSignIn): its runner starts it once it asks. */
+  signIn?: boolean;
 }
 
 interface Waiter {
@@ -94,18 +96,50 @@ export class Hub {
   register(info: AgentInfo, origin: string): void {
     const key = originKey(origin);
     const known = this.agents.get(info.id);
-    const { folder, kind, ...shown } = info;
+    const { folder, kind, setup: rawSetup, ...rest } = info;
+    // What pages see, checked: it comes from another process (setupOf).
+    const setup = setupOf(rawSetup);
+    const shown: AgentInfo = { ...rest, ...(setup ? { setup } : {}) };
     this.agents.set(info.id, {
       info: shown,
       origin: key,
       seen: this.now(),
       folder: folder ?? known?.folder,
       kind: isAgentKind(kind) ? kind : known?.kind,
+      // A sign-in asked for stays asked until the runner takes it, or the agent no longer needs one.
+      ...(known?.signIn && setup?.canSignIn ? { signIn: true } : {}),
     });
     if (!known || known.origin !== key) {
       if (known) this.notifyAgents(known.origin);
       this.notifyAgents(key);
+    } else if (JSON.stringify(known.info) !== JSON.stringify(shown)) {
+      // Its label or setup changed (the agent got ready, a sign-in started): the pages show it.
+      this.notifyAgents(key);
     }
+  }
+
+  /**
+   * The designer asked to sign in from the page of `origin`: each agent there
+   * that can start its sign-in (AgentSetup.canSignIn) gets the request, which
+   * its runner takes (takeSignIn). How many got it: 0 when none can.
+   */
+  requestSignIn(origin: string): number {
+    const key = originKey(origin);
+    let n = 0;
+    for (const agent of this.agents.values()) {
+      if (agent.origin !== key || !agent.info.setup?.canSignIn) continue;
+      agent.signIn = true;
+      n++;
+    }
+    return n;
+  }
+
+  /** Whether the designer asked agent `agentId` to sign in (requestSignIn) since it last asked: the request is taken. */
+  takeSignIn(agentId: string): boolean {
+    const agent = this.agents.get(agentId);
+    if (!agent?.signIn) return false;
+    agent.signIn = false;
+    return true;
   }
 
   /**

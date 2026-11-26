@@ -17,7 +17,12 @@ One line per item. Tick it when it ships; the details go in the doc for its area
   - [x] Choosing the agent: `init` saves the agent whose chat runs it; otherwise the only one signed in, or asked once in the terminal (`--agent` changes it)
   - [x] The page names its project (`mountPilot({ project })`, written by `init`): `npx usepilot` runs for its own project's pages only, and says why it leaves the others (found on nucleo-2: it took the playground's page)
   - [ ] The same project open on two addresses at once (a proxy's and the server's): `npx usepilot` runs for the first it finds
-  - [ ] Starting Pilot with the dev server (a Vite plugin, the dev script), so there's no second terminal; sites without an npm dev server keep `npx usepilot`
+  - [x] Starting Pilot with the dev server, so there's no second terminal: `usepilot/vite`, `usepilot/next` (`withPilot`), and `usepilot dev -- <command>` for any other; `init` sets up the one that fits, `update` points to it; sites without an npm dev server keep `npx usepilot` ([handoff.md](handoff.md), *Starting with the dev server*)
+  - [x] Pilot before the agent is ready: it opens on the page with the agent not installed or signed in, what's sent waits, the page says what to do, and the jobs run once it's ready, with no restart; sending starts the agent's sign-in in the browser ([handoff.md](handoff.md), *Before the agent is ready*). Bridge 9
+  - [x] `init` has the setup chat's agent install its own command-line tool (after asking the user), with the platform's command (PowerShell's on Windows); signing in is no longer a step before Pilot works
+  - [ ] Sign-in from the page, tried with real accounts: Claude Code, Codex and Cursor, on macOS and Windows (whether each finishes without a terminal; checked with stand-ins only)
+  - [ ] `usepilot/next` and `usepilot dev` tried in real projects (Next.js with Turbopack, Angular), and the Vite plugin in SvelteKit, Astro and Nuxt
+  - [ ] Where the setup shows: a checklist in the toolbar (app, Pilot, agent installed, signed in), each with its fix; the owner's design (it's in the stuck messages now)
   - [ ] More agents with the same three abilities (one task and exit, a session id, resume by id): Gemini (`gemini -p`), Copilot (`copilot -p`), opencode (`opencode run`)
   - [x] Released in 0.14.0 (bridge 7)
   - [x] Runs have the agent's own permissions, as in its chat: what the designer allowed runs, what it would ask about is refused, never skipped (until then Pilot's own limits: the project's files only, no shell, no internet) ([handoff.md](handoff.md), *Agent runs*)

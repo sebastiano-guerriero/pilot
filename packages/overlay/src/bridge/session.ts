@@ -1,4 +1,4 @@
-import type { AgentInfo, AgentQuestion, AgentRequest, AgentSession, ChangeResult, ChangeSet, CommentAction, CommentAttachment, CommentMessage, CommentReference, ElementTarget, FileToken, Job, JobError, JobStatus, ProjectComponent, ProjectSkill, PropChange, PropSpec, WidthCheck } from "@pilot/protocol";
+import type { AgentInfo, AgentQuestion, AgentRequest, AgentSetup, AgentSession, ChangeResult, ChangeSet, CommentAction, CommentAttachment, CommentMessage, CommentReference, ElementTarget, FileToken, Job, JobError, JobStatus, ProjectComponent, ProjectSkill, PropChange, PropSpec, WidthCheck } from "@pilot/protocol";
 import { attachmentType, requestTargets } from "@pilot/protocol";
 import { checkWidths, problemLines, snapshotAt, type StyleSnapshot, widthsToCheck } from "../checks/widths.ts";
 import { componentProps } from "../dom/component.ts";
@@ -173,7 +173,7 @@ export const QUIET_MS = 2 * 60_000;
  * of the jobs it's about.
  */
 export interface Stuck {
-  kind: "offline" | "older-agent" | "no-agent" | "quiet" | "agent-error";
+  kind: "offline" | "older-agent" | "no-agent" | "setup" | "quiet" | "agent-error";
   title: string;
   detail: string;
   jobs: string[];
@@ -777,7 +777,27 @@ export class PilotSession {
     this.jobs = [...this.jobs, job];
     this.save();
     void this.bridge?.postJob({ id, changeSet, status: "queued" });
+    this.signInIfNeeded();
     return job;
+  }
+
+  /**
+   * The agent Pilot runs for this site, while it isn't ready yet (Pilot started with the dev server before the agent
+   * was installed or signed in: AgentInfo.setup). Null once one is ready: jobs then run.
+   */
+  get setup(): AgentSetup | null {
+    const { connected, agents } = this.state;
+    if (!connected || !agents.length || agents.some((a) => !a.setup)) return null;
+    return (agents[0] as AgentInfo).setup ?? null;
+  }
+
+  /**
+   * Something was sent while the agent isn't signed in: Pilot starts its sign-in, which opens the agent's page in the
+   * browser (the designer asked by sending). It waits in the queue meanwhile, and runs once they've signed in. Once per
+   * send: while it's under way, or when it can't (not installed), nothing more happens.
+   */
+  private signInIfNeeded(): void {
+    if (this.setup?.canSignIn) void this.bridge?.signIn();
   }
 
   /** Take a job back before the agent is done: its changes are unsent again (they stay on the page). */
@@ -1177,6 +1197,9 @@ export class PilotSession {
     const detail = this.project ? NOT_RUNNING : NOT_NAMED;
     if (!connected) return { kind: "offline", title: notRunning, detail, jobs: ids(open) };
     if (!agents.length) return { kind: "no-agent", title: notRunning, detail, jobs: ids(open) };
+    // Pilot runs for the site, before its agent is ready: what's sent waits, and the page says what to do.
+    const setup = this.setup;
+    if (setup) return { kind: "setup", ...setupText(setup), jobs: ids(open) };
     // A run that has gone quiet (its agent's service stalled): said instead of a loader spinning for ever.
     const quiet = this.quietJobs();
     if (quiet.length) {
@@ -1234,11 +1257,32 @@ function stuckAfter(stuck: Stuck): number {
   return stuck.kind === "agent-error" || stuck.kind === "quiet" ? 0 : STUCK_OFFLINE_MS;
 }
 
+/**
+ * What the page says while the agent isn't ready (see PilotSession.setup): the title, then what to do. Neither ends
+ * with a period (the thread adds them). Sending signs in, when Pilot can start the agent's sign-in.
+ */
+export function setupText(setup: AgentSetup): { title: string; detail: string } {
+  const name = setup.agent ?? "your coding agent";
+  const waits = "What you send waits until then";
+  const command = setup.command.replace(/\.$/, "");
+  if (setup.state === "signing-in")
+    return { title: `Signing in to ${name}`, detail: `Finish in the browser${setup.url ? ` (${setup.url})` : ""}. ${waits}` };
+  if (setup.state === "not-signed-in")
+    return {
+      title: `Sign in to ${name}`,
+      detail: setup.error
+        ? setup.error.replace(/\.$/, "")
+        : `${setup.canSignIn ? "Send opens its sign-in page, or run" : "Run"} ${command} in a terminal. ${waits}`,
+    };
+  if (!setup.agent) return { title: "No coding agent installed", detail: `${command}. ${waits}` };
+  return { title: `${name} isn't installed`, detail: `Run ${command} in a terminal. ${waits}` };
+}
+
 /** What to do about a run that has gone quiet. */
 const QUIET_DETAIL = "No sign of work for 2 minutes. Click to stop it, then send again.";
 
 /** What to do when Pilot isn't running for the site. */
-const NOT_RUNNING = "Run npx usepilot in your project's folder";
+const NOT_RUNNING = "Restart your dev server if Pilot starts with it, or run npx usepilot in your project's folder";
 const NOT_RUNNING_OLDER = "Run npx usepilot in your project's folder (an older Pilot is running, and can't reach this page)";
 const NOT_NAMED = "Its loader doesn't say which project this is: ask your agent to run npx usepilot@latest update, then run npx usepilot";
 

@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ChangeSet, Job, PageEvent } from "@pilot/protocol";
 import { afterEach, describe, expect, it } from "vitest";
-import { AGENTS } from "./agents.ts";
+import { AGENTS, type FoundAgent } from "./agents.ts";
 import { activityOf, errorFor, outdatedNote, replyOf, sessionToResume, startRunner } from "./run.ts";
 
 const APP = "http://localhost:5173";
@@ -279,6 +279,111 @@ describe("which site it runs for", () => {
     cleanup.push(() => runner.close());
     expect(runner.origin).toBe(APP);
     expect(lines.filter((l) => l.includes("for playground, not shop"))).toHaveLength(1);
+  });
+});
+
+describe("before the agent is ready (waitForAgent: Pilot started with the dev server)", () => {
+  /** A runner waiting for its agent, with what `detect` finds switchable, and a page listening to it. */
+  async function waiting(start: FoundAgent[], options: Partial<Parameters<typeof startRunner>[0]> = {}) {
+    const { port, dir } = { port: nextPort++, dir: mkdtempSync(join(tmpdir(), "pilot-wait-")) };
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "app" }));
+    const bin = join(dir, "claude");
+    writeFileSync(bin, FAKE);
+    chmodSync(bin, 0o755);
+    const log = join(dir, "runs.log");
+    writeFileSync(log, "");
+    process.env.FAKE_LOG = log;
+    let agents = start.map((a) => ({ ...a, bin }));
+    const lines: string[] = [];
+    const runner = await startRunner({
+      cwd: dir,
+      port,
+      url: APP,
+      waitForAgent: true,
+      setupPollMs: 30,
+      detect: async () => agents,
+      configFile: join(dir, "config.json"),
+      out: (l) => lines.push(l),
+      ...options,
+    });
+    cleanup.push(() => runner.close());
+    const page = fakePage(port);
+    await page.ready;
+    /** The page's agents, as the last `agents` event said. */
+    const shown = () => page.events.filter((e): e is Extract<PageEvent, { type: "agents" }> => e.type === "agents").at(-1)?.agents ?? [];
+    return { page, runner, lines, shown, become: (next: FoundAgent[]) => (agents = next.map((a) => ({ ...a, bin }))), bin };
+  }
+
+  it("opens on the page with nothing installed, says what to do, and jobs wait for the agent", async () => {
+    const { page, runner, shown, become, lines } = await waiting([]);
+    expect(runner.agent).toBeNull();
+    await until(() => shown()[0]?.setup?.state === "not-installed");
+    expect(shown()[0]?.setup?.command).toContain("Claude Code: curl -fsSL https://claude.ai/install.sh | bash, then claude auth login");
+    expect(lines.some((l) => l.startsWith("Pilot is on http://localhost:5173, every page. Install your coding agent's command-line tool"))).toBe(true);
+    // The designer sends: the hub takes it (Pilot runs for the site), and it waits.
+    expect((await page.post("/jobs", { id: "w1", changeSet: changeSet("w1") })).status).toBe(202);
+    await new Promise((r) => setTimeout(r, 150));
+    expect(page.job("w1")?.status).toBe("queued");
+    // Installed, not signed in: said so, and Pilot can sign it in.
+    become([{ kind: "claude", bin: "", signedIn: false }]);
+    await until(() => shown()[0]?.setup?.state === "not-signed-in");
+    expect(shown()[0]?.setup).toMatchObject({ agent: "Claude Code", command: "claude auth login", canSignIn: true });
+    expect(shown()[0]?.label).toBe("Claude Code · " + shown()[0]?.label.split(" · ")[1]);
+    // Signed in (in a terminal): no restart; the job that waited runs.
+    become([{ kind: "claude", bin: "", signedIn: true }]);
+    await runner.ready;
+    expect(runner.agent?.kind).toBe("claude");
+    await until(() => page.job("w1")?.status === "done");
+    expect(shown()[0]?.setup).toBeUndefined();
+    expect(lines).toContain("Claude Code is ready: Pilot runs it for each job (the ones that waited go now).");
+  });
+
+  it("signs in from the page: the agent's own sign-in, its page's address shown, then the jobs run", async () => {
+    let calls = 0;
+    let finish: () => void = () => {};
+    const { page, runner, shown, become } = await waiting([{ kind: "claude", bin: "", signedIn: false }], {
+      signIn: async (_cli, _bin, onUrl) => {
+        calls++;
+        onUrl("https://claude.ai/oauth/authorize?code=1");
+        await new Promise<void>((r) => (finish = r));
+      },
+    });
+    await until(() => shown()[0]?.setup?.canSignIn === true);
+    expect((await page.post("/setup/sign-in", {})).status).toBe(202);
+    await until(() => shown()[0]?.setup?.state === "signing-in");
+    expect(shown()[0]?.setup?.url).toBe("https://claude.ai/oauth/authorize?code=1");
+    expect(shown()[0]?.setup?.canSignIn).toBeFalsy();
+    // A second click while it's under way: no second sign-in (the page can't ask: canSignIn is off).
+    expect((await page.post("/setup/sign-in", {})).status).toBe(409);
+    become([{ kind: "claude", bin: "", signedIn: true }]);
+    finish();
+    await runner.ready;
+    expect(calls).toBe(1);
+    await page.post("/jobs", { id: "s1", changeSet: changeSet("s1") });
+    await until(() => page.job("s1")?.status === "done");
+  });
+
+  it("a sign-in that didn't finish says to run it in a terminal, and can be tried again", async () => {
+    let calls = 0;
+    const { page, shown } = await waiting([{ kind: "claude", bin: "", signedIn: false }], {
+      signIn: async () => {
+        calls++;
+      },
+    });
+    await until(() => shown()[0]?.setup?.canSignIn === true);
+    await page.post("/setup/sign-in", {});
+    await until(() => !!shown()[0]?.setup?.error);
+    expect(shown()[0]?.setup).toMatchObject({ state: "not-signed-in", canSignIn: true, error: "The sign-in didn't finish. Run claude auth login in a terminal, then send again." });
+    await page.post("/setup/sign-in", {});
+    await until(() => calls === 2);
+  });
+
+  it("without waitForAgent (npx usepilot), an agent that isn't ready still stops it, with what to do", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pilot-nowait-"));
+    writeFileSync(join(dir, "package.json"), "{}");
+    await expect(startRunner({ cwd: dir, port: nextPort++, url: APP, detect: async () => [], configFile: join(dir, "c.json") })).rejects.toThrow(
+      "Pilot runs your coding agent's command-line tool, and none is ready here.",
+    );
   });
 });
 

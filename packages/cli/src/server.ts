@@ -20,6 +20,7 @@ import { Hub, type JobPost } from "./hub.ts";
  * - POST /quit                  the designer closed Pilot on the page's site: its other pages close it too
  * - POST /attachments           a file for a comment: an image, text file or PDF (the raw bytes, its type as Content-Type): saved in
  *                               the OS temp folder (attachments.ts), answers its id. Jobs name files by id only.
+ * - POST /setup/sign-in         sign in the agent Pilot waits for (AgentSetup.canSignIn): its runner starts the agent's sign-in
  * The page's origin comes from the `Origin` header the browser always sends,
  * never from the request. Jobs are only taken from an origin Pilot runs an
  * agent for (`npx usepilot` in its project, which registers it), so another
@@ -27,6 +28,7 @@ import { Hub, type JobPost } from "./hub.ts";
  *
  * Pilot's processes (`npx usepilot` ones that aren't the hub, see agent.ts):
  * - POST /agents/register | /agents/launch | /agents/wait | /agents/done | /agents/activity | /agents/check | /agents/leave
+ * - POST /agents/setup          whether the designer asked to sign in (taken: once per click)
  * - POST /agents/job            a job as the hub has it (a run polls it, to stop when it's cancelled)
  * - POST /agents/pages          the pages with Pilot open: each site and the project its loader names, but sites Pilot runs for
  * Refused for any request with an `Origin` (browsers send one; Node doesn't).
@@ -128,6 +130,13 @@ async function handle(hub: Hub, req: IncomingMessage, res: ServerResponse, attac
     return id ? json(res, 201, { id }) : json(res, 400, { error: "not a file of that type" });
   }
 
+  // Sign the agent in (AgentSetup.canSignIn): its runner starts the agent's own sign-in, which opens its page in the
+  // browser. Nothing from the request goes into it: the command is the agent's, fixed (agents.ts, `login`).
+  if (path === "/setup/sign-in") {
+    const agents = hub.requestSignIn(origin);
+    return agents ? json(res, 202, { agents }) : json(res, 409, { error: "no agent here can sign in from the page" });
+  }
+
   const data = (await body(req)) as Record<string, unknown>;
   if (path === "/jobs") {
     const post = data as unknown as JobPost;
@@ -220,6 +229,9 @@ async function handleAgent(hub: Hub, action: string, data: unknown, req: Incomin
       const check = await hub.check(d.jobId, Math.min(d.timeoutMs ?? CHECK_TIMEOUT, 2 * 60_000));
       return json(res, 200, { check });
     }
+    case "setup":
+      // A runner whose agent isn't ready asks whether the designer wants to sign in (Hub.requestSignIn).
+      return json(res, 200, { signIn: hub.takeSignIn(d.agent.id) });
     case "leave":
       hub.unregister(d.agent.id);
       return json(res, 200, { ok: true });

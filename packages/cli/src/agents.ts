@@ -58,10 +58,18 @@ export interface AgentCli {
   label: string;
   /** Executable names, first found wins. */
   bins: string[];
-  /** How to install it, for the designer (one command or page). */
+  /** How to install it, for the designer: one command, for macOS and Linux (see installCommand). */
   install: string;
-  /** How to sign in, for the designer. */
+  /** How to install it on Windows, in PowerShell, when it isn't the same command (see installCommand). */
+  installWindows?: string;
+  /** How to sign in, for the designer: a terminal line. */
   signIn: string;
+  /**
+   * The arguments of that sign-in, for Pilot to start it (from the page,
+   * AgentSetup.canSignIn): it opens the agent's sign-in page in the browser,
+   * and needs nothing typed in the terminal.
+   */
+  login: string[];
   /** How to update it, for the designer: a tool older than Pilot's flags fails every run (see missingFlags). */
   update: string;
   /** The arguments that print the help of the command Pilot runs, which lists its flags (see missingFlags). */
@@ -242,7 +250,9 @@ export const AGENTS: Record<AgentKind, AgentCli> = {
     label: "Claude Code",
     bins: ["claude"],
     install: "curl -fsSL https://claude.ai/install.sh | bash",
+    installWindows: "irm https://claude.ai/install.ps1 | iex",
     signIn: "claude auth login",
+    login: ["auth", "login"],
     update: "claude update",
     help: ["--help"],
     status: { args: ["auth", "status"], ok: (out) => /"loggedIn"\s*:\s*true/.test(out) },
@@ -272,6 +282,7 @@ export const AGENTS: Record<AgentKind, AgentCli> = {
     bins: ["codex"],
     install: "npm install -g @openai/codex",
     signIn: "codex login",
+    login: ["login"],
     update: "npm install -g @openai/codex@latest",
     help: ["exec", "--help"],
     status: { args: ["login", "status"], ok: (_out, code) => code === 0 },
@@ -298,7 +309,9 @@ export const AGENTS: Record<AgentKind, AgentCli> = {
     label: "Cursor",
     bins: ["cursor-agent", "agent"],
     install: "curl https://cursor.com/install -fsS | bash",
+    installWindows: "irm 'https://cursor.com/install?win32=true' | iex",
     signIn: "cursor-agent login",
+    login: ["login"],
     update: "cursor-agent update",
     help: ["--help"],
     status: { args: ["status"], ok: (out) => /logged in/i.test(out) && !/not logged in/i.test(out) },
@@ -313,6 +326,14 @@ export const AGENTS: Record<AgentKind, AgentCli> = {
     projectSettings: ".cursor/cli.json",
   },
 };
+
+/**
+ * How to install `cli` on `platform`: its PowerShell command on Windows
+ * (`curl … | bash` doesn't run there), else its macOS and Linux one.
+ */
+export function installCommand(cli: AgentCli, platform: NodeJS.Platform = process.platform): string {
+  return platform === "win32" && cli.installWindows ? cli.installWindows : cli.install;
+}
 
 export function isAgentKind(value: unknown): value is AgentKind {
   return typeof value === "string" && (AGENT_KINDS as readonly string[]).includes(value);
@@ -425,7 +446,7 @@ export interface ExecResult {
 export function exec(
   bin: string,
   args: string[],
-  options: { cwd?: string; input?: string; signal?: AbortSignal; timeoutMs?: number; env?: NodeJS.ProcessEnv; onStdout?(chunk: string): void } = {},
+  options: { cwd?: string; input?: string; signal?: AbortSignal; timeoutMs?: number; env?: NodeJS.ProcessEnv; onStdout?(chunk: string): void; onStderr?(chunk: string): void } = {},
 ): Promise<ExecResult> {
   return new Promise((resolve) => {
     const shell = process.platform === "win32" && /\.(cmd|bat)$/i.test(bin);
@@ -444,7 +465,11 @@ export function exec(
       stdout += text;
       options.onStdout?.(text);
     });
-    child.stderr?.on("data", (d: Buffer) => (stderr += d.toString()));
+    child.stderr?.on("data", (d: Buffer) => {
+      const text = d.toString();
+      stderr += text;
+      options.onStderr?.(text);
+    });
     const timer = options.timeoutMs ? setTimeout(kill, options.timeoutMs) : null;
     options.signal?.addEventListener("abort", kill, { once: true });
     const finish = (code: number | null) => {

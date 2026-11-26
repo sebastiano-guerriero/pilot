@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, relative } from "node:path";
-import { AGENTS as AGENT_CLIS, type AgentKind, agentFromEnv, detectAgents, type FoundAgent, isAgentKind } from "./agents.ts";
+import { AGENTS as AGENT_CLIS, type AgentKind, agentFromEnv, detectAgents, type FoundAgent, installCommand, isAgentKind } from "./agents.ts";
 import { projectName, saveAgent } from "./config.ts";
 import { removeOldSetup } from "./legacy.ts";
 import { olderThan, VERSION } from "./version.ts";
@@ -12,14 +12,16 @@ import { olderThan, VERSION } from "./version.ts";
  * into their agent ("run `npx usepilot@latest init` and follow what it
  * prints"); this does the mechanical part and prints the rest for the agent:
  * - installs `usepilot` as a dev dependency, with the project's package manager;
- * - checks the agents' command-line tools Pilot runs for each job (`npx
- *   usepilot`, run.ts): installed, signed in, and says what's missing; the
- *   agent whose chat runs it (told from its environment) is saved for the
- *   project, so `npx usepilot` doesn't ask;
+ * - checks the agents' command-line tools Pilot runs for each job (run.ts):
+ *   the agent whose chat runs it (told from its environment) is saved for
+ *   the project, and the agent installs its tool when it's missing, after
+ *   asking the user; signing in can wait: Pilot asks for it on the page;
  * - removes Pilot's old setup (its MCP server and `/pilot` skill, from
  *   before agent runs: legacy.ts);
  * - detects the framework and prints where and how to load Pilot in the
- *   app, in development only: the agent writes it, in the project's way.
+ *   app, in development only, and how to start it with the app's dev server
+ *   (the Vite plugin, withPilot, or `usepilot dev`), so there's no `npx
+ *   usepilot` to run: the agent writes it, in the project's way.
  * Run again, it changes nothing that's already there.
  */
 
@@ -45,6 +47,7 @@ export interface InitOptions {
 }
 
 type PackageJson = {
+  scripts?: Record<string, string>;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   workspaces?: unknown;
@@ -56,10 +59,10 @@ export function agentKindOf(value: string | undefined): AgentKind | undefined {
   return isAgentKind(v) ? v : undefined;
 }
 
-/** Each agent Pilot runs, with how to install it and sign in, for the designer. */
-export function agentsToInstall(): string {
+/** Each agent Pilot runs, with how to install it on `platform` and sign in, for the designer. */
+export function agentsToInstall(platform: NodeJS.Platform = process.platform): string {
   return Object.values(AGENT_CLIS)
-    .map((cli) => `${cli.label}: \`${cli.install}\`, then \`${cli.signIn}\``)
+    .map((cli) => `${cli.label}: \`${installCommand(cli, platform)}\`, then \`${cli.signIn}\``)
     .join("; ");
 }
 
@@ -79,37 +82,93 @@ export function installArgs(pm: "npm" | "pnpm" | "yarn" | "bun", spec = "usepilo
 
 /**
  * The agents' state, for the designer: which one Pilot will run, or what
- * to install or sign in to. `done` and `todo` lines, as init prints them.
+ * the agent installs and the user signs in to. `done` and `todo` lines, as
+ * init prints them. Signing in isn't a step before Pilot works: Pilot opens
+ * in the app at once, and asks for it on the page the first time it's needed
+ * (AgentSetup), so the user does it in the browser.
  */
-export function agentLines(found: FoundAgent[], wanted: AgentKind | undefined): { done: string[]; todo: string[] } {
+export function agentLines(found: FoundAgent[], wanted: AgentKind | undefined, platform: NodeJS.Platform = process.platform): { done: string[]; todo: string[] } {
   const ready = found.filter((a) => a.signedIn);
   const label = (kind: AgentKind) => AGENT_CLIS[kind].label;
+  const signInLater = (cli: (typeof AGENT_CLIS)[AgentKind]) =>
+    `They sign in to ${cli.label} once, when Pilot asks: its toolbar has a sign-in button the first time they send (or \`${cli.signIn}\` in a terminal).`;
+  const shell = platform === "win32" ? " in PowerShell" : "";
   if (wanted) {
     const it = found.find((a) => a.kind === wanted);
     const cli = AGENT_CLIS[wanted];
     if (it?.signedIn) return { done: [`Pilot will run ${cli.label} for this project (signed in).`], todo: [] };
+    if (it) return { done: [`Pilot will run ${cli.label} for this project.`], todo: [`**Tell the user** ${signInLater(cli)}`] };
     return {
       done: [],
       todo: [
-        it
-          ? `**Tell the user** to sign in to ${cli.label}'s command-line tool: \`${cli.signIn}\` in a terminal.`
-          : `**Tell the user** to install ${cli.label}'s command-line tool and sign in: \`${cli.install}\`, then \`${cli.signIn}\`.`,
+        `**Install ${cli.label}'s command-line tool**: Pilot runs it for each job (not this chat). Ask the user first, then run \`${installCommand(cli, platform)}\`${shell} (${cli.label}'s own installer). **Tell the user** ${signInLater(cli)}`,
       ],
     };
   }
   if (ready.length === 1) return { done: [`Pilot will run ${label((ready[0] as FoundAgent).kind)}, signed in here, for each job.`], todo: [] };
   if (ready.length > 1)
-    return { done: [`Found ${ready.map((a) => label(a.kind)).join(" and ")} signed in: \`npx usepilot\` asks which to run, the first time.`], todo: [] };
-  const installed = found.map((a) => `${label(a.kind)} (\`${AGENT_CLIS[a.kind].signIn}\`)`);
+    return { done: [`Found ${ready.map((a) => label(a.kind)).join(" and ")} signed in: Pilot runs the first, the first time (\`npx usepilot --agent <name>\` picks another).`], todo: [] };
+  const installed = found[0];
+  if (installed) return { done: [`Pilot will run ${label(installed.kind)} for this project.`], todo: [`**Tell the user** ${signInLater(AGENT_CLIS[installed.kind])}`] };
   return {
     done: [],
     todo: [
-      installed.length
-        ? `**Tell the user** Pilot runs their coding agent's command-line tool for each job, and it isn't signed in: sign in to ${installed.join(" or ")} in a terminal.`
-        : `**Tell the user** Pilot runs their coding agent's command-line tool for each job, and none is installed here. One of: ${agentsToInstall()}.`,
+      `**Ask the user which coding agent Pilot should run** for each job (none's command-line tool is installed here), then install it and run init again with \`--agent <claude|codex|cursor>\`. One of: ${agentsToInstall(platform)}${shell}.`,
     ],
   };
 }
+
+/**
+ * How Pilot starts with the app's dev server, so the user never runs `npx
+ * usepilot`: Vite's plugin (`usepilot/vite`, for Vite and the frameworks on
+ * it), Next.js's `withPilot` (`usepilot/next`), else the dev script run
+ * through `usepilot dev`. `done` when it's there already; `todo`, the step
+ * for the agent; neither when there's no dev server Pilot can start with
+ * (the user runs `npx usepilot`).
+ */
+export function devServerStep(framework: Framework, cwd: string, pkg: PackageJson): { done?: string; todo?: string } {
+  const first = (...files: string[]) => files.map((f) => join(cwd, f)).find((f) => existsSync(f));
+  const code = (lang: string, text: string) => `\n\n   \`\`\`${lang}\n${text.replace(/^(?=.)/gm, "   ")}\n   \`\`\``;
+  const intro = "**Start Pilot with the app's dev server**, so the user never runs `npx usepilot`:";
+  const end = " It only runs in development (never in a build or on a server).";
+  const config = (names: string[]) => first(...names.flatMap((n) => [".ts", ".mts", ".js", ".mjs", ".cjs"].map((e) => `${n}${e}`)));
+  const has = (file: string | undefined, text: string) => !!file && readText(file).includes(text);
+  const viteLike = ["vite", "vite-html", "sveltekit", "react-router"].includes(framework.kind);
+  if (viteLike || framework.kind === "astro" || framework.kind === "nuxt") {
+    const name = framework.kind === "astro" ? "astro.config" : framework.kind === "nuxt" ? "nuxt.config" : "vite.config";
+    const file = config([name]);
+    if (has(file, "usepilot/vite")) return { done: `Pilot starts with the dev server (\`usepilot/vite\` in \`${relative(cwd, file as string)}\`).` };
+    const at = file ? `\`${relative(cwd, file)}\`` : `its config (create \`${name}.ts\` if there's none)`;
+    const where = viteLike ? "its `plugins` (keep the others)" : "its `vite.plugins` (create `vite: { plugins: [] }` if there's none, keep the others)";
+    return {
+      todo: `${intro} in ${at}, add Pilot's Vite plugin to ${where}:${code("ts", 'import { pilot } from "usepilot/vite";\n\n// in the config:\nplugins: [pilot()],')}\n\n   Vite applies it only while it serves: never in a build or on a server.`,
+    };
+  }
+  if (framework.kind === "next-app" || framework.kind === "next-pages") {
+    const file = config(["next.config"]);
+    if (has(file, "usepilot/next")) return { done: `Pilot starts with the dev server (\`withPilot\` in \`${relative(cwd, file as string)}\`).` };
+    const at = file ? `\`${relative(cwd, file)}\`` : "`next.config.ts` (create it if there's none)";
+    return {
+      todo: `${intro} in ${at}, wrap the exported config with \`withPilot\`:${code("ts", 'import { withPilot } from "usepilot/next";\n\nexport default withPilot(nextConfig);')}\n\n   In a CommonJS config (\`module.exports\`): \`module.exports = withPilot(nextConfig)\`, with \`const { withPilot } = require("usepilot/next")\`.${end} Pilot starts only in \`next dev\`.`,
+    };
+  }
+  // Any other dev server: its script, run through `usepilot dev`. Never a script that may serve production (`next start`, `node server.js`).
+  const scripts = pkg.scripts ?? {};
+  const name = Object.keys(scripts).find((s) => s === "dev" || (["start", "serve", "develop"].includes(s) && DEV_SERVER.test(scripts[s] as string)));
+  if (!name) return {};
+  const script = scripts[name] as string;
+  if (/\busepilot dev\b/.test(script)) return { done: `Pilot starts with the dev server (\`${name}\` runs through \`usepilot dev\`).` };
+  // A script of several commands (`tsc -w & vite`) goes whole, in double quotes (sh and cmd.exe both read them), and
+  // `usepilot dev` runs it through a shell. One with quotes of its own can't be wrapped safely: `npx usepilot` then.
+  if (script.includes('"')) return {};
+  const wrapped = /[&|;<>]/.test(script) ? `usepilot dev -- "${script}"` : `usepilot dev -- ${script}`;
+  return {
+    todo: `${intro} in \`package.json\`, run its \`${name}\` script through Pilot: \`"${name}": ${JSON.stringify(wrapped)}\`. Pilot starts and stops with the dev server.${end}`,
+  };
+}
+
+/** A script that runs a development server (a `start`, `serve` or `develop` script may run a production one instead). */
+const DEV_SERVER = /\b(ng serve|react-scripts start|gatsby develop|vue-cli-service serve|webpack(-dev-server| serve)|rsbuild dev|rspack (serve|dev)|parcel(?! build)|vite(?! (build|preview)))\b/;
 
 export async function init(options: InitOptions = {}): Promise<string> {
   const cwd = options.cwd ?? process.cwd();
@@ -159,14 +218,16 @@ ${cwd} is a monorepo's root, not an app. Run \`npx usepilot@latest init\` again 
   // The agent: given, else the one whose chat runs this (the setup prompt), so `npx usepilot` needn't ask.
   const wanted = agentKindOf(options.agent) ?? agentFromEnv(options.env ?? process.env) ?? undefined;
   const found = await (options.detect ?? detectAgents)();
-  const agents = agentLines(found, wanted);
+  const platform = options.platform ?? process.platform;
+  const agents = agentLines(found, wanted, platform);
   done.push(...agents.done);
   todo.push(...agents.todo);
-  if (wanted && found.some((a) => a.kind === wanted && a.signedIn)) saveAgent(cwd, wanted, options.configFile);
+  // Saved even before it's installed or signed in: Pilot waits for that one, and runs it once it's ready.
+  if (wanted) saveAgent(cwd, wanted, options.configFile);
 
   // 3. Pilot's old setup (an agent's chat running it): removed, so no chat starts an old Pilot.
   const home = options.home ?? homedir();
-  const removed = await removeOldSetup(root, home, options.platform ?? process.platform, run);
+  const removed = await removeOldSetup(root, home, platform, run);
   if (removed.length) done.push(`Removed Pilot's old chat setup (its MCP server and \`/pilot\` skill): ${removed.map((r) => `\`${r}\``).join(", ")}. Pilot runs the agent itself now.`);
 
   // 4. Loading Pilot in the app: written by the agent.
@@ -176,8 +237,15 @@ ${cwd} is a monorepo's root, not an app. Run \`npx usepilot@latest init\` again 
     else done.push(`The app already loads Pilot (\`${relative(cwd, framework.loads)}\`).`);
   } else todo.push(loadStep(framework, cwd));
 
+  // 5. Starting Pilot with the dev server: written by the agent too.
+  const devServer = devServerStep(framework, cwd, pkg);
+  if (devServer.done) done.push(devServer.done);
+  if (devServer.todo) todo.push(devServer.todo);
+
   todo.push(
-    `**Tell the user**, in a few lines: Pilot is set up. To use it, run \`npx usepilot\` in ${cwd}, in a terminal beside the app's dev server, and open the app: Pilot opens on every page. They design and press Send (or comment on an element), Pilot runs their agent for each job, and the terminal shows what it does. No chat needs to stay open; without \`npx usepilot\` running, the toolbar says so.`,
+    devServer.done || devServer.todo
+      ? `**Tell the user**, in a few lines: Pilot is set up. It starts with the app's dev server: they restart it (if it's running) and open the app, and Pilot opens on every page. They design and press Send (or comment on an element), Pilot runs their agent for each job, and the dev server's terminal shows what it does. No chat needs to stay open.`
+      : `**Tell the user**, in a few lines: Pilot is set up. To use it, run \`npx usepilot\` in ${cwd}, in a terminal beside the app's dev server, and open the app: Pilot opens on every page. They design and press Send (or comment on an element), Pilot runs their agent for each job, and the terminal shows what it does. No chat needs to stay open; without \`npx usepilot\` running, the toolbar says so.`,
   );
 
   return `# Pilot: set up
@@ -334,6 +402,9 @@ const SOURCE_DIRS = ["src", "app", "pages", "plugins", "components", "lib"];
 const SOURCE_FILE = /\.(m?[jt]sx?|vue|svelte|astro|html)$/;
 
 /** A file of the app that already imports `usepilot` (looked for in its source folders, index.html and the Vite config), if any. */
+/** Code that loads Pilot in the page: `usepilot` or `usepilot/auto`, or its file from node_modules (a site without a bundler). Not `usepilot/vite` or `usepilot/next`. */
+const LOADS_PILOT = /["']usepilot(\/auto)?["']|node_modules\/usepilot\/dist\//;
+
 function findLoader(cwd: string): string | undefined {
   let budget = 3000;
   const walk = (dir: string, depth: number): string | undefined => {
@@ -347,7 +418,7 @@ function findLoader(cwd: string): string | undefined {
       if (budget-- <= 0 || name === "node_modules" || name.startsWith(".")) continue;
       const path = join(dir, name);
       if (SOURCE_FILE.test(name)) {
-        if (/["']usepilot(\/auto)?["']/.test(readText(path))) return path;
+        if (LOADS_PILOT.test(readText(path))) return path;
       } else if (depth > 0 && !name.includes(".")) {
         const found = walk(path, depth - 1);
         if (found) return found;
@@ -355,10 +426,11 @@ function findLoader(cwd: string): string | undefined {
     }
     return undefined;
   };
-  // index.html, the Vite config (where a page with no module of its own gets Pilot), and Gatsby's browser hooks.
+  // index.html, the Vite config (where a page with no module of its own gets Pilot), and Gatsby's browser hooks. Only
+  // what loads Pilot in the page counts: the Vite config's `usepilot/vite` (Pilot starting with the dev server) doesn't.
   for (const name of ["index.html", "vite.config.ts", "vite.config.mts", "vite.config.js", "vite.config.mjs", ...GATSBY_BROWSER]) {
     const file = join(cwd, name);
-    if (existsSync(file) && /usepilot/.test(readText(file))) return file;
+    if (existsSync(file) && LOADS_PILOT.test(readText(file))) return file;
   }
   for (const dir of SOURCE_DIRS) {
     const found = walk(join(cwd, dir), 6);

@@ -1042,7 +1042,62 @@ describe("the page's project", () => {
     expect(hub().url).toBe("http://hub/events?project=shop");
     hub().emit({ type: "agents", agents: [], waiting: 0 });
     await vi.advanceTimersByTimeAsync(5_000);
-    expect(s.stuck).toMatchObject({ title: "Pilot isn't running for shop", detail: "Run npx usepilot in your project's folder" });
+    expect(s.stuck).toMatchObject({ title: "Pilot isn't running for shop", detail: "Restart your dev server if Pilot starts with it, or run npx usepilot in your project's folder" });
+    s.destroy();
+  });
+});
+
+describe("before the agent is ready (Pilot started with the dev server)", () => {
+  const notSignedIn = { ...agent, setup: { state: "not-signed-in" as const, agent: "Claude Code", command: "claude auth login", canSignIn: true } };
+
+  it("what's sent waits, and the page says what to do: sign in (Send opens its page), or install", async () => {
+    vi.useFakeTimers();
+    const s = session("shop");
+    hub().emit({ type: "agents", agents: [notSignedIn], waiting: 0 });
+    // Pilot runs for the site: Send works, and the job waits in the hub's queue.
+    expect(s.canSendToAgent).toBe(true);
+    history.apply(el, "padding-top", "20px");
+    const sent = s.send() as { id: string };
+    expect(sent).toBeTruthy();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(s.stuck).toEqual({
+      kind: "setup",
+      title: "Sign in to Claude Code",
+      detail: "Send opens its sign-in page, or run claude auth login in a terminal. What you send waits until then",
+      jobs: [sent.id],
+    });
+    hub().emit({ type: "agents", agents: [{ ...agent, setup: { state: "not-installed", agent: "Claude Code", command: "curl -fsSL https://claude.ai/install.sh | bash, then claude auth login" } }], waiting: 0 });
+    expect(s.stuck).toMatchObject({ title: "Claude Code isn't installed", detail: "Run curl -fsSL https://claude.ai/install.sh | bash, then claude auth login in a terminal. What you send waits until then" });
+    hub().emit({ type: "agents", agents: [{ ...agent, setup: { state: "signing-in", agent: "Claude Code", command: "claude auth login", url: "https://claude.ai/oauth" } }], waiting: 0 });
+    expect(s.stuck).toMatchObject({ title: "Signing in to Claude Code", detail: "Finish in the browser (https://claude.ai/oauth). What you send waits until then" });
+    // Ready: nothing stuck; the job runs.
+    hub().emit({ type: "agents", agents: [agent], waiting: 0 });
+    expect(s.stuck).toBeNull();
+    s.destroy();
+  });
+
+  it("sending while it isn't signed in starts its sign-in; not when it can't (not installed), nor once it's ready", () => {
+    const s = session();
+    const signIns = () => posts.filter((p) => p.url === "http://hub/setup/sign-in").length;
+    hub().emit({ type: "agents", agents: [notSignedIn], waiting: 0 });
+    history.apply(el, "padding-top", "20px");
+    s.send();
+    expect(signIns()).toBe(1);
+    hub().emit({ type: "agents", agents: [{ ...agent, setup: { state: "not-installed", command: "x" } }], waiting: 0 });
+    history.apply(el, "padding-top", "24px");
+    s.send();
+    expect(signIns()).toBe(1);
+    hub().emit({ type: "agents", agents: [agent], waiting: 0 });
+    history.apply(el, "padding-top", "28px");
+    s.send();
+    expect(signIns()).toBe(1);
+    s.destroy();
+  });
+
+  it("one agent ready among several (two projects' runners on one site): nothing waits", () => {
+    const s = session();
+    hub().emit({ type: "agents", agents: [notSignedIn, { id: "b", label: "Codex · app" }], waiting: 0 });
+    expect(s.setup).toBeNull();
     s.destroy();
   });
 });
