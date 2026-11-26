@@ -36,7 +36,9 @@ describe("formatPrompt", () => {
     expect(prompt).toContain("First look at how each element's component is styled");
     expect(prompt).toContain("no `!important`");
     // One question per job: several shared components with some copies changed are asked about together.
-    expect(prompt).toContain("ask one question naming each in **bold** (\"Every **PlanCard** and **FeatureCard**, or only the ones you changed?\")");
+    expect(prompt).toContain("ask one question naming each in **bold** (\"Not changed yet: every **PlanCard** and **FeatureCard**, or only the ones you changed?\")");
+    // Said as what the designer did: a comment's or a task's element is "this one", their edits "the ones you changed".
+    expect(prompt).toContain('"only this one" for a comment or a task, "only the ones you changed" for their edits');
   });
 
   it("spells out a removal: not a new value, and where the page sets it", () => {

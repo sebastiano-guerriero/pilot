@@ -184,7 +184,11 @@ function CopyAllow({ text }: { text: string }) {
   );
 }
 
-/** Skills the `/` list shows at once, the best matches first (as the `@` list's few per group): typing narrows them. */
+/**
+ * Skills a bare `/` lists, the first few (as the `@` list's few per group). Once something's typed, every
+ * match, the best first: the list scrolls. Before, `/emil` showed six of a collection's skills, and the
+ * rest couldn't be reached by narrowing further when their names share the prefix.
+ */
 const SKILLS_SHOWN = 6;
 
 /** The longest the field grows to before it scrolls, in px. */
@@ -440,7 +444,8 @@ export function CommentWidget({
     };
   }, [slashOpen]);
   const options = slash && slashOpen ? matchActions(slash.query, { component: !!component }) : [];
-  const skillOptions = slash && slashOpen ? matchSkills(skillList, slash.query).slice(0, SKILLS_SHOWN) : [];
+  const skillMatches = slash && slashOpen ? matchSkills(skillList, slash.query) : [];
+  const skillOptions = slash?.query ? skillMatches : skillMatches.slice(0, SKILLS_SHOWN);
   const menuCount = options.length + skillOptions.length;
   const menuOpen = menuCount > 0;
   const [active, setActive] = useState(0);
