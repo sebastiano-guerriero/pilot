@@ -676,9 +676,9 @@ describe("PilotSession", () => {
     expect(s.jobs.find((j) => j.id === first.id)?.attempt ?? 1).toBe(1);
     expect(posts.some((p) => p.url.includes("/retry"))).toBe(false);
     expect(s.jobOn(el)).toBeNull();
-    // On the grid: an edit, and a comment that takes it. They go at once, as one job.
+    // On the grid: an edit, and a comment that takes it, about the badge too. They go at once, as one job.
     history.apply(el, "margin-top", "8px");
-    const commented = s.comment(el, "Add another card", [], undefined, [], [], true);
+    const commented = s.comment(el, "Add another card", [], undefined, [badge], [], true);
     expect(commented.waiting).toBe(false);
     const posted = posts.at(-1)?.body as { id: string; changeSet: { request: { kind: string }; edits: Array<{ changes: Array<{ property: string }> }> } };
     expect(posted.changeSet.request.kind).toBe("comment");
@@ -686,7 +686,7 @@ describe("PilotSession", () => {
     // What the first job landed on the grid settled then; the badge's outline is still its, for after the answer.
     expect(history.changes({ job: first.id }).map((c) => c.property)).toEqual(["outline-color"]);
     expect(s.jobOn(el)?.id).toBe(posted.id);
-    // The answer, while the comment's job is on the grid: it waits.
+    // The answer, while the comment's job is on the badge too: it waits.
     const thread = s.threadFor(badge) as NonNullable<ReturnType<typeof s.threadFor>>;
     const before = posts.length;
     s.comment(badge, "Only this");
@@ -704,6 +704,57 @@ describe("PilotSession", () => {
     expect(s.jobs.find((j) => j.id === first.id)?.answerWaits).toBeUndefined();
     expect(s.jobOn(badge)?.id).toBe(first.id);
     badge.remove();
+  });
+
+  it("answered, the job is on what the answer is about: All of them, the element and its look-alikes; the rest settles", async () => {
+    vi.useFakeTimers();
+    const wrap = document.createElement("div");
+    wrap.innerHTML = `<span class="badge">A</span><span class="badge">B</span><span class="badge">C</span>`;
+    document.body.append(wrap);
+    const [badge, ...copies] = [...wrap.querySelectorAll(".badge")] as HTMLElement[];
+    let s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    // The card's padding (landed), and one badge's outline, which the agent asks about.
+    history.apply(el, "padding-top", "20px");
+    history.apply(badge as HTMLElement, "outline-color", "red");
+    const sent = s.send() as { id: string };
+    sheet.textContent = ".card { padding-top: 20px; }";
+    const question = { text: "Every **Badge**, or only this one?", choices: ["All of them", "Only this", "New variant"], element: 2 };
+    hub().emit({ type: "job", job: job({ id: sent.id, status: "done", agent, question }) });
+    await vi.advanceTimersByTimeAsync(0);
+    s.comment(badge as HTMLElement, "All of them");
+    // On the badge and the two like it, which the agent changes with the component; not on the card, done already.
+    expect(s.busy.map((b) => b.element)).toEqual([badge, ...copies]);
+    expect(s.jobOn(el)).toBeNull();
+    expect(history.changes({ job: sent.id }).map((c) => c.property)).toEqual(["outline-color"]);
+    // After a reload too, by their selectors.
+    s.destroy();
+    s = session();
+    expect(s.busy.map((b) => b.element)).toEqual([badge, ...copies]);
+    s.destroy();
+    wrap.remove();
+  });
+
+  it("answered Only this: the job is on the question's element, and on what hasn't landed", async () => {
+    vi.useFakeTimers();
+    const wrap = document.createElement("div");
+    wrap.innerHTML = `<span class="badge">A</span><span class="badge">B</span>`;
+    document.body.append(wrap);
+    const badge = wrap.querySelector(".badge") as HTMLElement;
+    const s = session();
+    hub().emit({ type: "agents", agents: [agent], waiting: 1 });
+    history.apply(el, "padding-top", "20px");
+    history.apply(badge, "outline-color", "red");
+    const sent = s.send() as { id: string };
+    const question = { text: "Every **Badge**, or only this one?", choices: ["All of them", "Only this"], element: 2 };
+    hub().emit({ type: "job", job: job({ id: sent.id, status: "done", agent, question }) });
+    await vi.advanceTimersByTimeAsync(0);
+    s.comment(badge, "Only this");
+    // The badge alone, and the card, whose padding hasn't landed: still the job's.
+    expect(s.busy.map((b) => b.element)).toEqual([badge, el]);
+    sheet.textContent = ".card { padding-top: 20px; }";
+    s.destroy();
+    wrap.remove();
   });
 
   it("a job on several elements: the question goes on the one it names, not the first", async () => {

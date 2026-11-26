@@ -183,6 +183,8 @@ When part of a job needs your decision, the agent asks in a thread instead of gu
 
 Or write your own answer. Selecting every instance of a component (Select similar) already says "all of them", so the agent changes the component without asking.
 
+Once you answer, the loaders show where the agent works now: on the element it asked about, and with **All of them** on every instance like it on the page. The rest of the job's elements are done.
+
 ## Measuring distances
 
 With an element selected, **hold Alt (Option)** and move the pointer: Pilot shows the distances from the selection to the element under the pointer (or to its parent), in red. Release Alt to go back.

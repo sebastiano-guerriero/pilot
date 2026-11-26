@@ -1,9 +1,10 @@
 import type { AgentInfo, AgentQuestion, AgentRequest, AgentSession, ChangeResult, ChangeSet, CommentAction, CommentAttachment, CommentMessage, CommentReference, ElementTarget, FileToken, Job, JobError, JobStatus, ProjectComponent, ProjectSkill, PropChange, PropSpec, WidthCheck } from "@pilot/protocol";
-import { attachmentType, requestTargets } from "@pilot/protocol";
+import { attachmentType, requestTargets, SHARED_CHOICES } from "@pilot/protocol";
 import { checkWidths, problemLines, snapshotAt, type StyleSnapshot, widthsToCheck } from "../checks/widths.ts";
 import { componentProps } from "../dom/component.ts";
+import { similarOf } from "../dom/similar.ts";
 import { type ChangeCounts, countChanges } from "../ui/changesLabel.ts";
-import { describeElement, findTarget, structuralSelector, uniqueSelector } from "../dom/target.ts";
+import { describeElement, type EditableElement, findTarget, structuralSelector, uniqueSelector } from "../dom/target.ts";
 import { buildChangeSet, buildRequest } from "../edits/changeSet.ts";
 import type { EditHistory, RecordedChange } from "../edits/history.ts";
 import { changedLook, type Look, looksOf } from "../edits/look.ts";
@@ -37,6 +38,12 @@ export interface JobRecord {
   answer?: string;
   /** Answered while another job was on its elements: the answer goes once that one is finished (see answer). */
   answerWaits?: boolean;
+  /**
+   * Once answered, the elements the job is on (see answerElements): what the
+   * answer is about, not every element it was sent with. Plain data, found
+   * again by selector after a reload.
+   */
+  on?: ElementTarget[];
   /** The agent's notes, when done. */
   notes?: string;
   createdAt: string;
@@ -403,7 +410,7 @@ export class PilotSession {
     const known = this.jobElements.get(job.id)?.filter((e) => e.isConnected);
     if (known?.length) return known;
     const { request, edits } = job.changeSet;
-    const targets = request ? requestTargets(request) : edits.map((e) => e.target);
+    const targets = job.on ?? (request ? requestTargets(request) : edits.map((e) => e.target));
     const found = targets.map((t) => findTarget(t)).filter((e): e is Element => !!e);
     if (found.length) this.jobElements.set(job.id, found);
     return found;
@@ -974,10 +981,44 @@ export class PilotSession {
 
   /** The designer answered a job's question: back to the agent with it (posted again when the hub doesn't have it, a new hub). */
   private answer(job: JobRecord, answer: string): void {
+    // The job is on what the answer is about from now (its loaders, what waits for it): what it landed
+    // elsewhere settles, so those elements are free.
+    const about = this.answerElements(job, answer);
+    if (about.length) {
+      settleLanded(this.history, job.id);
+      // Elements whose changes didn't land are still the job's too.
+      const left = this.history.changes({ job: job.id }).map((c) => c.element);
+      const on = [...new Set([...about, ...left])].filter((e) => e.isConnected);
+      this.jobElements.set(job.id, on);
+      this.patch(job.id, { on: on.map((e) => describeElement(e)) });
+    }
     // Another job went on its elements while it waited for the answer (see holds): the answer waits for it, as comments do.
     const waits = this.heldByOther(job);
     this.patch(job.id, { status: "queued", answer, notes: undefined, ...(waits ? { answerWaits: true } : {}) });
     if (!waits) this.sendAnswer(job, answer);
+  }
+
+  /**
+   * The elements an answered job is on: the one its question is about (all
+   * of its elements when it names none), and for **All of them** their
+   * look-alikes too, the instances the agent now changes with the component.
+   * Before, it stayed on every element it was sent with: the loaders spun on
+   * two the agent had finished, and not on the instances it was changing.
+   * Any other answer (Only this, New variant, the designer's own words) is
+   * about the question's element.
+   */
+  private answerElements(job: JobRecord, answer: string): Element[] {
+    const { request, edits } = job.changeSet;
+    const targets = request ? requestTargets(request) : edits.map((e) => e.target);
+    const number = job.question?.element;
+    const about = (number ? [targets[number - 1]] : targets).flatMap((t) => {
+      const element = t && findTarget(t);
+      return element ? [{ target: t, element }] : [];
+    });
+    const elements = about.map((a) => a.element);
+    if (answer.trim().toLowerCase() !== SHARED_CHOICES.all.label.toLowerCase()) return elements;
+    const copies = about.flatMap((a) => (a.target.lookAlikes ? similarOf(a.element as EditableElement).elements : []));
+    return [...new Set([...elements, ...copies])];
   }
 
   /** Whether a job other than `job` holds any of its elements (see holds). */
