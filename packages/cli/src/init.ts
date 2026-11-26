@@ -461,7 +461,7 @@ function workspaceApps(cwd: string): string[] {
     for (const name of readdirSync(dir)) {
       const pkg = readJson<PackageJson>(join(dir, name, "package.json"));
       if (pkg && detectFramework(join(dir, name), { ...pkg.dependencies, ...pkg.devDependencies }).kind !== "unknown")
-        found.push(join(group, name));
+        found.push(`${group}/${name}`); // as Pilot shows paths (paths.ts)
     }
   }
   return found;

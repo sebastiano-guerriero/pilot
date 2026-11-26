@@ -28,7 +28,7 @@ const BUDGET_MS = 1500;
 function isTokenJson(path: string): boolean {
   const name = basename(path).toLowerCase();
   if (!name.endsWith(".json") || name === "package.json" || name.startsWith("tsconfig")) return false;
-  return /(^|[.-])(design-)?tokens?\.json$/.test(name) || /(^|\/)(design-)?tokens?$/.test(dirname(path).toLowerCase());
+  return /(^|[.-])(design-)?tokens?\.json$/.test(name) || /(^|[\\/])(design-)?tokens?$/.test(dirname(path).toLowerCase());
 }
 
 /** A Sass file named for tokens. */
