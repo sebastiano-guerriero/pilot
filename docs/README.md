@@ -1,6 +1,6 @@
 # Pilot docs
 
-These are the working docs for whoever builds Pilot, people and agents. The [README](../README.md) at the root is for people who want to use Pilot: what it is and how to install it. Everything else lives here.
+These are the working docs for whoever builds Pilot, people and agents. The [README](../README.md) at the root is for people who want to use Pilot: what it is and how to install it. How to use it, task by task, is the user guide, [GUIDE.md](../packages/usepilot/GUIDE.md), which ships with the package and must match each release ([development.md](development.md), *The user guide*). Everything else lives here.
 
 Each doc covers one area. Read the one for the area you're changing before you change it, and update it in the same change.
 
@@ -26,5 +26,6 @@ The docs record what the code can't say by itself: how Pilot behaves, what was d
 - **Say who owns a look.** The project owner designs Pilot's visuals. Say when a part is the owner's design, a placeholder pending design, or derived from a designed one (an icon rotated or mirrored), so nobody "improves" a design or mistakes a placeholder for one.
 - **Point at the code** with a link to the file once per section, and name functions in backticks. `pnpm test` checks that every link in the docs and the README points at a file that exists (`docs/links.test.ts`).
 - **One home per fact.** If two docs need the same thing, one says it and the other links there.
+- **A change users can notice updates the guide too** ([GUIDE.md](../packages/usepilot/GUIDE.md)): added, changed or removed, in the user's words. The docs say how and why; the guide says what to do.
 - **Fix what's stale when you see it.** A shipped feature still listed as planned, an open question already answered: correct it in the same change.
 - **Roadmap:** tick an item when it ships, as one line. The details go in the doc for its area, not in the roadmap.

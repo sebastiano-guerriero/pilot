@@ -11,6 +11,13 @@ The docs in `docs/` are the project's living spec, and the memory between sessio
 - resolve an open question (move the answer into the area's doc),
 - change how Pilot is installed or set up: the root [README.md](README.md) and [packages/usepilot/README.md](packages/usepilot/README.md) (npm's page), both.
 
+**The user guide must always match the release** ([packages/usepilot/GUIDE.md](packages/usepilot/GUIDE.md), shipped in the package and printed by `npx usepilot guide`: what users and their agents read to learn how to do something in Pilot). In the same change, from the user's point of view (what to press and type, what happens; no code names):
+- **a feature added:** add it to the guide, in its task's section, and to the shortcuts table if it has a key;
+- **a feature changed** (a key, a name, how it works): rewrite what the guide says about it;
+- **a feature removed:** take it out of the guide, everywhere it's mentioned (and add it to *What Pilot doesn't do (yet)* if people would look for it).
+
+Temporary things (test buttons, flags kept off) stay out. Releasing checks the guide against every change since the last tag, and `docs/guide.test.ts` fails until its version line is the package's ([docs/development.md](docs/development.md), *The user guide*).
+
 Write behavior and reasons, not what the code already holds (sizes, colors, timings, lists kept in one file). Fix what's stale when you see it. `pnpm test` checks the docs' links.
 
 ## Product rules

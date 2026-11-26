@@ -30,8 +30,8 @@ Before finishing a change, run `pnpm typecheck` and `pnpm test`.
 | --- | --- | --- |
 | `@pilot/overlay` | [packages/overlay](../packages/overlay) | The in-page editor: Shadow DOM mount, launch/close, toolbar, property search, editors, the bridge client. Builds `pilot.js` (API) and `pilot-auto.js` (self-mounting). |
 | `@pilot/protocol` | [packages/protocol](../packages/protocol) | Shared `ChangeSet` types, `formatPrompt()`, `BRIDGE_VERSION`. |
-| `@pilot/cli` | [packages/cli](../packages/cli) | The `usepilot` command: with no command, Pilot for the project in its folder, running the agent's command-line tool for each job (`--agent`, `--url`: [run.ts](../packages/cli/src/run.ts), [agents.ts](../packages/cli/src/agents.ts); [handoff.md](handoff.md), *Agent runs*), `init` (sets Pilot up in a project, checks the agent's tool, removes the old chat setup: [init.ts](../packages/cli/src/init.ts), [legacy.ts](../packages/cli/src/legacy.ts)) and `update` (brings it up to date: [update.ts](../packages/cli/src/update.ts)); `mcp` only tells an old chat setup what to do instead. Bundled into one file by tsup, dependencies included. |
-| `usepilot` | [packages/usepilot](../packages/usepilot) | The one published package: the overlay's build (`dist/`) and the CLI's (`cli/`), copied in by its `build` script (which `prepack` runs), hand-written types (`types/`), and npm's README. Exports `usepilot` (`mountPilot`) and `usepilot/auto` (mounts with defaults). |
+| `@pilot/cli` | [packages/cli](../packages/cli) | The `usepilot` command: with no command, Pilot for the project in its folder, running the agent's command-line tool for each job (`--agent`, `--url`: [run.ts](../packages/cli/src/run.ts), [agents.ts](../packages/cli/src/agents.ts); [handoff.md](handoff.md), *Agent runs*), `init` (sets Pilot up in a project, checks the agent's tool, removes the old chat setup: [init.ts](../packages/cli/src/init.ts), [legacy.ts](../packages/cli/src/legacy.ts)) `update` (brings it up to date: [update.ts](../packages/cli/src/update.ts)) and `guide` (prints the user guide, bundled in as text, so it's always the installed version's); `mcp` only tells an old chat setup what to do instead. Bundled into one file by tsup, dependencies included. |
+| `usepilot` | [packages/usepilot](../packages/usepilot) | The one published package: the overlay's build (`dist/`) and the CLI's (`cli/`), copied in by its `build` script (which `prepack` runs), hand-written types (`types/`), npm's README, and the user guide ([GUIDE.md](../packages/usepilot/GUIDE.md), *The user guide* below). Exports `usepilot` (`mountPilot`) and `usepilot/auto` (mounts with defaults). |
 | `playground` | [apps/playground](../apps/playground) | A plain Vite page for developing Pilot. |
 
 The workspace packages (`@pilot/overlay`, `@pilot/protocol`, `@pilot/cli`) are internal and never published under those names: `usepilot` bundles them.
@@ -119,19 +119,28 @@ The pages are saved HTML, rendered from a copy of the project whose every tag ca
 The published package is [packages/usepilot](../packages/usepilot). Publishing builds it first (`prepack` runs the build and copies `dist/`, `cli/` and the license in).
 
 1. Bump the version in [packages/usepilot/package.json](../packages/usepilot/package.json) (0.x for now: a patch for fixes, a minor for new features and for a new bridge version, which older Pilots can't join), or run `npm version patch --no-git-tag-version` there. Set the same version in [version.ts](../packages/cli/src/version.ts) (`VERSION`: `update` and `init` compare with it); `version.test.ts` fails until both match.
-2. Run the smoke test ([What each agent does that Pilot relies on](#what-each-agent-does-that-pilot-relies-on)) in the clients you can, with this version; fix what breaks first.
-3. Publish, from that folder (it asks for your npm security key):
+2. **Bring the user guide in line with this release** ([GUIDE.md](../packages/usepilot/GUIDE.md)): go through every change since the last tag (`git log vX.Y.Z..HEAD`) and check that each one a user can notice is in the guide as it now works, and that nothing removed or changed is still described. Then set the version in its first lines; `docs/guide.test.ts` fails until it matches the package's (*The user guide*, below).
+3. Run the smoke test ([What each agent does that Pilot relies on](#what-each-agent-does-that-pilot-relies-on)) in the clients you can, with this version; fix what breaks first.
+4. Publish, from that folder (it asks for your npm security key):
 
    ```bash
    cd packages/usepilot && npm publish
    ```
 
-4. Commit the version bump.
-5. **Tag it and publish it on GitHub**, right after npm, without being asked: an annotated tag `vX.Y.Z` on the version-bump commit (`git tag -a vX.Y.Z <commit> -m "usepilot X.Y.Z"`, pushed), then a release from it (`gh release create vX.Y.Z --verify-tag --title vX.Y.Z --notes-file …`). The notes are written for users, not copied from commits: a few bullets on what's new since the last release, in plain language, and an **Update every agent** line when the bridge version changed (older Pilots can't join the hub). Only versions published on npm get one.
+5. Commit the version bump.
+6. **Tag it and publish it on GitHub**, right after npm, without being asked: an annotated tag `vX.Y.Z` on the version-bump commit (`git tag -a vX.Y.Z <commit> -m "usepilot X.Y.Z"`, pushed), then a release from it (`gh release create vX.Y.Z --verify-tag --title vX.Y.Z --notes-file …`). The notes are written for users, not copied from commits: a few bullets on what's new since the last release, in plain language, and an **Update every agent** line when the bridge version changed (older Pilots can't join the hub). Only versions published on npm get one.
 
 npm can take a minute or two to show a new version. Users update with `npm install -D usepilot@latest`. A published version can't be changed or reused: fix forward with a new version. To try the package before publishing, `npm pack` makes the tarball, and a separate app installs it with `npm install -D <path to the .tgz>`.
 
 **Install steps live in two places:** the root [README](../README.md) (GitHub) and [packages/usepilot/README.md](../packages/usepilot/README.md) (npm's page). Change both together.
+
+### The user guide
+
+[packages/usepilot/GUIDE.md](../packages/usepilot/GUIDE.md) is how to use Pilot, task by task, for the people who design with it and for their agents: asked "how do I make this change only on mobile?", an agent in their project answers from the guide instead of reading Pilot's minified code, and says so when Pilot doesn't do something. It ships in the package (`files`), so each project's copy (`node_modules/usepilot/GUIDE.md`) is the installed version's; `npx usepilot guide` prints it (bundled into the CLI as text, so it can't drift from the version run), both READMEs point to it, and `init` and `update` name it in what they print.
+
+- **It must match the release.** Every change a user can notice updates the guide in the same change: a new feature added, a changed one rewritten, a removed one taken out (and listed under *What Pilot doesn't do (yet)* when people would look for it). Temporary things (test buttons, a flag kept off) stay out. Releasing checks it once more against every change since the last tag (step 2 above), and `docs/guide.test.ts` fails until the guide's version line is the package's, so a release can't skip it.
+- **The user's view only**: what to press and type, and what happens, in plain words. No function or file names, no reasons or rejected alternatives: those are the docs' (this folder), which remain the spec. The guide repeats behavior the docs describe, on purpose: it's for another reader, and it ships, while the docs don't.
+- **Why a file in the package** rather than the docs or a website: the docs are for whoever builds Pilot, and the repository is private; a site would describe the latest version, not the one installed. `init` doesn't add a pointer to the project's `AGENTS.md` or `CLAUDE.md`: that would edit the user's agent instructions, and agents look at a package's README first.
 
 **Names:** Pilot is published as one package, `usepilot` (the plain `pilot` name on npm is an abandoned 2011 library). The npm organization `usepilot` reserves the `@usepilot/…` scope in case Pilot is ever split into several packages. The site will be `usepilot.design`.
 

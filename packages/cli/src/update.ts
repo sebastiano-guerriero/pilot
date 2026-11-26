@@ -97,7 +97,9 @@ ${pm} ${args.join(" ")}
     : "";
   return `${headline}
 ${removedLine}
-${changed ? `Next:\n${steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n` : "Nothing else to do.\n"}`;
+${changed ? `Next:\n${steps.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n` : "Nothing else to do.\n"}
+How to use Pilot, this version: \`npx usepilot guide\` (also in \`node_modules/usepilot/GUIDE.md\`).
+`;
 }
 
 /** The bridge version of the installed Pilot (read from its CLI bundle), before it's replaced; null when unknown. */

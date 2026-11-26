@@ -12,5 +12,7 @@ export default defineConfig({
   platform: "node",
   clean: true,
   noExternal: [/.*/],
+  // The user guide (`usepilot guide`) is bundled as text.
+  loader: { ".md": "text" },
   banner: { js: 'import { createRequire as __pilotRequire } from "node:module"; const require = __pilotRequire(import.meta.url);' },
 });

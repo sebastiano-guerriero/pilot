@@ -60,6 +60,8 @@ Then restart your app's dev server and `npx usepilot`. Updating from 0.13 or ear
 
 ## Using Pilot
 
+Everything Pilot does, task by task, is in the [guide](packages/usepilot/GUIDE.md), which ships with Pilot: `npx usepilot guide` prints it for the version you have, and it's in your project at `node_modules/usepilot/GUIDE.md`. Ask your agent how to do something in Pilot and it can answer from there. The short version:
+
 1. **Open your app** with `npx usepilot` running. Closed Pilot, or moved to another page? **Option+P** (Alt+P) opens it again.
 2. **Select** with the cursor button in the toolbar, then click any element. Its property dialog opens next to it. Shift+click selects several, to edit them together.
 3. **Search and edit.** Type a property (`p`, `pt`, `w`, `gap`, `display`, `aspect`…), press Tab to go into its editor, then type or drag a value. Cmd/Ctrl+Z undoes.

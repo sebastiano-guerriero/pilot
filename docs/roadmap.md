@@ -5,6 +5,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 ## Next
 
 - [x] **One description of what Pilot is, everywhere:** "Design in your running app. Your agents write the code." in both READMEs, `usepilot help`, product.md and the loop diagram.
+- [x] **A user guide that ships with Pilot** ([GUIDE.md](../packages/usepilot/GUIDE.md)): every feature task by task, in the package and printed by `npx usepilot guide`, so a user's agent answers how-to questions from it; kept in line with each release ([development.md](development.md), *The user guide*)
 - [x] **Pilot runs the agent for each Send** (0.14.0), instead of a chat parked in `pilot_wait_for_edits` ([handoff.md](handoff.md), *Agent runs*). **Windows decided it** (it had to work there, or this was a dead end): Claude Code, Codex and Cursor pass on Windows, Linux and macOS.
   - [x] Tested on macOS with Claude Code, Codex and Cursor (jobs, follow-ups, two jobs at once, file and network limits); `scripts/agent-runs-check.mjs` and the Agent runs workflow
   - [x] Codex on Windows and Linux (Windows needs `windows.sandbox="unelevated"`)
@@ -162,6 +163,7 @@ Items marked *(chat loop)* were for an agent's chat running Pilot over MCP, up t
 - [x] Skills in the `/` menu: the agent's own skills (its project and home folders), picked as a chip, and the run starts with it as the agent's chat does (`/name`, `$name`) ([handoff.md](handoff.md), *Skills*)
   - [x] Replies: concise for comments (no longer one sentence), as the skill says with a skill; the skills group in the `@` list's design, the chip an action's
   - [ ] A Claude Code plugin's skills (`plugin:skill`), if designers ask
+- Comment screenshots: tried and shelved (branch `comment-screenshot`: capture the tab, drag an area, draw on it, attach). Browsers ask for screen-capture permission on every capture and never remember it, which makes it unusable as is. Ways without the prompt, each with a cost: keep one capture running while the comment box is open (the sharing bar stays up), a browser extension (`captureVisibleTab`), or the hub grabbing the screen (an OS permission, and mapping the page to the screen).
 - [ ] Element markers for unsent changes
 - [x] Comments, phase 2: the agent asks the designer a question in a thread, without waiting (in its reply's `pilot` block; `pilot_done`'s `question` in the chat loop), and the answer sends the job back to the same session
 - [x] Faster jobs: Pilot finds each element's code in the project for the agent, each job's step times recorded (*(chat loop)*: the edit guidelines read once)

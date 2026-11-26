@@ -38,6 +38,7 @@
     "cli",
     "types",
     "README.md",
+    "GUIDE.md",
     "LICENSE.md"
   ],
   "scripts": {

@@ -177,7 +177,7 @@ ${cwd} is a monorepo's root, not an app. Run \`npx usepilot@latest init\` again 
   } else todo.push(loadStep(framework, cwd));
 
   todo.push(
-    `**Tell the user**, in a few lines: Pilot is set up. To use it, run \`npx usepilot\` in ${cwd}, in a terminal beside the app's dev server, and open the app: Pilot opens on every page. They design and press Send (or comment on an element), Pilot runs their agent for each job, and the terminal shows what it does. No chat needs to stay open; without \`npx usepilot\` running, the toolbar says so.`,
+    `**Tell the user**, in a few lines: Pilot is set up. To use it, run \`npx usepilot\` in ${cwd}, in a terminal beside the app's dev server, and open the app: Pilot opens on every page. They design and press Send (or comment on an element), Pilot runs their agent for each job, and the terminal shows what it does. No chat needs to stay open; without \`npx usepilot\` running, the toolbar says so. For how to do anything in Pilot, \`npx usepilot guide\` prints the guide for this version (also in \`node_modules/usepilot/GUIDE.md\`): read it when they ask how Pilot works, rather than the package's code.`,
   );
 
   return `# Pilot: set up

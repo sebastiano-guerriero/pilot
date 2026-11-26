@@ -2,10 +2,12 @@
 /**
  * `usepilot` CLI entry: with no command, Pilot for this project (run.ts: it
  * runs your agent for each job); `init` sets Pilot up in a project, `update`
- * brings it up to date.
+ * brings it up to date, `guide` prints the user guide (bundled in, so it's
+ * always this version's).
  */
 import { createInterface } from "node:readline/promises";
 import { type AgentKind, AGENTS, isAgentKind } from "./agents.ts";
+import guide from "../../usepilot/GUIDE.md";
 import { init } from "./init.ts";
 import { RunnerError, startRunner } from "./run.ts";
 import { update } from "./update.ts";
@@ -28,6 +30,8 @@ Usage: npx usepilot [command]
   update  Update Pilot in this project to the latest, and remove its old
           chat setup. Prints what's left (restart the app and npx usepilot).
           Run it in the app's folder.
+  guide   Print Pilot's guide: how to do each thing in Pilot, for this
+          version (also in node_modules/usepilot/GUIDE.md)
   help    Show this message
 `;
 
@@ -101,6 +105,9 @@ switch (command) {
   case "--help":
   case "-h":
     process.stdout.write(HELP);
+    break;
+  case "guide":
+    process.stdout.write(guide);
     break;
   case "mcp":
     process.stderr.write(MCP_GONE);

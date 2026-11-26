@@ -4,13 +4,78 @@
     {
       "name": "playground",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["dev"],
+      "runtimeArgs": [
+        "dev"
+      ],
       "port": 5180
+    },
+    {
+      "name": "playground-dom-editing",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--dir",
+        "../pilot-dom-editing",
+        "--filter",
+        "playground",
+        "dev",
+        "--port",
+        "5181",
+        "--strictPort"
+      ],
+      "port": 5181
+    },
+    {
+      "name": "playground-5182",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "playground",
+        "dev",
+        "--port",
+        "5182",
+        "--strictPort"
+      ],
+      "port": 5182
+    },
+    {
+      "name": "playground-filters",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--dir",
+        "../pilot-filters",
+        "--filter",
+        "playground",
+        "dev",
+        "--port",
+        "5184",
+        "--strictPort"
+      ],
+      "port": 5184
+    },
+    {
+      "name": "playground-canvas",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--dir",
+        "../pilot-canvas",
+        "--filter",
+        "playground",
+        "dev",
+        "--port",
+        "5190",
+        "--strictPort"
+      ],
+      "port": 5190
     },
     {
       "name": "lab-responsive",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "../pilot-lab-responsive", "run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "../pilot-lab-responsive",
+        "run",
+        "dev"
+      ],
       "port": 5183
     },
     {
@@ -20,10 +85,67 @@
       "port": 5188
     },
     {
+      "name": "lab-gmail",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "../lab01-gmail-mono",
+        "run",
+        "dev"
+      ],
+      "port": 5173
+    },
+    {
       "name": "experiments",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["dev:experiments"],
+      "runtimeArgs": [
+        "dev:experiments"
+      ],
       "port": 5199
+    },
+    {
+      "name": "components-lab",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "/private/tmp/claude-501/-Users-sebastiano-Github-pilot/5b587b8e-70df-4f68-8a23-a043f2cb2f77/scratchpad/components-lab",
+        "run",
+        "dev"
+      ],
+      "port": 5186
+    },
+    {
+      "name": "lab-react",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "../pilot-lab-react",
+        "run",
+        "dev"
+      ],
+      "port": 5187
+    },
+    {
+      "name": "lab-sandbox",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "../pilot-lab-sandbox",
+        "run",
+        "dev"
+      ],
+      "port": 5188
+    },
+    {
+      "name": "lab-modes",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "../pilot-lab-modes",
+        "run",
+        "dev"
+      ],
+      "port": 5192
     }
   ]
 }
