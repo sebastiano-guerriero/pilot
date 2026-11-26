@@ -2,6 +2,7 @@ import type { ElementState, WidthRange } from "@pilot/protocol";
 import { stateSelector } from "../edits/states.ts";
 import { mediaRange } from "./breakpoints.ts";
 import { type Placed, baseValue, beats, declarationsOf, subjectStates } from "./declared.ts";
+import { copyFor } from "./excluded.ts";
 
 /**
  * Pilot's changes shown in the page's own CSS (the owner's call, 2026-11-26):
@@ -98,7 +99,7 @@ export function renderAnchored(requests: AnchorRequest[], check: boolean): Ancho
     const entry = shown.get(key);
     const looked = !entry || check || !live(entry.rule);
     const spot = looked ? spotFor(request) : null;
-    if (entry && live(entry.rule) && entry.element === request.element && (!looked || (spot && byOf(spot) === entry.by))) {
+    if (entry && live(entry.rule) && entry.element === request.element && (!looked || (spot && byOf(spot, request.element) === entry.by))) {
       if (entry.text !== request.text) {
         entry.style.cssText = request.text;
         entry.text = request.text;
@@ -114,18 +115,21 @@ export function renderAnchored(requests: AnchorRequest[], check: boolean): Ancho
       left.push(request);
       continue;
     }
-    const placed = place(spot, request, lastBy.get(byOf(spot)));
+    const by = byOf(spot, request.element);
+    const placed = place(spot, request, lastBy.get(by));
     if (!placed) {
       left.push(request);
       continue;
     }
-    lastBy.set(byOf(spot), placed.rule);
-    shown.set(key, { element: request.element, text: request.text, by: byOf(spot), ...placed });
+    lastBy.set(by, placed.rule);
+    shown.set(key, { element: request.element, text: request.text, by, ...placed });
   }
   return left;
 }
 
-const byOf = (spot: Spot): CSSStyleDeclaration | CSSRule => (spot.kind === "beside" ? spot.declared.rule : spot.unit);
+/** What a change is placed by: beside a rule the element skips (a cleared field, dom/excluded.ts), its copy's declarations. */
+const byOf = (spot: Spot, element: Element): CSSStyleDeclaration | CSSRule =>
+  spot.kind === "beside" ? (copyFor(spot.declared.rule, element) ?? spot.declared.rule) : spot.unit;
 
 const sameRange = (a: { min?: number; max?: number }, b: { min?: number; max?: number }) => a.min === b.min && a.max === b.max;
 const overlaps = (a: { min?: number; max?: number }, b: { min?: number; max?: number }) =>
@@ -230,8 +234,8 @@ function place(spot: Spot, request: AnchorRequest, after?: CSSRule): { rule: CSS
     const container = containerOf(spot.unit);
     return container ? insert(container, own(spot.selector), indexIn(container, spot.unit) + 1) : null;
   }
-  // Beside: nested in the rule the declarations belong to, right after them.
-  const owner = spot.declared.rule.parentRule as RuleLike | null;
+  // Beside: nested in the rule the declarations belong to, right after them (the copy's, when the element skips the rule).
+  const owner = (copyFor(spot.declared.rule, request.element) ?? spot.declared.rule).parentRule as RuleLike | null;
   if (!owner) return null;
   const nested = `&:where(${where}) { ${request.text} }`;
   // The rule's own declarations: first among its nested rules. A block of declarations after some (CSSNestedDeclarations): right after it.

@@ -1,8 +1,13 @@
-import type { WidthRange } from "@pilot/protocol";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { describeWidths } from "@pilot/protocol";
+import { useEffect, useReducer, useRef, useState } from "preact/hooks";
 import { pageBreakpoints } from "../../../dom/breakpoints.ts";
-import { inWidths } from "../../../edits/widths.ts";
+import { type Span, sameKey } from "../../../edits/reach.ts";
+import { type WidthChip, inWidths } from "../../../edits/widths.ts";
 import { px } from "../../px.ts";
+import type { Reach } from "../PropertyDialog/PropertyDialog.tsx";
+
+/** How long the bars stay after the property is no longer in use: their way out (ViewportWidth.css), in ms. */
+const LEAVE_MS = 150;
 
 /** How long the bar stays after the window's last resize, in ms. */
 const RESIZE_LINGER = 800;
@@ -11,7 +16,12 @@ interface ViewportWidthProps {
   /** The window's width now (useViewportWidth). */
   width: number;
   /** The width chip, to mark the button when the window is outside its range. */
-  widths: WidthRange | null;
+  widths: WidthChip | null;
+  /**
+   * The property in use, where its values apply among the widths: shown, as
+   * bars under the ruler, while it's there (PropertyDialog's onReach).
+   */
+  reach?: Reach | null;
   /**
    * The width or a breakpoint was clicked: `shift` when Shift was held (the
    * width as the range's upper end).
@@ -27,8 +37,31 @@ interface ViewportWidthProps {
  * Clicking the width or a breakpoint sets the width chip (see clickWidth):
  * `from` that width, or with Shift `to` it. A breakpoint is drawn over the
  * width button where they meet.
+ *
+ * While a property is in use and has rules for some widths (`reach`), the
+ * bar shows too, with bars under the breakpoints: where each of its values
+ * applies (edits/reach.ts spansOf), green where the edits go, grey for its
+ * other rules, none where nothing declares it. Where a value applies, not
+ * how its media query is written: `md:pt-4` before `lg:pt-12` is md to lg
+ * (the owner's design, 2026-11-26). The ruler is the window, so a bar past
+ * its width is cut at the right edge.
  */
-export function ViewportWidth({ width, widths, onPick }: ViewportWidthProps) {
+export function ViewportWidth({ width, widths, reach = null, onPick }: ViewportWidthProps) {
+  // The bars stay a moment after the property is no longer in use, so they leave as the ruler does.
+  // Kept in the same render (not an effect's), so they never blink out before fading.
+  const last = useRef<Reach | null>(reach);
+  const [, gone] = useReducer((n: number) => n + 1, 0);
+  if (reach) last.current = reach;
+  const bars = reach ?? last.current;
+  useEffect(() => {
+    if (reach) return;
+    const timer = setTimeout(() => {
+      last.current = null;
+      gone(0);
+    }, LEAVE_MS);
+    return () => clearTimeout(timer);
+  }, [reach]);
+
   // Shown while the window is being resized (not on the first render).
   const [resizing, setResizing] = useState(false);
   const mounted = useRef(false);
@@ -50,8 +83,8 @@ export function ViewportWidth({ width, widths, onPick }: ViewportWidthProps) {
     setBreakpoints((current) => (current.join() === next.join() ? current : next));
   };
   useEffect(() => {
-    if (resizing) refresh();
-  }, [resizing]);
+    if (resizing || reach) refresh();
+  }, [resizing, !!reach]);
 
   const pick = (value: number) => ({
     title: `Click: changes from ${value}px. Shift+click: to ${value}px.`,
@@ -61,9 +94,31 @@ export function ViewportWidth({ width, widths, onPick }: ViewportWidthProps) {
   });
 
   return (
-    <div class="viewport-width" data-resizing={resizing || undefined} onPointerEnter={refresh}>
+    <div
+      class="viewport-width"
+      data-resizing={resizing || undefined}
+      data-reach={reach ? "" : undefined}
+      data-bars={bars ? "" : undefined}
+      onPointerEnter={refresh}
+    >
       <div class="bar">
         <div class="ticks" />
+        {bars && (
+          // Keyed by the property: another property in use glows the green bar again.
+          <div key={bars.property} class="reach" aria-hidden="true">
+            {bars.spans
+              .filter((s) => s.min < width && (s.value !== "" || isTarget(s, bars)))
+              .map((s) => (
+                <div
+                  key={`${s.min}`}
+                  class="span"
+                  data-target={isTarget(s, bars) || undefined}
+                  style={spanBox(s, width)}
+                  title={`${spanWidths(s)}: ${bars.property} ${s.value || "not set"}`}
+                />
+              ))}
+          </div>
+        )}
         <button type="button" class="width" data-outside={!inWidths(widths, width) || undefined} {...pick(width)}>
           {width}
         </button>
@@ -78,4 +133,28 @@ export function ViewportWidth({ width, widths, onPick }: ViewportWidthProps) {
       </div>
     </div>
   );
+}
+
+/** The span is where the edits go: its value is declared where they're recorded (All widths: everywhere). */
+function isTarget(span: Span, reach: Reach): boolean {
+  return reach.target === "all" || sameKey(span.key, reach.target);
+}
+
+/** `0–767px`, `from 1024px`. */
+function spanWidths(span: Span): string {
+  return span.min === 0 && span.max === undefined ? "every width" : describeWidths({ ...(span.min > 0 && { min: span.min }), ...(span.max !== undefined && { max: span.max }) }).replace(/^to /, "0–");
+}
+
+/**
+ * Where a span's bar is drawn. Width `w` is the pixel from `w` to `w + 1`, as
+ * its tick (and a breakpoint's label is centered on it). Two bars meet in the
+ * middle of the breakpoint between them: the next one starts a pixel after
+ * the tick, leaving the tick's pixel as the 1px gap between them, which also
+ * keeps two grey bars side by side apart. The first is 1px from the window's
+ * left edge the same way. Cut at the window's width.
+ */
+function spanBox(span: Span, width: number): { left: string; width: string } {
+  const left = span.min + 1;
+  const right = Math.min(span.max === undefined ? width : span.max + 1, width);
+  return { left: px(left), width: px(Math.max(0, right - left)) };
 }

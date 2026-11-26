@@ -27,6 +27,8 @@ export interface Modifier {
   insert: string;
   /** For a state: picking it sets the pill right away (nothing left to type). */
   state?: ElementState;
+  /** For Base and All widths: picking it sets the width chip right away. */
+  chip?: "base" | "all";
 }
 
 export const MODIFIERS: Modifier[] = [
@@ -43,6 +45,15 @@ export const MODIFIERS: Modifier[] = [
     description: "Up to this viewport width",
     syntax: "to-767",
     insert: "to-",
+  },
+  { id: "base", name: "Base", description: "The value without a breakpoint", syntax: "base", insert: "base ", chip: "base" },
+  {
+    id: "all-widths",
+    name: "All widths",
+    description: "One value, breakpoints removed",
+    syntax: "all-widths",
+    insert: "all-widths ",
+    chip: "all",
   },
   { id: "hover", name: "Hover", description: "The pointer is over it", syntax: "hover:", insert: "hover:", state: "hover" },
   { id: "focus", name: "Focus", description: "It has focus", syntax: "focus:", insert: "focus:", state: "focus" },

@@ -74,3 +74,19 @@ describe("widthSuggestion", () => {
     expect(widthSuggestion("from-1108", 1108)).toBeNull();
   });
 });
+
+describe("Base and All widths", () => {
+  it("`base ` and `all-widths ` are chips of their own; a width after Base gives it that end", () => {
+    expect(takeWidths("base pt", null)).toEqual({ range: {}, rest: "pt" });
+    expect(takeWidths("all-widths ", { min: 768 })).toEqual({ range: "all", rest: "" });
+    expect(takeWidths("from-768 ", {})).toEqual({ range: { min: 768 }, rest: "" });
+    expect(takeWidths("from-768 ", "all")).toEqual({ range: { min: 768 }, rest: "" });
+  });
+
+  it("clicking a width starts a range; any width is in them", () => {
+    expect(clickWidth({}, 1200, false)).toEqual({ min: 1200 });
+    expect(clickWidth("all", 1200, true)).toEqual({ max: 1200 });
+    expect(inWidths({}, 300)).toBe(true);
+    expect(inWidths("all", 300)).toBe(true);
+  });
+});

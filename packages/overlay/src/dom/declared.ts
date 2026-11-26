@@ -501,7 +501,8 @@ function walkRule(walk: Walk, rule: CSSRule, layer: string, parents: string[] | 
   if (typeof r.selectorText === "string" && r.style) {
     // Pilot's own preview of a base edit, beside the page's rule (preview.ts): not the page's.
     if (r.selectorText.includes(`[${EDIT_ATTRIBUTE}`)) return;
-    const selectors = resolveNesting(splitTopLevel(r.selectorText, ","), parents);
+    // A rule an element skips for a cleared field (dom/excluded.ts): read as the project wrote it.
+    const selectors = resolveNesting(splitTopLevel(r.selectorText.replace(SKIP_CLAUSE, ""), ","), parents);
     addIfMatching(walk, r.style, selectors, layer);
     if (r.cssRules?.length) walkRules(walk, r.cssRules, layer, selectors);
     return;
@@ -541,6 +542,9 @@ function walkRule(walk: Walk, rule: CSSRule, layer: string, parents: string[] | 
   // @container (can't be evaluated), @keyframes, @font-face, @page,
   // @starting-style…: nothing that applies to the element here.
 }
+
+/** The clause Pilot adds to a project's rule an element skips (dom/excluded.ts), left out when reading it. */
+const SKIP_CLAUSE = /:not\(\[data-pilot-skip~="[^"]*"\]\)/g;
 
 /** Register a layer under `parent`, in order of first appearance; returns its full name. */
 function declareLayer(walk: Walk, parent: string, name: string): string {

@@ -10,7 +10,7 @@ import { findSimilar } from "../dom/similar.ts";
 import { describeElement, type EditableElement, findTarget, isEditable } from "../dom/target.ts";
 import { isTextOnly, normalizeText, textProperty, textRunAt } from "../dom/text.ts";
 import { type EditHistory, historyShortcut } from "../edits/history.ts";
-import { clickWidth } from "../edits/widths.ts";
+import { type WidthChip, clickWidth } from "../edits/widths.ts";
 import type { PilotDevOptions } from "../mount.tsx";
 import { caretAt, editText } from "../select/inlineText.ts";
 import { useElementPicker } from "../select/useElementPicker.ts";
@@ -21,7 +21,7 @@ import { Measurements } from "./components/Measurements/Measurements.tsx";
 import { BoxAreas } from "./components/BoxAreas/BoxAreas.tsx";
 import { GridOverlay } from "./components/GridOverlay/GridOverlay.tsx";
 import { Highlight } from "./components/Highlight/Highlight.tsx";
-import { PropertyDialog, type WidthPick } from "./components/PropertyDialog/PropertyDialog.tsx";
+import { PropertyDialog, type Reach, type WidthPick } from "./components/PropertyDialog/PropertyDialog.tsx";
 import { awaitsAnswer, type CommentThread, type JobRecord, needsYou, type PilotSession } from "../bridge/session.ts";
 import { elapsed, jobAbout, statusText, whatText } from "./components/JobList/JobList.tsx";
 import { DomTree } from "./components/DomTree/DomTree.tsx";
@@ -124,10 +124,12 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     if (!selected) lastQuery.current = "";
   }, [selected]);
 
-  // The width chip: the viewport widths changes are for (null: every width).
+  // The width chip: the viewport widths changes are for (null: the rule that applies at the window's width).
   // Set in the search (`from-1200 `) or by clicking the viewport width; it
   // stays, across selections and with nothing selected, until it's removed.
-  const [widths, setWidths] = useState<WidthRange | null>(null);
+  const [widths, setWidths] = useState<WidthChip | null>(null);
+  // Where the property in use has values among the widths (PropertyDialog's onReach), for the ruler.
+  const [reach, setReach] = useState<Reach | null>(null);
   // The state pills: the element states changes are for, together. Kept across selections, like the chip.
   const [states, setStates] = useState<ElementState[]>([]);
   const viewportWidth = useViewportWidth();
@@ -781,6 +783,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
               onClose={dismiss}
               onInspect={setInspect}
               onEditing={setEditingId}
+              onReach={setReach}
               widths={widths}
               onWidthsChange={setWidths}
               states={states}
@@ -831,6 +834,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
       <ViewportWidth
         width={viewportWidth}
         widths={widths}
+        reach={selected ? reach : null}
         onPick={(width, shift) =>
           selected ? setWidthPick({ width, shift }) : setWidths((current) => clickWidth(current, width, shift))
         }

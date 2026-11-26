@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import type { ElementState, WidthRange } from "@pilot/protocol";
+import type { WidthChip } from "../../../edits/widths.ts";
 import { h, render } from "preact";
 import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
@@ -386,10 +387,9 @@ describe("declared values", () => {
     expect(received).toEqual({ gap: "16px" });
     act(() => change?.("gap", ""));
     expect(received).toEqual({ gap: "" });
-    // A base value: previewed beside the page's own rule, in its stylesheet (dom/anchored.ts).
-    const rules = (list: CSSRuleList | undefined): string[] =>
-      Array.from(list ?? []).flatMap((r) => [r.cssText, ...rules((r as CSSRule & { cssRules?: CSSRuleList }).cssRules)]);
-    expect(rules(style.sheet?.cssRules).join("\n")).toMatch(/data-pilot-edit="\d+"\]\) \{ gap: revert; \}/);
+    // A removal: the page's rule skips the element (dom/excluded.ts). This test DOM can't change a rule's
+    // selector, so it falls back to Pilot's layer, the next value or revert (the browser test is the demo page's).
+    expect(previewText()).toContain("gap: revert !important");
     style.remove();
   });
 
@@ -444,7 +444,7 @@ describe("width chip", () => {
   let pick: (p: WidthPick) => void;
   const mountWithWidths = (history: EditHistory, viewportWidth = 1440, initial: WidthRange | null = null) => {
     function Host() {
-      const [widths, setWidths] = useState<WidthRange | null>(initial);
+      const [widths, setWidths] = useState<WidthChip | null>(initial);
       const [states, setStates] = useState<ElementState[]>([]);
       const [widthPick, setWidthPick] = useState<WidthPick | undefined>();
       pick = setWidthPick;
@@ -553,7 +553,7 @@ describe("width chip", () => {
     mountWithWidths(new EditHistory(), 1108);
     const rows = () => [...container.querySelectorAll(".modifier .modifier-name")].map((n) => n.textContent);
     type("/");
-    expect(rows()).toEqual(["From width", "To width", "Hover", "Focus", "Focus visible", "Active"]);
+    expect(rows()).toEqual(["From width", "To width", "Base", "All widths", "Hover", "Focus", "Focus visible", "Active"]);
     expect(search().getAttribute("aria-expanded")).toBe("true");
     type("/to");
     expect(rows()).toEqual(["To width"]);
@@ -579,7 +579,7 @@ describe("width chip", () => {
   it("Esc closes the menu and clears the / text; the dialog stays", () => {
     let closed = 0;
     function Host() {
-      const [widths, setWidths] = useState<WidthRange | null>(null);
+      const [widths, setWidths] = useState<WidthChip | null>(null);
       return h(PropertyDialog, {
         element,
         anchor: element.getBoundingClientRect(),

@@ -2,6 +2,7 @@ import type { ElementState } from "@pilot/protocol";
 import { stateSelector } from "../edits/states.ts";
 import type { WidthRange } from "@pilot/protocol";
 import { type AnchorRequest, anchoredElements, renderAnchored } from "./anchored.ts";
+import { type ExclusionRequest, renderExclusions } from "./excluded.ts";
 
 /**
  * How Pilot shows its edits on the page: as rules in a stylesheet it adds,
@@ -46,6 +47,8 @@ export interface PreviewRule {
   value: string;
   widths?: WidthRange;
   states?: ElementState[];
+  /** A cleared field the page's CSS declares (EditHistory's removal): `value` is only what shows without it, the layer's fallback. */
+  removal?: unknown;
 }
 
 /** Where EditHistory shows its changes. Given every rule in effect, in order, each time. */
@@ -69,8 +72,8 @@ export const stylesheetPreview: Preview = {
 /** What was last shown, to show again when the page's stylesheets or an element's classes change. */
 let last: PreviewRule[] = [];
 
-/** A change shown in the page's own CSS (dom/anchored.ts): all but a state's removal (`revert-layer`, which only means something in Pilot's layer). */
-const isPlaced = (rule: PreviewRule) => rule.value !== "revert-layer";
+/** A value shown in the page's own CSS (dom/anchored.ts): all but removals (dom/excluded.ts) and `revert-layer` (only meaningful in Pilot's layer). */
+const isPlaced = (rule: PreviewRule) => !rule.removal && rule.value !== "revert-layer";
 
 function draw(rules: PreviewRule[], check: boolean) {
     const byRoot = new Map<Document | ShadowRoot, string[]>();
@@ -83,8 +86,16 @@ function draw(rules: PreviewRule[], check: boolean) {
       if (text)
         requests.push({ element: rule.element, property: rule.property, text, id: idOf(rule.element), widths: rule.widths, states: rule.states, rule });
     }
-    const left = new Set(renderAnchored(requests, check));
-    const anchored = new Set(requests.filter((r) => !left.has(r)).map((r) => r.rule));
+    // Cleared fields the page's CSS declares: its rule skips the element, a copy keeps the rest (dom/excluded.ts).
+    const removals: Array<ExclusionRequest & { rule: PreviewRule }> = rules
+      .filter((r) => r.removal && r.element.isConnected)
+      .map((rule) => ({ element: rule.element, property: rule.property, id: idOf(rule.element), widths: rule.widths, states: rule.states, rule }));
+    const excluded = renderExclusions(removals, check);
+    const notExcluded = new Set(excluded.left);
+    for (const r of removals) if (!notExcluded.has(r)) used.add(r.element);
+    // Pilot's values beside the page's rules; placed again when exclusions changed (beside a skipped rule, they go in its copy).
+    const left = new Set(renderAnchored(requests, check || excluded.changed));
+    const anchored = new Set([...requests.filter((r) => !left.has(r)).map((r) => r.rule), ...removals.filter((r) => !notExcluded.has(r)).map((r) => r.rule)]);
     for (const rule of anchored) used.add(rule.element);
     watch(anchored.size > 0);
     const add = (element: Element, text: string, widths?: WidthRange, states = "") => {

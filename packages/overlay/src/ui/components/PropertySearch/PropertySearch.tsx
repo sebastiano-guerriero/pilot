@@ -1,8 +1,8 @@
-import { describeWidths, type ElementState, type WidthRange } from "@pilot/protocol";
+import type { ElementState } from "@pilot/protocol";
 import type { RefObject } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { takeStates } from "../../../edits/states.ts";
-import { inWidths, takeWidths, widthSuggestion } from "../../../edits/widths.ts";
+import { type WidthChip, chipLabel, inWidths, takeWidths, widthSuggestion } from "../../../edits/widths.ts";
 import { isModifierQuery, matchModifiers } from "../../../search/modifiers.ts";
 import { Icon } from "../Icon/Icon.tsx";
 
@@ -12,10 +12,10 @@ interface PropertySearchProps {
   onKeyDown?(e: KeyboardEvent): void;
   /** The field itself, so the dialog can move focus back to it. */
   inputRef: RefObject<HTMLInputElement | null>;
-  /** The width chip: the viewport widths changes are for. null: every width (no chip). */
-  widths?: WidthRange | null;
-  /** The chip changed: typed (`from-1200 `), or removed (null). Without it, no chip. */
-  onWidthsChange?(widths: WidthRange | null): void;
+  /** The width chip: the viewport widths changes are for. null: no chip (the rule that applies at the window's width). */
+  widths?: WidthChip | null;
+  /** The chip changed: typed (`from-1200 `, `base `), picked in the `/` menu, or removed (null). Without it, no chip. */
+  onWidthsChange?(widths: WidthChip | null): void;
   /** The window's width now, to show when it's outside the chip's range. */
   viewportWidth?: number;
   /** The state pills: the element states changes are for, together. [] for none. */
@@ -97,9 +97,12 @@ export function PropertySearch({
   const pick = (index: number) => {
     const modifier = options[index];
     if (!modifier) return;
-    // A state is complete as picked: its pill right away. A width needs its number typed.
+    // A state, Base and All widths are complete as picked: their pill right away. A width needs its number typed.
     if (modifier.state) {
       onStatesChange?.(takeStates(modifier.insert, states).states ?? states);
+      onChange("");
+    } else if (modifier.chip) {
+      onWidthsChange?.(modifier.chip === "base" ? {} : modifier.chip);
       onChange("");
     } else onChange(modifier.insert);
     inputRef.current?.focus();
@@ -159,14 +162,16 @@ export function PropertySearch({
               title={
                 outside
                   ? `The window (${viewportWidth}px) is outside this range: what you see isn't what these changes are for`
-                  : "Changes are for these viewport widths. Backspace at the start of the field removes it."
+                  : widths === "all"
+                    ? "Changes are for every width: the base value, with the property's breakpoint rules removed. Backspace at the start of the field removes it."
+                    : "Changes are for these viewport widths. Backspace at the start of the field removes it."
               }
             >
-              <span class="pill-label">{describeWidths(widths)}</span>
+              <span class="pill-label">{chipLabel(widths)}</span>
               <button
                 type="button"
                 class="pill-remove"
-                aria-label="Changes for every width"
+                aria-label="Changes where the rule applies at this width"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
                   onWidthsChange?.(null);

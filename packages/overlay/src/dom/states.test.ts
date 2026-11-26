@@ -65,3 +65,19 @@ describe("a state read like CSS", () => {
     x.remove();
   });
 });
+
+describe("a rule an element skips for a cleared field (dom/excluded.ts)", () => {
+  it("reads as the project wrote it: Pilot's skip clause left out", () => {
+    const style = document.createElement("style");
+    style.textContent = '.y:not([data-pilot-skip~="r1"]) { color: red; }';
+    document.head.append(style);
+    const y = document.createElement("div");
+    y.className = "y";
+    y.setAttribute("data-pilot-skip", "r1");
+    document.body.append(y);
+    expect(declaredValue(y, "color")?.value).toBe("red");
+    expect(declaredValue(y, "color")?.source).toEqual({ selector: ".y" });
+    style.remove();
+    y.remove();
+  });
+});

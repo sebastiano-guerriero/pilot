@@ -344,6 +344,11 @@ export class EditHistory {
     return rule?.property === property ? (rule.removal ?? null) : null;
   }
 
+  /** Whether Pilot removed the page's `property` there: its own removal, or its shorthand's (`padding` for padding-top). */
+  removes(element: EditableElement, property: string, width: "base" | WidthRange, states?: readonly ElementState[]): boolean {
+    return !!this.activeRule(element, property, width, states)?.removal;
+  }
+
   /**
    * Take back what `gesture` did to `property` so far, as if it never touched
    * it, and drop it from the step. E.g. releasing Alt mid-drag un-mirrors the

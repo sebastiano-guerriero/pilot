@@ -1,12 +1,12 @@
 import { isModifierQuery } from "../../../search/modifiers.ts";
 import type { ElementState, WidthRange } from "@pilot/protocol";
 import { Component, type ComponentChildren, Fragment } from "preact";
-import { baseValues, isFromReset, rangeValues } from "../../../dom/declared.ts";
+import { type Declared, isFromReset } from "../../../dom/declared.ts";
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import type { BoxArea } from "../../../dom/boxModel.ts";
 import type { EditableElement } from "../../../dom/target.ts";
-import { clearProperty } from "../../../edits/clear.ts";
-import { clickWidth, partialWidth, takeWidths } from "../../../edits/widths.ts";
+import { type Span, type WidthKey, applyChange, hasWidthRules, keyFor, pageValueAt, spansOf } from "../../../edits/reach.ts";
+import { type WidthChip, clickWidth, partialWidth, sameChip, takeWidths } from "../../../edits/widths.ts";
 import { EditHistory, type RecordedChange, longhandsOf } from "../../../edits/history.ts";
 import { editors as allEditors, matchEditors } from "../../../editors/registry.ts";
 import { groupOf, inListOrder, rowsOf } from "../../../editors/listOrder.ts";
@@ -75,12 +75,19 @@ interface PropertyDialogProps {
    */
   onEditing?(id: string | null): void;
   /**
-   * The width chip: the viewport widths changes are for (null: every width).
-   * App keeps it across selections, until it's removed.
+   * Where the property in use has values among the widths (edits/reach.ts),
+   * while it's in use (its field focused, dragged or just changed) and has
+   * rules for some widths: App draws them under the ruler. null otherwise.
    */
-  widths?: WidthRange | null;
+  onReach?(reach: Reach | null): void;
+  /**
+   * The width chip: the viewport widths changes are for (null: the rule
+   * that applies at the window's width, edits/reach.ts). App keeps it across
+   * selections, until it's removed.
+   */
+  widths?: WidthChip | null;
   /** The chip was typed in the search or removed. */
-  onWidthsChange?(widths: WidthRange | null): void;
+  onWidthsChange?(widths: WidthChip | null): void;
   /**
    * The state pills: the element states changes are for, together ([]: the
    * element as it is). App keeps them across selections, until removed.
@@ -101,6 +108,14 @@ interface PropertyDialogProps {
    * the chip, since a `from`/`to` being typed in the search decides it.
    */
   widthPick?: WidthPick;
+}
+
+/** Where the property in use has values among the widths, for the ruler (ViewportWidth). */
+export interface Reach {
+  property: string;
+  spans: Span[];
+  /** Where its edits go: the spans with this key are the ones they reach (all of them for All widths). */
+  target: WidthKey | "all";
 }
 
 /** A click on the viewport width. */
@@ -138,6 +153,7 @@ export function PropertyDialog({
   onClose,
   onInspect,
   onEditing,
+  onReach,
   widths = null,
   onWidthsChange,
   states = NO_STATES,
@@ -149,6 +165,8 @@ export function PropertyDialog({
   const [query, setQueryState] = useState(initialQuery);
   const [ownHistory] = useState(() => new EditHistory());
   const history = sharedHistory ?? ownHistory;
+  // The window's width: with no chip, where each property's edits go (the rule that applies there).
+  const windowWidth = viewportWidth ?? window.innerWidth;
   // State pills only say where edits go: the element isn't shown in those states (the owner's call,
   // 2026-11-26: forcing them over the page hid how its other states behave). Hide Pilot (Option+P) and hover.
   const stateKey = states.join(",");
@@ -161,8 +179,8 @@ export function PropertyDialog({
   // Listing every editor: what the revealing ones (display, position) show as rows depends on their value, so the list follows it.
   const revealing = listAll ? revealingValues(element, editors, history) : "";
   const withValues = useMemo(
-    () => (!empty ? [] : listAll ? listedEditors(element, editors, history) : editorsWithValues(element, editors, history, states, widths)),
-    [element, empty, listAll, revealing, stateKey, `${widths?.min}-${widths?.max}`],
+    () => (!empty ? [] : listAll ? listedEditors(element, editors, history) : editorsWithValues(element, editors, history, states, widths, windowWidth)),
+    [element, empty, listAll, revealing, stateKey, JSON.stringify(widths)],
   );
   const matches = empty ? withValues : matchEditors(query, editors);
   const matchKey = matches.map((m) => m.id).join(",");
@@ -284,22 +302,37 @@ export function PropertyDialog({
   };
   const rowValues = (editor: PropertyEditor) => {
     const properties = [...editor.properties, ...(editor.reads ?? [])];
-    return rowEntries(properties, fieldValues(element, properties, history, states));
+    return rowEntries(properties, fieldValues(element, properties, history, states, widths, windowWidth));
   };
   const paste = () => {
     const entries = copiedProperties();
     if (!entries) return;
     // On every selected element, as one undo step, for the width chip and the state pills.
     const gesture = {};
-    for (const el of [element, ...others]) for (const [p, v] of entries) history.apply(el, p, v, gesture, { widths: widths ?? undefined, states });
+    for (const el of [element, ...others]) for (const [p, v] of entries) applyChange(history, el, p, v, gesture, { chip: widths, states, width: windowWidth });
     repaint(0);
   };
 
+  // The editor whose field has focus (by id), for the ruler's bars.
+  const [focusedEditor, setFocusedEditor] = useState<string | null>(null);
   const onFocusIn = (e: FocusEvent) => {
     const target = e.target as Element | null;
     if (target === searchRef.current) setFocusArea("search");
     else if (target?.closest(".editor")) setFocusArea("editor");
+    setFocusedEditor(target?.closest<HTMLElement>(".editor[data-editor]")?.dataset.editor ?? null);
   };
+  const onFocusOut = (e: FocusEvent) => {
+    if (!(e.relatedTarget instanceof Element) || !ref.current?.contains(e.relatedTarget)) setFocusedEditor(null);
+  };
+
+  // The property in use (its field focused, dragged or just changed): where its values apply among the
+  // widths, for the bars under the ruler, when it has rules for some widths (the owner's design, 2026-11-26).
+  const inUse = editing ?? focusedEditor;
+  const usedEditor = inUse ? findEditor(matches, inUse) : undefined;
+  const reach = usedEditor ? reachOf(element, usedEditor, history, states, widths, windowWidth) : null;
+  const reachKey = reach ? JSON.stringify(reach) : "";
+  useEffect(() => onReach?.(reach), [reachKey]);
+  useEffect(() => () => onReach?.(null), []);
 
 
   const returnToSearch = () => {
@@ -415,6 +448,7 @@ export function PropertyDialog({
         data-veiled={veiled || undefined}
         onKeyDown={onKeyDown}
         onFocusIn={onFocusIn}
+        onFocusOut={onFocusOut}
         onPointerDown={onPointerDown}
         onContextMenu={onContextMenu}
       >
@@ -476,7 +510,8 @@ export function PropertyDialog({
                           element={element}
                           others={others}
                           history={history}
-                          widths={widths ?? undefined}
+                          widths={widths}
+                          width={windowWidth}
                           states={states}
                           query={query}
                           focusRequest={focus?.index === index ? focus.request : undefined}
@@ -667,16 +702,17 @@ function editorsWithValues(
   element: EditableElement,
   editors: PropertyEditor[],
   history: EditHistory,
-  states?: readonly ElementState[],
-  widths?: WidthRange | null,
+  states: readonly ElementState[] | undefined,
+  widths: WidthChip | null | undefined,
+  width: number,
 ): PropertyEditor[] {
   const properties = [...new Set(editors.flatMap((e) => e.properties))];
-  // As the fields read them (pageValues), Pilot's own changes too: like CSS, whatever the window's width.
-  const { page, width } = pageValues(element, properties, states, widths);
+  // As the fields read them (pageValues), Pilot's own changes too.
+  const page = pageValues(element, properties, history, states, widths, width);
   const isSet = (p: string) => {
-    if (history.removalOf(element, p, width, states)) return false;
-    if (history.valueOf(element, p, width, states) !== null) return true;
-    const declared = page[p];
+    const { declared, at } = page[p] as PageValue;
+    if (history.removalOf(element, p, at, states)) return false;
+    if (history.valueOf(element, p, at, states) !== null) return true;
     return !!declared?.value && !isFromReset(declared);
   };
   const shown = editors.filter((e) => e.properties.some(isSet));
@@ -705,35 +741,77 @@ function fieldValues(
   properties: string[],
   history: EditHistory,
   states?: readonly ElementState[],
-  widths?: WidthRange | null,
+  widths?: WidthChip | null,
+  width: number = window.innerWidth,
 ): Record<string, string> {
   // With state pills: the values for exactly those states (Pilot's, else the
-  // page's rules for them); empty when nothing sets one for them. With
-  // neither pills nor the width chip: the base value (Pilot's base change,
-  // else the page's, without media queries), whatever the window's width:
-  // what an edit there changes (the owner's call, 2026-11-26).
-  const { page, width } = pageValues(element, properties, states, widths);
+  // page's rules for them); empty when nothing sets one for them. Each
+  // property's value where an edit of it goes (pageValues).
+  const page = pageValues(element, properties, history, states, widths, width);
   return Object.fromEntries(
-    properties.map((p) => [
-      p,
-      history.removalOf(element, p, width, states) ? "" : (history.valueOf(element, p, width, states) ?? page[p]?.value ?? ""),
-    ]),
+    properties.map((p) => {
+      const { declared, at } = page[p] as PageValue;
+      return [p, history.removalOf(element, p, at, states) ? "" : (history.valueOf(element, p, at, states) ?? declared?.value ?? "")];
+    }),
+  );
+}
+
+/** A property's page value, and the widths Pilot's own is read at (the history's key). */
+interface PageValue {
+  declared: Declared | null;
+  at: "base" | WidthRange;
+}
+
+/**
+ * The page's values the fields show, and where Pilot's own are read: per
+ * property, where an edit of it goes (keyFor): pills read like CSS, no
+ * assumptions (the owner's call, 2026-11-26). With a range chip, what's set
+ * for exactly its range (Pilot's change for it, else the project's rule for
+ * that breakpoint; nothing, empty, when neither sets it); Base and All
+ * widths, what's set outside any media query; no chip, the rule that applies
+ * at the window's width (`md:pt-4` between md and lg), so the field follows
+ * resizes. With state pills, those states' rules (`.btn:hover`, a hover
+ * rule inside a breakpoint only at its widths). What a field shows is what
+ * an edit there changes.
+ */
+function pageValues(
+  element: EditableElement,
+  properties: string[],
+  history: EditHistory,
+  states: readonly ElementState[] | undefined,
+  widths: WidthChip | null | undefined,
+  width: number,
+): Record<string, PageValue> {
+  return Object.fromEntries(
+    properties.map((p) => {
+      const key = keyFor(element, p, widths, states, width, history);
+      return [p, { declared: pageValueAt(element, p, key, states), at: key }];
+    }),
   );
 }
 
 /**
- * The page's values the fields show, and the widths Pilot's own are read at,
- * whatever the window's width: pills read like CSS, no assumptions (the
- * owner's call, 2026-11-26). With the width chip, what's set for exactly its
- * range (Pilot's change for it, else the project's rule for that
- * breakpoint; nothing, empty, when neither sets it); without, what's set
- * outside any media query: the base values, or with state pills those
- * states' (`.btn:hover`, not a hover rule inside a breakpoint: that's hover
- * and the chip together). What a field shows is what an edit there changes.
+ * The property in use: where its values apply among the widths, when it has
+ * rules for some (else null, no bars). Of an editor's properties, the first
+ * with such rules; a shorthand's sides are read rather than the shorthand
+ * (`md:pt-4` sets padding-top, not padding).
  */
-function pageValues(element: EditableElement, properties: string[], states?: readonly ElementState[], widths?: WidthRange | null) {
-  if (widths) return { page: rangeValues(element, properties, widths, states), width: widths };
-  return { page: baseValues(element, properties, states), width: "base" as const };
+function reachOf(
+  element: EditableElement,
+  editor: PropertyEditor,
+  history: EditHistory,
+  states: readonly ElementState[] | undefined,
+  widths: WidthChip | null | undefined,
+  width: number,
+): Reach | null {
+  const all = propertiesOf(editor);
+  const properties = all.filter((p) => !longhandsOf(p).some((l) => l !== p && all.includes(l)));
+  for (const property of properties) {
+    const target = widths === "all" ? "all" : keyFor(element, property, widths, states, width, history);
+    const spans = spansOf(element, property, states, history, target === "all" ? undefined : target);
+    if (hasWidthRules(spans)) return { property, spans, target };
+  }
+  return null;
 }
 
 /** The properties whose field value only a reset gives: Pilot sets none there, and the page's comes from a `*` rule. */
@@ -741,14 +819,16 @@ function resetValues(
   element: EditableElement,
   properties: string[],
   history: EditHistory,
-  states?: readonly ElementState[],
-  widths?: WidthRange | null,
+  states: readonly ElementState[] | undefined,
+  widths: WidthChip | null | undefined,
+  width: number,
 ): Set<string> {
-  const { page, width } = pageValues(element, properties, states, widths);
+  const page = pageValues(element, properties, history, states, widths, width);
   return new Set(
-    properties.filter(
-      (p) => !history.removalOf(element, p, width, states) && history.valueOf(element, p, width, states) === null && isFromReset(page[p]),
-    ),
+    properties.filter((p) => {
+      const { declared, at } = page[p] as PageValue;
+      return !history.removalOf(element, p, at, states) && history.valueOf(element, p, at, states) === null && isFromReset(declared);
+    }),
   );
 }
 
@@ -807,8 +887,8 @@ class EditorRow extends Component<EditorRowProps> {
       prev.count === next.count &&
       prev.query === next.query &&
       prev.focusRequest === next.focusRequest &&
-      prev.widths?.min === next.widths?.min &&
-      prev.widths?.max === next.widths?.max &&
+      sameChip(prev.widths, next.widths) &&
+      prev.width === next.width &&
       (prev.states ?? []).join() === (next.states ?? []).join() &&
       (prev.others ?? []).length === (next.others ?? []).length &&
       (prev.others ?? []).every((o, i) => o === next.others?.[i]) &&
@@ -851,6 +931,7 @@ function MatchedEditor({
   others = [],
   history,
   widths,
+  width,
   states,
   query,
   focusRequest,
@@ -864,7 +945,10 @@ function MatchedEditor({
   element: EditableElement;
   others?: readonly EditableElement[];
   history: EditHistory;
-  widths?: WidthRange;
+  /** The width chip (null: the rule that applies at `width`). */
+  widths?: WidthChip | null;
+  /** The window's width. */
+  width: number;
   states?: ElementState[];
   query?: string;
   focusRequest?: FocusRequest;
@@ -880,16 +964,16 @@ function MatchedEditor({
   const properties = propertiesOf(editor);
   const values = Object.fromEntries(properties.map((p) => [p, computed.getPropertyValue(p)]));
   const all = [element, ...others];
-  const declared = fieldValues(element, properties, history, states, widths);
+  const declared = fieldValues(element, properties, history, states, widths, width);
   // Several selected: a property whose value differs across them is "Mixed" (an empty field).
   const mixed = new Set<string>();
   for (const other of others) {
-    const theirs = fieldValues(other, properties, history, states, widths);
+    const theirs = fieldValues(other, properties, history, states, widths, width);
     for (const p of properties) if (theirs[p] !== declared[p]) mixed.add(p);
   }
   for (const p of mixed) declared[p] = "";
   // Values only a reset gives (Pilot sets none, the page's comes from a `*` rule).
-  const reset = resetValues(element, properties, history, states, widths);
+  const reset = resetValues(element, properties, history, states, widths, width);
   const Editor = editor.component;
   return (
     <Editor
@@ -901,12 +985,9 @@ function MatchedEditor({
       onChange={(property, value, options) => {
         // Every selected element, with one gesture: one undo step for all of them.
         const gesture = options?.gesture ?? (others.length ? {} : undefined);
-        for (const el of all) {
-          // Cleared: the element doesn't set it (a removal, when the page's CSS does).
-          // Recorded for the chip's widths (none: every width) and the state pills (none: as it is).
-          if (value === "") clearProperty(history, el, property, gesture, widths, states);
-          else history.apply(el, property, value, gesture, { widths, states });
-        }
+        // Each element where the chip sends it (no chip: its rule that applies at the window's
+        // width, each element its own); cleared, the element doesn't set it (a removal, when the page's CSS does).
+        for (const el of all) applyChange(history, el, property, value, gesture, { chip: widths, states, width });
         onChanged?.();
         rerender(0);
       }}
