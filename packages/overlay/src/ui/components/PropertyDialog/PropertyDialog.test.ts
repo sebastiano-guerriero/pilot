@@ -18,11 +18,15 @@ const stub = (id: string, properties: string[]): PropertyEditor => ({
   id,
   label: id,
   properties,
-  component: ({ values, onChange, focusRequest, onReturnToSearch, onTabOut }: PropertyEditorProps) => {
+  component: ({ values, declared, onChange, focusRequest, onReturnToSearch, onTabOut }: PropertyEditorProps) => {
     focusRequests.push(focusRequest);
     if (focusRequest) focusedEditors.push(`${id}${focusRequest.edge ? `@${focusRequest.edge}` : ""}`);
     return h("div", {}, [
-      h("button", { class: "stub", onClick: () => onChange(properties[0] as string, "0.5") }, `${id}:${JSON.stringify(values)}`),
+      h(
+        "button",
+        { class: "stub", "data-declared": JSON.stringify(declared), onClick: () => onChange(properties[0] as string, "0.5") },
+        `${id}:${JSON.stringify(values)}`,
+      ),
       h("button", { class: "back", onClick: () => onReturnToSearch?.() }, "back"),
       h("button", { class: "next", onClick: () => onTabOut?.(1) }, "next"),
       h("button", { class: "prev", onClick: () => onTabOut?.(-1) }, "prev"),
@@ -445,7 +449,13 @@ describe("width chip", () => {
   const mountWithWidths = (history: EditHistory, viewportWidth = 1440, initial: WidthRange | null = null) => {
     function Host() {
       const [widths, setWidths] = useState<WidthChip | null>(initial);
-      const [states, setStates] = useState<ElementState[]>([]);
+      const [states, setStateList] = useState<ElementState[]>([]);
+      const [defaultState, setDefaultState] = useState(false);
+      // As App: changing the states switches back to their pill.
+      const setStates = (next: ElementState[]) => {
+        setStateList(next);
+        setDefaultState(false);
+      };
       const [widthPick, setWidthPick] = useState<WidthPick | undefined>();
       pick = setWidthPick;
       return h(PropertyDialog, {
@@ -458,6 +468,8 @@ describe("width chip", () => {
         onWidthsChange: setWidths,
         states,
         onStatesChange: setStates,
+        defaultState,
+        onDefaultStateChange: setDefaultState,
         viewportWidth,
         listAll: false,
       });
@@ -474,7 +486,8 @@ describe("width chip", () => {
     type("hover");
     expect(statePills()).toEqual([]);
     type("active:hover:from-768 opa");
-    expect(statePills()).toEqual(["hover", "active"]);
+    // The states together are one pill.
+    expect(statePills()).toEqual(["hover:active"]);
     expect(chip()?.textContent).toContain("from 768px");
     expect(search().value).toBe("opa");
   });
@@ -502,6 +515,32 @@ describe("width chip", () => {
     type("hover:");
     expect(statePills()).toEqual(["hover"]);
     expect(editorIds()).toEqual(["opacity"]);
+    history.clear();
+  });
+
+  it("default and the states' pill switch what the fields show and where changes go, the states kept", () => {
+    const history = new EditHistory();
+    history.apply(element, "opacity", "0.8");
+    history.apply(element, "opacity", "0.3", undefined, { states: ["hover"] });
+    mountWithWidths(history);
+    const defaultPill = () => container.querySelector('.pill[data-pill="default"]') as HTMLButtonElement | null;
+    expect(defaultPill()).toBeNull();
+    type("hover:opacity");
+    expect(defaultPill()?.getAttribute("aria-pressed")).toBe("false");
+    const field = () => (container.querySelector('[data-editor="opacity"] .stub') as HTMLElement).dataset.declared;
+    expect(field()).toContain("0.3");
+    act(() => defaultPill()?.click());
+    expect(defaultPill()?.getAttribute("aria-pressed")).toBe("true");
+    expect(statePills()).toEqual(["hover"]);
+    expect(field()).toContain("0.8");
+    // A change now is the element's own.
+    act(() => (container.querySelector('[data-editor="opacity"] .stub') as HTMLButtonElement).click());
+    expect(history.valueOf(element, "opacity", "base")).toBe("0.5");
+    expect(history.valueOf(element, "opacity", "base", ["hover"])).toBe("0.3");
+    // The states' pill switches back.
+    act(() => (container.querySelector('.pill[data-pill="state"] .pill-label') as HTMLButtonElement).click());
+    expect(defaultPill()?.getAttribute("aria-pressed")).toBe("false");
+    expect(field()).toContain("0.3");
     history.clear();
   });
 

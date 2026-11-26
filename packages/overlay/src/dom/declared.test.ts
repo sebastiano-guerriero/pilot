@@ -6,6 +6,7 @@ import {
   declaredWithout,
   isFromReset,
   matchedRules as matchedRulesFor,
+  backgroundColor,
   pickSide,
   resolve,
   sourcesOf,
@@ -266,5 +267,18 @@ describe("a shorthand's implicit reset", () => {
   it("initial written by the page is declared", () => {
     const written = rule("text-decoration-color: initial;", { "text-decoration-color": "initial" });
     expect(resolve("text-decoration-color", undefined, [written])?.value).toBe("initial");
+  });
+});
+
+describe("background-color out of a background shorthand", () => {
+  it("a lone var(), or the one color in the last layer; else nothing", () => {
+    expect(backgroundColor("var(--color-brand)")).toBe("var(--color-brand)");
+    expect(backgroundColor("url(a.png), var(--color-brand)")).toBe("var(--color-brand)");
+    expect(backgroundColor("var(--a) var(--b)")).toBeNull();
+    expect(backgroundColor("url(a.png)")).toBeNull();
+  });
+
+  it("is where background-color reads from, after itself", () => {
+    expect(sourcesOf("background-color").map((s) => s.property)).toEqual(["background-color", "background"]);
   });
 });

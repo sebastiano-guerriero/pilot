@@ -91,9 +91,16 @@ interface PropertyDialogProps {
   /**
    * The state pills: the element states changes are for, together ([]: the
    * element as it is). App keeps them across selections, until removed.
-   * While set, the element is shown in those states.
    */
   states?: ElementState[];
+  /**
+   * The `default` pill is on instead of the states' (shown while there are
+   * states): fields and changes are for the element as it is, the states'
+   * pill kept to switch back. App keeps it, until the states change.
+   */
+  defaultState?: boolean;
+  /** `default` or the states' pill was clicked. */
+  onDefaultStateChange?(on: boolean): void;
   /** The state pills were typed, picked or removed. */
   onStatesChange?(states: ElementState[]): void;
   /**
@@ -156,7 +163,9 @@ export function PropertyDialog({
   onReach,
   widths = null,
   onWidthsChange,
-  states = NO_STATES,
+  states: pillStates = NO_STATES,
+  defaultState = false,
+  onDefaultStateChange,
   onStatesChange,
   autoFocus = true,
   viewportWidth,
@@ -167,6 +176,8 @@ export function PropertyDialog({
   const history = sharedHistory ?? ownHistory;
   // The window's width: with no chip, where each property's edits go (the rule that applies there).
   const windowWidth = viewportWidth ?? window.innerWidth;
+  // The states edits are for: the pill's, or none while `default` is on (the element as it is).
+  const states = defaultState ? NO_STATES : pillStates;
   // State pills only say where edits go: the element isn't shown in those states (the owner's call,
   // 2026-11-26: forcing them over the page hid how its other states behave). Hide Pilot (Option+P) and hover.
   const stateKey = states.join(",");
@@ -481,8 +492,10 @@ export function PropertyDialog({
           inputRef={searchRef}
           widths={widths}
           onWidthsChange={onWidthsChange}
-          states={states}
+          states={pillStates}
           onStatesChange={onStatesChange}
+          defaultState={defaultState}
+          onDefaultStateChange={onDefaultStateChange}
           viewportWidth={viewportWidth}
           autoFocus={autoFocus}
         />

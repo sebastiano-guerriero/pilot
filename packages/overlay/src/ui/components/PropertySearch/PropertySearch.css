@@ -56,6 +56,45 @@
     }
   }
 
+  /* The state pair (PropertySearch.tsx): `default` and the states' pill, a
+     button each, one on. Off: the fields' dark look, its text dimmed, the
+     accent's on hover. `default` has no ×, so even padding. First pass,
+     pending the owner's design. */
+  .pill-toggle {
+    appearance: none;
+    margin: 0;
+    border: 0;
+    font-family: inherit;
+    font-weight: inherit;
+    padding-inline: 4px;
+    cursor: pointer;
+  }
+
+  .pill-switch {
+    all: unset;
+    cursor: pointer;
+  }
+
+  .pill[data-off] {
+    background: var(--plt-color-background-light);
+    color: var(--plt-color-contrast-low);
+
+    &:hover {
+      color: var(--plt-color-contrast-high);
+    }
+
+    .pill-remove {
+      color: var(--plt-color-contrast-low);
+    }
+  }
+
+  .pill-toggle:focus-visible,
+  .pill-switch:focus-visible {
+    outline: 2px solid var(--plt-color-accent);
+    outline-offset: 1px;
+    border-radius: 4px;
+  }
+
   /* The / menu: under the field, inside the dialog (the editors' area is
      empty while it's open). Rows like the select menu's options (6px radius,
      the same highlight), with the name and its syntax on the first line and

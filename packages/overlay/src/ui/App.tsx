@@ -143,7 +143,13 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // Where the property in use has values among the widths (PropertyDialog's onReach), for the ruler.
   const [reach, setReach] = useState<Reach | null>(null);
   // The state pills: the element states changes are for, together. Kept across selections, like the chip.
-  const [states, setStates] = useState<ElementState[]>([]);
+  const [states, setStateList] = useState<ElementState[]>([]);
+  // The `default` pill on instead of the states' (PropertySearch): back to the states' when they change.
+  const [defaultState, setDefaultState] = useState(false);
+  const setStates = useCallback((next: ElementState[]) => {
+    setStateList(next);
+    setDefaultState(false);
+  }, []);
   const viewportWidth = useViewportWidth();
   // A click on the viewport width. With the dialog open, it goes to the
   // dialog, which sets the chip (a `from`/`to` typed in the search decides it).
@@ -800,6 +806,8 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
               onWidthsChange={setWidths}
               states={states}
               onStatesChange={setStates}
+              defaultState={defaultState}
+              onDefaultStateChange={setDefaultState}
               viewportWidth={viewportWidth}
               widthPick={widthPick}
               autoFocus={selected.from !== "dom"}

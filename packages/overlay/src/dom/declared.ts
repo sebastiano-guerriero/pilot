@@ -101,9 +101,18 @@ interface Source {
   property: string;
   /** For a shorthand: which of its values belongs to `property` (see pickSide). */
   side?: { of: "box" | "pair"; index: number };
+  /**
+   * For a shorthand of different kinds of values (`background`): picks
+   * `property`'s part out of its text, null when it can't tell (see
+   * backgroundColor).
+   */
+  pick?: (text: string) => string | null;
 }
 
 export function sourcesOf(property: string): Source[] {
+  // `background: var(--color-brand)` (CSSOM leaves background-color empty, the var() unresolved). Each
+  // background longhand gets its part this way as its editor comes (image, position, size…).
+  if (property === "background-color") return [{ property }, { property: "background", pick: backgroundColor }];
   const box = property.match(/^(padding|margin)-(top|right|bottom|left)$/);
   if (box) {
     const [, kind, side] = box as unknown as [string, string, Side];
@@ -150,6 +159,39 @@ export function sourcesOf(property: string): Source[] {
     return [{ property }, { property: "border-width", side: { of: "box", index: SIDES.indexOf(side) } }];
   }
   return [{ property }];
+}
+
+/**
+ * The color out of a `background` shorthand's text, when CSSOM couldn't
+ * expand it (it holds a var()): the one color in its last layer (only the
+ * last layer has one), or the last layer when it's a lone var(), the way
+ * tokens set a background (`var(--color-brand)`; it could stand for an
+ * image, rarely). Null when there's no telling (`var(--a) var(--b)`, no
+ * color).
+ */
+export function backgroundColor(text: string): string | null {
+  const last = splitTopLevel(text, ",").at(-1)?.trim() ?? "";
+  const parts = splitTopLevel(last, " ").filter(Boolean);
+  const colors = parts.filter(isColorLiteral);
+  if (colors.length === 1) return colors[0] as string;
+  if (!colors.length && parts.length === 1 && /^var\(/.test(parts[0] as string)) return parts[0] as string;
+  return null;
+}
+
+/**
+ * A color written out: a hex, a color function (`rgb(…)`, `oklch(…)`), or a
+ * name the browser takes as a color (`red`, not `center` or `no-repeat`).
+ * Not a var(), which `CSS.supports` takes as anything.
+ */
+function isColorLiteral(text: string): boolean {
+  if (/^#[\da-f]{3,8}$/i.test(text)) return true;
+  if (/^(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix|light-dark)\(/i.test(text)) return true;
+  if (!/^[a-z]+$/i.test(text)) return false;
+  try {
+    return typeof CSS !== "undefined" && typeof CSS.supports === "function" && CSS.supports("color", text);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -310,7 +352,7 @@ export function resolve(
     for (const source of sources) {
       const text = style.getPropertyValue(source.property).trim();
       if (!text) continue;
-      const value = source.side ? pickSide(text, source.side) : text;
+      const value = source.pick ? source.pick(text) : source.side ? pickSide(text, source.side) : text;
       if (value) {
         const important = style.getPropertyPriority(source.property) === "important";
         return { value, important, implicit: isImplicitReset(style, source.property, value) };

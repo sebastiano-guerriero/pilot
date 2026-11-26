@@ -294,7 +294,8 @@ export function Toolbar({
       {onHide && (
         // Out of sight, everything kept: the page as it is, to try a hover or a focus for real. Back with the
         // shortcut.
-        <Tooltip text="Hide Pilot" shortcut={hideShortcut ? keyLabel(hideShortcut) : undefined} gap={TIP_GAP}>
+        // Nothing of Pilot shows while it's hidden, so the tooltip says the shortcut shows it too.
+        <Tooltip text={hideShortcut ? "Hide/show Pilot" : "Hide Pilot"} shortcut={hideShortcut ? keyLabel(hideShortcut) : undefined} gap={TIP_GAP}>
           <button
             type="button"
             class="button"

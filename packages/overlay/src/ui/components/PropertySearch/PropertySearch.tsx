@@ -22,6 +22,10 @@ interface PropertySearchProps {
   states?: ElementState[];
   /** The state pills changed: typed (`hover:`), picked in the `/` menu, or removed. */
   onStatesChange?(states: ElementState[]): void;
+  /** The `default` pill is on instead of the states' (the element as it is). */
+  defaultState?: boolean;
+  /** `default` or the states' pill was clicked. */
+  onDefaultStateChange?(on: boolean): void;
   /** Take focus when it appears (default). False when the selection came from somewhere that keeps focus (the DOM tree). */
   autoFocus?: boolean;
 }
@@ -41,6 +45,8 @@ export function PropertySearch({
   viewportWidth,
   states = [],
   onStatesChange,
+  defaultState = false,
+  onDefaultStateChange,
   autoFocus = true,
 }: PropertySearchProps) {
   useEffect(() => {
@@ -182,28 +188,49 @@ export function PropertySearch({
               </button>
             </span>
           )}
-          {states.map((state) => (
-            <span
-              key={state}
-              class="pill"
-              data-pill="state"
-              title="Changes are for this element state (all the state pills together). Backspace at the start of the field removes the last pill."
+          {/* The states, as a pair: `default` (the element as it is) and the states together as one pill
+              (`hover:focus`), one of them on, a click switching. To compare a property in both, or see what
+              each sets, without retyping the states (the owner's design, 2026-11-26). */}
+          {states.length > 0 && (
+            <button
+              type="button"
+              class="pill pill-toggle"
+              data-pill="default"
+              data-off={!defaultState || undefined}
+              aria-pressed={defaultState}
+              title="Changes are for the element as it is, without these states. Click the states to switch back."
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onDefaultStateChange?.(true)}
             >
-              <span class="pill-label">{state}</span>
+              default
+            </button>
+          )}
+          {states.length > 0 && (
+            <span class="pill" data-pill="state" data-off={defaultState || undefined}>
+              <button
+                type="button"
+                class="pill-label pill-switch"
+                aria-pressed={!defaultState}
+                title="Changes are for these element states, together. Click default to switch. Backspace at the start of the field removes the last state."
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => onDefaultStateChange?.(false)}
+              >
+                {states.join(":")}
+              </button>
               <button
                 type="button"
                 class="pill-remove"
-                aria-label={`Not only ${state}`}
+                aria-label={`Not ${states.join(":")}`}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
-                  onStatesChange?.(states.filter((s) => s !== state));
+                  onStatesChange?.([]);
                   inputRef.current?.focus();
                 }}
               >
                 <Icon name="close-small" />
               </button>
             </span>
-          ))}
+          )}
         </div>
       )}
       <div class="field">
