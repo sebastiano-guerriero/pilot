@@ -49,8 +49,8 @@
     "LICENSE.md"
   ],
   "scripts": {
-    "build": "pnpm --filter @pilot/overlay build && pnpm --filter @pilot/cli build && rm -rf dist cli && cp -R ../overlay/dist ./dist && cp -R ../cli/dist ./cli",
-    "prepack": "pnpm run build && cp ../../LICENSE.md ./LICENSE.md",
-    "postpack": "rm -f ./LICENSE.md"
+    "build": "pnpm --filter @pilot/overlay build && pnpm --filter @pilot/cli build && node build.mjs",
+    "prepack": "pnpm run build && node build.mjs license",
+    "postpack": "node build.mjs unlicense"
   }
 }

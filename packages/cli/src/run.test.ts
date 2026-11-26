@@ -48,6 +48,24 @@ process.stdin.on("end", () => {
 });
 `;
 
+/**
+ * The stand-in as an executable in `dir`, the way agents' tools are installed: a script with a shebang on macOS and
+ * Linux; on Windows, which runs no shebang, a `.cmd` that runs it with Node (the way npm installs a tool there, so
+ * Pilot's runs go through a shell, as they do for real).
+ */
+function standIn(dir: string): string {
+  if (process.platform !== "win32") {
+    const bin = join(dir, "claude");
+    writeFileSync(bin, FAKE);
+    chmodSync(bin, 0o755);
+    return bin;
+  }
+  writeFileSync(join(dir, "claude.cjs"), FAKE.replace(/^#!.*\n/, ""));
+  const bin = join(dir, "claude.cmd");
+  writeFileSync(bin, `@"${process.execPath}" "%~dp0claude.cjs" %*\r\n`);
+  return bin;
+}
+
 let nextPort = 49000 + Math.floor(Math.random() * 900);
 const cleanup: Array<() => Promise<void> | void> = [];
 afterEach(async () => {
@@ -99,9 +117,7 @@ async function setup() {
   const { mkdirSync } = await import("node:fs");
   mkdirSync(project);
   writeFileSync(join(project, "package.json"), "{}");
-  const bin = join(dir, "claude");
-  writeFileSync(bin, FAKE);
-  chmodSync(bin, 0o755);
+  const bin = standIn(dir);
   const log = join(dir, "runs.log");
   writeFileSync(log, "");
   process.env.FAKE_LOG = log;
@@ -287,9 +303,7 @@ describe("before the agent is ready (waitForAgent: Pilot started with the dev se
   async function waiting(start: FoundAgent[], options: Partial<Parameters<typeof startRunner>[0]> = {}) {
     const { port, dir } = { port: nextPort++, dir: mkdtempSync(join(tmpdir(), "pilot-wait-")) };
     writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "app" }));
-    const bin = join(dir, "claude");
-    writeFileSync(bin, FAKE);
-    chmodSync(bin, 0o755);
+    const bin = standIn(dir);
     const log = join(dir, "runs.log");
     writeFileSync(log, "");
     process.env.FAKE_LOG = log;

@@ -1,0 +1,66 @@
+# What each agent's sign-in does when Pilot starts it from the page (scripts/sign-in-check.mjs): installed the way
+# its docs say, never signed in, its sign-in run as Pilot runs it (no terminal, nothing typed), and stopped after a
+# moment. Pilot can help only when it prints its page's address and waits for the browser. No secrets, no agent
+# runs. On macOS too: it can't run on a machine someone uses (it would start a real sign-in there). Runs on pushes
+# that change how agents are run or signed in, or by hand (Actions → Sign-in → Run workflow).
+name: Sign-in
+
+on:
+  push:
+    paths:
+      - scripts/sign-in-check.mjs
+      - .github/workflows/sign-in.yml
+      - packages/cli/src/agents.ts
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Claude Code (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          irm https://claude.ai/install.ps1 | iex
+          "$env:USERPROFILE\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: Install Claude Code (macOS, Linux)
+        if: runner.os != 'Windows'
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install Codex
+        run: npm install -g @openai/codex
+
+      - name: Install Cursor CLI (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          irm 'https://cursor.com/install?win32=true' | iex
+          $cmd = Get-Command cursor-agent, agent -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($cmd) { Split-Path $cmd.Source | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8 }
+          foreach ($dir in "$env:LOCALAPPDATA\cursor-agent", "$env:USERPROFILE\.local\bin") {
+            if (Test-Path $dir) { $dir | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8 }
+          }
+      - name: Install Cursor CLI (macOS, Linux)
+        if: runner.os != 'Windows'
+        run: |
+          curl https://cursor.com/install -fsS | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Sign-in from the page
+        shell: bash
+        run: node scripts/sign-in-check.mjs

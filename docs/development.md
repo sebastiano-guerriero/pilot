@@ -78,10 +78,12 @@ To use the Pilot you're working on in another project without publishing a versi
 
 ## What each agent does that Pilot relies on
 
-Pilot runs other people's command-line tools, and an update of one can change how it behaves. Two checks keep that in view:
+Pilot runs other people's command-line tools, and an update of one can change how it behaves. These checks keep that in view:
 
 - **Pilot's side, automatically:** [run.test.ts](../packages/cli/src/run.test.ts) (part of `pnpm test`) drives the runner with a stand-in agent through a real hub and a page: a job and its reply, a thread's session resumed, a question from the `pilot` block, a retry, a sign-in error, Stop, two jobs at once. [agents.test.ts](../packages/cli/src/agents.test.ts) reads output recorded from the real tools.
 - **The agents' side, on every platform:** `node scripts/agent-runs-check.mjs` here, and the **Agent runs** workflow on Windows and Linux: a job, a resumed follow-up, and what its chat would ask about refused without hanging. A tool that behaves differently gets its entry in `AGENTS` ([agents.ts](../packages/cli/src/agents.ts)) changed.
+- **Pilot with dev servers, on every platform:** `node scripts/dev-server-check.mjs` here, and the **Tests** workflow on Windows and Linux (with the typecheck and `pnpm test`, on every push). It packs `usepilot`, installs it with npm into a Vite, a Next.js and a plain project, and runs each as its dev server would be (the Vite plugin, `withPilot`, `usepilot dev`), with a stand-in for Claude Code's tool, a home folder and a PATH of its own (no account, nothing of this machine's touched): Pilot starts before any agent is installed and the page hears why, a job waits, the stand-in installed and signed in from the page, the job runs; one Pilot per Next.js dev server, none in `next build`; the dev server stopping stops Pilot; `usepilot dev`'s exit code, a command line of several commands (a `.cmd` on Windows), never in production. Needs the network (npm). About a minute.
+- **Each agent's sign-in, started from the page:** the **Sign-in** workflow on macOS, Windows and Linux (`scripts/sign-in-check.mjs`): each agent installed and never signed in, its sign-in run as Pilot runs it (no terminal, nothing typed), stopped after 20s. It passes when the sign-in prints its page's address and waits for the browser, which is what the page needs. Never run it on a machine you use: it starts a real sign-in there.
 
 | What the tool does | Agent | What depends on it |
 | --- | --- | --- |
@@ -101,6 +103,7 @@ Pilot runs other people's command-line tools, and an update of one can change ho
 5. A comment, then "a bit more" in its thread: the second resumes the first's session (same id), and the agent knows what "more" means.
 6. Stop a job from its loader: the terminal says it stopped.
 7. Sign the agent out (or pass an agent that isn't installed): the toolbar says what to run.
+8. With Pilot started by the dev server (the Vite plugin, `withPilot` or `usepilot dev`) and the agent signed out: Pilot opens anyway, Send opens the agent's sign-in page, and the job runs once you've signed in.
 
 ## Measuring the code search
 
@@ -112,7 +115,7 @@ The pages are saved HTML, rendered from a copy of the project whose every tag ca
 
 ## Releasing `usepilot`
 
-The published package is [packages/usepilot](../packages/usepilot). Publishing builds it first (`prepack` runs the build and copies `dist/`, `cli/` and the license in).
+The published package is [packages/usepilot](../packages/usepilot). Publishing builds it first (`prepack` runs the build and copies `dist/`, `cli/` and the license in, with [build.mjs](../packages/usepilot/build.mjs): Node, not `rm` and `cp`, so packing works on Windows too).
 
 1. Bump the version in [packages/usepilot/package.json](../packages/usepilot/package.json) (0.x for now: a patch for fixes, a minor for new features and for a new bridge version, which older Pilots can't join), or run `npm version patch --no-git-tag-version` there. Set the same version in [version.ts](../packages/cli/src/version.ts) (`VERSION`: `update` and `init` compare with it); `version.test.ts` fails until both match.
 2. Run the smoke test ([What each agent does that Pilot relies on](#what-each-agent-does-that-pilot-relies-on)) in the clients you can, with this version; fix what breaks first.
