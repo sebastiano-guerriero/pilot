@@ -40,6 +40,8 @@ The workspace packages (`@pilot/overlay`, `@pilot/protocol`, `@pilot/cli`) are i
 
 `pnpm dev` starts it at http://localhost:5180 (not Vite's default 5173, which other projects may use). Launch Pilot with Option+P or the dashed **Launch Pilot** button (it opens Pilot as `npx usepilot` starting for the site does). To send jobs, run Pilot for it: `node packages/cli/dist/index.js --url http://localhost:5180` in `apps/playground`, after `pnpm --filter @pilot/cli build` (the agent edits the playground's files: put them back with git after).
 
+**The modifiers demo**, http://localhost:5180/modifiers.html ([modifiers.html](../apps/playground/modifiers.html)): components whose CSS changes at a breakpoint, in a state or under a condition, each with its rules shown under it, and the window's width live at the top: a padding at two breakpoints (768px, 1200px), a button with hover, focus-visible and active, a toggle whose dot changes under the parent's `data-checked`, a breakpoint nested in its rule, and Tailwind-style utilities in a layer (`p-4 md:p-8`). To try how Pilot edits on top of the project's modifiers (base edits, the width chip, state pills, and the cue to come). The dialog opens on the padding card (`?select=` picks another).
+
 **Designing the dialog.** Saving a CSS file reloads the page, which normally closes everything. To keep the dialog on screen while styling it, the playground mounts Pilot with a `dev` option ([apps/playground/src/main.ts](../apps/playground/src/main.ts)):
 
 ```ts

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pilot Playground · Modifiers</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/modifiers.css" />
+  </head>
+  <body>
+    <main class="demo">
+      <header class="demo-header">
+        <p class="eyebrow"><a href="/">Playground</a> · Modifiers</p>
+        <h1>Breakpoints, states and conditions</h1>
+        <p class="lead">
+          Components whose CSS changes at a breakpoint, in a state or under a condition, to try how Pilot edits on top of them. The window is
+          <strong data-width>—</strong> wide: <span data-active>—</span>.
+        </p>
+      </header>
+
+      <section class="demo-grid">
+        <!-- 1. A padding that changes at two breakpoints (plain CSS, mobile first). -->
+        <article class="demo-item">
+          <div class="demo-card" data-block="breakpoint-card">
+            <h2>Padding at breakpoints</h2>
+            <p>Edit its padding without the width chip: from 768px a breakpoint wins, and the edit doesn't show.</p>
+          </div>
+          <pre class="demo-css">.demo-card { padding: 16px; }
+@media (min-width: 768px)  { .demo-card { padding: 32px; } }
+@media (min-width: 1200px) { .demo-card { padding: 48px; } }</pre>
+        </article>
+
+        <!-- 2. A button with hover, focus-visible and active. -->
+        <article class="demo-item">
+          <div class="demo-stage">
+            <button type="button" class="demo-button" data-block="state-button">Hover or tab to me</button>
+          </div>
+          <pre class="demo-css">.demo-button { background: var(--color-brand); }
+.demo-button:hover { background: #4f46e5; }
+.demo-button:focus-visible { outline: 3px solid var(--color-accent); }
+.demo-button:active { transform: translateY(1px); }</pre>
+        </article>
+
+        <!-- 3. A condition on the parent: data-checked on the toggle changes the dot. -->
+        <article class="demo-item">
+          <div class="demo-stage">
+            <button type="button" class="demo-toggle" data-block="condition-toggle" aria-pressed="false" data-toggle>
+              <span class="demo-dot"></span>
+            </button>
+            <span class="demo-note">Click to toggle <code>data-checked</code></span>
+          </div>
+          <pre class="demo-css">.demo-dot { margin-left: 2px; background: #cbd5e1; }
+.demo-toggle[data-checked] > .demo-dot { margin-left: 22px; background: #fff; }</pre>
+        </article>
+
+        <!-- 4. Nested CSS: the breakpoint inside the rule. -->
+        <article class="demo-item">
+          <div class="demo-nested" data-block="nested-card">
+            <h2>Nested breakpoint</h2>
+            <p>The media query is nested inside its rule, as CSS nesting writes it.</p>
+          </div>
+          <pre class="demo-css">.demo-nested {
+  padding: 12px;
+  @media (min-width: 900px) { padding: 28px; }
+}</pre>
+        </article>
+
+        <!-- 5. Utility classes in a layer, the way Tailwind v4 writes them. -->
+        <article class="demo-item">
+          <div class="u-p-4 u-md-p-8 u-rounded demo-utility" data-block="utility-card">
+            <h2>Utility classes</h2>
+            <p><code>p-4 md:p-8</code>, written as Tailwind v4 does, in a layer.</p>
+          </div>
+          <pre class="demo-css">@layer utilities {
+  .u-p-4 { padding: 16px; }
+  .u-md-p-8 { @media (width >= 768px) { padding: 32px; } }
+}</pre>
+        </article>
+      </section>
+    </main>
+    <button type="button" class="dev-launch" data-launch-pilot>Launch Pilot</button>
+    <script type="module" src="/src/modifiers.ts"></script>
+  </body>
+</html>
