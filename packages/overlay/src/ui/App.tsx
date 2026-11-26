@@ -228,9 +228,12 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   // Send: what went, and what waits for a job still on its element (it goes once that's finished).
   const sendChanges = (): boolean | string => {
     if (!session) return false;
+    // The agent isn't signed in: Send opens its sign-in page, even with nothing new to send (session.send).
+    const signsIn = !!session.setup?.canSignIn;
     const job = session.send();
     const held = session.heldCount > 0;
     if (job) return held ? "Sent; some queued" : true;
+    if (signsIn) return "Opening the sign-in page";
     return held ? "Queued" : false;
   };
   // The job on the selected element, if one isn't finished: its actions give way to where it stands.

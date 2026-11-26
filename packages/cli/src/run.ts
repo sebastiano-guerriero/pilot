@@ -310,10 +310,10 @@ function setupLine(setup: AgentSetup | undefined): string {
   if (setup.state === "signing-in") return `Waiting for you to sign in to ${name} in the browser${setup.url ? ` (${setup.url})` : ""}.`;
   if (setup.error) return `! ${setup.error}`;
   if (setup.state === "not-signed-in")
-    return `${name} isn't signed in: send something from Pilot to sign in (its page opens in your browser), or run ${setup.command} in a terminal. Jobs wait until then.`;
+    return `${name} isn't signed in: click Send in Pilot to sign in (its page opens in your browser), or run ${setup.command} in a terminal. Jobs wait until then.`;
   return setup.agent
-    ? `${name}'s command-line tool isn't installed: run ${setup.command} in a terminal. Jobs wait until then.`
-    : `${setup.command} Jobs wait until then.`;
+    ? `${name}'s command-line tool isn't installed: ask your agent to install it, or run ${setup.command} in a terminal. Jobs wait until then.`
+    : `${setup.command} (Or ask your agent to install its own.) Jobs wait until then.`;
 }
 
 /**

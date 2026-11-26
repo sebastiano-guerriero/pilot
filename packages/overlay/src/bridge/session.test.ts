@@ -1063,11 +1063,19 @@ describe("before the agent is ready (Pilot started with the dev server)", () => 
     expect(s.stuck).toEqual({
       kind: "setup",
       title: "Sign in to Claude Code",
-      detail: "Send opens its sign-in page, or run claude auth login in a terminal. What you send waits until then",
+      detail: "Click Send to open its sign-in page, or run claude auth login in a terminal. What you send waits until then",
       jobs: [sent.id],
     });
     hub().emit({ type: "agents", agents: [{ ...agent, setup: { state: "not-installed", agent: "Claude Code", command: "curl -fsSL https://claude.ai/install.sh | bash, then claude auth login" } }], waiting: 0 });
-    expect(s.stuck).toMatchObject({ title: "Claude Code isn't installed", detail: "Run curl -fsSL https://claude.ai/install.sh | bash, then claude auth login in a terminal. What you send waits until then" });
+    expect(s.stuck).toMatchObject({
+      title: "Claude Code isn't installed",
+      detail: "Ask your agent to install Claude Code's command-line tool, or run curl -fsSL https://claude.ai/install.sh | bash, then claude auth login in a terminal. What you send waits until then",
+    });
+    hub().emit({ type: "agents", agents: [{ ...agent, setup: { state: "not-installed", command: "Install your coding agent's command-line tool and sign in: Codex: npm install -g @openai/codex, then codex login." } }], waiting: 0 });
+    expect(s.stuck).toMatchObject({
+      title: "No coding agent installed",
+      detail: "Ask your agent to install its command-line tool, or: Install your coding agent's command-line tool and sign in: Codex: npm install -g @openai/codex, then codex login. What you send waits until then",
+    });
     hub().emit({ type: "agents", agents: [{ ...agent, setup: { state: "signing-in", agent: "Claude Code", command: "claude auth login", url: "https://claude.ai/oauth" } }], waiting: 0 });
     expect(s.stuck).toMatchObject({ title: "Signing in to Claude Code", detail: "Finish in the browser (https://claude.ai/oauth). What you send waits until then" });
     // Ready: nothing stuck; the job runs.
@@ -1091,6 +1099,25 @@ describe("before the agent is ready (Pilot started with the dev server)", () => 
     history.apply(el, "padding-top", "28px");
     s.send();
     expect(signIns()).toBe(1);
+    s.destroy();
+  });
+
+  it("sent while it wasn't installed, then installed: Send signs it in with nothing new to send, and so does a comment that waits", () => {
+    const s = session();
+    const signIns = () => posts.filter((p) => p.url === "http://hub/setup/sign-in").length;
+    hub().emit({ type: "agents", agents: [{ ...agent, setup: { state: "not-installed", agent: "Claude Code", command: "x" } }], waiting: 0 });
+    history.apply(el, "padding-top", "20px");
+    expect(s.send()).toBeTruthy();
+    expect(signIns()).toBe(0);
+    // Installed now, not signed in: what was sent waits; Send has nothing new, and still opens the sign-in page.
+    hub().emit({ type: "agents", agents: [notSignedIn], waiting: 0 });
+    expect(s.unsent).toBe(0);
+    expect(s.send()).toBeNull();
+    expect(signIns()).toBe(1);
+    // A comment on the element the job is on waits for it (nothing posted): it signs in too.
+    const { waiting } = s.comment(el, "Make it bigger");
+    expect(waiting).toBe(true);
+    expect(signIns()).toBe(2);
     s.destroy();
   });
 

@@ -316,7 +316,10 @@ export class PilotSession {
     const unsent = this.history.changes({ unsent: true });
     for (const change of unsent) if (this.jobOn(change.element)) this.held.add(change.element);
     this.saveHeld();
-    return this.sendChanges((change) => !this.held.has(change.element));
+    const job = this.sendChanges((change) => !this.held.has(change.element));
+    // Nothing new went (what was sent before waits for the agent to be signed in): Send still signs it in.
+    if (!job) this.signIn();
+    return job;
   }
 
   /** The unsent changes `only` picks, as a job. Null when it picks none. */
@@ -526,6 +529,8 @@ export class PilotSession {
     const messages = [...thread.messages, message];
     this.patchThread(thread.id, { messages });
     const { job, changeSet } = waiting ? { job: null, changeSet: this.commentSet(element, messages, others) } : this.postComment(thread.id, element);
+    // A comment that waits for the job on its element posts nothing: it still signs the agent in.
+    if (waiting) this.signIn();
     return { thread: this.threads.find((t) => t.id === thread.id) as CommentThread, job, changeSet, waiting };
   }
 
@@ -777,7 +782,7 @@ export class PilotSession {
     this.jobs = [...this.jobs, job];
     this.save();
     void this.bridge?.postJob({ id, changeSet, status: "queued" });
-    this.signInIfNeeded();
+    this.signIn();
     return job;
   }
 
@@ -792,12 +797,16 @@ export class PilotSession {
   }
 
   /**
-   * Something was sent while the agent isn't signed in: Pilot starts its sign-in, which opens the agent's page in the
-   * browser (the designer asked by sending). It waits in the queue meanwhile, and runs once they've signed in. Once per
-   * send: while it's under way, or when it can't (not installed), nothing more happens.
+   * The designer sent something (Send, a comment, a task) while the agent isn't signed in: Pilot starts its sign-in,
+   * which opens the agent's page in the browser (they asked by sending). What they sent waits in the queue meanwhile,
+   * and runs once they've signed in. Send signs in even with nothing new to send: what waits was sent before, while
+   * the agent wasn't installed. True when it asked; while a sign-in is under way, or when there's none to start (not
+   * installed, or ready), nothing happens.
    */
-  private signInIfNeeded(): void {
-    if (this.setup?.canSignIn) void this.bridge?.signIn();
+  signIn(): boolean {
+    if (!this.setup?.canSignIn || !this.bridge) return false;
+    void this.bridge.signIn();
+    return true;
   }
 
   /** Take a job back before the agent is done: its changes are unsent again (they stay on the page). */
@@ -1272,10 +1281,11 @@ export function setupText(setup: AgentSetup): { title: string; detail: string } 
       title: `Sign in to ${name}`,
       detail: setup.error
         ? setup.error.replace(/\.$/, "")
-        : `${setup.canSignIn ? "Send opens its sign-in page, or run" : "Run"} ${command} in a terminal. ${waits}`,
+        : `${setup.canSignIn ? "Click Send to open its sign-in page, or run" : "Run"} ${command} in a terminal. ${waits}`,
     };
-  if (!setup.agent) return { title: "No coding agent installed", detail: `${command}. ${waits}` };
-  return { title: `${name} isn't installed`, detail: `Run ${command} in a terminal. ${waits}` };
+  // Not installed: the designer has their agent's chat open (it set Pilot up), which is easier than a terminal.
+  if (!setup.agent) return { title: "No coding agent installed", detail: `Ask your agent to install its command-line tool, or: ${command}. ${waits}` };
+  return { title: `${name} isn't installed`, detail: `Ask your agent to install ${name}'s command-line tool, or run ${command} in a terminal. ${waits}` };
 }
 
 /** What to do about a run that has gone quiet. */
