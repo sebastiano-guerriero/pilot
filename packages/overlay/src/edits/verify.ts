@@ -1,5 +1,6 @@
 import type { ChangeResult } from "@pilot/protocol";
-import { baseValue, declaredValue } from "../dom/declared.ts";
+import { mediaRange } from "../dom/breakpoints.ts";
+import { baseValue, declaredValue, mediaOf } from "../dom/declared.ts";
 import { isPageMutation } from "../dom/preview.ts";
 import { normalizeText, textRunOf } from "../dom/text.ts";
 import type { EditHistory, RecordedChange } from "./history.ts";
@@ -38,10 +39,8 @@ export interface JobCheck {
 
 export function checkJob(history: EditHistory, jobId: string, width = window.innerWidth): JobCheck {
   const changes = history.changes({ job: jobId });
-  // Base changes the project's own breakpoints or conditions hide at this width (read on the page alone, Pilot's changes left out).
-  const hidden = new Set(
-    history.probe([], () => changes.filter((c) => !c.widths && !c.states?.length && c.element.isConnected && !baseAppliesHere(c.element, c.property))),
-  );
+  // Changes the project's own rules hide at this width, by design (read on the page alone, Pilot's changes left out).
+  const hidden = new Set(history.probe([], () => changes.filter((c) => !c.states?.length && c.element.isConnected && hiddenHere(c))));
   const checkable = changes.filter((c) => c.element.isConnected && !c.states?.length && inWidths(c.widths ?? null, width) && !hidden.has(c));
   const isText = (c: RecordedChange) => textRunOf(c.property) !== null;
   const css = checkable.filter((c) => !isText(c));
@@ -80,6 +79,26 @@ export function checkJob(history: EditHistory, jobId: string, width = window.inn
  * would read the same with or without it: it's left unchecked, settled on
  * the agent's word, like a change for widths the window isn't at.
  */
+function hiddenHere(c: RecordedChange): boolean {
+  return c.widths ? laterBreakpointWins(c.element, c.property, c.widths) : !baseAppliesHere(c.element, c.property);
+}
+
+/**
+ * Whether a project's rule for a later breakpoint wins at this width over a
+ * change for `widths`: placed among the project's breakpoints (dom/anchored.ts),
+ * a "from 768px" change gives way to its "from 1200px" one above 1200px, as
+ * the code will, so it can't be seen there.
+ */
+function laterBreakpointWins(element: Element, property: string, widths: { min?: number; max?: number }): boolean {
+  const now = declaredValue(element, property);
+  const media = now?.rule && now.source !== "inline" ? mediaOf(now.rule) : undefined;
+  const range = media ? mediaRange(media) : null;
+  if (!range) return false;
+  if (widths.min !== undefined && widths.max === undefined) return range.max === undefined && range.min !== undefined && range.min > widths.min;
+  if (widths.max !== undefined && widths.min === undefined) return range.min === undefined && range.max !== undefined && range.max < widths.max;
+  return false;
+}
+
 function baseAppliesHere(element: Element, property: string): boolean {
   const now = declaredValue(element, property);
   if (!now) return true;

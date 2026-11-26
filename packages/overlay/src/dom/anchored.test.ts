@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { renderAnchored } from "./anchored.ts";
-import { baseValue, declaredValue } from "./declared.ts";
+import { baseValue, declaredValue, rangeValue } from "./declared.ts";
 
 let style: HTMLStyleElement;
 let element: HTMLElement;
@@ -90,5 +90,65 @@ describe("renderAnchored", () => {
     expect(holds(".box-b")).toBe(true);
     expect(holds(".box")).toBe(false);
     expect(baseValue(element, "padding-top")?.source).toEqual({ selector: ".box-b" });
+  });
+});
+
+describe("changes for widths and states, among the project's rules", () => {
+  beforeEach(() => {
+    style.textContent = [
+      ".box { padding: 40px; }",
+      "@media (min-width: 768px) { .box { padding: 56px; } }",
+      "@media (min-width: 1200px) { .box { padding: 72px; } }",
+      ".box:hover { padding: 8px; }",
+      ".box:focus { padding: 4px; }",
+    ].join("\n");
+  });
+  const index = (pred: (t: string) => boolean) => Array.from(style.sheet?.cssRules ?? []).findIndex((r) => pred(r.cssText));
+  const ours = (t: string) => t.includes('data-pilot-edit="7"');
+
+  it("a width the project has a rule for: beside it, in its media query", () => {
+    renderAnchored([{ element, property: "padding", text: "padding: 60px;", id: 7, widths: { min: 768 } }], false);
+    const at = index(ours);
+    expect(at).toBeGreaterThan(-1);
+    // In (or right after) the 768px rule, before the 1200px one: that one still wins above it.
+    expect(at).toBeLessThan(index((t) => t.includes("1200px")));
+    expect(at).toBeGreaterThanOrEqual(index((t) => t.includes("768px")));
+  });
+
+  it("a new breakpoint: its own rule, between the project's smaller and larger ones", () => {
+    renderAnchored([{ element, property: "padding", text: "padding: 60px;", id: 7, widths: { min: 900 } }], false);
+    const at = index(ours);
+    expect(Array.from(style.sheet?.cssRules ?? [])[at]?.cssText).toContain("min-width: 900px");
+    expect(at).toBeGreaterThan(index((t) => t.includes("768px")));
+    expect(at).toBeLessThan(index((t) => t.includes("1200px")));
+  });
+
+  it("a state the project has a rule for: beside it, before its other states", () => {
+    renderAnchored([{ element, property: "padding", text: "padding: 10px;", id: 7, states: ["hover"] }], false);
+    const at = index(ours);
+    expect(at).toBeGreaterThanOrEqual(index((t) => t.startsWith(".box:hover")));
+    expect(at).toBeLessThan(index((t) => t.startsWith(".box:focus")));
+  });
+
+  it("a state the project has no rule for: its own rule right after the base, for that state", () => {
+    renderAnchored([{ element, property: "padding", text: "padding: 10px;", id: 7, states: ["active"] }], false);
+    const rule = Array.from(style.sheet?.cssRules ?? []).find((r) => ours(r.cssText));
+    expect(rule?.cssText).toContain(":active");
+    expect(index(ours)).toBeLessThan(index((t) => t.startsWith(".box:hover")));
+  });
+});
+
+describe("rangeValue (what a field shows with the width chip)", () => {
+  it("the project's rule for exactly that breakpoint, whatever the window's width; none for a new one", () => {
+    style.textContent = [
+      ".box { padding: 40px; }",
+      "@media (min-width: 768px) { .box { padding: 56px; } }",
+      "@media (min-width: 1200px) { .box { padding: 72px; } }",
+      "@media (max-width: 767px) { .box { padding: 24px; } }",
+    ].join("\n");
+    expect(rangeValue(element, "padding-top", { min: 768 })?.value).toBe("56px");
+    expect(rangeValue(element, "padding-top", { min: 1200 })?.value).toBe("72px");
+    expect(rangeValue(element, "padding-top", { max: 767 })?.value).toBe("24px");
+    expect(rangeValue(element, "padding-top", { min: 900 })).toBeNull();
   });
 });

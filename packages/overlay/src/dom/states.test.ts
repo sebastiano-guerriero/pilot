@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { declaredValue, forcedDeclarations, subjectStates } from "./declared.ts";
+import { baseValue, declaredValue, subjectStates } from "./declared.ts";
 
 describe("subjectStates", () => {
   it("takes the element's own states off its selector", () => {
@@ -49,10 +49,19 @@ describe("declared values for a state", () => {
     expect(declaredValue(el, "padding-top", ["hover"])).toBeNull();
     expect(declaredValue(el, "color", ["hover", "active"])?.value).toBe("blue");
   });
+});
 
-  it("forced: what applies while in all the states, each state's rules included", () => {
-    const forced = Object.fromEntries(forcedDeclarations(el, ["hover", "active"]).map((d) => [d.property, d.value]));
-    expect(forced).toEqual({ color: "blue", "padding-top": "6px" });
-    expect(forcedDeclarations(el, [])).toEqual([]);
+describe("a state read like CSS", () => {
+  it("the hover pill alone is the hover rule outside media queries, not one inside a breakpoint that holds now", () => {
+    const style = document.createElement("style");
+    style.textContent = ".x:hover { color: red; } @media (min-width: 1px) { .x:hover { color: blue; } }";
+    document.head.append(style);
+    const x = document.createElement("div");
+    x.className = "x";
+    document.body.append(x);
+    expect(declaredValue(x, "color", ["hover"])?.value).toBe("blue");
+    expect(baseValue(x, "color", ["hover"])?.value).toBe("red");
+    style.remove();
+    x.remove();
   });
 });

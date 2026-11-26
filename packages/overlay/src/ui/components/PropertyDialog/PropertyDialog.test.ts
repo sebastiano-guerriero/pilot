@@ -511,10 +511,10 @@ describe("width chip", () => {
     type("hover:active:opacity");
     act(() => (container.querySelector('[data-editor="opacity"] .stub') as HTMLButtonElement).click());
     expect(history.changes().map((c) => [c.property, c.value, c.states])).toEqual([["opacity", "0.5", ["hover", "active"]]]);
-    // Its rule is for those states; while the pills are set, the element shows them.
+    // Its rule is for those states, and only them: the element isn't shown in them while the pills are set.
     const sheet = document.querySelector(`style[${PREVIEW_ATTRIBUTE}]`)?.textContent ?? "";
     expect(sheet).toContain(":hover:active { opacity: 0.5 !important; }");
-    expect(sheet).toMatch(/\[data-pilot-edit="\d+"\] \{ opacity: 0\.5 !important; \}/);
+    expect(sheet).not.toMatch(/\[data-pilot-edit="\d+"\] \{ opacity: 0\.5 !important; \}/);
     history.clear();
   });
 

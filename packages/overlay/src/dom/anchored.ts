@@ -1,134 +1,191 @@
-import { baseValue } from "./declared.ts";
+import type { ElementState, WidthRange } from "@pilot/protocol";
+import { stateSelector } from "../edits/states.ts";
+import { mediaRange } from "./breakpoints.ts";
+import { type Placed, baseValue, beats, declarationsOf, subjectStates } from "./declared.ts";
 
 /**
- * Base edits shown beside the page's own CSS (the owner's call, 2026-11-26):
- * an edit made without the width chip or a state pill changes the element's
- * base value, the one it declares without a media query or a state, and the
- * project's breakpoint, state and condition rules keep winning where they
- * apply, as they will once the agent changes the code. So Pilot doesn't
- * override them (its layer's `!important`): it puts its value right after
- * the declaration it replaces, in the page's own stylesheet, for this element
- * only, and the browser's cascade does the rest.
+ * Pilot's changes shown in the page's own CSS (the owner's call, 2026-11-26):
+ * not over it, in a layer of `!important` rules that beat every rule of the
+ * project's, but among its rules, where the agent will write them, so the
+ * browser's cascade shows what the code will. Pilot builds on what's there.
  *
- *     .pt-4 { padding-top: 1rem; &:where([data-pilot-edit="3"]) { padding-top: 20px; } }
+ * - **Beside the project's own rule** for the same widths and states, when
+ *   it has one: the base value (`pt-4`, no media query, no state), its
+ *   `md:pt-3` for "from 768px", its `:hover` rule for hover. Nested in that
+ *   rule (`&`: its selector and specificity), right after its declarations,
+ *   so whatever came after it still does (`.md\:pt-3` after `.pt-4`, focus
+ *   after hover):
  *
- * Nested in the rule (`&`: its selector and specificity), right after its
- * declarations, so whatever came after it (`.md\:pt-3`, a nested `@media`, a
- * `:hover` rule) still comes after it. Where a rule can't hold nested rules,
- * the same right after the rule, with its selector spelled out:
- * `:is(.pt-4):where([data-pilot-edit="3"])`. The browser's in-memory copy of
- * the stylesheet only (CSSOM), never the project's files. A property the
- * element declares nowhere (or only in its style attribute) has nothing to
- * sit beside: the caller shows it in its own layer, as before.
+ *       .pt-4 { padding-top: 1rem; &:where([data-pilot-edit="3"]) { padding-top: 20px; } }
+ *
+ * - **A rule of its own** otherwise (a breakpoint or a state the project has
+ *   no rule for here), placed where the project's would go: a "from" width
+ *   after the project's smaller "from" breakpoints for the property and
+ *   before its larger ones (mobile first), a "to" width after the larger
+ *   "to" ones (desktop first), a range after every rule overlapping it (it's
+ *   meant to win in it), a state right after the element's base rule (the
+ *   project's other states, later, still win when they apply):
+ *
+ *       @media (min-width: 900px) { :is(.card):where([data-pilot-edit="3"]) { padding: 24px; } }
+ *       :is(.btn):where([data-pilot-edit="3"]):hover { background: red; }
+ *
+ * The browser's in-memory copy of the stylesheet only (CSSOM), never the
+ * project's files. A property the element declares nowhere (or only in its
+ * style attribute), and a removal for a state (`revert-layer`, which only
+ * means something in Pilot's layer), have nothing to sit among: the caller
+ * shows them in its layer, as before.
  *
  * The page can drop or move what Pilot leaned on: a hot reload replaces a
  * stylesheet (Pilot's rule goes with the old one), and a component restyled
  * with other props gets another class (CSS-in-JS). `check` looks for both,
- * and puts the rule back beside the base declaration found again.
+ * and places the rule again.
  */
 
-/** One base edit shown beside its declaration. */
-interface Anchored {
+/** What to show: one change, with the element's preview id. */
+export interface AnchorRequest {
   element: Element;
   property: string;
   /** The declaration, as written: `padding-top: 20px;`. */
   text: string;
-  /** The page's declarations it sits after. */
-  anchor: CSSStyleDeclaration;
-  /** The rule's selector that matched the element (nesting resolved): it must still match. */
-  selector: string;
-  rule: CSSStyleRule;
-}
-
-/** What to show: one base edit, with the element's preview id. */
-export interface AnchorRequest {
-  element: Element;
-  property: string;
-  text: string;
   id: number;
+  widths?: WidthRange;
+  states?: ElementState[];
 }
 
-const shown = new Map<string, Anchored>();
+/** Where a change goes among the page's rules. */
+type Spot =
+  | { kind: "beside"; declared: Placed["declared"]; media?: string }
+  | { kind: "after"; unit: CSSRule; selector: string };
 
-const keyOf = (r: { element: Element; property: string }, id: number) => `${id}|${r.property}`;
+/** One change shown in the page's CSS. */
+interface Shown {
+  element: Element;
+  text: string;
+  /** What it's placed by: the declaration it sits beside, or the rule it comes after. */
+  by: CSSStyleDeclaration | CSSRule;
+  /** What Pilot inserted (to take it away), and the declarations it writes (to update in place). */
+  rule: CSSRule;
+  style: CSSStyleDeclaration;
+}
 
-/** The elements with a base edit shown beside the page's CSS now (their classes are watched). */
+const shown = new Map<string, Shown>();
+
+const keyOf = (r: AnchorRequest) => `${r.id}|${r.property}|${r.widths?.min ?? ""}-${r.widths?.max ?? ""}|${r.states?.join(",") ?? ""}`;
+
+/** The elements with a change shown in the page's CSS now (their classes are watched). */
 export function anchoredElements(): Element[] {
   return [...new Set([...shown.values()].map((a) => a.element))];
 }
 
 /**
- * Show `requests` beside the page's declarations, in order, and take away
- * those not asked for anymore. With `check`, each one already shown is looked
- * at again (its stylesheet replaced, its declaration no longer the base, its
- * selector no longer matching) and put back where it belongs. Returns the
- * requests it couldn't place: nothing to sit beside.
+ * Show `requests` in the page's CSS, in order, and take away those not asked
+ * for anymore. With `check`, each one already shown is placed again if where
+ * it belongs changed (its stylesheet replaced, its rule no longer the one,
+ * its element's classes changed). Returns the requests it couldn't place.
  */
 export function renderAnchored(requests: AnchorRequest[], check: boolean): AnchorRequest[] {
-  const wanted = new Set(requests.map((r) => keyOf(r, r.id)));
+  const wanted = new Set(requests.map(keyOf));
   for (const [key, entry] of shown) {
     if (wanted.has(key)) continue;
-    remove(entry);
+    remove(entry.rule);
     shown.delete(key);
   }
   const left: AnchorRequest[] = [];
-  // Several edits beside the same declarations (padding, then padding-top): in the order they were made.
-  const lastBeside = new Map<CSSStyleDeclaration, CSSStyleRule>();
+  // Several changes placed by the same rule (padding, then padding-top): in the order they were made.
+  const lastBy = new Map<CSSStyleDeclaration | CSSRule, CSSRule>();
   for (const request of requests) {
-    const key = keyOf(request, request.id);
+    const key = keyOf(request);
     const entry = shown.get(key);
-    if (entry && live(entry.rule) && entry.element === request.element) {
-      const still = !check || (sameBase(entry) && matches(entry.element, entry.selector));
-      if (still) {
-        if (entry.text !== request.text) {
-          entry.rule.style.cssText = request.text;
-          entry.text = request.text;
-        }
-        lastBeside.set(entry.anchor, entry.rule);
-        continue;
+    const looked = !entry || check || !live(entry.rule);
+    const spot = looked ? spotFor(request) : null;
+    if (entry && live(entry.rule) && entry.element === request.element && (!looked || (spot && byOf(spot) === entry.by))) {
+      if (entry.text !== request.text) {
+        entry.style.cssText = request.text;
+        entry.text = request.text;
       }
+      lastBy.set(entry.by, entry.rule);
+      continue;
     }
     if (entry) {
-      remove(entry);
+      remove(entry.rule);
       shown.delete(key);
     }
-    const base = baseValue(request.element, request.property);
-    if (!base?.rule || base.source === "inline") {
+    if (!spot) {
       left.push(request);
       continue;
     }
-    const rule = place({ rule: base.rule, selector: base.source.selector }, request, lastBeside.get(base.rule));
-    if (!rule) {
+    const placed = place(spot, request, lastBy.get(byOf(spot)));
+    if (!placed) {
       left.push(request);
       continue;
     }
-    lastBeside.set(base.rule, rule);
-    shown.set(key, { element: request.element, property: request.property, text: request.text, anchor: base.rule, selector: base.source.selector, rule });
+    lastBy.set(byOf(spot), placed.rule);
+    shown.set(key, { element: request.element, text: request.text, by: byOf(spot), ...placed });
   }
   return left;
 }
 
-/** Whether the declaration it sits beside is still the element's base for its property. */
-function sameBase(entry: Anchored): boolean {
-  return baseValue(entry.element, entry.property)?.rule === entry.anchor;
+const byOf = (spot: Spot): CSSStyleDeclaration | CSSRule => (spot.kind === "beside" ? spot.declared.rule : spot.unit);
+
+const sameRange = (a: { min?: number; max?: number }, b: { min?: number; max?: number }) => a.min === b.min && a.max === b.max;
+const overlaps = (a: { min?: number; max?: number }, b: { min?: number; max?: number }) =>
+  (a.min ?? 0) <= (b.max ?? Number.POSITIVE_INFINITY) && (b.min ?? 0) <= (a.max ?? Number.POSITIVE_INFINITY);
+
+/** Where a change goes among the page's rules (see the module's comment), or null: nothing to place it by. */
+function spotFor(request: AnchorRequest): Spot | null {
+  const { element, property, states } = request;
+  const want = request.widths ?? {};
+  const rules = declarationsOf(element, property, states).flatMap((p) => {
+    const range = p.media ? mediaRange(p.media) : {};
+    return range ? [{ placed: p, range }] : [];
+  });
+  // The project's own rule for exactly these widths and states: beside the one that wins (the cascade's, `beats`).
+  const exact = rules
+    .filter((r) => sameRange(r.range, want))
+    .reduce<(typeof rules)[number] | undefined>(
+      (best, r) =>
+        !best || beats({ important: r.placed.declared.important, rule: r.placed.match }, { important: best.placed.declared.important, rule: best.placed.match }) ? r : best,
+      undefined,
+    );
+  if (exact) return { kind: "beside", declared: exact.placed.declared, ...(exact.placed.media ? { media: exact.placed.media } : {}) };
+  // A rule of its own: the element's selector, as its base rule writes it.
+  const base = baseValue(element, property);
+  const selector = base?.rule && base.source !== "inline" ? base.source.selector : rules[0] ? subjectStates(rules[0].placed.declared.source.selector).stripped : null;
+  if (!selector) return null;
+  // After which rule: among the project's breakpoints for it, else after its rule without one (the state's), else the base.
+  const plain = rules.filter((r) => r.range.min === undefined && r.range.max === undefined).at(-1);
+  let after = plain;
+  if (want.min !== undefined && want.max === undefined) {
+    after = rules.filter((r) => r.range.max === undefined && r.range.min !== undefined && r.range.min <= (want.min as number)).at(-1) ?? plain;
+  } else if (want.max !== undefined && want.min === undefined) {
+    after = rules.filter((r) => r.range.min === undefined && r.range.max !== undefined && r.range.max >= (want.max as number)).at(-1) ?? plain;
+  } else if (want.min !== undefined && want.max !== undefined) {
+    after = rules.filter((r) => (r.range.min !== undefined || r.range.max !== undefined) && overlaps(r.range, want)).at(-1) ?? plain;
+  }
+  const by = after?.placed.declared.rule ?? (base?.rule && base.source !== "inline" ? base.rule : null);
+  const unit = by && unitOf(by);
+  return unit ? { kind: "after", unit, selector } : null;
 }
 
-function matches(element: Element, selector: string): boolean {
-  try {
-    return element.matches(selector);
-  } catch {
-    return false;
-  }
+/**
+ * The rule a declaration belongs to, as one piece of its stylesheet: the
+ * style rule, with any rule it's nested in (`.md\:p-8 { @media { … } }`), or
+ * the `@media` around it (`@media { .card { … } }`). What a rule of Pilot's own goes after.
+ */
+function unitOf(declarations: CSSStyleDeclaration): CSSRule | null {
+  let rule = declarations.parentRule;
+  while (rule?.parentRule && rule.parentRule.constructor.name !== "CSSLayerBlockRule") rule = rule.parentRule;
+  return rule ?? null;
 }
 
 type Container = { cssRules: CSSRuleList; insertRule(text: string, index?: number): number; deleteRule(index: number): void };
-type RuleLike = CSSRule & { cssRules?: CSSRuleList; insertRule?: Container["insertRule"]; selectorText?: string; style?: CSSStyleDeclaration };
+type RuleLike = CSSRule & { cssRules?: CSSRuleList; insertRule?: Container["insertRule"]; selectorText?: string };
 
 const containerOf = (rule: CSSRule): Container | null => (rule.parentRule as unknown as Container | null) ?? (rule.parentStyleSheet as unknown as Container | null);
 const indexIn = (container: Container, rule: CSSRule) => Array.from(container.cssRules).indexOf(rule);
 
 /** Whether a rule Pilot inserted is still in a stylesheet the page uses. */
-function live(rule: CSSStyleRule): boolean {
+function live(rule: CSSRule): boolean {
   const sheet = rule.parentStyleSheet;
   if (!sheet) return false;
   const owner = sheet.ownerNode as (Node & { sheet?: CSSStyleSheet | null }) | null;
@@ -138,10 +195,10 @@ function live(rule: CSSStyleRule): boolean {
   return !!container && indexIn(container, rule) >= 0;
 }
 
-function remove(entry: Anchored) {
-  const container = containerOf(entry.rule);
+function remove(rule: CSSRule) {
+  const container = containerOf(rule);
   if (!container) return;
-  const index = indexIn(container, entry.rule);
+  const index = indexIn(container, rule);
   if (index < 0) return;
   try {
     container.deleteRule(index);
@@ -151,44 +208,63 @@ function remove(entry: Anchored) {
 }
 
 /**
- * Insert the request's rule right after `base`'s declarations (or after
- * `after`, an earlier edit beside them): nested in the rule they belong to,
- * else right after that rule at the top level. Null when the page's
- * stylesheet can't take it (not readable, or the browser refuses).
+ * Insert the request's rule at `spot` (or right after `after`, an earlier
+ * change placed by the same rule). Null when the page's stylesheet can't take
+ * it (not readable, or the browser refuses).
  */
-function place(base: { rule: CSSStyleDeclaration; selector: string }, request: AnchorRequest, after?: CSSStyleRule): CSSStyleRule | null {
+function place(spot: Spot, request: AnchorRequest, after?: CSSRule): { rule: CSSRule; style: CSSStyleDeclaration } | null {
   const where = `[data-pilot-edit="${request.id}"]`;
-  const nested = `&:where(${where}) { ${request.text} }`;
-  // After an earlier edit beside the same declarations: as it was placed.
+  const own = (selector: string) => {
+    const rule = `:is(${selector}):where(${where})${stateSelector(request.states)} { ${request.text} }`;
+    const media = request.widths && mediaFor(request.widths);
+    return media ? `@media ${media} { ${rule} }` : rule;
+  };
   if (after) {
     const container = containerOf(after);
     if (!container) return null;
-    const text = after.selectorText.startsWith("&") ? nested : `:is(${base.selector}):where(${where}) { ${request.text} }`;
+    const nested = (after as RuleLike).selectorText?.startsWith("&");
+    const text = nested ? `&:where(${where}) { ${request.text} }` : spot.kind === "after" ? own(spot.selector) : besideOutside(spot, where, request.text);
     return insert(container, text, indexIn(container, after) + 1);
   }
-  const owner = base.rule.parentRule as RuleLike | null;
-  if (!owner) return null;
-  // The rule's own declarations: first among its nested rules. A block of declarations after some (CSSNestedDeclarations): right after it.
-  const styleRule = owner.selectorText !== undefined ? owner : (owner.parentRule as RuleLike | null);
-  if (styleRule?.selectorText !== undefined && typeof styleRule.insertRule === "function") {
-    const index = owner === styleRule ? 0 : indexIn(styleRule as unknown as Container, owner) + 1;
-    const rule = insert(styleRule as unknown as Container, nested, index);
-    if (rule) return rule;
+  if (spot.kind === "after") {
+    const container = containerOf(spot.unit);
+    return container ? insert(container, own(spot.selector), indexIn(container, spot.unit) + 1) : null;
   }
-  // No nesting: right after the outermost style rule, with the selector spelled out.
-  let outer: RuleLike | null = styleRule;
-  while (outer?.parentRule && (outer.parentRule as RuleLike).selectorText !== undefined) outer = outer.parentRule as RuleLike;
-  if (!outer) return null;
-  const container = containerOf(outer);
-  if (!container) return null;
-  return insert(container, `:is(${base.selector}):where(${where}) { ${request.text} }`, indexIn(container, outer) + 1);
+  // Beside: nested in the rule the declarations belong to, right after them.
+  const owner = spot.declared.rule.parentRule as RuleLike | null;
+  if (!owner) return null;
+  const nested = `&:where(${where}) { ${request.text} }`;
+  // The rule's own declarations: first among its nested rules. A block of declarations after some (CSSNestedDeclarations): right after it.
+  const target = (owner.selectorText !== undefined ? owner : owner.parentRule) as RuleLike | null;
+  if (target && typeof target.insertRule === "function") {
+    const placed = insert(target as unknown as Container, nested, owner === target ? 0 : indexIn(target as unknown as Container, owner) + 1);
+    if (placed) return placed;
+  }
+  // No nesting: right after the rule's piece of the stylesheet, its selector and media spelled out.
+  const unit = unitOf(spot.declared.rule);
+  const container = unit && containerOf(unit);
+  return unit && container ? insert(container, besideOutside(spot, where, request.text), indexIn(container, unit) + 1) : null;
 }
 
-function insert(container: Container, text: string, index: number): CSSStyleRule | null {
+/** A rule beside a declaration, written out at the top: its selector (states included) and media. */
+function besideOutside(spot: Extract<Spot, { kind: "beside" }>, where: string, text: string): string {
+  const rule = `:is(${spot.declared.source.selector}):where(${where}) { ${text} }`;
+  return spot.media ? `@media ${spot.media} { ${rule} }` : rule;
+}
+
+/** The media query for a width range, both ends included (preview.ts's mediaQuery, not imported: preview imports this module). */
+function mediaFor({ min, max }: WidthRange): string | undefined {
+  const parts = [min !== undefined && `(min-width: ${min}px)`, max !== undefined && `(max-width: ${max}px)`];
+  return parts.filter(Boolean).join(" and ") || undefined;
+}
+
+function insert(container: Container, text: string, index: number): { rule: CSSRule; style: CSSStyleDeclaration } | null {
   try {
     const at = container.insertRule(text, index);
-    const rule = container.cssRules[at] as CSSStyleRule | undefined;
-    return rule?.style ? rule : null;
+    const rule = container.cssRules[at] as RuleLike | undefined;
+    if (!rule) return null;
+    const style = (rule as CSSRule & { style?: CSSStyleDeclaration }).style ?? (rule.cssRules?.[0] as CSSStyleRule | undefined)?.style;
+    return style ? { rule, style } : null;
   } catch {
     return null;
   }

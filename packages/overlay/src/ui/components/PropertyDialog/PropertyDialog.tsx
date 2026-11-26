@@ -1,7 +1,7 @@
 import { isModifierQuery } from "../../../search/modifiers.ts";
 import type { ElementState, WidthRange } from "@pilot/protocol";
 import { Component, type ComponentChildren, Fragment } from "preact";
-import { baseValues, declaredValues, forcedDeclarations, isFromReset } from "../../../dom/declared.ts";
+import { baseValues, isFromReset, rangeValues } from "../../../dom/declared.ts";
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import type { BoxArea } from "../../../dom/boxModel.ts";
 import type { EditableElement } from "../../../dom/target.ts";
@@ -149,13 +149,9 @@ export function PropertyDialog({
   const [query, setQueryState] = useState(initialQuery);
   const [ownHistory] = useState(() => new EditHistory());
   const history = sharedHistory ?? ownHistory;
-  // With state pills, the element is shown in those states (the pointer is
-  // on the dialog, not on it): the page's own rules for them, and Pilot's.
+  // State pills only say where edits go: the element isn't shown in those states (the owner's call,
+  // 2026-11-26: forcing them over the page hid how its other states behave). Hide Pilot (Option+P) and hover.
   const stateKey = states.join(",");
-  useEffect(() => {
-    history.setForced(states.length ? { element, states, page: forcedDeclarations(element, states) } : null);
-  }, [element, stateKey]);
-  useEffect(() => () => history.setForced(null), []);
   // The editors shown for the query: the best matches, plus their family
   // (`w` → width, min-width, max-width). See matchEditors. With nothing
   // typed: the editors for every property the element has a value for. That
@@ -675,9 +671,8 @@ function editorsWithValues(
   widths?: WidthRange | null,
 ): PropertyEditor[] {
   const properties = [...new Set(editors.flatMap((e) => e.properties))];
-  // With neither pills nor the chip, the page's base values (see fieldValues); Pilot's at the window's width.
-  const { page } = pageValues(element, properties, states, widths);
-  const width = window.innerWidth;
+  // As the fields read them (pageValues), Pilot's own changes too: like CSS, whatever the window's width.
+  const { page, width } = pageValues(element, properties, states, widths);
   const isSet = (p: string) => {
     if (history.removalOf(element, p, width, states)) return false;
     if (history.valueOf(element, p, width, states) !== null) return true;
@@ -727,16 +722,18 @@ function fieldValues(
 }
 
 /**
- * The page's values the fields show, and the width Pilot's own are read at:
- * the base values (and Pilot's base changes) with neither state pills nor
- * the width chip, else what applies at the window's width for those states.
+ * The page's values the fields show, and the widths Pilot's own are read at,
+ * whatever the window's width: pills read like CSS, no assumptions (the
+ * owner's call, 2026-11-26). With the width chip, what's set for exactly its
+ * range (Pilot's change for it, else the project's rule for that
+ * breakpoint; nothing, empty, when neither sets it); without, what's set
+ * outside any media query: the base values, or with state pills those
+ * states' (`.btn:hover`, not a hover rule inside a breakpoint: that's hover
+ * and the chip together). What a field shows is what an edit there changes.
  */
 function pageValues(element: EditableElement, properties: string[], states?: readonly ElementState[], widths?: WidthRange | null) {
-  const base = !states?.length && !widths;
-  return {
-    page: base ? baseValues(element, properties) : declaredValues(element, properties, states),
-    width: base ? ("base" as const) : window.innerWidth,
-  };
+  if (widths) return { page: rangeValues(element, properties, widths, states), width: widths };
+  return { page: baseValues(element, properties, states), width: "base" as const };
 }
 
 /** The properties whose field value only a reset gives: Pilot sets none there, and the page's comes from a `*` rule. */

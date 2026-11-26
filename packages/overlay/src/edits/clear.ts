@@ -1,5 +1,5 @@
 import type { ElementState, StyleSource, WidthRange } from "@pilot/protocol";
-import { type Declared, baseValue, declaredValue, declaredWithout, isFromReset, mediaOf } from "../dom/declared.ts";
+import { type Declared, baseValue, declaredWithout, isFromReset, mediaOf, rangeValue } from "../dom/declared.ts";
 import type { EditableElement } from "../dom/target.ts";
 import type { EditHistory } from "./history.ts";
 
@@ -43,8 +43,10 @@ export function clearProperty(
   states?: readonly ElementState[],
 ): void {
   // No width chip and no state: the base value is what's removed (the project's breakpoint and state rules stay).
-  const base = !widths && !states?.length;
-  const page = base ? baseValue(element, property) : declaredValue(element, property, states);
+  // What the field shows, read like CSS: with widths, the project's rule for exactly that breakpoint;
+  // without, its rule outside any media query (the base, or those states'). None: nothing of the page's to remove.
+  const base = !widths;
+  const page = widths ? rangeValue(element, property, widths, states) : baseValue(element, property, states);
   if (!page || isFromReset(page)) return history.apply(element, property, "", gesture, { widths, states });
 
   // Without the removed declaration: for the app's style attribute, the

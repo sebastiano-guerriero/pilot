@@ -85,10 +85,11 @@ describe("a base change's source", () => {
     expect(change?.from).toBe("10px");
     expect(change?.source).toMatchObject({ kind: "rule", selector: ".card" });
     expect(change?.source && "media" in change.source ? change.source.media : undefined).toBeUndefined();
-    // For a width: what applies there (the breakpoint's rule).
-    history.apply(card, "padding-top", "40px", undefined, { widths: { min: 768 } });
-    const forWidth = buildChangeSet(history).edits[0]?.changes.find((c) => c.widths);
-    expect(forWidth?.from).toBe("30px");
+    // For a width: the project's rule for exactly that breakpoint; none there (a new one): not set.
+    history.apply(card, "padding-top", "40px", undefined, { widths: { min: 1 } });
+    expect(buildChangeSet(history).edits[0]?.changes.find((c) => c.widths)?.from).toBe("30px");
+    history.apply(card, "padding-top", "44px", undefined, { widths: { min: 900 } });
+    expect(buildChangeSet(history).edits[0]?.changes.find((c) => c.widths?.min === 900)?.from).toBe("");
     media.remove();
   });
 });

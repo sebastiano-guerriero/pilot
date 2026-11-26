@@ -1,6 +1,6 @@
 import type { ElementState, ElementTarget, StyleSource, WidthRange } from "@pilot/protocol";
 import { sortStates } from "@pilot/protocol";
-import { type Forced, type Preview, stylesheetPreview } from "../dom/preview.ts";
+import { type Preview, stylesheetPreview } from "../dom/preview.ts";
 import { type TextPreview, domTextPreview, textRunOf } from "../dom/text.ts";
 import { sameStates } from "./states.ts";
 import { type EditableElement, describeElement } from "../dom/target.ts";
@@ -110,8 +110,6 @@ export class EditHistory {
   private done: Step[] = [];
   private undone: Step[] = [];
   private listeners = new Set<() => void>();
-  /** An element shown in its states while they're edited (see Forced). Not saved. */
-  private forced: Forced | null = null;
 
   constructor(
     private readonly preview: Preview = stylesheetPreview,
@@ -317,7 +315,7 @@ export class EditHistory {
     try {
       return measure();
     } finally {
-      this.preview.render(this.previewRules(), this.forced);
+      this.preview.render(this.previewRules());
     }
   }
 
@@ -327,9 +325,11 @@ export class EditHistory {
    * preview rule that sets it there, a longhand read out of a shorthand
    * (`grid-column-start` from `grid-column`). What a field shows over the
    * page's own CSS. `"base"`: Pilot's base change only (no widths), what a
-   * field shows with no width chip, whatever the window's width.
+   * field shows with no width chip; a width range: Pilot's change for exactly
+   * those widths, what a field shows with the chip set. Both whatever the
+   * window's width.
    */
-  valueOf(element: EditableElement, property: string, width: number | "base" = window.innerWidth, states?: readonly ElementState[]): string | null {
+  valueOf(element: EditableElement, property: string, width: number | "base" | WidthRange = window.innerWidth, states?: readonly ElementState[]): string | null {
     const rule = this.activeRule(element, property, width, states);
     return rule ? valueIn(rule, property) || null : null;
   }
@@ -339,7 +339,7 @@ export class EditHistory {
    * (the window's, by default): the change in effect there is a removal. The
    * field then shows nothing, and the change set says "remove".
    */
-  removalOf(element: EditableElement, property: string, width: number | "base" = window.innerWidth, states?: readonly ElementState[]): Removal | null {
+  removalOf(element: EditableElement, property: string, width: number | "base" | WidthRange = window.innerWidth, states?: readonly ElementState[]): Removal | null {
     const rule = this.activeRule(element, property, width, states);
     return rule?.property === property ? (rule.removal ?? null) : null;
   }
@@ -436,7 +436,7 @@ export class EditHistory {
   }
 
   private render(): void {
-    this.preview.render(this.previewRules(), this.forced);
+    this.preview.render(this.previewRules());
     this.text.render(
       this.rules()
         .filter((r) => textRunOf(r.property) !== null && r.value !== "")
@@ -461,20 +461,6 @@ export class EditHistory {
     return this.text.pageText(element, run);
   }
 
-  /**
-   * Show `forced.element` in its states while they're edited (the search's
-   * state pills), or stop (null). Not a change: nothing is recorded.
-   */
-  setForced(forced: Forced | null): void {
-    const same =
-      forced?.element === this.forced?.element &&
-      sameStates(forced?.states, this.forced?.states) &&
-      JSON.stringify(forced?.page) === JSON.stringify(this.forced?.page);
-    if (same) return;
-    this.forced = forced;
-    this.preview.render(this.previewRules(), this.forced);
-  }
-
   /** The element's description: the one taken at its first change, so all its changes agree. */
   private targetOf(element: EditableElement): ElementTarget {
     for (const step of [...this.done, ...this.undone]) {
@@ -485,11 +471,11 @@ export class EditHistory {
   }
 
   /** The rule that wins for `property` on `element` at `width`: the latest that sets it there. */
-  private activeRule(element: EditableElement, property: string, width: number | "base", states?: readonly ElementState[]): Entry | undefined {
+  private activeRule(element: EditableElement, property: string, width: number | "base" | WidthRange, states?: readonly ElementState[]): Entry | undefined {
     const rules = this.rules();
     for (let i = rules.length - 1; i >= 0; i--) {
       const r = rules[i] as Entry;
-      const there = width === "base" ? !r.widths : inWidths(r.widths ?? null, width);
+      const there = width === "base" ? !r.widths : typeof width === "object" ? sameWidths(r.widths, width) : inWidths(r.widths ?? null, width);
       if (r.element === element && sameStates(r.states, states) && sets(r, property) && there) return r;
     }
     return undefined;

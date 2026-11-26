@@ -1,4 +1,5 @@
 import { type ElementState, STATES, sortStates } from "@pilot/protocol";
+import { mediaRange } from "./breakpoints.ts";
 import { EDIT_ATTRIBUTE, isPilotSheet } from "./preview.ts";
 
 /**
@@ -28,14 +29,11 @@ import { EDIT_ATTRIBUTE, isPilotSheet } from "./preview.ts";
  * `:focus`, `:focus-visible`, `:active` on the element itself):
  * - none (the default): rules for the element as it is, without states, even
  *   while it happens to be hovered;
- * - `exact`: rules for exactly these states (what a field shows with state pills);
- * - `subset`: rules for any of these states, alone or together (what applies
- *   while the element is in all of them: how Pilot shows the state, see
- *   forcedDeclarations).
+ * - `exact`: rules for exactly these states (what a field shows with state pills).
  */
 export interface StateFilter {
   states: readonly ElementState[];
-  mode: "exact" | "subset";
+  mode: "exact";
 }
 
 export interface Declared {
@@ -193,33 +191,78 @@ export function declaredValue(element: Element, property: string, states?: reado
  * `@media` (nested ones too, Tailwind v4's `md:`) and `@container` don't
  * count; `@supports` does (it's the browser's, not a modifier). Conditions on
  * an ancestor that hold right now count as base (not told apart yet).
+ * With `states`: those states' rules without a media query (`.btn:hover`,
+ * `hover:bg-…`), never one inside a breakpoint: a pill reads like CSS, the
+ * hover pill alone is the hover rule, hover at a breakpoint takes both
+ * pills (the owner's call, 2026-11-26). The style attribute has no states.
  */
-export function baseValues(element: Element, properties: string[]): Record<string, Declared | null> {
-  const rules = matchedRules(element, undefined, { base: true });
-  const inline = (element as HTMLElement).style as CSSStyleDeclaration | undefined;
+export function baseValues(element: Element, properties: string[], states?: readonly ElementState[]): Record<string, Declared | null> {
+  const rules = matchedRules(element, states?.length ? { states, mode: "exact" } : undefined, { base: true });
+  const inline = states?.length ? undefined : ((element as HTMLElement).style as CSSStyleDeclaration | undefined);
   return Object.fromEntries(properties.map((p) => [p, resolve(p, inline, rules)]));
 }
 
 /** The base value of one property (see baseValues), or null. */
-export function baseValue(element: Element, property: string): Declared | null {
-  return baseValues(element, [property])[property] ?? null;
+export function baseValue(element: Element, property: string, states?: readonly ElementState[]): Declared | null {
+  return baseValues(element, [property], states)[property] ?? null;
 }
 
 /**
- * What the page's own CSS gives the element while it's in `states` (hovered
- * and pressed…), from its rules for those states: each property they set,
- * with the cascade's winner. How Pilot shows the state while the designer
- * edits it (the mouse is on Pilot's dialog, not on the element).
+ * The page's value for exactly a width range (and states): its rule for that
+ * breakpoint (`@media (min-width: 768px)` for "from 768px", nested or not),
+ * the cascade's winner when several, whatever the window's width; null when
+ * the project sets nothing for those widths. What a field shows with the
+ * width chip set: what an edit there changes (the owner's call, 2026-11-26).
  */
-export function forcedDeclarations(element: Element, states: readonly ElementState[]): Array<{ property: string; value: string }> {
-  if (!states.length) return [];
-  const rules = matchedRules(element, { states, mode: "subset" });
-  const properties = new Set<string>();
-  for (const rule of rules) for (let i = 0; i < rule.style.length; i++) properties.add(rule.style.item(i));
-  const out: Array<{ property: string; value: string }> = [];
-  for (const property of properties) {
-    const found = resolve(property, undefined, rules);
-    if (found) out.push({ property, value: found.value });
+export function rangeValues(
+  element: Element,
+  properties: string[],
+  widths: { min?: number; max?: number },
+  states?: readonly ElementState[],
+): Record<string, Declared | null> {
+  return Object.fromEntries(
+    properties.map((p) => {
+      let best: Placed | null = null;
+      for (const placed of declarationsOf(element, p, states)) {
+        const range = placed.media ? mediaRange(placed.media) : null;
+        if (!range || range.min !== widths.min || range.max !== widths.max) continue;
+        if (!best || beats({ important: placed.declared.important, rule: placed.match }, { important: best.declared.important, rule: best.match })) best = placed;
+      }
+      return [p, best?.declared ?? null];
+    }),
+  );
+}
+
+/** The page's value of one property for exactly a width range (see rangeValues), or null. */
+export function rangeValue(element: Element, property: string, widths: { min?: number; max?: number }, states?: readonly ElementState[]): Declared | null {
+  return rangeValues(element, [property], widths, states)[property] ?? null;
+}
+
+/** One of the page's declarations of a property for an element, wherever it applies. */
+export interface Placed {
+  declared: Declared & { rule: CSSStyleDeclaration; source: { selector: string } };
+  /** Its `@media` conditions (nested ones joined with `and`), none for a rule without. */
+  media?: string;
+  /** Its place in the cascade (layer, specificity, order), to tell which of several wins (`beats`). */
+  match: MatchedRule;
+}
+
+/**
+ * Every declaration of `property` the page makes for the element in exactly
+ * `states` (none: the element as it is), whatever the window's width: each
+ * with its media query, in the order the stylesheets give them. Where a
+ * change for some widths or a state goes among the project's own rules
+ * (dom/anchored.ts). Rules for conditions that never hold now (`print`) come
+ * too: their media says so.
+ */
+export function declarationsOf(element: Element, property: string, states?: readonly ElementState[]): Placed[] {
+  const rules = matchedRules(element, states?.length ? { states, mode: "exact" } : undefined, { anyMedia: true });
+  const out: Placed[] = [];
+  for (const rule of rules) {
+    const found = resolve(property, undefined, [rule]);
+    if (!found?.rule || found.source === "inline") continue;
+    const media = mediaOf(found.rule);
+    out.push({ declared: found as Placed["declared"], ...(media ? { media } : {}), match: rule });
   }
   return out;
 }
@@ -355,10 +398,10 @@ function compare(a: number[], b: number[]): number {
  */
 let cache: { element: Element; signature: string; rules: MatchedRule[] } | null = null;
 
-export function matchedRules(element: Element, filter?: StateFilter, options: { base?: boolean } = {}): MatchedRule[] {
-  const signature = `${signatureOf(element)}|${filter ? `${filter.mode}:${filter.states.join(",")}` : ""}|${options.base ? "base" : ""}`;
+export function matchedRules(element: Element, filter?: StateFilter, options: { base?: boolean; anyMedia?: boolean } = {}): MatchedRule[] {
+  const signature = `${signatureOf(element)}|${filter ? `${filter.mode}:${filter.states.join(",")}` : ""}|${options.base ? "base" : ""}|${options.anyMedia ? "any" : ""}`;
   if (cache?.element === element && cache.signature === signature) return cache.rules;
-  const rules = collect(element, filter, !!options.base);
+  const rules = collect(element, filter, !!options.base, !!options.anyMedia);
   cache = { element, signature, rules };
   queueMicrotask(() => {
     cache = null;
@@ -413,10 +456,12 @@ interface Walk {
   media: Map<string, boolean>;
   /** Only the rules without a media query, whatever the width (see baseValues). */
   base: boolean;
+  /** The rules in every media query, whether it holds now or not (see declarationsOf). */
+  anyMedia: boolean;
 }
 
-function collect(element: Element, filter?: StateFilter, base = false): MatchedRule[] {
-  const walk: Walk = { element, filter, out: [], order: 0, layers: new Map(), anonymous: 0, media: new Map(), base };
+function collect(element: Element, filter?: StateFilter, base = false, anyMedia = false): MatchedRule[] {
+  const walk: Walk = { element, filter, out: [], order: 0, layers: new Map(), anonymous: 0, media: new Map(), base, anyMedia };
   for (const sheet of sheetsOf(element)) walkSheet(walk, sheet, "", null);
   return walk.out;
 }
@@ -533,7 +578,6 @@ function addIfMatching(walk: Walk, style: CSSStyleDeclaration, selectors: string
     const filter = walk.filter;
     if (!filter && subject.states.length) continue;
     if (filter?.mode === "exact" && !sameStateSet(subject.states, filter.states)) continue;
-    if (filter?.mode === "subset" && (!subject.states.length || !subject.states.every((s) => filter.states.includes(s)))) continue;
     let matches = false;
     try {
       matches = walk.element.matches(filter ? subject.stripped : selector);
@@ -613,6 +657,7 @@ function resolveNesting(selectors: string[], parents: string[] | null): string[]
 function conditionHolds(walk: Walk, text: string): boolean {
   const t = text.trim();
   if (walk.base) return !t || t === "all";
+  if (walk.anyMedia) return true;
   return mediaMatches(walk, t);
 }
 

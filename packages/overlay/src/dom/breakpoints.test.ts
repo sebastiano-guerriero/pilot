@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
-import { mediaWidths, pageBreakpoints } from "./breakpoints.ts";
+import { mediaRange, mediaWidths, pageBreakpoints } from "./breakpoints.ts";
 
 describe("mediaWidths", () => {
   it("reads every width syntax, in px", () => {
@@ -17,6 +17,25 @@ describe("mediaWidths", () => {
     expect(mediaWidths("(max-device-width: 480px)")).toEqual([]);
     expect(mediaWidths("(prefers-reduced-motion: reduce)")).toEqual([]);
     expect(mediaWidths("print")).toEqual([]);
+  });
+});
+
+describe("mediaRange", () => {
+  it("a width condition as a range, both ends included, in px", () => {
+    expect(mediaRange("(min-width: 768px)")).toEqual({ min: 768 });
+    expect(mediaRange("(max-width: 767.98px)")).toEqual({ max: 767 });
+    expect(mediaRange("(width >= 48rem)")).toEqual({ min: 768 });
+    expect(mediaRange("(width < 64rem)")).toEqual({ max: 1023 });
+    expect(mediaRange("(768px <= width < 1024px)")).toEqual({ min: 768, max: 1023 });
+    expect(mediaRange("screen and (min-width: 768px) and (max-width: 1199px)")).toEqual({ min: 768, max: 1199 });
+    expect(mediaRange("all")).toEqual({});
+  });
+
+  it("anything else too is not a width range: null", () => {
+    expect(mediaRange("(min-width: 768px) and (orientation: landscape)")).toBeNull();
+    expect(mediaRange("(prefers-color-scheme: dark)")).toBeNull();
+    expect(mediaRange("print")).toBeNull();
+    expect(mediaRange("(min-width: 768px), (max-width: 400px)")).toBeNull();
   });
 });
 

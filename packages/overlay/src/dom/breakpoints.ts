@@ -41,6 +41,44 @@ export function mediaWidths(text: string): number[] {
   return out;
 }
 
+/**
+ * The viewport widths a media condition holds for, as Pilot's width ranges
+ * (CSS px, both ends included, `WidthRange`): `(min-width: 768px)` → from
+ * 768, `(max-width: 767.98px)` → to 767, `(width < 64rem)` → to 1023,
+ * `(768px <= width < 1024px)` → 768–1023, `screen and (…)` the same. Null
+ * when it tests anything else too (orientation, color scheme, height, `or`,
+ * `not`, a comma list): not a width range, so it can't be placed among the
+ * breakpoints. `{}` for no condition (`all`, `screen`).
+ */
+export function mediaRange(text: string): { min?: number; max?: number } | null {
+  const t = text.trim().toLowerCase();
+  if (/,|\bor\b|\bnot\b/.test(t)) return null;
+  const range: { min?: number; max?: number } = {};
+  const px = (n: string, unit: string) => Number(n) * (unit === "px" ? 1 : EM);
+  const atLeast = (v: number, strict: boolean) => (range.min = Math.max(range.min ?? 0, Math.ceil(strict ? v + 0.01 : v - 0.01)));
+  const atMost = (v: number, strict: boolean) => (range.max = Math.min(range.max ?? Number.POSITIVE_INFINITY, Math.floor(strict ? v - 0.01 : v + 0.01)));
+  const N = String.raw`(\d*\.?\d+)(px|r?em)`;
+  const S = String.raw`\s*`;
+  // What's outside the features: only `and`, `only`, `screen`, `all`.
+  if (!/^[\s]*$/.test(t.replace(/\([^()]*\)/g, " ").replace(/\b(and|only|screen|all)\b/g, " "))) return null;
+  for (const feature of t.match(/\([^()]*\)/g) ?? []) {
+    const f = feature.slice(1, -1).trim();
+    let m: RegExpMatchArray | null;
+    if ((m = new RegExp(`^min-width${S}:${S}${N}$`).exec(f))) atLeast(px(m[1] as string, m[2] as string), false);
+    else if ((m = new RegExp(`^max-width${S}:${S}${N}$`).exec(f))) atMost(px(m[1] as string, m[2] as string), false);
+    else if ((m = new RegExp(`^width${S}(>=|>|<=|<)${S}${N}$`).exec(f))) {
+      const v = px(m[2] as string, m[3] as string);
+      if (m[1]?.startsWith(">")) atLeast(v, m[1] === ">");
+      else atMost(v, m[1] === "<");
+    } else if ((m = new RegExp(`^${N}${S}(<=|<)${S}width${S}(<=|<)${S}${N}$`).exec(f))) {
+      atLeast(px(m[1] as string, m[2] as string), m[3] === "<");
+      atMost(px(m[5] as string, m[6] as string), m[4] === "<");
+    } else return null;
+  }
+  if (range.max === Number.POSITIVE_INFINITY) delete range.max;
+  return range;
+}
+
 function walkSheet(sheet: CSSStyleSheet, widths: Set<number>, seen: Set<CSSStyleSheet>) {
   if (seen.has(sheet) || sheet.disabled) return;
   seen.add(sheet);

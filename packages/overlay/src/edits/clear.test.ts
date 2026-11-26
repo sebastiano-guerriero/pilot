@@ -123,23 +123,34 @@ describe("clearProperty", () => {
     expect(history.removalOf(element, "padding")).toEqual({ from: "4px", source: { kind: "inline" } });
   });
 
-  it("a removal records the rule's media query and the widths it's for", () => {
-    style.textContent = "@media (min-width: 1px) { .card { gap: 16px; } }";
+  it("a removal for some widths removes the project's rule for exactly that breakpoint, and records its media query", () => {
+    style.textContent = ".card { gap: 8px; } @media (min-width: 1200px) { .card { gap: 16px; } }";
     clearProperty(history, element, "gap", undefined, { min: 1200 });
     expect(history.removalOf(element, "gap", 1440)?.source).toEqual({
       kind: "rule",
       selector: ".card",
       elements: 1,
-      media: "(min-width: 1px)",
+      media: "(min-width: 1200px)",
     });
     expect(history.changes()[0]?.widths).toEqual({ min: 1200 });
-  });
-
-  it("a removal for some widths applies only there", () => {
-    style.textContent = ".card { gap: 16px; }";
-    clearProperty(history, element, "gap", undefined, { min: 1200 });
-    expect(history.removalOf(element, "gap", 1440)).not.toBeNull();
+    // Only there.
     expect(history.removalOf(element, "gap", 800)).toBeNull();
     expect(history.valueOf(element, "gap", 800)).toBeNull();
+  });
+
+  it("Pilot's value for exactly a range, whatever the window's width (what the chip's fields show)", () => {
+    history.apply(element, "gap", "10px", undefined, { widths: { min: 768 } });
+    history.apply(element, "gap", "20px", undefined, { widths: { min: 1200 } });
+    expect(history.valueOf(element, "gap", { min: 768 })).toBe("10px");
+    expect(history.valueOf(element, "gap", { min: 1200 })).toBe("20px");
+    expect(history.valueOf(element, "gap", { min: 900 })).toBeNull();
+    expect(history.valueOf(element, "gap", "base")).toBeNull();
+  });
+
+  it("nothing set for that breakpoint (only the base, or another breakpoint): nothing of the page's to remove there", () => {
+    style.textContent = ".card { gap: 16px; } @media (min-width: 1px) { .card { gap: 20px; } }";
+    clearProperty(history, element, "gap", undefined, { min: 1200 });
+    expect(history.removalOf(element, "gap", { min: 1200 })).toBeNull();
+    expect(history.changes()).toEqual([]);
   });
 });

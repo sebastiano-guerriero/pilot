@@ -2,7 +2,7 @@ import type { AgentRequest, ChangeSet, CommentAttachment, CommentMessage, Commen
 import { pageBreakpoints } from "../dom/breakpoints.ts";
 import { componentProps } from "../dom/component.ts";
 import { fileTokensNow } from "../dom/tokens.ts";
-import { baseValue, declaredValue } from "../dom/declared.ts";
+import { baseValue, rangeValue } from "../dom/declared.ts";
 import { equivalentsOf } from "../dom/equivalents.ts";
 import { currentStyle, tokensNow } from "../dom/currentStyle.ts";
 import { similarOf } from "../dom/similar.ts";
@@ -47,10 +47,10 @@ export function buildChangeSet(
       (edit.texts ??= []).push({ from: normalizeText(from), to: normalizeText(value) });
       continue;
     }
-    // No widths and no states: the base value, where it's declared without a media query (the agent changes
-    // it there, keeping the project's breakpoints); else what applies at the window's width for those states.
-    const base = !widths && !states?.length;
-    const page = removal || !element.isConnected ? null : base ? baseValue(element, property) : declaredValue(element, property, states);
+    // Read like CSS, as the fields do: without widths, where it's declared outside any media query (the base,
+    // or those states'), the agent changing it there and keeping the project's breakpoints.
+    // For widths: the project's rule for exactly that breakpoint (none: a new one, its From "not set").
+    const page = removal || !element.isConnected ? null : widths ? rangeValue(element, property, widths, states) : baseValue(element, property, states);
     const styleChange: StyleChange = removal
       ? { property, from: removal.from, to: "", removed: true, source: removal.source }
       : { property, from: page?.value ?? "", to: value, ...(page && { source: sourceOf(element, page) }) };

@@ -76,7 +76,8 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [x] The `/` menu of modifiers
 - [x] DOM tree (plumbing; design pending)
 - [x] Base edits build on the page's CSS: without the width chip or a state, an edit is the element's base value, previewed beside the page's own declaration (its stylesheet, CSSOM), so the project's breakpoints, states and conditions keep winning; the fields show the base value; the agent changes the base and keeps the rest ([edits.md](edits.md), *Widths*)
-- [ ] Modifiers, next (agreed with the owner, 2026-11-26): a cue when an edit doesn't show at this width (what wins here, and the way to edit it); an automatic width modifier (the breakpoint the window is in, following resizes); states as a `default` / modifier pair of pills (a combination as one pill, `hover:focus`), no state forced on the page; the `/` menu marking the modifiers (and combinations) used on the element; changes for widths and states beside the page's rules too
+- [ ] Modifiers, next (agreed with the owner, 2026-11-26): a cue when an edit doesn't show at this width (what wins here, and the way to edit it); an automatic width modifier (the breakpoint the window is in, following resizes); states as a `default` / modifier pair of pills (a combination as one pill, `hover:focus`); the `/` menu marking the modifiers (and combinations) used on the element
+- [x] Changes for widths and states in the page's CSS too: beside the project's rule for them, else placed among its breakpoints or after the base (a state); no state forced on the element while its pill is set ([edits.md](edits.md), *The preview*)
   - [x] DOM / Components switch: the page's component instances as a tree (React, Server Components, Vue 3)
 - [x] Preview from a stylesheet Pilot adds (`@layer` + `!important`, `@media` per width range)
 - [x] The page's breakpoints on the ruler, clickable

@@ -48,21 +48,9 @@ export interface PreviewRule {
   states?: ElementState[];
 }
 
-/**
- * An element shown in some states while the designer edits them (state
- * pills set): the page's own declarations for those states (`page`, see
- * forcedDeclarations), and Pilot's changes for them, apply without the
- * pointer or focus being there, like the browser's "force state".
- */
-export interface Forced {
-  element: Element;
-  states: ElementState[];
-  page: Array<{ property: string; value: string }>;
-}
-
 /** Where EditHistory shows its changes. Given every rule in effect, in order, each time. */
 export interface Preview {
-  render(rules: PreviewRule[], forced?: Forced | null): void;
+  render(rules: PreviewRule[]): void;
 }
 
 const ids = new WeakMap<Element, number>();
@@ -72,27 +60,28 @@ const marked = new Set<Element>();
 
 /** The stylesheet preview. One per page: every EditHistory shares the same sheets. */
 export const stylesheetPreview: Preview = {
-  render(rules, forced) {
-    last = { rules, forced };
-    draw(rules, forced, false);
+  render(rules) {
+    last = rules;
+    draw(rules, false);
   },
 };
 
 /** What was last shown, to show again when the page's stylesheets or an element's classes change. */
-let last: { rules: PreviewRule[]; forced?: Forced | null } = { rules: [] };
+let last: PreviewRule[] = [];
 
-/** A base change (no widths, no states, not a removal): shown beside the page's own declaration. */
-const isBase = (rule: PreviewRule) => !rule.widths && !rule.states?.length && rule.value !== "revert-layer";
+/** A change shown in the page's own CSS (dom/anchored.ts): all but a state's removal (`revert-layer`, which only means something in Pilot's layer). */
+const isPlaced = (rule: PreviewRule) => rule.value !== "revert-layer";
 
-function draw(rules: PreviewRule[], forced: Forced | null | undefined, check: boolean) {
+function draw(rules: PreviewRule[], check: boolean) {
     const byRoot = new Map<Document | ShadowRoot, string[]>();
     const used = new Set<Element>();
     // Base changes beside the page's declarations; those with nothing to sit beside stay in the layer below.
     const requests: Array<AnchorRequest & { rule: PreviewRule }> = [];
     for (const rule of rules) {
-      if (!isBase(rule) || !rule.element.isConnected) continue;
+      if (!isPlaced(rule) || !rule.element.isConnected) continue;
       const text = plainDeclaration(rule.property, rule.value);
-      if (text) requests.push({ element: rule.element, property: rule.property, text, id: idOf(rule.element), rule });
+      if (text)
+        requests.push({ element: rule.element, property: rule.property, text, id: idOf(rule.element), widths: rule.widths, states: rule.states, rule });
     }
     const left = new Set(renderAnchored(requests, check));
     const anchored = new Set(requests.filter((r) => !left.has(r)).map((r) => r.rule));
@@ -112,22 +101,6 @@ function draw(rules: PreviewRule[], forced: Forced | null | undefined, check: bo
       if (anchored.has(rule)) continue;
       const text = declaration(rule.property, rule.value);
       if (text) add(rule.element, text, rule.widths, stateSelector(rule.states));
-    }
-    // Forced states, last so they win: the page's own declarations for the
-    // states, then Pilot's changes for any of them (fewer states first, as
-    // their selectors are less specific), without the pseudo-classes.
-    if (forced) {
-      for (const { property, value } of forced.page) {
-        const text = declaration(property, value);
-        if (text) add(forced.element, text);
-      }
-      const inStates = rules
-        .filter((r) => r.element === forced.element && r.states?.length && r.states.every((s) => forced.states.includes(s)))
-        .sort((a, b) => (a.states?.length ?? 0) - (b.states?.length ?? 0));
-      for (const rule of inStates) {
-        const text = declaration(rule.property, rule.value);
-        if (text) add(rule.element, text, rule.widths);
-      }
     }
     for (const element of used) {
       element.setAttribute(EDIT_ATTRIBUTE, String(idOf(element)));
@@ -168,7 +141,7 @@ function recheck() {
   if (frame) return;
   frame = requestAnimationFrame(() => {
     frame = 0;
-    draw(last.rules, last.forced, true);
+    draw(last, true);
   });
 }
 

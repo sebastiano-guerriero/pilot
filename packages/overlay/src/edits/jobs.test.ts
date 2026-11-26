@@ -104,6 +104,13 @@ describe("checking a done job", () => {
     expect(checkJob(history, "j1").results[0]?.outcome).toBe("unchecked");
   });
 
+  it("a change from a width where the project's larger breakpoint wins here: unchecked", () => {
+    pageCss(".card { padding-top: 10px; border-radius: 4px; } @media (min-width: 2px) { .card { padding-top: 30px; } }");
+    history.apply(el, "padding-top", "20px", undefined, { widths: { min: 1 } });
+    history.send("j1");
+    expect(checkJob(history, "j1").results[0]?.outcome).toBe("unchecked");
+  });
+
   it("watching: what landed is settled as the CSS arrives; what still differs at the end stays", async () => {
     vi.useFakeTimers();
     history.apply(el, "padding-top", "20px");
