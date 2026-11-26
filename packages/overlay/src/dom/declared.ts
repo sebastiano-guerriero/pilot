@@ -448,20 +448,29 @@ function compare(a: number[], b: number[]): number {
 /**
  * Matched rules are cached for the rest of the current task, so every editor
  * in the dialog (they render in the same pass) shares one walk of the
- * stylesheets. The cache also checks a cheap signature (the stylesheets and
- * their rule counts, the element's classes and id), so a change within the
- * same task isn't missed.
+ * stylesheets per element and kind of walk (filter, base, any media). Every
+ * kind is kept: a pass over the properties asks for several in turn (where
+ * an edit goes, then the value there), and one entry made each re-walk the
+ * sheets, about 2ms a property, most of a second to open the dialog. The cache
+ * also checks a cheap signature (the stylesheets and their rule counts, the
+ * element's classes and id), so a change within the same task isn't missed.
  */
-let cache: { element: Element; signature: string; rules: MatchedRule[] } | null = null;
+let cache: Map<Element, Map<string, MatchedRule[]>> | null = null;
 
 export function matchedRules(element: Element, filter?: StateFilter, options: { base?: boolean; anyMedia?: boolean } = {}): MatchedRule[] {
   const signature = `${signatureOf(element)}|${filter ? `${filter.mode}:${filter.states.join(",")}` : ""}|${options.base ? "base" : ""}|${options.anyMedia ? "any" : ""}`;
-  if (cache?.element === element && cache.signature === signature) return cache.rules;
+  if (!cache) {
+    cache = new Map();
+    queueMicrotask(() => {
+      cache = null;
+    });
+  }
+  let walks = cache.get(element);
+  if (!walks) cache.set(element, (walks = new Map()));
+  const cached = walks.get(signature);
+  if (cached) return cached;
   const rules = collect(element, filter, !!options.base, !!options.anyMedia);
-  cache = { element, signature, rules };
-  queueMicrotask(() => {
-    cache = null;
-  });
+  walks.set(signature, rules);
   return rules;
 }
 

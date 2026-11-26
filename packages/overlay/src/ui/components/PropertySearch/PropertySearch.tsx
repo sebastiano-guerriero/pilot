@@ -90,9 +90,13 @@ export function PropertySearch({
       }
       break;
     }
-    if (taken) {
+    // Spaces before the search mean nothing, and one left alone hid the placeholder (it was carried to the
+    // next element's dialog, which looked empty but wasn't): they go.
+    const trimmed = rest.trimStart();
+    if (taken || trimmed !== rest) {
       if (range !== widths) onWidthsChange?.(range);
       if (nextStates !== states) onStatesChange?.(nextStates);
+      rest = trimmed;
       input.value = rest;
     }
     onChange(rest);
