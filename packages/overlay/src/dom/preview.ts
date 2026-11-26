@@ -3,6 +3,7 @@ import { stateSelector } from "../edits/states.ts";
 import type { WidthRange } from "@pilot/protocol";
 import { type AnchorRequest, anchoredElements, renderAnchored } from "./anchored.ts";
 import { type ExclusionRequest, renderExclusions } from "./excluded.ts";
+import { schemeOf, schemeParts } from "./scheme.ts";
 
 /**
  * How Pilot shows its edits on the page: as rules in a stylesheet it adds,
@@ -98,11 +99,13 @@ function draw(rules: PreviewRule[], check: boolean) {
     const anchored = new Set([...requests.filter((r) => !left.has(r)).map((r) => r.rule), ...removals.filter((r) => !notExcluded.has(r)).map((r) => r.rule)]);
     for (const rule of anchored) used.add(rule.element);
     watch(anchored.size > 0);
-    const add = (element: Element, text: string, widths?: WidthRange, states = "") => {
+    const add = (element: Element, text: string, widths?: WidthRange, states?: ElementState[]) => {
       const root = element.getRootNode() as Document | ShadowRoot;
       if (!byRoot.has(root)) byRoot.set(root, []);
-      const selector = `[${EDIT_ATTRIBUTE}="${idOf(element)}"]${states}`;
-      const media = widths && mediaQuery(widths);
+      // The scheme the project's way (dom/scheme.ts), the states and pseudo-element after the element.
+      const scheme = schemeParts(schemeOf(states));
+      const selector = `[${EDIT_ATTRIBUTE}="${idOf(element)}"]${scheme.selector}${stateSelector(states)}`;
+      const media = [widths && mediaQuery(widths), scheme.media].filter(Boolean).join(" and ");
       byRoot.get(root)?.push(media ? `@media ${media} { ${selector} { ${text} } }` : `${selector} { ${text} }`);
       used.add(element);
     };
@@ -111,7 +114,7 @@ function draw(rules: PreviewRule[], check: boolean) {
     for (const rule of rules) {
       if (anchored.has(rule)) continue;
       const text = declaration(rule.property, rule.value);
-      if (text) add(rule.element, text, rule.widths, stateSelector(rule.states));
+      if (text) add(rule.element, text, rule.widths, rule.states);
     }
     for (const element of used) {
       element.setAttribute(EDIT_ATTRIBUTE, String(idOf(element)));

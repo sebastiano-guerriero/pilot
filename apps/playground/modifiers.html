@@ -94,6 +94,33 @@
   .demo-chip:hover { background: #fecdd3; }
 }</pre>
         </article>
+
+        <!-- 7. Dark mode, the system's (prefers-color-scheme), as Tailwind's dark: writes it by default. -->
+        <article class="demo-item">
+          <div class="demo-theme" data-block="dark-card">
+            <h2>Dark mode</h2>
+            <p>Light on a light system, dark on a dark one. Try the <code>dark:</code> and <code>light:</code> pills.</p>
+          </div>
+          <pre class="demo-css">.demo-theme { background: #fff; color: #0f172a; }
+@media (prefers-color-scheme: dark) {
+  .demo-theme { background: #0f172a; color: #e2e8f0; }
+}</pre>
+        </article>
+
+        <!-- 8. Pseudo-elements: a quote mark drawn with ::before, a field's placeholder. -->
+        <article class="demo-item">
+          <div class="demo-stage">
+            <blockquote class="demo-quote" data-block="quote">Build on what's there.</blockquote>
+          </div>
+          <pre class="demo-css">.demo-quote::before { content: "\201C"; color: var(--color-brand); }</pre>
+        </article>
+
+        <article class="demo-item">
+          <div class="demo-stage">
+            <input class="demo-input" data-block="search-field" placeholder="Search the docs" />
+          </div>
+          <pre class="demo-css">.demo-input::placeholder { color: #94a3b8; }</pre>
+        </article>
       </section>
     </main>
     <button type="button" class="dev-launch" data-launch-pilot>Launch Pilot</button>

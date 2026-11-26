@@ -72,7 +72,7 @@ A change for some widths carries `widths: { min?, max? }` (`WidthRange`: CSS px,
 
 ## States
 
-Changes record the state pills' `states` the same way, through `history.apply(…, { widths, states })` / `clearProperty(…, widths, states)`; fields read values for exactly those states. Editors don't handle states either. The prompt adds a State column (only when a change has one) and tells the agent to use the project's form (`hover:`, `:hover`). Pilot can't put an element in a real hover or focus to measure it, so a state change is accepted on the agent's word after done (`unchecked`).
+Changes record the state pills' `states` the same way, through `history.apply(…, { widths, states })` / `clearProperty(…, widths, states)`; fields read values for exactly those states. Editors don't handle states either. The color scheme (`dark`, `light`) and pseudo-elements (`before`, `after`, `placeholder`) are states too ([property-dialog.md](property-dialog.md), *States*): in the preview, a pseudo-element goes last in the selector (`:hover::before`, `stateSelector()`), and a scheme around the rule the project's way, a class after the subject or a media condition (`schemeParts()` in [dom/scheme.ts](../packages/overlay/src/dom/scheme.ts)). The prompt adds a State column (only when a change has one) and tells the agent to use the project's form (`hover:`, `:hover`; the project's dark mode for `dark`, its `light:` or the same mechanism for `light`; `::before`, with a `content`). Pilot can't put an element in a real hover or focus to measure it, so a state change is accepted on the agent's word after done (`unchecked`).
 
 ## Text changes
 

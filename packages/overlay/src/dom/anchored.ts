@@ -1,8 +1,9 @@
-import type { ElementState, WidthRange } from "@pilot/protocol";
+import { type ElementState, type WidthRange, isPseudoElement } from "@pilot/protocol";
 import { stateSelector } from "../edits/states.ts";
 import { mediaRange } from "./breakpoints.ts";
 import { type Placed, baseValue, beats, declarationsOf, subjectStates } from "./declared.ts";
 import { copyFor } from "./excluded.ts";
+import { schemeOf, schemeParts } from "./scheme.ts";
 
 /**
  * Pilot's changes shown in the page's own CSS (the owner's call, 2026-11-26):
@@ -219,15 +220,21 @@ function remove(rule: CSSRule) {
 function place(spot: Spot, request: AnchorRequest, after?: CSSRule): { rule: CSSRule; style: CSSStyleDeclaration } | null {
   const where = `[data-pilot-edit="${request.id}"]`;
   const own = (selector: string) => {
-    const rule = `:is(${selector}):where(${where})${stateSelector(request.states)} { ${request.text} }`;
-    const media = request.widths && mediaFor(request.widths);
+    // A color scheme the project's way: a class on the root after the subject, or a media condition.
+    const scheme = schemeParts(schemeOf(request.states));
+    const rule = `:is(${selector}):where(${where})${scheme.selector}${stateSelector(request.states)} { ${request.text} }`;
+    const media = [request.widths && mediaFor(request.widths), scheme.media].filter(Boolean).join(" and ");
     return media ? `@media ${media} { ${rule} }` : rule;
   };
+  // For a pseudo-element, never nested in the project's rule: `.q::before { &:where(…) }` would put
+  // `:where()` after the pseudo-element, which matches nothing. Beside it instead, the pseudo-element last.
+  const pseudo = !!request.states?.some(isPseudoElement);
+  const beside = (s: Extract<Spot, { kind: "beside" }>) => (pseudo ? besidePseudo(s, where, request) : besideOutside(s, where, request.text));
   if (after) {
     const container = containerOf(after);
     if (!container) return null;
-    const nested = (after as RuleLike).selectorText?.startsWith("&");
-    const text = nested ? `&:where(${where}) { ${request.text} }` : spot.kind === "after" ? own(spot.selector) : besideOutside(spot, where, request.text);
+    const nested = !pseudo && (after as RuleLike).selectorText?.startsWith("&");
+    const text = nested ? `&:where(${where}) { ${request.text} }` : spot.kind === "after" ? own(spot.selector) : beside(spot);
     return insert(container, text, indexIn(container, after) + 1);
   }
   if (spot.kind === "after") {
@@ -240,14 +247,26 @@ function place(spot: Spot, request: AnchorRequest, after?: CSSRule): { rule: CSS
   const nested = `&:where(${where}) { ${request.text} }`;
   // The rule's own declarations: first among its nested rules. A block of declarations after some (CSSNestedDeclarations): right after it.
   const target = (owner.selectorText !== undefined ? owner : owner.parentRule) as RuleLike | null;
-  if (target && typeof target.insertRule === "function") {
+  if (!pseudo && target && typeof target.insertRule === "function") {
     const placed = insert(target as unknown as Container, nested, owner === target ? 0 : indexIn(target as unknown as Container, owner) + 1);
     if (placed) return placed;
   }
   // No nesting: right after the rule's piece of the stylesheet, its selector and media spelled out.
   const unit = unitOf(spot.declared.rule);
   const container = unit && containerOf(unit);
-  return unit && container ? insert(container, besideOutside(spot, where, request.text), indexIn(container, unit) + 1) : null;
+  return unit && container ? insert(container, beside(spot), indexIn(container, unit) + 1) : null;
+}
+
+/**
+ * A rule beside a pseudo-element's declaration, right after the project's:
+ * its element's selector (`:is()` can't hold a pseudo-element), the scheme
+ * the project's way when it's a class, then the states and the
+ * pseudo-element; its media (widths, a scheme's query) as the project's rule.
+ */
+function besidePseudo(spot: Extract<Spot, { kind: "beside" }>, where: string, request: AnchorRequest): string {
+  const scheme = schemeParts(schemeOf(request.states));
+  const rule = `:is(${subjectStates(spot.declared.source.selector).stripped}):where(${where})${scheme.selector}${stateSelector(request.states)} { ${request.text} }`;
+  return spot.media ? `@media ${spot.media} { ${rule} }` : rule;
 }
 
 /** A rule beside a declaration, written out at the top: its selector (states included) and media. */

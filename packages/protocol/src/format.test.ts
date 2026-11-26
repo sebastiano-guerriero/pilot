@@ -328,6 +328,7 @@ describe("formatPrompt", () => {
       { kind: "component" as const, name: "Hero" },
       { kind: "element" as const, name: "h1", target },
       { kind: "unlisted" as const, name: "Footer" },
+      { kind: "breakpoint" as const, name: "768px", width: 768 },
     ];
     const thread = [{ from: "designer" as const, text: "Use --color-accent like @ProductCard", at: "", references }];
     const text = formatPrompt({ ...changeSet, edits: [], request: { kind: "comment", target, thread, breakpoints: [] } });
@@ -338,6 +339,7 @@ describe("formatPrompt", () => {
     expect(text).toContain("- `@Hero`: the `Hero` component; find its declaration (`function Hero`, `const Hero =`, `class Hero`, or a `Hero.vue` or `.svelte` file). It isn't on this page.");
     expect(text).toContain(`- \`@h1\`: an element on the page: \`${target.path}\`, selector \`${target.selector}\``);
     expect(text).toContain("- `@Footer`: a name the designer typed that Pilot didn't find on the page or among the project's components: probably a component or a part of the page. Search the project for `Footer`");
+    expect(text).toContain("- `@768px`: one of the page's breakpoints: its media queries change the layout at 768px. Use the project's own name for it");
     // In a task's note (from the / menu) too.
     const task = formatPrompt({ ...changeSet, edits: [], note: "Use --color-accent", request: { kind: "responsive", target, breakpoints: [], references: references.slice(0, 1) } });
     expect(task).toContain("now `#1cf69e`");

@@ -79,7 +79,8 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [x] Edits follow the project's width rules (the owner's design, 2026-11-26): with no width chip, a change goes to the rule that applies at the window's width; bars under the ruler while a property is in use (green where the change goes, grey its other rules); Base and All widths chips. [property-dialog.md](property-dialog.md), *Viewport widths*.
 - [x] States as a `default` / states pair of pills, a combination as one pill (`hover:focus`). [property-dialog.md](property-dialog.md), *States*.
 - [x] The `/` menu lists the modifiers (and combinations) used on the element first, marked, each with what it sets. [property-dialog.md](property-dialog.md), *The `/` menu*.
-- [ ] Modifiers, next: rules for conditions other than width (dark mode, print) on the bars and in the `/` menu (open)
+- [x] Dark and light modifiers (the project's media query or root class), and pseudo-elements: before, after, placeholder. [property-dialog.md](property-dialog.md), *States*.
+- [ ] Modifiers, next: conditions on a parent or an attribute (`group-hover:`, `peer-checked:`, `data-[state=open]:`, `aria-expanded:`), more states (`disabled:`, `focus-within:`, `checked:`, `first:`/`last:`/`odd:`), container queries (`@container`), print
 - [x] Changes for widths and states in the page's CSS too: beside the project's rule for them, else placed among its breakpoints or after the base (a state); no state forced on the element while its pill is set ([edits.md](edits.md), *The preview*)
   - [x] DOM / Components switch: the page's component instances as a tree (React, Server Components, Vue 3)
 - [x] Preview from a stylesheet Pilot adds (`@layer` + `!important`, `@media` per width range)

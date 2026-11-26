@@ -1,6 +1,6 @@
 import { isModifierQuery } from "../../../search/modifiers.ts";
 import { usedModifiers } from "../../../search/used.ts";
-import type { ElementState, WidthRange } from "@pilot/protocol";
+import { type ElementState, type WidthRange, isPseudoElement } from "@pilot/protocol";
 import { Component, type ComponentChildren, Fragment } from "preact";
 import { type Declared, isFromReset } from "../../../dom/declared.ts";
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
@@ -993,7 +993,9 @@ function MatchedEditor({
   onResized?(): void;
 }) {
   const [, rerender] = useReducer((n: number) => n + 1, 0);
-  const computed = getComputedStyle(element);
+  // A pseudo-element's pill: its own computed values (`::before`'s), for steps and drags.
+  const pseudo = states?.find(isPseudoElement);
+  const computed = getComputedStyle(element, pseudo ? `::${pseudo}` : null);
   const properties = propertiesOf(editor);
   const values = Object.fromEntries(properties.map((p) => [p, computed.getPropertyValue(p)]));
   const all = [element, ...others];

@@ -121,3 +121,21 @@ describe("mentions", () => {
     expect(splitMentions("like @productcard", references)).toEqual([{ text: "like " }, { text: "@productcard", mention: true }]);
   });
 });
+
+describe("breakpoints", () => {
+  it("the page's breakpoints come with the tokens, after them, mentioned as @768px, found by width or by the word", () => {
+    const options = mentionOptions({ tokens: [{ name: "--gap", value: "8px", kind: "length" }], breakpoints: [768, 1200], components: [], elements: [] });
+    expect(options.slice(0, 3).map((o) => [o.label, o.insert, o.detail])).toEqual([
+      ["--gap", "--gap", "8px"],
+      ["768px", "@768px", "breakpoint"],
+      ["1200px", "@1200px", "breakpoint"],
+    ]);
+    // Counted apart: many variables don't push them out.
+    const many = mentionOptions({ tokens: Array.from({ length: 9 }, (_, i) => ({ name: `--c${i}`, value: "#000", kind: "color" as const })), breakpoints: [768], components: [], elements: [] });
+    expect(matchMentions(many, "").map((o) => o.label)).toEqual(["--c0", "--c1", "--c2", "--c3", "--c4", "768px"]);
+    expect(matchMentions(options, "76").map((o) => o.label)).toEqual(["768px"]);
+    expect(matchMentions(options, "break").map((o) => o.label)).toEqual(["768px", "1200px"]);
+    // Typed without the list, the text counts too.
+    expect(mentionsIn("more room from @768px.", [], options).map((o) => o.breakpoint)).toEqual([768]);
+  });
+});

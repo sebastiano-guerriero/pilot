@@ -129,8 +129,11 @@ export interface StyleChange {
    */
   widths?: WidthRange;
   /**
-   * The element states the change is for, together (`["hover", "active"]`:
-   * hovered and pressed), in STATES order. Absent: the element as it is.
+   * The modifiers the change is for besides widths, together, in STATES
+   * order: element states (`["hover", "active"]`: hovered and pressed), the
+   * color scheme (`dark`, `light`: only in that mode), a pseudo-element
+   * (`before`, `after`, `placeholder`: its `::before`, not the element
+   * itself). Absent: the element as it is.
    */
   states?: ElementState[];
   /**
@@ -142,11 +145,34 @@ export interface StyleChange {
   equivalents?: { tokens: string[]; classes: string[]; fluid?: boolean };
 }
 
-/** The element states a change can be for: CSS's pseudo-classes, Tailwind's variants. */
-export type ElementState = "hover" | "focus" | "focus-visible" | "active";
+/**
+ * The modifiers a change can be for besides widths, Tailwind's variants:
+ * the color scheme (`dark`, `light`), CSS's pseudo-classes (`hover`…), and
+ * pseudo-elements (`before`, `after`, `placeholder`). Named states, as most
+ * are.
+ */
+export type ElementState = ColorScheme | "hover" | "focus" | "focus-visible" | "active" | PseudoElement;
 
-/** Every state, in the order they're written (Tailwind's variant order: `hover:focus:active:`). */
-export const STATES: readonly ElementState[] = ["hover", "focus", "focus-visible", "active"];
+/** A color scheme: the page in dark or light mode. */
+export type ColorScheme = "dark" | "light";
+/** A pseudo-element of the element: its `::before`, `::after`, `::placeholder`. */
+export type PseudoElement = "before" | "after" | "placeholder";
+
+/**
+ * Every state, in the order they're written (Tailwind's variant order: the
+ * scheme first, the pseudo-element last: `dark:hover:before:`).
+ */
+export const STATES: readonly ElementState[] = ["dark", "light", "hover", "focus", "focus-visible", "active", "before", "after", "placeholder"];
+
+/** Whether a state is a color scheme (a condition on the page, not the element). */
+export function isColorScheme(state: ElementState): state is ColorScheme {
+  return state === "dark" || state === "light";
+}
+
+/** Whether a state is a pseudo-element (what's styled, not a condition). */
+export function isPseudoElement(state: ElementState): state is PseudoElement {
+  return state === "before" || state === "after" || state === "placeholder";
+}
 
 /** States in STATES order, each once. */
 export function sortStates(states: Iterable<ElementState>): ElementState[] {
@@ -337,7 +363,7 @@ export interface CommentMessage {
  * Something the designer mentioned in a comment with `@`, picked from
  * Pilot's list or typed: a design token with its value now, a component
  * (with an instance on the page, or its file in the project), an element on
- * the page, or a name Pilot found nowhere (`unlisted`, for the agent to look
+ * the page, one of the page's breakpoints, or a name Pilot found nowhere (`unlisted`, for the agent to look
  * for). `name` is the thing's own name: the text reads it as `mentionText()`
  * (a token as is, the others after `@`).
  */
@@ -345,6 +371,8 @@ export type CommentReference =
   | { kind: "token"; name: string; value: string; source?: ComponentFile }
   | { kind: "component"; name: string; target?: ElementTarget; source?: ComponentFile }
   | { kind: "element"; name: string; target: ElementTarget }
+  /** One of the page's breakpoints (`768px`): a width its media queries test. */
+  | { kind: "breakpoint"; name: string; width: number }
   | { kind: "unlisted"; name: string };
 
 /** Where a component is declared in the project, relative to the project's folder. */

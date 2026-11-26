@@ -28,13 +28,15 @@ export interface MentionOption {
   source?: ComponentFile;
   /** A token from a file in the project (not a CSS variable on the page): where it's defined. */
   tokenFile?: ComponentFile;
+  /** One of the page's breakpoints, in px: listed with the tokens, mentioned as `@768px`. */
+  breakpoint?: number;
 }
 
 /** At most this many per group: the list narrows as you type. */
 export const PER_GROUP = 5;
 
 /** The page's mentionables as the list's options, by group. */
-export function mentionOptions({ tokens, components, elements }: Mentionables): MentionOption[] {
+export function mentionOptions({ tokens, breakpoints = [], components, elements }: Mentionables): MentionOption[] {
   return [
     ...tokens.map((t): MentionOption => ({
       group: "Tokens",
@@ -45,6 +47,8 @@ export function mentionOptions({ tokens, components, elements }: Mentionables): 
       swatch: t.kind === "color" ? t.value : undefined,
       ...(t.source ? { tokenFile: { file: t.source.file, ...(t.source.line ? { line: t.source.line } : {}) } } : {}),
     })),
+    // The page's breakpoints with the tokens, after them (the owner's call, 2026-11-26): what a comment about layout names.
+    ...breakpoints.map((b): MentionOption => ({ group: "Tokens", label: `${b}px`, insert: `@${b}px`, detail: "breakpoint", breakpoint: b })),
     ...components.map((c): MentionOption => ({ group: "Components", label: c.name, insert: `@${c.name}`, element: c.element })),
     ...elements.map((e): MentionOption => ({ group: "Elements", label: e.name, insert: `@${e.name}`, element: e.element })),
   ];
@@ -73,7 +77,9 @@ export function matchMentions(options: readonly MentionOption[], query: string):
       (o) => o.group === group && (!q || bare(o.label).includes(q) || (o.detail ?? "").toLowerCase().includes(q)),
     );
     matching.sort((a, b) => Number(!bare(a.label).startsWith(q)) - Number(!bare(b.label).startsWith(q)));
-    out.push(...matching.slice(0, PER_GROUP));
+    // Breakpoints count apart from the variables: the few of them never push the variables out, nor the reverse.
+    out.push(...matching.filter((o) => o.breakpoint === undefined).slice(0, PER_GROUP));
+    out.push(...matching.filter((o) => o.breakpoint !== undefined).slice(0, PER_GROUP));
   }
   return out;
 }

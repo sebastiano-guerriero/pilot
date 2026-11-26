@@ -1,5 +1,6 @@
-import { type ElementState, STATES, sortStates } from "@pilot/protocol";
+import { type ColorScheme, type ElementState, STATES, isColorScheme, isPseudoElement, sortStates } from "@pilot/protocol";
 import { mediaRange } from "./breakpoints.ts";
+import { mediaScheme, selectorScheme, withoutScheme } from "./scheme.ts";
 import { EDIT_ATTRIBUTE, isPilotSheet } from "./preview.ts";
 
 /**
@@ -85,6 +86,11 @@ export interface MatchedRule {
   layer: number[];
   /** Order of appearance across all the stylesheets. */
   order: number;
+  /**
+   * The states it's for, its scheme and pseudo-element included (from its
+   * selector, or the `prefers-color-scheme` query it sits in), in STATES order.
+   */
+  states?: ElementState[];
 }
 
 export type Specificity = [number, number, number];
@@ -508,6 +514,8 @@ interface Walk {
   base: boolean;
   /** The rules in every media query, whether it holds now or not (see declarationsOf). */
   anyMedia: boolean;
+  /** The color scheme of the `@media (prefers-color-scheme: …)` being walked, if any: its rules are for that scheme. */
+  scheme?: ColorScheme;
 }
 
 function collect(element: Element, filter?: StateFilter, base = false, anyMedia = false): MatchedRule[] {
@@ -578,7 +586,14 @@ function walkRule(walk: Walk, rule: CSSRule, layer: string, parents: string[] | 
     return;
   }
   if (kind === "CSSMediaRule" || (r.media && r.cssRules)) {
-    if (conditionHolds(walk, r.media?.mediaText ?? "") && r.cssRules) walkRules(walk, r.cssRules, layer, parents);
+    // A color scheme isn't a condition that holds or not here: it's the rules' scheme, a state (dom/scheme.ts).
+    const text = r.media?.mediaText ?? "";
+    if (conditionHolds(walk, withoutScheme(text)) && r.cssRules) {
+      const outer = walk.scheme;
+      walk.scheme = mediaScheme(text) ?? outer;
+      walkRules(walk, r.cssRules, layer, parents);
+      walk.scheme = outer;
+    }
     return;
   }
   if (kind === "CSSSupportsRule") {
@@ -624,16 +639,18 @@ function layerPath(walk: Walk, layer: string): number[] {
 
 function addIfMatching(walk: Walk, style: CSSStyleDeclaration, selectors: string[], layer: string) {
   const order = walk.order++;
-  let best: { selector: string; specificity: Specificity } | null = null;
+  let best: { selector: string; specificity: Specificity; states: ElementState[] } | null = null;
   // `any`: the best selector for each states the rule's selectors put on the element.
-  const bestByStates = new Map<string, { selector: string; specificity: Specificity }>();
+  const bestByStates = new Map<string, { selector: string; specificity: Specificity; states: ElementState[] }>();
   for (const selector of selectors) {
-    // The states on the element itself decide whether the rule counts; the
-    // rest of the selector must match the element as it is.
+    // The states on the element itself decide whether the rule counts (its
+    // scheme and pseudo-element too); the rest of the selector must match the
+    // element as it is.
     const subject = subjectStates(selector);
+    const states = walk.scheme && !subject.states.some(isColorScheme) ? sortStates([...subject.states, walk.scheme]) : subject.states;
     const filter = walk.filter;
-    if (!filter && subject.states.length) continue;
-    if (filter?.mode === "exact" && !sameStateSet(subject.states, filter.states)) continue;
+    if (!filter && states.length) continue;
+    if (filter?.mode === "exact" && !sameStateSet(states, filter.states)) continue;
     let matches = false;
     try {
       matches = walk.element.matches(filter ? subject.stripped : selector);
@@ -643,15 +660,15 @@ function addIfMatching(walk: Walk, style: CSSStyleDeclaration, selectors: string
     if (!matches) continue;
     const s = specificity(selector);
     if (filter?.mode === "any") {
-      const key = subject.states.join(",");
+      const key = states.join(",");
       const there = bestByStates.get(key);
-      if (!there || compare(s, there.specificity) > 0) bestByStates.set(key, { selector, specificity: s });
+      if (!there || compare(s, there.specificity) > 0) bestByStates.set(key, { selector, specificity: s, states });
       continue;
     }
-    if (!best || compare(s, best.specificity) > 0) best = { selector, specificity: s };
+    if (!best || compare(s, best.specificity) > 0) best = { selector, specificity: s, states };
   }
-  for (const b of bestByStates.values()) walk.out.push({ style, selector: b.selector, specificity: b.specificity, layer: layerPath(walk, layer), order });
-  if (best) walk.out.push({ style, selector: best.selector, specificity: best.specificity, layer: layerPath(walk, layer), order });
+  for (const b of bestByStates.values()) walk.out.push({ style, selector: b.selector, specificity: b.specificity, layer: layerPath(walk, layer), order, states: b.states });
+  if (best) walk.out.push({ style, selector: best.selector, specificity: best.specificity, layer: layerPath(walk, layer), order, states: best.states });
 }
 
 const STATE_NAMES: readonly ElementState[] = STATES;
@@ -662,7 +679,9 @@ const STATE_NAMES: readonly ElementState[] = STATES;
  * (`.btn`). Pseudo-classes inside :not(), :is()… or on an ancestor
  * (`.card:hover .title`) aren't the element's own state.
  */
-export function subjectStates(selector: string): { states: ElementState[]; stripped: string } {
+export function subjectStates(full: string): { states: ElementState[]; stripped: string } {
+  // A color scheme on the root (`.dark .card`, `:where(.dark, .dark *)`): a state too (dom/scheme.ts).
+  const { scheme, stripped: selector } = selectorScheme(full);
   // The last compound starts after the last combinator outside brackets and quotes.
   let depth = 0;
   let quote: string | null = null;
@@ -685,17 +704,21 @@ export function subjectStates(selector: string): { states: ElementState[]; strip
     const ch = compound[i] as string;
     if (ch === "(" || ch === "[") depth++;
     else if (ch === ")" || ch === "]") depth--;
-    if (depth === 0 && ch === ":" && compound[i + 1] !== ":") {
-      const name = /^[\w-]+/.exec(compound.slice(i + 1))?.[0] ?? "";
-      const after = compound[i + 1 + name.length];
-      if ((STATE_NAMES as readonly string[]).includes(name) && after !== "(") {
+    if (depth === 0 && ch === ":") {
+      // `:hover` (a pseudo-class), `::before` (a pseudo-element; `:before` is its old spelling).
+      const colons = compound[i + 1] === ":" ? 2 : 1;
+      const name = /^[\w-]+/.exec(compound.slice(i + colons))?.[0] ?? "";
+      const after = compound[i + colons + name.length];
+      const known = (STATE_NAMES as readonly string[]).includes(name) && !isColorScheme(name as ElementState);
+      if (known && after !== "(" && (colons === 1 || isPseudoElement(name as ElementState))) {
         states.push(name as ElementState);
-        i += name.length;
+        i += name.length + colons - 1;
         continue;
       }
     }
     rest += ch;
   }
+  if (scheme) states.push(scheme);
   return { states: sortStates(states), stripped: `${head}${rest || "*"}` };
 }
 

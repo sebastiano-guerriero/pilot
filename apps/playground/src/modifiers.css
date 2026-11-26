@@ -206,3 +206,43 @@
     background: #fecdd3;
   }
 }
+
+/* 7. Dark mode, the system's. */
+.demo-theme {
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  color: #0f172a;
+}
+
+@media (prefers-color-scheme: dark) {
+  .demo-theme {
+    background: #0f172a;
+    color: #e2e8f0;
+  }
+}
+
+/* 8. Pseudo-elements. */
+.demo-quote {
+  margin: 0;
+  font-size: var(--text-lg, 18px);
+}
+
+.demo-quote::before {
+  content: "\201C";
+  margin-right: 4px;
+  color: var(--color-brand);
+}
+
+.demo-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font: inherit;
+}
+
+.demo-input::placeholder {
+  color: #94a3b8;
+}

@@ -11,7 +11,23 @@ describe("modifiers", () => {
   });
 
   it("/ alone lists them all; typing filters by name word or syntax", () => {
-    expect(ids("/")).toEqual(["from-width", "to-width", "base", "all-widths", "hover", "focus", "focus-visible", "active"]);
+    expect(ids("/")).toEqual([
+      "from-width",
+      "to-width",
+      "base",
+      "all-widths",
+      "dark",
+      "light",
+      "hover",
+      "focus",
+      "focus-visible",
+      "active",
+      "before",
+      "after",
+      "placeholder",
+    ]);
+    expect(ids("/da")).toEqual(["dark"]);
+    expect(ids("/bef")).toEqual(["before"]);
     expect(ids("/fr")).toEqual(["from-width"]);
     expect(ids("/to")).toEqual(["to-width"]);
     expect(ids("/width")).toEqual(["from-width", "to-width", "all-widths"]);

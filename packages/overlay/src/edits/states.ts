@@ -1,4 +1,4 @@
-import { type ElementState, STATES, sortStates } from "@pilot/protocol";
+import { type ElementState, STATES, isColorScheme, isPseudoElement, sortStates } from "@pilot/protocol";
 
 /**
  * The state pills: which element states the designer's changes are for, all
@@ -19,10 +19,20 @@ export function takeStates(text: string, current: readonly ElementState[]): { st
   let states: ElementState[] | null = null;
   let rest = text;
   for (let match = TOKEN.exec(rest); match; match = TOKEN.exec(rest)) {
-    states = sortStates([...(states ?? current), (match[1] as string).toLowerCase() as ElementState]);
+    states = withState(states ?? current, (match[1] as string).toLowerCase() as ElementState);
     rest = rest.slice(match[0].length);
   }
   return { states, rest };
+}
+
+/**
+ * The states with one added. One color scheme and one pseudo-element at a
+ * time: `light` replaces `dark` (a rule can't be for both), `after` replaces
+ * `before`.
+ */
+export function withState(states: readonly ElementState[], state: ElementState): ElementState[] {
+  const kind = (s: ElementState) => (isColorScheme(s) ? "scheme" : isPseudoElement(s) ? "pseudo" : s);
+  return sortStates([...states.filter((s) => kind(s) !== kind(state)), state]);
 }
 
 /** The same states, in any order. */
@@ -32,7 +42,14 @@ export function sameStates(a: readonly ElementState[] | undefined, b: readonly E
   return x.length === y.length && x.every((s) => y.includes(s));
 }
 
-/** CSS for the states: `:hover:active`. */
+/**
+ * CSS for the states, after the element's selector: `:hover:active`, then a
+ * pseudo-element last (`:hover::before`). A color scheme isn't written here:
+ * it's a condition around the rule, the project's way (dom/scheme.ts schemeParts).
+ */
 export function stateSelector(states: readonly ElementState[] | undefined): string {
-  return (states ?? []).map((s) => `:${s}`).join("");
+  const list = states ?? [];
+  const classes = list.filter((s) => !isColorScheme(s) && !isPseudoElement(s)).map((s) => `:${s}`);
+  const element = list.filter(isPseudoElement).map((s) => `::${s}`);
+  return [...classes, ...element].join("");
 }

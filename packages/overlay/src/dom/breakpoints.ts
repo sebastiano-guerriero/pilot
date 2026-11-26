@@ -84,6 +84,8 @@ export function mediaRange(text: string): { min?: number; max?: number } | null 
       atMost(px(m[5] as string, m[6] as string), m[4] === "<");
     } else if ((m = CAPABILITY.exec(f))) {
       if (!holdsNow(`(${f})`)) return null;
+    } else if (/^prefers-color-scheme\s*:/.test(f)) {
+      // The rule's color scheme: a state of its own (dom/scheme.ts), not a condition on the widths.
     } else return null;
   }
   if (range.max === Number.POSITIVE_INFINITY) delete range.max;

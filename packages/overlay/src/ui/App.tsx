@@ -997,6 +997,7 @@ function isTextField(el: Element | null): boolean {
 
 /** What the comment mentions as the references it carries (see CommentReference); an element gone from the page since, none. */
 function toReference(o: MentionOption): CommentReference[] {
+  if (o.breakpoint !== undefined) return [{ kind: "breakpoint", name: o.label, width: o.breakpoint }];
   if (o.group === "Tokens") return [{ kind: "token", name: o.label, value: o.detail ?? "", ...(o.tokenFile ? { source: o.tokenFile } : {}) }];
   if (o.group === "Unlisted") return [{ kind: "unlisted", name: o.label }];
   const target = o.element?.isConnected ? describeElement(o.element) : undefined;

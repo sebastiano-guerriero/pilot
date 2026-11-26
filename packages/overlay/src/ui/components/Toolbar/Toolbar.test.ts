@@ -62,6 +62,10 @@ describe("Toolbar", () => {
     expect(tip(discard())?.textContent).toBe("Discard 1 change");
     act(() => discard().click());
     expect(discarded).toBe(1);
+    // Off while Send has a warning: what's stuck is sorted out first.
+    draw({ onDiscard: () => discarded++, discardCount: 3, alerts: { send: { title: "Pilot isn't running", detail: "Run npx usepilot" } } } as Partial<typeof props>);
+    expect(discard().disabled).toBe(true);
+    expect(tip(discard())?.textContent).toBe("Discard is off while Send has a warning");
   });
 
   it("with something to send, Send lights up", () => {

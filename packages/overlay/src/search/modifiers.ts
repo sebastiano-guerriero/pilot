@@ -66,6 +66,8 @@ export const MODIFIERS: Modifier[] = [
     insert: "all-widths ",
     chip: "all",
   },
+  { id: "dark", name: "Dark", description: "The page in dark mode", syntax: "dark:", insert: "dark:", state: "dark" },
+  { id: "light", name: "Light", description: "The page in light mode only", syntax: "light:", insert: "light:", state: "light" },
   { id: "hover", name: "Hover", description: "The pointer is over it", syntax: "hover:", insert: "hover:", state: "hover" },
   { id: "focus", name: "Focus", description: "It has focus", syntax: "focus:", insert: "focus:", state: "focus" },
   {
@@ -77,6 +79,9 @@ export const MODIFIERS: Modifier[] = [
     state: "focus-visible",
   },
   { id: "active", name: "Active", description: "Being pressed", syntax: "active:", insert: "active:", state: "active" },
+  { id: "before", name: "Before", description: "Its ::before", syntax: "before:", insert: "before:", state: "before" },
+  { id: "after", name: "After", description: "Its ::after", syntax: "after:", insert: "after:", state: "after" },
+  { id: "placeholder", name: "Placeholder", description: "A field's placeholder text", syntax: "placeholder:", insert: "placeholder:", state: "placeholder" },
 ];
 
 /** The search text opens the menu: it starts with `/` (no property does). */

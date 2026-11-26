@@ -46,7 +46,9 @@ describe("mediaRange", () => {
 
   it("anything else too is not a width range: null", () => {
     expect(mediaRange("(min-width: 768px) and (orientation: landscape)")).toBeNull();
-    expect(mediaRange("(prefers-color-scheme: dark)")).toBeNull();
+    // The color scheme isn't a width condition but the rule's scheme, a state (dom/scheme.ts).
+    expect(mediaRange("(prefers-color-scheme: dark)")).toEqual({});
+    expect(mediaRange("(min-width: 768px) and (prefers-color-scheme: dark)")).toEqual({ min: 768 });
     expect(mediaRange("print")).toBeNull();
     expect(mediaRange("(min-width: 768px), (max-width: 400px)")).toBeNull();
   });

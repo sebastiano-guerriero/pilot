@@ -15,7 +15,20 @@ describe("subjectStates", () => {
     expect(subjectStates(".card:hover .title").states).toEqual([]);
     expect(subjectStates(".btn:not(:hover)").states).toEqual([]);
     expect(subjectStates(".btn:focus-within").states).toEqual([]);
-    expect(subjectStates(".btn::before").states).toEqual([]);
+    expect(subjectStates(".btn::selection").states).toEqual([]);
+  });
+
+  it("pseudo-elements (the old one-colon spelling too) and the color scheme, the project's ways", () => {
+    expect(subjectStates(".btn:hover::before")).toEqual({ states: ["hover", "before"], stripped: ".btn" });
+    expect(subjectStates(".btn:after").states).toEqual(["after"]);
+    expect(subjectStates("input::placeholder").states).toEqual(["placeholder"]);
+    // Tailwind v4's class strategy, hand-written ancestors, an attribute.
+    expect(subjectStates(".dark\\:bg-x:where(.dark, .dark *)")).toEqual({ states: ["dark"], stripped: ".dark\\:bg-x" });
+    expect(subjectStates(".dark .card:hover")).toEqual({ states: ["dark", "hover"], stripped: ".card" });
+    expect(subjectStates('[data-theme="light"] .card').states).toEqual(["light"]);
+    expect(subjectStates("html.dark .card").stripped).toBe(".card");
+    // A class merely named like it isn't one.
+    expect(subjectStates(".dark-ish .card").states).toEqual([]);
   });
 });
 

@@ -614,7 +614,21 @@ describe("width chip", () => {
     mountWithWidths(new EditHistory(), 1108);
     const rows = () => [...container.querySelectorAll(".modifier .modifier-name")].map((n) => n.textContent);
     type("/");
-    expect(rows()).toEqual(["From width", "To width", "No breakpoint", "All widths", "Hover", "Focus", "Focus visible", "Active"]);
+    expect(rows()).toEqual([
+      "From width",
+      "To width",
+      "No breakpoint",
+      "All widths",
+      "Dark",
+      "Light",
+      "Hover",
+      "Focus",
+      "Focus visible",
+      "Active",
+      "Before",
+      "After",
+      "Placeholder",
+    ]);
     expect(search().getAttribute("aria-expanded")).toBe("true");
     type("/to");
     expect(rows()).toEqual(["To width"]);

@@ -1,11 +1,13 @@
 import type { ElementState } from "@pilot/protocol";
 import type { RefObject } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { takeStates } from "../../../edits/states.ts";
 import { pageBreakpoints } from "../../../dom/breakpoints.ts";
 import { ALL_WIDTHS, type PartialWidth, type WidthChip, chipRange, inWidths, isBaseChip, takeWidths, widthSuggestion, widthToFinish } from "../../../edits/widths.ts";
 import { MODIFIERS, type Modifier, isModifierQuery, matchModifiers } from "../../../search/modifiers.ts";
+import { scrollWithin } from "../../../dom/reveal.ts";
 import { Icon } from "../Icon/Icon.tsx";
+import { ScrollThumb } from "../ScrollThumb/ScrollThumb.tsx";
 
 interface PropertySearchProps {
   value: string;
@@ -108,6 +110,26 @@ export function PropertySearch({
   const options = !menuOpen ? [] : widthList && typedWidth ? widthOptions(typedWidth, viewportWidth, used) : matchModifiers(value, menuList(used));
   const [active, setActive] = useState(0);
   useEffect(() => setActive(0), [value]);
+  // The menu scrolls past its max height (PropertySearch.css): the highlighted row kept in view, and a fade
+  // on each edge with more to scroll to.
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState({ above: false, below: false });
+  const readMore = () => {
+    const list = menuRef.current;
+    const next = list
+      ? { above: list.scrollTop > 0, below: list.scrollTop + list.clientHeight < list.scrollHeight - 1 }
+      : { above: false, below: false };
+    setMore((current) => (current.above === next.above && current.below === next.below ? current : next));
+  };
+  useLayoutEffect(readMore);
+  useLayoutEffect(() => {
+    const list = menuRef.current;
+    if (!list) return;
+    // The first and last rows: to the very edge, past the padding, so no fade lies over them.
+    if (active === 0) list.scrollTop = 0;
+    else if (active === options.length - 1) list.scrollTop = list.scrollHeight;
+    else scrollWithin(list, list.querySelector(".modifier[data-active]"));
+  }, [active, value]);
   // The `/` menu's text when From width or To width was picked from it: Esc in the widths goes back there.
   const [cameFrom, setCameFrom] = useState<string | null>(null);
   useEffect(() => {
@@ -264,7 +286,16 @@ export function PropertySearch({
         )}
       </div>
       {menuOpen && (
-        <div class="modifiers" id="pilot-modifiers" role="listbox" aria-label={widthList ? "Widths" : "Modifiers"} data-list={widthList ? "widths" : undefined}>
+        <div class="modifiers-frame">
+        <div
+          ref={menuRef}
+          class="modifiers"
+          id="pilot-modifiers"
+          role="listbox"
+          aria-label={widthList ? "Widths" : "Modifiers"}
+          data-list={widthList ? "widths" : undefined}
+          onScroll={readMore}
+        >
           {options.length ? (
             options.map((m, i) => (
               <div
@@ -289,6 +320,10 @@ export function PropertySearch({
           ) : (
             <div class="modifier-none">{widthList ? "Any width: type it, then a space" : "No modifier matches"}</div>
           )}
+        </div>
+          <div class="fade" data-edge="top" data-shown={more.above || undefined} aria-hidden="true" />
+          <div class="fade" data-edge="bottom" data-shown={more.below || undefined} aria-hidden="true" />
+          <ScrollThumb target={menuRef} />
         </div>
       )}
     </div>

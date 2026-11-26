@@ -1,11 +1,13 @@
 import { componentName } from "./component.ts";
 import { elementName } from "./name.ts";
 import { isEditable } from "./target.ts";
+import { pageBreakpoints } from "./breakpoints.ts";
 import { allTokens, type Token } from "./tokens.ts";
 
 /**
  * What `@` in the comment box can mention, from the page as it is now:
- * its tokens (CSS variables, dom/tokens.ts), its components (each by the
+ * its tokens (CSS variables, dom/tokens.ts), its breakpoints (the widths
+ * its media queries test, as the ruler shows them), its components (each by the
  * first element it renders at its top level, dom/component.ts) and its
  * named elements (an id or a naming attribute, as the hover label names
  * them: `section#features`). Plain tags (`div`) aren't listed: there are
@@ -13,6 +15,8 @@ import { allTokens, type Token } from "./tokens.ts";
  */
 export interface Mentionables {
   tokens: Token[];
+  /** The page's breakpoints, in px (dom/breakpoints.ts). */
+  breakpoints?: number[];
   components: Array<{ name: string; element: Element }>;
   elements: Array<{ name: string; element: Element }>;
 }
@@ -36,6 +40,7 @@ export function mentionables(nameAttributes: readonly string[] = [], doc: Docume
   }
   return {
     tokens: allTokens(doc),
+    breakpoints: pageBreakpoints(doc),
     components: [...components].map(([name, element]) => ({ name, element })),
     elements: [...elements].map(([name, element]) => ({ name, element })),
   };

@@ -33,13 +33,13 @@ export function usedModifiers(element: EditableElement, history: EditHistory): M
   };
 
   for (const rule of matchedRules(element, { states: [], mode: "any" }, { anyMedia: true })) {
-    const subject = subjectStates(rule.selector);
-    if (isUniversal(subject.stripped)) continue;
+    if (isUniversal(subjectStates(rule.selector).stripped)) continue;
     const media = mediaOf(rule.style);
     const range = media ? mediaRange(media) : {};
     if (!range) continue;
     const widths = range.min === undefined && range.max === undefined ? undefined : range;
-    add(subject.states, widths, Array.from({ length: rule.style.length }, (_, i) => rule.style.item(i)));
+    // Its states as the walk read them: the scheme of a `prefers-color-scheme` query it sits in too.
+    add(rule.states ?? [], widths, Array.from({ length: rule.style.length }, (_, i) => rule.style.item(i)));
   }
   for (const c of history.changes()) {
     if (c.element === element && !c.removal) add(c.states ?? [], c.widths, [c.property]);

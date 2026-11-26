@@ -32,7 +32,7 @@ interface ToolbarProps {
   sendCount?: number;
   /** Send; resolves to whether it worked, or to what the tooltip says instead of "Sent" ("Queued"). */
   onSend(): Promise<boolean | string> | boolean | string | void;
-  /** How many changes Discard would take off the page (the unsent ones): dimmed and disabled at 0. */
+  /** How many changes Discard would take off the page (the unsent ones): dimmed and disabled at 0, and while Send has an alert. */
   discardCount?: number;
   /** Discard the changes not sent yet (one undo step). */
   onDiscard?(): void;
@@ -259,14 +259,24 @@ export function Toolbar({
           )}
         </button>
       </Tooltip>
-      {/* Discard, right after Send: the changes Send would send (and those waiting for a job), off the page. Undo brings them back. */}
+      {/* Discard, right after Send: the changes Send would send (and those waiting for a job), off the page. Undo brings them back.
+          Off while Send has a warning (the owner's call, 2026-11-26): what's stuck is sorted out first, nothing thrown away meanwhile. */}
       {onDiscard && (
-        <Tooltip text={discardCount ? `Discard ${discardCount} ${discardCount === 1 ? "change" : "changes"}` : "Nothing to discard"} gap={TIP_GAP}>
+        <Tooltip
+          text={alerts.send ? "Discard is off while Send has a warning" : discardCount ? `Discard ${discardCount} ${discardCount === 1 ? "change" : "changes"}` : "Nothing to discard"}
+          gap={TIP_GAP}
+        >
           <button
             type="button"
             class="button discard"
-            aria-label={discardCount ? `Discard changes (${discardCount} ${discardCount === 1 ? "change" : "changes"})` : "Nothing to discard"}
-            disabled={!discardCount}
+            aria-label={
+              alerts.send
+                ? "Discard is off while Send has a warning"
+                : discardCount
+                  ? `Discard changes (${discardCount} ${discardCount === 1 ? "change" : "changes"})`
+                  : "Nothing to discard"
+            }
+            disabled={!discardCount || !!alerts.send}
             onClick={onDiscard}
           >
             <Icon name="brush" />
