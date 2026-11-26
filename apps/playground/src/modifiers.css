@@ -175,3 +175,34 @@
   margin: 0;
   color: var(--color-muted);
 }
+
+/* 6. Hover at breakpoints: in (hover: hover), as Tailwind v4 writes `hover:`
+   (no hover effect on touch screens), so `hover:` and `md:hover:` read as the
+   hover rule and hover from 768px. */
+.demo-chip {
+  padding: 8px 14px;
+  border-radius: var(--radius-full);
+  background: #f1f5f9;
+  color: var(--color-ink);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  .demo-chip:hover {
+    background: #bbf7d0;
+  }
+}
+
+@media (min-width: 768px) and (hover: hover) {
+  .demo-chip:hover {
+    background: #c7d2fe;
+  }
+}
+
+@media (min-width: 1200px) and (hover: hover) {
+  .demo-chip:hover {
+    background: #fecdd3;
+  }
+}

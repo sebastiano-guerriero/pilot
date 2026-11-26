@@ -31,6 +31,19 @@ describe("mediaRange", () => {
     expect(mediaRange("all")).toEqual({});
   });
 
+  it("a device capability true now is no condition (Tailwind v4's hover:); false now, never applies", () => {
+    const real = globalThis.matchMedia;
+    globalThis.matchMedia = ((q: string) => ({ matches: q === "(hover: hover)" || q === "(pointer: fine)" })) as typeof matchMedia;
+    try {
+      expect(mediaRange("(hover: hover)")).toEqual({});
+      expect(mediaRange("(width >= 48rem) and (hover: hover)")).toEqual({ min: 768 });
+      expect(mediaRange("(pointer: fine)")).toEqual({});
+      expect(mediaRange("(hover: none)")).toBeNull();
+    } finally {
+      globalThis.matchMedia = real;
+    }
+  });
+
   it("anything else too is not a width range: null", () => {
     expect(mediaRange("(min-width: 768px) and (orientation: landscape)")).toBeNull();
     expect(mediaRange("(prefers-color-scheme: dark)")).toBeNull();

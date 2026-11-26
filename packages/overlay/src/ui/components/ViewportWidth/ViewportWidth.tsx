@@ -1,10 +1,20 @@
 import { describeWidths } from "@pilot/protocol";
 import { useEffect, useReducer, useRef, useState } from "preact/hooks";
+import { type RGBA, colorBehind, darkTextOn, over } from "../../../dom/backdrop.ts";
 import { pageBreakpoints } from "../../../dom/breakpoints.ts";
 import { type Span, sameKey } from "../../../edits/reach.ts";
 import { type WidthChip, inWidths } from "../../../edits/widths.ts";
 import { px } from "../../px.ts";
 import type { Reach } from "../PropertyDialog/PropertyDialog.tsx";
+
+/** The grey bars' layers, top first (ViewportWidth.css): black at 20% over white at 40%. */
+const GREY_BAR: RGBA[] = [
+  [0, 0, 0, 0.2],
+  [255, 255, 255, 0.4],
+];
+
+/** Where the labels' middle is with the bars shown (ViewportWidth.css: 26px down, 20px tall). */
+const LABEL_MIDDLE = 36;
 
 /** How long the bars stay after the property is no longer in use: their way out (ViewportWidth.css), in ms. */
 const LEAVE_MS = 150;
@@ -44,7 +54,12 @@ interface ViewportWidthProps {
  * other rules, none where nothing declares it. Where a value applies, not
  * how its media query is written: `md:pt-4` before `lg:pt-12` is md to lg
  * (the owner's design, 2026-11-26). The ruler is the window, so a bar past
- * its width is cut at the right edge.
+ * its width is cut at the right edge. Then the ruler shows only the widths
+ * where the bars meet, and no window width: the page's other breakpoints
+ * change nothing for this property, and the green bar running to the right
+ * edge already says "here". Those between two grey bars are dimmed: only the
+ * green bar's ends bound the edit. Hovering it, or resizing, shows it all
+ * again, at full strength.
  */
 export function ViewportWidth({ width, widths, reach = null, onPick }: ViewportWidthProps) {
   // The bars stay a moment after the property is no longer in use, so they leave as the ruler does.
@@ -93,8 +108,49 @@ export function ViewportWidth({ width, widths, reach = null, onPick }: ViewportW
     onClick: (e: MouseEvent) => onPick(value, e.shiftKey),
   });
 
+  // Where the bars meet: the widths where the property's value changes. While it's in use, the only
+  // breakpoints shown (the page's others change nothing for it), Pilot's own too (`from-500`).
+  const edges = bars ? bars.spans.map((s) => s.min).filter((b) => b > 0) : [];
+  // An end of the green bar (where the edit's reach starts or stops), or between two others: dimmed.
+  const greenEdge = (b: number) =>
+    !!bars && bars.spans.some((s, i) => isTarget(s, bars) && (s.min === b || bars.spans[i + 1]?.min === b));
+  const labels = [...new Set([...breakpoints, ...edges])].sort((a, b) => a - b);
+
+  // The dimmed labels' text, dark or light for the page under them (their background is translucent, as
+  // the grey bars'): read where each one is, again as the page scrolls under them. None: can't tell
+  // (an image, a gradient), white with a ring.
+  const root = useRef<HTMLDivElement>(null);
+  const dimmed = bars ? edges.filter((b) => b < width && !greenEdge(b)) : [];
+  const dimmedKey = dimmed.join();
+  const [tones, setTones] = useState<Record<number, "dark" | "light">>({});
+  useEffect(() => {
+    if (!dimmedKey) return;
+    const node = root.current?.getRootNode();
+    const host = node instanceof ShadowRoot ? node.host : null;
+    const read = () => {
+      const next: Record<number, "dark" | "light"> = {};
+      for (const b of dimmed) {
+        const page = colorBehind(b + 0.5, LABEL_MIDDLE, host);
+        if (page) next[b] = darkTextOn(over(page, GREY_BAR)) ? "dark" : "light";
+      }
+      setTones((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
+    };
+    read();
+    let frame = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(read);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true, capture: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", onScroll, { capture: true });
+    };
+  }, [dimmedKey, width]);
+
   return (
     <div
+      ref={root}
       class="viewport-width"
       data-resizing={resizing || undefined}
       data-reach={reach ? "" : undefined}
@@ -113,6 +169,7 @@ export function ViewportWidth({ width, widths, reach = null, onPick }: ViewportW
                   key={`${s.min}`}
                   class="span"
                   data-target={isTarget(s, bars) || undefined}
+                  data-cut={s.max === undefined || s.max >= width || undefined}
                   style={spanBox(s, width)}
                   title={`${spanWidths(s)}: ${bars.property} ${s.value || "not set"}`}
                 />
@@ -122,11 +179,19 @@ export function ViewportWidth({ width, widths, reach = null, onPick }: ViewportW
         <button type="button" class="width" data-outside={!inWidths(widths, width) || undefined} {...pick(width)}>
           {width}
         </button>
-        {breakpoints
+        {labels
           .filter((b) => b < width)
           .map((b) => (
             // Centered on its tick (the 1px line at b: its center is half a pixel in).
-            <button key={b} type="button" class="breakpoint" style={{ left: px(b + 0.5) }} {...pick(b)}>
+            <button
+              key={b}
+              type="button"
+              class="breakpoint"
+              data-edge={edges.includes(b) ? (greenEdge(b) ? "target" : "other") : undefined}
+              data-tone={tones[b]}
+              style={{ left: px(b + 0.5) }}
+              {...pick(b)}
+            >
               {b}
             </button>
           ))}

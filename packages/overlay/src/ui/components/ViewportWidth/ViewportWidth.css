@@ -114,6 +114,12 @@
     border-radius: 3px;
     background: linear-gradient(rgb(0 0 0 / 0.2) 0 0), rgb(255 255 255 / 0.4);
 
+    /* Going on past the window's width: cut by the window, so no rounded end there. */
+    &[data-cut] {
+      border-start-end-radius: 0;
+      border-end-end-radius: 0;
+    }
+
     &[data-target] {
       overflow: hidden;
       background: hsl(from var(--plt-color-accent) h s l / 0.5);
@@ -181,6 +187,34 @@
     .breakpoint {
       opacity: 1;
       translate: 0 0;
+    }
+  }
+
+  /* A property in use, the ruler not hovered nor resized: only the widths
+     where its bars meet, no window width (ViewportWidth.tsx). They go as
+     they'd go with the ruler. */
+  :scope[data-reach]:not(:hover, [data-resizing]) :is(.width, .breakpoint:not([data-edge])) {
+    opacity: 0;
+    translate: 0 -4px;
+    pointer-events: none;
+  }
+
+  /* …and a width between two grey bars is dimmed: the grey bars' background,
+     its text dark or light for the page under it (`data-tone`, read by
+     ViewportWidth.tsx); where that can't be told (an image, a gradient),
+     white with a white ring outside. The green bar's ends stay as they are.
+     The owner's call, 2026-11-26. */
+  :scope[data-reach]:not(:hover, [data-resizing]) .breakpoint[data-edge="other"] {
+    background: linear-gradient(rgb(0 0 0 / 0.2) 0 0), rgb(255 255 255 / 0.4);
+    color: #fff;
+    box-shadow: 0 0 0 1px #fff;
+
+    &[data-tone] {
+      box-shadow: none;
+    }
+
+    &[data-tone="dark"] {
+      color: var(--plt-color-background);
     }
   }
 

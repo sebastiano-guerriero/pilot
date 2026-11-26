@@ -363,6 +363,16 @@ export function PropertyDialog({
   const ref = useRef<HTMLDivElement>(null);
   // The scrolling list, for its scroll thumb.
   const listRef = useRef<HTMLDivElement>(null);
+  // A row whose value the window's resize changed (another rule applies now, edits/reach.ts): a brief
+  // tint says "this updated" (PropertyDialog.css), started over if it changes again.
+  const flashRow = (id: string) => {
+    const row = listRef.current?.querySelector<HTMLElement>(`.editor[data-editor="${CSS.escape(id)}"]`);
+    if (!row) return;
+    row.removeAttribute("data-updated");
+    void row.offsetWidth;
+    row.setAttribute("data-updated", "");
+    row.addEventListener("animationend", () => row.removeAttribute("data-updated"), { once: true });
+  };
   const [size, setSize] = useState({ width: 0, height: 0 });
   useLayoutEffect(() => {
     const width = ref.current?.offsetWidth ?? 0;
@@ -523,6 +533,7 @@ export function PropertyDialog({
                             live.current = { id: match.id, at: performance.now() };
                             changedBy(match.id);
                           }}
+                          onResized={() => flashRow(match.id)}
                         />
                       </div>
                     </Fragment>
@@ -940,6 +951,7 @@ function MatchedEditor({
   onHint,
   onInspect,
   onChanged,
+  onResized,
 }: {
   editor: PropertyEditor;
   element: EditableElement;
@@ -958,6 +970,8 @@ function MatchedEditor({
   onInspect?(areas: BoxArea[] | null): void;
   /** The editor changed a value (or took one back). */
   onChanged?(): void;
+  /** The window's resize changed what the fields show (another rule applies there now). */
+  onResized?(): void;
 }) {
   const [, rerender] = useReducer((n: number) => n + 1, 0);
   const computed = getComputedStyle(element);
@@ -974,6 +988,14 @@ function MatchedEditor({
   for (const p of mixed) declared[p] = "";
   // Values only a reset gives (Pilot sets none, the page's comes from a `*` rule).
   const reset = resetValues(element, properties, history, states, widths, width);
+  // What the fields show changed with the window's width, not an edit: say so (the dialog's flashRow).
+  const shownKey = JSON.stringify(declared);
+  const shown = useRef({ width, values: shownKey });
+  useEffect(() => {
+    const before = shown.current;
+    shown.current = { width, values: shownKey };
+    if (before.width !== width && before.values !== shownKey) onResized?.();
+  }, [width, shownKey]);
   const Editor = editor.component;
   return (
     <Editor

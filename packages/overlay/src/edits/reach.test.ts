@@ -125,3 +125,25 @@ describe("applyChange", () => {
     other.remove();
   });
 });
+
+describe("states inside a device capability (Tailwind v4's hover:)", () => {
+  it("`@media (hover: hover)` is the hover rule; with a breakpoint, hover from there: followed as the window resizes", () => {
+    const real = globalThis.matchMedia;
+    globalThis.matchMedia = ((q: string) => ({ matches: q === "(hover: hover)" })) as typeof matchMedia;
+    try {
+      style.textContent = [
+        ".card { background-color: white; }",
+        "@media (hover: hover) { .card:hover { background-color: red; } }",
+        "@media (min-width: 768px) and (hover: hover) { .card:hover { background-color: blue; } }",
+      ].join("\n");
+      expect(spansOf(element, "background-color", ["hover"], history)).toEqual([
+        { min: 0, max: 767, key: "base", value: "red" },
+        { min: 768, key: { min: 768 }, value: "blue" },
+      ]);
+      expect(targetAt(element, "background-color", ["hover"], 500, history)).toBe("base");
+      expect(targetAt(element, "background-color", ["hover"], 1000, history)).toEqual({ min: 768 });
+    } finally {
+      globalThis.matchMedia = real;
+    }
+  });
+});

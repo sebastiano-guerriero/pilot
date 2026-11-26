@@ -160,3 +160,21 @@
     color: var(--plt-color-contrast-high);
   }
 }
+
+/* A row whose value changed as the window was resized, not by an edit
+   (another rule applies at the new width, PropertyDialog.tsx flashRow): its
+   property names turn the accent, then fade back to their own color, saying
+   "this updated". The names, not the row's background: a tint can be lost
+   on some rows (the owner's call, 2026-11-26). */
+@scope (.property-dialog) {
+  .editor[data-updated] .property-label {
+    animation: row-updated 1s ease-out;
+  }
+
+  @keyframes row-updated {
+    from,
+    30% {
+      color: var(--plt-color-accent);
+    }
+  }
+}

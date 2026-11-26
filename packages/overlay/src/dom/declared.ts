@@ -660,7 +660,11 @@ function resolveNesting(selectors: string[], parents: string[] | null): string[]
 /** Whether a media condition counts: for the base value, only none (or `all`); else whether it matches now. */
 function conditionHolds(walk: Walk, text: string): boolean {
   const t = text.trim();
-  if (walk.base) return !t || t === "all";
+  // Base: no condition, or only a device capability true now (`(hover: hover)`, mediaRange).
+  if (walk.base) {
+    const range = mediaRange(t);
+    return !!range && range.min === undefined && range.max === undefined;
+  }
   if (walk.anyMedia) return true;
   return mediaMatches(walk, t);
 }

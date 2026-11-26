@@ -76,6 +76,24 @@
   .u-md-p-8 { @media (width >= 768px) { padding: 32px; } }
 }</pre>
         </article>
+
+        <!-- 6. Hover that changes at breakpoints, in (hover: hover) as Tailwind v4 writes hover:. -->
+        <article class="demo-item">
+          <div class="demo-stage">
+            <a href="#" class="demo-chip" data-block="hover-breakpoints">Hover me</a>
+            <span class="demo-note">Green below 768px, indigo from 768px, rose from 1200px</span>
+          </div>
+          <pre class="demo-css">.demo-chip { background: #f1f5f9; }
+@media (hover: hover) {
+  .demo-chip:hover { background: #bbf7d0; }
+}
+@media (min-width: 768px) and (hover: hover) {
+  .demo-chip:hover { background: #c7d2fe; }
+}
+@media (min-width: 1200px) and (hover: hover) {
+  .demo-chip:hover { background: #fecdd3; }
+}</pre>
+        </article>
       </section>
     </main>
     <button type="button" class="dev-launch" data-launch-pilot>Launch Pilot</button>

@@ -49,6 +49,15 @@ export function mediaWidths(text: string): number[] {
  * when it tests anything else too (orientation, color scheme, height, `or`,
  * `not`, a comma list): not a width range, so it can't be placed among the
  * breakpoints. `{}` for no condition (`all`, `screen`).
+ *
+ * A device capability that's true now (`(hover: hover)`, `(pointer: fine)`)
+ * counts as no condition: it holds for the whole session, whatever the
+ * window, so it's no modifier of its own. Tailwind v4 puts every `hover:` in
+ * `@media (hover: hover)` (no hover effects on touch screens, where they'd
+ * take an extra tap): `hover:bg-…` is the hover rule, `md:hover:bg-…` hover
+ * from 768px (the owner's call, 2026-11-26). False now: null, it never
+ * applies here. Dark mode and print are choices that switch, not
+ * capabilities: still null (placing them is open).
  */
 export function mediaRange(text: string): { min?: number; max?: number } | null {
   const t = text.trim().toLowerCase();
@@ -73,10 +82,23 @@ export function mediaRange(text: string): { min?: number; max?: number } | null 
     } else if ((m = new RegExp(`^${N}${S}(<=|<)${S}width${S}(<=|<)${S}${N}$`).exec(f))) {
       atLeast(px(m[1] as string, m[2] as string), m[3] === "<");
       atMost(px(m[5] as string, m[6] as string), m[4] === "<");
+    } else if ((m = CAPABILITY.exec(f))) {
+      if (!holdsNow(`(${f})`)) return null;
     } else return null;
   }
   if (range.max === Number.POSITIVE_INFINITY) delete range.max;
   return range;
+}
+
+/** A device capability: what the device can do (hover, a fine pointer), not a choice that switches. */
+const CAPABILITY = /^(any-)?(hover|pointer)\s*:\s*[a-z]+$/;
+
+function holdsNow(query: string): boolean {
+  try {
+    return typeof matchMedia === "function" ? matchMedia(query).matches : true;
+  } catch {
+    return false;
+  }
 }
 
 function walkSheet(sheet: CSSStyleSheet, widths: Set<number>, seen: Set<CSSStyleSheet>) {
