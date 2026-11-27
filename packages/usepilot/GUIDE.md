@@ -1,6 +1,6 @@
 # Pilot guide
 
-How to use Pilot, task by task. This guide is for **usepilot 0.16.0**: it ships with Pilot, so the copy in your project (`node_modules/usepilot/GUIDE.md`, or `npx usepilot guide`) always matches the version you have.
+How to use Pilot, task by task. This guide is for **usepilot 0.17.0**: it ships with Pilot, so the copy in your project (`node_modules/usepilot/GUIDE.md`, or `npx usepilot guide`) always matches the version you have.
 
 **Agents:** when someone asks how to do something with Pilot, answer from this file. If it isn't here, Pilot doesn't do it yet: say so rather than guessing.
 
@@ -167,7 +167,7 @@ With **Select** on, **double-click** a text to edit it in place. **Enter** is do
 
 Type `/` at the start of a word in the comment box:
 
-- **Your agent's skills**, the ones its own `/` shows (the project's, then yours). Pick one and the agent uses it for this comment.
+- **Your agent's skills**, the ones its own `/` shows (the project's, then yours). A bare `/` lists the first few; type to see every match (`/emil`). Pick one and the agent uses it for this comment.
 - **Props**, on a component's instance: lists the props that change how it looks. Reply with a line like `tone: dark` to change one.
 - **Make responsive**: makes the element work at every screen width. Pilot checks the result at a phone width, each breakpoint and a wide desktop, and sends problems back to the agent once.
 
@@ -177,13 +177,13 @@ Type `@` in a comment to name things instead of describing them: the page's **to
 
 ## When the agent asks you something
 
-When part of a job needs your decision, the agent asks in a thread instead of guessing, and does the rest. The most common question: you changed one card and the cards share one component. Answer with a button:
+When part of a job needs your decision, the agent asks in a thread instead of guessing, and does the rest. It leaves that part unchanged until you answer, and says so ("Not changed yet: …"). The most common question: you changed one card, or commented on it, and the cards share one component. A question about several elements gets a thread of its own. Answer with a button:
 
 - **All of them** changes the component itself.
 - **Only this** changes this one instance.
 - **New variant** adds a named option to the component and uses it here.
 
-Or write your own answer. Selecting every instance of a component (Select similar) already says "all of them", so the agent changes the component without asking.
+Or write your own answer (only the buttons' exact words are read as "every copy" for the loaders). Selecting every instance of a component (Select similar) already says "all of them", so the agent changes the component without asking.
 
 Once you answer, the loaders show where the agent works now: on the element it asked about, and with **All of them** on every instance like it on the page. The rest of the job's elements are done.
 
