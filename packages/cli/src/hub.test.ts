@@ -19,6 +19,49 @@ function page(hub: Hub, origin = APP) {
 }
 
 describe("Hub", () => {
+  it("an agent not ready yet: pages see its setup, checked, and hear when it changes (signed in: gone)", () => {
+    const hub = new Hub();
+    const p = page(hub);
+    const agentsSeen = () => p.events.filter((e): e is Extract<PageEvent, { type: "agents" }> => e.type === "agents").map((e) => e.agents);
+    const setup = { state: "not-signed-in" as const, agent: "Claude Code", command: "claude auth login", canSignIn: true };
+    hub.register({ ...a, folder: "/app", kind: "claude", setup }, APP);
+    expect(agentsSeen().at(-1)).toEqual([{ ...a, setup }]);
+    // The same again (a heartbeat): nothing new to tell.
+    const before = p.events.length;
+    hub.register({ ...a, setup }, APP);
+    expect(p.events.length).toBe(before);
+    // A setup that isn't one (from another process: never trusted as is) is dropped; a url only when https.
+    hub.register({ ...a, setup: { state: "weird", command: "x" } as never }, APP);
+    expect(agentsSeen().at(-1)).toEqual([a]);
+    hub.register({ ...a, setup: { ...setup, state: "signing-in", url: "javascript:alert(1)" } }, APP);
+    expect(agentsSeen().at(-1)?.[0]?.setup?.url).toBeUndefined();
+    hub.register({ ...a, setup: { ...setup, state: "signing-in", url: "https://claude.ai/oauth?x=1" } }, APP);
+    expect(agentsSeen().at(-1)?.[0]?.setup?.url).toBe("https://claude.ai/oauth?x=1");
+    // Ready: no setup.
+    hub.register(a, APP);
+    expect(agentsSeen().at(-1)).toEqual([a]);
+  });
+
+  it("signing in from the page: only an agent that can, taken once by its runner", () => {
+    const hub = new Hub();
+    const setup = { state: "not-signed-in" as const, agent: "Claude Code", command: "claude auth login", canSignIn: true };
+    expect(hub.requestSignIn(APP)).toBe(0);
+    hub.register({ ...a, setup: { ...setup, canSignIn: false } }, APP);
+    expect(hub.requestSignIn(APP)).toBe(0);
+    hub.register({ ...a, setup }, APP);
+    // Another site's page can't ask for this one.
+    expect(hub.requestSignIn("http://localhost:3000")).toBe(0);
+    expect(hub.requestSignIn(APP)).toBe(1);
+    // Kept through a heartbeat, then taken once.
+    hub.register({ ...a, setup }, APP);
+    expect(hub.takeSignIn("a")).toBe(true);
+    expect(hub.takeSignIn("a")).toBe(false);
+    // Asked, then the agent got ready another way: nothing left to take.
+    hub.requestSignIn(APP);
+    hub.register(a, APP);
+    expect(hub.takeSignIn("a")).toBe(false);
+  });
+
   it("a /props job's answer keeps its props for the page; other jobs' are dropped", async () => {
     const hub = new Hub();
     const props = [{ name: "tone", type: "options" as const, options: ["light", "dark"] }];

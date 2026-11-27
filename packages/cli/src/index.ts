@@ -5,9 +5,11 @@
  * brings it up to date, `guide` prints the user guide (bundled in, so it's
  * always this version's).
  */
+import { spawn } from "node:child_process";
 import { createInterface } from "node:readline/promises";
 import { type AgentKind, AGENTS, isAgentKind } from "./agents.ts";
 import guide from "../../usepilot/GUIDE.md";
+import { startWithDevServer } from "./dev.ts";
 import { init } from "./init.ts";
 import { RunnerError, startRunner } from "./run.ts";
 import { update } from "./update.ts";
@@ -22,6 +24,10 @@ Usage: npx usepilot [command]
           in), and shows the jobs here. Ctrl+C stops it.
           --agent <claude|codex|cursor>: which agent (saved for the project)
           --url <address>: your app's address, when Pilot can't tell
+  dev     Start your dev server with Pilot: usepilot dev -- <your dev command>
+          (in package.json: "dev": "usepilot dev -- vite"). Pilot starts with it
+          and stops with it, so there's no npx usepilot to run. Vite and Next.js
+          have their own way (usepilot/vite, usepilot/next): init sets it up.
   init    Set Pilot up in this project: installs it, checks your agent's
           command-line tool, removes Pilot's old chat setup, and prints
           what's left (loading Pilot in the app). Ask your agent to run it.
@@ -91,6 +97,40 @@ async function run(): Promise<void> {
   process.on("SIGTERM", close);
 }
 
+/**
+ * `usepilot dev -- <command>`: the app's dev server, with Pilot (dev.ts)
+ * in this process, until the dev server ends. Pilot starts first, so a dev
+ * server that also starts it (withPilot) sees it running.
+ */
+async function dev(): Promise<void> {
+  const args = process.argv.slice(process.argv.indexOf("dev") + 1);
+  const commandLine = args[0] === "--" ? args.slice(1) : args;
+  if (!commandLine.length) {
+    process.stderr.write('usepilot dev runs your dev server with Pilot: usepilot dev -- <your dev command> (in package.json: "dev": "usepilot dev -- vite").\n');
+    process.exitCode = 1;
+    return;
+  }
+  const runner = startWithDevServer({ cwd: process.cwd() });
+  // One argument with spaces is a whole command line (`usepilot dev -- "tsc -w & vite"`, as init writes a script of
+  // several commands): a shell runs it. On Windows, the dev command is usually a .cmd (node_modules/.bin), which only
+  // runs through a shell too.
+  const child =
+    commandLine.length === 1 && /\s/.test(commandLine[0] as string)
+      ? spawn(commandLine[0] as string, { stdio: "inherit", shell: true })
+      : process.platform === "win32"
+      ? spawn(commandLine.map((a) => (/^[\w\-.:\\/=,@]+$/.test(a) ? a : `"${a.replace(/"/g, '""')}"`)).join(" "), { stdio: "inherit", shell: true })
+      : spawn(commandLine[0] as string, commandLine.slice(1), { stdio: "inherit" });
+  // Ctrl+C reaches the dev server by itself (one terminal); a kill from outside is passed on.
+  process.on("SIGINT", () => {});
+  process.on("SIGTERM", () => child.kill("SIGTERM"));
+  child.on("error", (error) => {
+    process.stderr.write(`usepilot dev: couldn't start ${commandLine[0]}: ${error.message}\n`);
+  });
+  child.on("close", async (code, signal) => {
+    await runner?.close();
+    process.exit(code ?? (signal ? 1 : 0));
+  });
+}
 
 switch (command) {
   case "run":
@@ -100,6 +140,9 @@ switch (command) {
       process.stderr.write(error instanceof RunnerError ? `${error.message}\n` : `usepilot: ${(error as Error).message}\n`);
       process.exitCode = 1;
     }
+    break;
+  case "dev":
+    await dev();
     break;
   case "help":
   case "--help":

@@ -30,22 +30,21 @@ How to use Pilot, task by task. This guide is for **usepilot 0.16.0**: it ships 
 
 ## Setting up
 
-1. **Sign in to your agent in a terminal**, once per computer. Pilot runs your agent's command-line tool, not its chat window:
-   - Claude Code: `curl -fsSL https://claude.ai/install.sh | bash`, then `claude auth login`
-   - Codex: `npm install -g @openai/codex`, then `codex login`
-   - Cursor: `curl https://cursor.com/install -fsS | bash`, then `cursor-agent login`
-2. **Add Pilot to the project**: ask your agent, in the project, to *run `npx usepilot@latest init` and follow what it prints*. It installs Pilot as a dev dependency and loads it in development only: Pilot never ships to your live site.
-3. **Each time you design**, run `npx usepilot` in the project's folder, in a terminal beside your dev server, and open your app. Keep it running: it's what runs your agent for each job, and its terminal shows each job's progress.
+1. **Add Pilot to the project**: ask your agent, in the project, to *run `npx usepilot@latest init` and follow what it prints*. It installs Pilot as a dev dependency, loads it in development only (Pilot never ships to your live site), and sets it to start with your dev server. Pilot runs your agent's command-line tool for each job, not its chat window: if that isn't installed, your agent installs it, after asking you.
+2. **Restart your dev server** and open your app. Pilot opens on every page, and you can design right away. The dev server's terminal shows each job's progress (`[pilot]` lines).
+3. **Sign in once, when Pilot asks.** The first time you send something (Send, or a comment), Pilot opens your agent's sign-in page in your browser; what you sent waits, and goes once you've signed in. Already signed in to your agent's command-line tool? Nothing to do. To sign in in a terminal instead: `claude auth login`, `codex login` or `cursor-agent login`.
 
-**Choosing the agent:** Pilot uses the agent you set it up with. `npx usepilot --agent codex` (or `claude`, `cursor`) switches, and is remembered for the project.
+**A dev server Pilot can't start with?** Run `npx usepilot` in the project's folder, in a terminal beside it, and keep it running.
+
+**Choosing the agent:** Pilot uses the agent you set it up with. `npx usepilot init --agent codex` (or `claude`, `cursor`) switches, remembered for the project; then restart your dev server. (`npx usepilot --agent codex` does the same when you run Pilot that way.)
 
 **What the agent may do:** edit the project's files, and whatever you've already set it to always allow. Anything it would normally ask permission for is refused, since no one is there to answer; its reply says what was refused. For an MCP server or a website, the reply has a **Copy instructions** button: paste them into your agent's chat to allow it for this project. Commands are never allowed this way.
 
-**Updating:** run `npx usepilot@latest update` in the project's folder, then restart your dev server and `npx usepilot`.
+**Updating:** run `npx usepilot@latest update` in the project's folder, then restart your dev server (and `npx usepilot`, if you run it).
 
 ## Opening, hiding and closing Pilot
 
-- **Option+P** (Alt+P on Windows and Linux) opens Pilot on any page of your app. Starting `npx usepilot` also opens it in the app's open tabs.
+- **Option+P** (Alt+P on Windows and Linux) opens Pilot on any page of your app. Pilot starting (with the dev server, or `npx usepilot`) also opens it in the app's open tabs.
 - **Hide:** Option+P again, or the toolbar's eye button, hides Pilot in this tab and keeps everything as it was (the selection, the dialog, what you typed). The page is fully yours meanwhile: hover, click and focus work normally, your edits stay on it. Press Option+P again to come back. Use it to try a hover or a click for real.
 - **Close:** the toolbar's last button closes Pilot in every tab of the site. Jobs keep running, and Option+P opens it again.
 - Pilot remembers per browser tab whether it's open, so reloads don't open or close it.
@@ -99,7 +98,7 @@ Use your project's tokens anywhere a value goes:
 - **Type `--`** in a field to list the page's CSS variables that fit (spacing for a padding, colors for a color…), filtered as you type, by name or value. It works inside math too: `calc(--sp`…
 - **The variable button** on the right edge of a hovered field opens the same list to browse.
 - **↑/↓** on a field holding a token move along its scale (`--space-3` → `--space-4`); Shift+drag on the handle does the same.
-- Tokens kept in files rather than CSS (a W3C or Style Dictionary `tokens.json`, Sass `$variables`) are listed too while `npx usepilot` runs. Tailwind v3 configs aren't read.
+- Tokens kept in files rather than CSS (a W3C or Style Dictionary `tokens.json`, Sass `$variables`) are listed too while Pilot runs for the project. Tailwind v3 configs aren't read.
 
 The agent writes the token the project's way, never a raw value.
 
@@ -172,7 +171,7 @@ Type `/` at the start of a word in the comment box:
 
 ## Mentions (@)
 
-Type `@` in a comment to name things instead of describing them: the page's **tokens** and **breakpoints** (`--color-brand`, `@768px`), its **components** (`@ProductCard`, also ones not on this page while `npx usepilot` runs), and its **named elements** (`@section#features`). The agent gets exactly what you picked, and where it is in the code.
+Type `@` in a comment to name things instead of describing them: the page's **tokens** and **breakpoints** (`--color-brand`, `@768px`), its **components** (`@ProductCard`, also ones not on this page while Pilot runs for the project), and its **named elements** (`@section#features`). The agent gets exactly what you picked, and where it is in the code.
 
 ## When the agent asks you something
 
@@ -221,8 +220,10 @@ The shortcuts with Option work in Pilot's own fields too, but not while you're t
 Pilot says when it's stuck: a red **!** on a toolbar button (hover it for what to do), a red warning on an element's corner, or a red reply in a thread.
 
 - **The toolbar doesn't appear.** Pilot only loads in development, in the browser. Press Option+P. If nothing happens, ask your agent to check where `usepilot/auto` is imported (Option+P is ignored while you type in the page's fields).
-- **"Pilot isn't running for this site"**: run `npx usepilot` in the project's folder and keep it running. If it is running, its terminal says why it skipped the page (another project's page, or a loader set up before 0.15: run `npx usepilot@latest update`).
-- **The agent isn't signed in**, or "couldn't do this job": sign in with the command in [Setting up](#setting-up); the `npx usepilot` terminal shows what the agent said.
+- **"Pilot isn't running for this site"**: restart your dev server, which starts Pilot (its terminal says why, if it doesn't). Without that setup, run `npx usepilot` in the project's folder and keep it running. Its terminal says why it skipped the page (another project's page, or a loader set up before 0.15: run `npx usepilot@latest update`).
+- **"Sign in to …"**: your agent isn't signed in. Click Send to open its sign-in page; what you sent goes once you've signed in. If the page doesn't open, or the sign-in doesn't finish, sign in in a terminal (see [Setting up](#setting-up)).
+- **Your agent's tool isn't installed**: ask your agent to install its command-line tool (or run the command Pilot shows). What you sent waits, and goes once it's ready.
+- **"… couldn't do this job"**: the dev server's terminal (or the one running `npx usepilot`) shows what the agent said.
 - **"… needs an update"**: your agent's command-line tool is too old for Pilot; run the command it gives.
 - **"… has gone quiet"**: no sign of work for 2 minutes. Click to stop the job, then send again.
 - **A reply says something was refused**: the agent wasn't allowed to do it in its settings. See *What the agent may do* in [Setting up](#setting-up).
@@ -234,7 +235,7 @@ Pilot says when it's stuck: a red **!** on a toolbar button (hover it for what t
 - No adding, moving or deleting elements from Pilot: ask in a comment.
 - No forcing hover or focus on the page while editing those states (hide Pilot to try them).
 - No values typed in the search (`pt-4` + Enter): search for the property, then type the value.
-- No Copy prompt: everything goes through `npx usepilot`.
+- No Copy prompt: everything goes through Pilot running for the project (with the dev server, or `npx usepilot`).
 - Components are read in React and Vue only (not Svelte or Angular). Tailwind v3 config tokens aren't read.
 - Props work on one component instance at a time.
 
@@ -242,7 +243,8 @@ Pilot says when it's stuck: a red **!** on a toolbar button (hover it for what t
 
 | Command | Does |
 | --- | --- |
-| `npx usepilot` | Run Pilot for this project (beside the dev server). `--agent claude\|codex\|cursor` picks the agent, `--url <address>` gives the app's address when Pilot can't tell |
+| `usepilot dev -- <command>` | Run your dev server with Pilot in it, in a `package.json` script (`"dev": "usepilot dev -- vite"`); Vite and Next.js use their own way (`usepilot/vite`, `usepilot/next`), set up by `init` |
+| `npx usepilot` | Run Pilot for this project, beside a dev server Pilot doesn't start with. `--agent claude\|codex\|cursor` picks the agent, `--url <address>` gives the app's address when Pilot can't tell |
 | `npx usepilot@latest init` | Set Pilot up in a project (ask your agent to run it) |
 | `npx usepilot@latest update` | Update Pilot in this project |
 | `npx usepilot guide` | Print this guide |

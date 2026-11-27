@@ -1,9 +1,10 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, extname, isAbsolute, join, relative } from "node:path";
+import { basename, extname, isAbsolute, join } from "node:path";
 import type { AgentRequest, CommentReference, ElementTarget, Job } from "@pilot/protocol";
 import { requestTargets } from "@pilot/protocol";
 import { workspaceRoot } from "./components.ts";
 import { markupSources, type Source, sourceFiles, wordsOf } from "./sources.ts";
+import { relPath } from "./paths.ts";
 
 /**
  * Where an element's code probably is, found by Pilot before the agent gets
@@ -672,7 +673,7 @@ function snippetAt(lines: string[], index: number): string {
 
 /** A file the framework named, relative to `root` when it's in the project (absolute, or relative already); null when it isn't there. */
 function sourcePath(file: string, root: string): string | null {
-  const rel = isAbsolute(file) ? relative(root, file) : file.replace(/^\.\//, "");
+  const rel = isAbsolute(file) ? relPath(root, file) : file.replace(/^\.\//, "");
   if (rel.startsWith("..") || isAbsolute(rel)) return null;
   return existsSync(join(root, rel)) ? rel : null;
 }
@@ -717,7 +718,7 @@ export function componentFile(
       break;
     }
   }
-  return best ? { file: relative(root, best.file), line: best.line } : null;
+  return best ? { file: relPath(root, best.file), line: best.line } : null;
 }
 
 /**
@@ -744,12 +745,12 @@ export function withComponentFiles(job: Job, root: string): Job {
   const workspace = workspaceRoot(root);
   const declared = (name: string) => {
     const found = componentFile(name, workspace, deadline);
-    return found ? { file: relative(root, join(workspace, found.file)), line: found.line } : null;
+    return found ? { file: relPath(root, join(workspace, found.file)), line: found.line } : null;
   };
   // A file in the workspace (a token's, sent relative to its root) as this project sees it.
   const local = (file: string) => {
     const path = join(workspace, file);
-    return existsSync(path) ? relative(root, path) : file;
+    return existsSync(path) ? relPath(root, path) : file;
   };
   const mention = (r: CommentReference): CommentReference => {
     if (r.kind === "token") return r.source ? { ...r, source: { ...r.source, file: local(r.source.file) } } : r;
@@ -761,7 +762,7 @@ export function withComponentFiles(job: Job, root: string): Job {
     if (r.kind !== "component") return r;
     if (r.source) {
       const path = join(workspace, r.source.file);
-      return existsSync(path) ? { ...r, source: { ...r.source, file: relative(root, path) } } : r;
+      return existsSync(path) ? { ...r, source: { ...r.source, file: relPath(root, path) } } : r;
     }
     if (r.target?.source?.file) return { ...r, target: fill(r.target) };
     const source = declared(r.name);

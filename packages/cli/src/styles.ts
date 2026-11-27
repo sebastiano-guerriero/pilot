@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { basename, extname, join, relative } from "node:path";
+import { basename, extname, join } from "node:path";
 import { sourceFiles, styleFiles } from "./sources.ts";
+import { relPath } from "./paths.ts";
 
 /**
  * Where a value the page reports (its CSS rule's selector, `.btn--primary`)
@@ -50,7 +51,7 @@ function rulesOf(path: string, root: string): StyleRule[] {
   try {
     const text = readFileSync(path, "utf8");
     // A minified file is a build's output.
-    if (!text.split("\n", 50).some((l) => l.length > 3000)) rules = parseStylesheet(text, relative(root, path));
+    if (!text.split("\n", 50).some((l) => l.length > 3000)) rules = parseStylesheet(text, relPath(root, path));
   } catch {
     // Unreadable: no rules.
   }
@@ -210,7 +211,7 @@ function componentStyles(path: string, root: string): StyleRule[] {
     const before = text.slice(0, (m.index as number) + m[0].indexOf(">") + 1);
     const offset = (before.match(/\n/g) ?? []).length;
     const lang = /lang=["'](\w+)["']/.exec(m[1] as string)?.[1] ?? "css";
-    const file = relative(root, path);
+    const file = relPath(root, path);
     for (const r of parseStylesheet(m[2] as string, `${file}.${lang}`))
       out.push({ ...r, file, line: r.line + offset, declarations: r.declarations.map((d) => ({ ...d, line: d.line + offset })) });
   }

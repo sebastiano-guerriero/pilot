@@ -3,6 +3,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import type { Job, StyleChange, WidthRange } from "@pilot/protocol";
 import { styleFiles } from "./sources.ts";
 import { type RuleSource, ruleSource } from "./styles.ts";
+import { relPath } from "./paths.ts";
 
 /**
  * What the agent would otherwise work out about the project before an edit,
@@ -109,7 +110,7 @@ export function tailwindOf(root: string, near: string[] = [], url?: string): Tai
   else for (const [k, v] of DEFAULTS) theme.set(k, v); // Not installed yet: Tailwind 4's own scales (its colors left out).
   const own = new Set<string>();
   readTheme(entry, theme, 0, own);
-  return { entry: relative(root, entry), ...(version ? { version } : {}), theme, own };
+  return { entry: relPath(root, entry), ...(version ? { version } : {}), theme, own };
 }
 
 function importsTailwind(file: string): boolean {
@@ -220,7 +221,7 @@ export function rebuildOf(pkg: string | null, root: string): { by: string; css: 
   for (const file of [...new Set([pkg, join(root, "package.json")])]) {
     const p = read(file);
     const scripts = p.scripts ?? {};
-    const where = file && file !== join(root, "package.json") ? ` in \`${relative(root, dirname(file))}\`` : "";
+    const where = file && file !== join(root, "package.json") ? ` in \`${relPath(root, dirname(file))}\`` : "";
     // The script that runs `name`, when another does (`dev` runs `css:watch`).
     const runner = (name: string) =>
       Object.entries(scripts).find(([other, cmd]) => other !== name && new RegExp(`(npm run|pnpm( run)?|yarn|bun run|npm:)\\s*${escape(name)}\\b`).test(cmd))?.[0];

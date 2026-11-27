@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { basename } from "node:path";
-import type { AgentInfo, AgentSession, Job, JobError, PromptOptions } from "@pilot/protocol";
+import type { AgentInfo, AgentSession, AgentSetup, Job, JobError, PromptOptions } from "@pilot/protocol";
 import { DEFAULT_BRIDGE_PORT, isLocalHost, originKey, originOf, propsOf, questionOf, requestTargets, sessionOf } from "@pilot/protocol";
-import { AGENTS, type AgentCli, type AgentKind, detectAgents, exec, type FoundAgent, missingFlags, NOTHING_PRINTED, type Refused, refusedNote, refusedOf, type RunOutput } from "./agents.ts";
+import { AGENTS, type AgentCli, type AgentKind, detectAgents, exec, type FoundAgent, installCommand, missingFlags, NOTHING_PRINTED, type Refused, refusedNote, refusedOf, type RunOutput } from "./agents.ts";
 import { Bridge } from "./agent.ts";
 import { attachmentBlocks, attachmentsDir, newAttachments } from "./attachments.ts";
 import { projectName, saveAgent, savedAgent } from "./config.ts";
@@ -55,16 +55,40 @@ export interface RunnerOptions {
   slots?: number;
   /** For tests: the saved agent's file. */
   configFile?: string;
+  /**
+   * Start even when the agent isn't ready (its command-line tool not
+   * installed, or not signed in), instead of failing: Pilot opens on the
+   * page, the designer can edit and send, jobs wait, and the page says what
+   * to do (AgentSetup). Pilot looks again every few seconds and runs the
+   * jobs that waited once it's ready, with no restart. For Pilot started
+   * with the dev server (dev.ts), where nobody would read a failure.
+   */
+  waitForAgent?: boolean;
+  /** For tests: how often to look again while waiting for the agent, for a sign-in asked from the page and the agent both. */
+  setupPollMs?: number;
+  /**
+   * Stops it while it starts (before a page of the project opened, which it may wait for as long as the dev server
+   * runs): it then rejects with RunnerStopped. Once started, `close()` stops it.
+   */
+  signal?: AbortSignal;
+  /** For tests: starts the agent's sign-in (default: its `login`, see signIn). */
+  signIn?: (cli: AgentCli, bin: string, onUrl: (url: string) => void) => Promise<void>;
 }
 
 export interface Runner {
   origin: string;
-  agent: AgentCli;
+  /** The agent Pilot runs: null while it waits for one to be ready (waitForAgent). */
+  agent: AgentCli | null;
+  /** Resolves once the agent is ready and jobs run (at once, unless waitForAgent). */
+  ready: Promise<void>;
   close(): Promise<void>;
 }
 
 /** Why Pilot can't start: what's wrong and what to do (printed as is). */
 export class RunnerError extends Error {}
+
+/** It was stopped before it started (RunnerOptions.signal): nothing went wrong, nothing to say. */
+export class RunnerStopped extends Error {}
 
 export async function startRunner(options: RunnerOptions): Promise<Runner> {
   const out = options.out ?? ((line: string) => process.stdout.write(`${line}\n`));
@@ -74,57 +98,239 @@ export async function startRunner(options: RunnerOptions): Promise<Runner> {
     throw new RunnerError(`${project} isn't a project folder (no package.json or .git). Run npx usepilot in your project's folder.`);
   }
 
-  const { cli, bin } = await pickAgent(options, choose, out);
-  // Whether the installed tool knows the flags Pilot runs it with (missingFlags): said at start, and checked again when a run
-  // fails (the designer may have updated it since). In plain words first: whoever reads it may be a designer; the flags last.
-  // Not for a stand-in (`bin`: tests, trying states by hand): it isn't the agent's tool.
-  const checkFlags = options.bin ? undefined : () => missingFlags(cli, bin).catch(() => null);
-  void checkFlags?.().then((missing) => {
-    if (missing?.length) out(outdatedNote(cli, missing));
-  });
-  const agent: AgentInfo = { id: randomUUID(), label: `${cli.label} · ${basename(project)}`, folder: project, kind: cli.kind };
+  // The agent: ready now, or (waitForAgent) the one Pilot waits for and what to do about it.
+  let state = options.waitForAgent ? await readiness(options, choose) : { ready: await pickAgent(options, choose, out) };
+  const first = state.ready?.cli ?? state.target;
+  const agent: AgentInfo = {
+    id: randomUUID(),
+    label: `${first?.label ?? "Pilot"} · ${basename(project)}`,
+    folder: project,
+    ...(first ? { kind: first.kind } : {}),
+    ...(state.ready ? {} : { setup: state.setup }),
+  };
   const bridge = new Bridge(agent, options.port ?? (Number(process.env.PILOT_PORT) || DEFAULT_BRIDGE_PORT));
 
-  const origin = await pickSite(bridge, options, out);
+  let origin: string;
+  try {
+    origin = await pickSite(bridge, options, out);
+    if (options.signal?.aborted) throw new RunnerStopped("stopped");
+  } catch (error) {
+    await bridge.close();
+    throw error;
+  }
   await bridge.launch(origin);
-  out(`Pilot is on ${origin}, every page, with ${cli.label}. Send from the toolbar; jobs show here. Ctrl+C stops.`);
+  out(
+    state.ready
+      ? `Pilot is on ${origin}, every page, with ${state.ready.cli.label}. Send from the toolbar; jobs show here. Ctrl+C stops.`
+      : `Pilot is on ${origin}, every page. ${setupLine(state.setup)}`,
+  );
   // Reads the project's files for the code search and its stylesheets now, not when the first job is waiting for them.
   setImmediate(() => {
     warmSources(project);
     warmStyles(project);
   });
 
-  const pool = new SessionPool(project, cli.kind, options.configFile);
   const stop = new AbortController();
   const runs = new Set<Promise<void>>();
-  const slots = options.slots ?? SLOTS;
-  for (let i = 0; i < slots; i++) {
-    const loop = (async () => {
-      while (!stop.signal.aborted) {
-        let job: Job | null = null;
-        try {
-          ({ job } = await bridge.wait(origin, WAIT_MS, stop.signal));
-        } catch (error) {
-          if (stop.signal.aborted) break;
-          out(`The hub is unreachable (${(error as Error).message}); trying again.`);
-          await sleep(2_000, stop.signal);
-          continue;
+  let picked: { cli: AgentCli; bin: string } | null = state.ready ?? null;
+
+  /** The runs: `slots` loops, each taking the site's next job and running the agent for it. */
+  const start = ({ cli, bin }: { cli: AgentCli; bin: string }) => {
+    // Whether the installed tool knows the flags Pilot runs it with (missingFlags): said at start, and checked again when a run
+    // fails (the designer may have updated it since). In plain words first: whoever reads it may be a designer; the flags last.
+    // Not for a stand-in (`bin`: tests, trying states by hand): it isn't the agent's tool.
+    const checkFlags = options.bin ? undefined : () => missingFlags(cli, bin).catch(() => null);
+    void checkFlags?.().then((missing) => {
+      if (missing?.length) out(outdatedNote(cli, missing));
+    });
+    const pool = new SessionPool(project, cli.kind, options.configFile);
+    const slots = options.slots ?? SLOTS;
+    for (let i = 0; i < slots; i++) {
+      const loop = (async () => {
+        while (!stop.signal.aborted) {
+          let job: Job | null = null;
+          try {
+            ({ job } = await bridge.wait(origin, WAIT_MS, stop.signal));
+          } catch (error) {
+            if (stop.signal.aborted) break;
+            out(`The hub is unreachable (${(error as Error).message}); trying again.`);
+            await sleep(2_000, stop.signal);
+            continue;
+          }
+          if (job && !stop.signal.aborted) await runJob(job, { bridge, cli, bin, project, out, signal: stop.signal, pool, checkFlags });
         }
-        if (job && !stop.signal.aborted) await runJob(job, { bridge, cli, bin, project, out, signal: stop.signal, pool, checkFlags });
+      })();
+      runs.add(loop);
+    }
+  };
+
+  let ready: Promise<void>;
+  if (state.ready) {
+    start(state.ready);
+    ready = Promise.resolve();
+  } else {
+    // Waiting for the agent: look again every few seconds (and sign in when the designer asks, from the page). Once it's
+    // ready, the page hears it (no setup), and the jobs that waited in the hub's queue run.
+    const waiting = (async () => {
+      const poll = options.setupPollMs ?? SETUP_TICK_MS;
+      let signingIn: Promise<void> | null = null;
+      let url: string | undefined;
+      let signInError: string | undefined;
+      const say = async (setup: AgentSetup) => {
+        const shown: AgentSetup = signingIn
+          ? { ...setup, state: "signing-in", canSignIn: false, ...(url ? { url } : {}) }
+          : { ...setup, ...(signInError ? { error: signInError } : {}) };
+        // The agent it waits for may have changed too (none installed, then one was): the page names it.
+        const label = `${state.target?.label ?? "Pilot"} · ${basename(project)}`;
+        if (JSON.stringify(agent.setup) === JSON.stringify(shown) && agent.label === label) return;
+        const before = agent.setup;
+        agent.setup = shown;
+        agent.label = label;
+        if (state.target) agent.kind = state.target.kind;
+        else delete agent.kind;
+        if (before?.state !== shown.state || before?.agent !== shown.agent || before?.error !== shown.error) out(setupLine(shown));
+        await bridge.register().catch(() => {});
+      };
+      // A sign-in asked from the page is looked for every tick; the agent's state (a sign-in check per agent, about a
+      // second each) every few.
+      const lookEvery = options.setupPollMs ? 1 : Math.round(SETUP_POLL_MS / SETUP_TICK_MS);
+      for (let tick = 1; !stop.signal.aborted && !state.ready; tick++) {
+        await sleep(poll, stop.signal);
+        if (stop.signal.aborted) return;
+        const asked = !signingIn && state.setup?.canSignIn && state.target ? await bridge.signInAsked().catch(() => false) : false;
+        if (asked && state.target && state.bin) {
+          const cli = state.target;
+          out(`Signing in to ${cli.label}: its page opens in your browser.`);
+          url = undefined;
+          signInError = undefined;
+          signingIn = (options.signIn ?? signIn)(cli, state.bin, (u) => {
+            url = u;
+            if (state.setup) void say(state.setup);
+          })
+            .catch(() => {})
+            .finally(() => {
+              signingIn = null;
+              // Looked at right after: still not signed in, it didn't finish (closed, or it wanted a code typed).
+              signInError = `The sign-in didn't finish. Run ${cli.signIn} in a terminal, then send again.`;
+            });
+        }
+        // Right after a sign-in started (it shows as signing in at once), and every few ticks.
+        if (!asked && tick % lookEvery !== 0) continue;
+        state = await readiness(options, choose);
+        if (state.ready) break;
+        if (state.setup) await say(state.setup);
       }
+      if (stop.signal.aborted || !state.ready) return;
+      picked = state.ready;
+      const { cli } = state.ready;
+      agent.label = `${cli.label} · ${basename(project)}`;
+      agent.kind = cli.kind;
+      delete agent.setup;
+      await bridge.register().catch(() => {});
+      out(`${cli.label} is ready: Pilot runs it for each job (the ones that waited go now).`);
+      start(state.ready);
     })();
-    runs.add(loop);
+    runs.add(waiting);
+    ready = waiting;
   }
 
   return {
     origin,
-    agent: cli,
+    get agent() {
+      return picked?.cli ?? null;
+    },
+    ready,
     async close() {
       stop.abort();
       await Promise.allSettled(runs);
       await bridge.close();
     },
   };
+}
+
+/** How often Pilot looks again for its agent while it waits for one (waitForAgent): each look asks the tool if it's signed in. */
+const SETUP_POLL_MS = 3_000;
+/** How often it looks for a sign-in asked from the page meanwhile: the designer just sent something. */
+const SETUP_TICK_MS = 1_000;
+/** How long a sign-in started from the page may take: the designer signs in in the browser. */
+const SIGN_IN_TIMEOUT_MS = 5 * 60_000;
+
+/**
+ * How the agent stands, for waitForAgent: ready (installed and signed in),
+ * or the one Pilot waits for (`target`, with its executable when it's
+ * installed) and what to do (`setup`). The agent given or saved for the
+ * project, else one signed in (asked when several), else the first one
+ * installed, else none: any of them, once installed.
+ */
+async function readiness(
+  options: RunnerOptions,
+  choose: NonNullable<RunnerOptions["choose"]>,
+): Promise<{ ready?: { cli: AgentCli; bin: string }; target?: AgentCli; bin?: string; setup?: AgentSetup }> {
+  const wanted = options.agent ?? savedAgent(options.cwd, options.configFile);
+  if (wanted && options.bin) return { ready: { cli: AGENTS[wanted], bin: options.bin } };
+  const found = await (options.detect ?? detectAgents)();
+  const waitFor = (cli: AgentCli, it?: FoundAgent) => ({ target: cli, ...(it ? { bin: it.bin } : {}), setup: setupFor(cli, it) });
+  if (wanted) {
+    const it = found.find((a) => a.kind === wanted);
+    if (it?.signedIn) {
+      if (options.agent) saveAgent(options.cwd, wanted, options.configFile);
+      return { ready: { cli: AGENTS[wanted], bin: it.bin } };
+    }
+    return waitFor(AGENTS[wanted], it);
+  }
+  const signedIn = found.filter((a) => a.signedIn);
+  if (signedIn.length) {
+    const index = signedIn.length > 1 ? await choose("Which agent should Pilot run for this project?", signedIn.map((a) => AGENTS[a.kind].label)) : 0;
+    const it = signedIn[index] ?? (signedIn[0] as FoundAgent);
+    saveAgent(options.cwd, it.kind, options.configFile);
+    return { ready: { cli: AGENTS[it.kind], bin: options.bin ?? it.bin } };
+  }
+  const installed = found[0];
+  if (installed) return waitFor(AGENTS[installed.kind], installed);
+  return {
+    setup: {
+      state: "not-installed",
+      command: `Install your coding agent's command-line tool and sign in: ${Object.values(AGENTS)
+        .map((cli) => `${cli.label}: ${installCommand(cli)}, then ${cli.signIn}`)
+        .join(". ")}.`,
+    },
+  };
+}
+
+/** What to do to get `cli` ready: install it and sign in, or sign in (which Pilot can start, from the page). */
+export function setupFor(cli: AgentCli, found?: FoundAgent): AgentSetup {
+  if (!found) return { state: "not-installed", agent: cli.label, command: `${installCommand(cli)}, then ${cli.signIn}` };
+  return { state: "not-signed-in", agent: cli.label, command: cli.signIn, canSignIn: true };
+}
+
+/** One line for the terminal about a setup: what Pilot waits for, and what to do. */
+function setupLine(setup: AgentSetup | undefined): string {
+  if (!setup) return "";
+  const name = setup.agent ?? "your coding agent";
+  if (setup.state === "signing-in") return `Waiting for you to sign in to ${name} in the browser${setup.url ? ` (${setup.url})` : ""}.`;
+  if (setup.error) return `! ${setup.error}`;
+  if (setup.state === "not-signed-in")
+    return `${name} isn't signed in: click Send in Pilot to sign in (its page opens in your browser), or run ${setup.command} in a terminal. Jobs wait until then.`;
+  return setup.agent
+    ? `${name}'s command-line tool isn't installed: ask your agent to install it, or run ${setup.command} in a terminal. Jobs wait until then.`
+    : `${setup.command} (Or ask your agent to install its own.) Jobs wait until then.`;
+}
+
+/**
+ * Starts `cli`'s own sign-in (its `login`): it opens the agent's sign-in page
+ * in the browser and ends once the designer signed in there (or after
+ * SIGN_IN_TIMEOUT_MS). Nothing is typed into it: one that asks for a code in
+ * the terminal ends at once, and the page says to run it in a terminal. The
+ * page's address, when it prints one, goes to `onUrl`.
+ */
+export async function signIn(cli: AgentCli, bin: string, onUrl: (url: string) => void): Promise<void> {
+  let seen = "";
+  const look = (chunk: string) => {
+    seen += chunk;
+    const url = /https:\/\/[^\s"'<>]+/.exec(seen)?.[0];
+    if (url) onUrl(url);
+  };
+  await exec(bin, cli.login, { timeoutMs: SIGN_IN_TIMEOUT_MS, onStdout: look, onStderr: look });
 }
 
 /** The agent: given, else saved for the project, else found signed in (asked when several). */
@@ -139,7 +345,7 @@ async function pickAgent(
   if (wanted) {
     const cli = AGENTS[wanted];
     const it = found.find((a) => a.kind === wanted);
-    if (!it) throw new RunnerError(`${cli.label}'s command-line tool isn't installed. Install it (${cli.install}), sign in (${cli.signIn}), then run npx usepilot again.`);
+    if (!it) throw new RunnerError(`${cli.label}'s command-line tool isn't installed. Install it (${installCommand(cli)}), sign in (${cli.signIn}), then run npx usepilot again.`);
     if (!it.signedIn) throw new RunnerError(`${cli.label} isn't signed in. Run ${cli.signIn}, then npx usepilot again.`);
     if (options.agent) saveAgent(options.cwd, wanted, options.configFile);
     return { cli, bin: it.bin };
@@ -152,7 +358,7 @@ async function pickAgent(
         "Pilot runs your coding agent's command-line tool, and none is ready here.",
         ...(installed.length
           ? installed
-          : Object.values(AGENTS).map((cli) => `- ${cli.label}: ${cli.install}, then ${cli.signIn}`)),
+          : Object.values(AGENTS).map((cli) => `- ${cli.label}: ${installCommand(cli)}, then ${cli.signIn}`)),
         "Then run npx usepilot again.",
       ].join("\n"),
     );
@@ -184,6 +390,7 @@ async function pickSite(bridge: Bridge, options: RunnerOptions, out: (line: stri
     out(line);
   };
   for (;;) {
+    if (options.signal?.aborted) throw new RunnerStopped("stopped");
     // Pages connect to the hub as they load: a moment for them to (re)connect to a new one.
     const local = (await bridge.pages()).filter((p) => {
       try {
@@ -204,7 +411,7 @@ async function pickSite(bridge: Bridge, options: RunnerOptions, out: (line: stri
         );
     }
     say("none", `Waiting for a page of ${name}: open your app in the browser (with its dev server running).`);
-    await sleep(1_000);
+    await sleep(1_000, options.signal);
   }
 }
 

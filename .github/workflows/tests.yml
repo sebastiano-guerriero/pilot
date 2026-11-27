@@ -1,0 +1,35 @@
+# Pilot's tests on Windows and Linux (macOS is where Pilot is developed: `pnpm test` there before each change):
+# the typecheck, the unit tests, and scripts/dev-server-check.mjs, which installs the packed `usepilot` into a Vite,
+# a Next.js and a plain project and runs each as its dev server would be, with a stand-in for the agent (no account,
+# no secret). Runs on every push and pull request, or by hand (Actions → Tests → Run workflow).
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      # The version in package.json's `packageManager`.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - name: Pilot with dev servers (Vite, Next.js, usepilot dev)
+        run: node scripts/dev-server-check.mjs

@@ -65,9 +65,25 @@ describe("usepilot update", () => {
     expect(JSON.parse(await readFile(join(home, ".cursor/mcp.json"), "utf8")).mcpServers).toEqual({ figma: { url: "http://x" } });
     expect(out).toContain(`# Pilot updated: 0.6.0 → ${VERSION}`);
     expect(out).toContain("Pilot's old chat setup is removed (`~/.cursor/mcp.json`, `~/.claude/skills/pilot`)");
-    expect(out).toContain("1. Restart your app's dev server");
-    expect(out).toContain("2. Restart `npx usepilot`");
+    // Pilot doesn't start with its dev server yet: init sets that up.
+    expect(out).toContain("1. Ask your agent to run `npx usepilot@latest init` in the app's folder: it sets Pilot to start with your dev server");
+    expect(out).toContain("2. Restart your app's dev server");
+    expect(out).toContain("3. Restart `npx usepilot` in the app's folder, if you run it");
     expect(out).not.toContain("other projects");
+  });
+
+  it("Pilot starts with the dev server already: restarting it is all (no npx usepilot to restart)", async () => {
+    await files({ ...app("0.6.0"), "vite.config.ts": 'import { pilot } from "usepilot/vite";\nexport default { plugins: [pilot()] };' });
+    const out = await update({ cwd: dir, run: installer().run, home });
+    expect(out).toContain("1. Restart your app's dev server");
+    expect(out).not.toContain("npx usepilot` in the app's folder");
+    expect(out).not.toContain("npx usepilot@latest init");
+  });
+
+  it("reads the old bridge from a bundle in several files (the shared code in a chunk)", async () => {
+    await files({ ...app("0.6.0"), "node_modules/usepilot/cli/index.js": 'import "./chunk-X.js";', "node_modules/usepilot/cli/chunk-X.js": `var BRIDGE_VERSION = ${BRIDGE_VERSION - 1};` });
+    const out = await update({ cwd: dir, run: installer().run, home });
+    expect(out).toContain("Update Pilot in your other projects too");
   });
 
   it("a skill that's a link (a Pilot checkout, while developing it): unlinked, its checkout kept", async () => {

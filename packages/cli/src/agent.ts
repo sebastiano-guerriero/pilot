@@ -24,6 +24,8 @@ export interface HubApi {
   /** The agent is at work on `jobId` (its output came). */
   activity(agent: AgentInfo, jobId: string): Promise<void>;
   check(agent: AgentInfo, jobId: string, timeoutMs: number): Promise<WidthCheck | null>;
+  /** Whether the designer asked, from the page, to sign the agent in (taken: true once per ask). */
+  setup(agent: AgentInfo): Promise<{ signIn: boolean }>;
   leave(agent: AgentInfo): Promise<void>;
 }
 
@@ -56,6 +58,9 @@ class LocalApi implements HubApi {
   }
   check(_agent: AgentInfo, jobId: string, timeoutMs: number) {
     return this.hub.check(jobId, timeoutMs);
+  }
+  async setup(agent: AgentInfo) {
+    return { signIn: this.hub.takeSignIn(agent.id) };
   }
   async leave(agent: AgentInfo) {
     localAgents.delete(agent.id);
@@ -111,6 +116,9 @@ class RemoteApi implements HubApi {
   async check(agent: AgentInfo, jobId: string, timeoutMs: number) {
     return (await this.post<{ check: WidthCheck | null }>("check", { agent, jobId, timeoutMs })).check;
   }
+  async setup(agent: AgentInfo) {
+    return { signIn: !!(await this.post<{ signIn?: boolean }>("setup", { agent })).signIn };
+  }
   async leave(agent: AgentInfo) {
     await this.post("leave", { agent });
   }
@@ -147,6 +155,18 @@ export class Bridge {
   /** The sites with Pilot open in a browser (their origins). */
   pages(): Promise<OpenPage[]> {
     return this.call((api) => api.pages());
+  }
+
+  /** Tells the hub how the agent stands now (its `setup` changed): the pages show it at once. */
+  async register(): Promise<void> {
+    if (!this.origin) return;
+    const origin = this.origin;
+    await this.call((api) => api.register(this.agent, origin));
+  }
+
+  /** Whether the designer asked, from the page, to sign the agent in (see Hub.requestSignIn). */
+  async signInAsked(): Promise<boolean> {
+    return (await this.call((api) => api.setup(this.agent))).signIn;
   }
 
   /** Waits up to `timeoutMs` for a job; survives the hub moving to another process mid-wait. */

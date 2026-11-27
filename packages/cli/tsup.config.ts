@@ -1,12 +1,14 @@
 import { defineConfig } from "tsup";
 
 /**
- * One self-contained file: the protocol is bundled in, so `usepilot` ships
- * the CLI with no dependencies to install. The banner gives bundled
+ * Self-contained: the protocol is bundled in, so `usepilot` ships the CLI
+ * with no dependencies to install. Three entries, the command,
+ * `usepilot/vite` and `usepilot/next`, with their shared code in a chunk
+ * beside them (`usepilot` copies the whole folder). The banner gives bundled
  * CommonJS code a `require`.
  */
 export default defineConfig({
-  entry: ["src/index.ts"],
+  entry: ["src/index.ts", "src/vite.ts", "src/next.ts"],
   format: ["esm"],
   target: "node22",
   platform: "node",

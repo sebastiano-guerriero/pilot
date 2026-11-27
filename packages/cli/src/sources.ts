@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { extname, join, relative } from "node:path";
+import { extname, join } from "node:path";
+import { relPath } from "./paths.ts";
 
 /**
  * A project's source files, for Pilot's code search (locate.ts): every file
@@ -156,7 +157,7 @@ class Index {
     const lines = content.split("\n");
     const lineCounts = new Map<string, number>();
     for (const line of lines) for (const w of new Set(wordsOf(line))) lineCounts.set(w, (lineCounts.get(w) ?? 0) + 1);
-    return { path, rel: relative(this.root, path), content, lines, words: new Set(lineCounts.keys()), lineCounts };
+    return { path, rel: relPath(this.root, path), content, lines, words: new Set(lineCounts.keys()), lineCounts };
   }
 
   private count(source: Source, by: 1 | -1): void {

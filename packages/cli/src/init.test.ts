@@ -41,18 +41,32 @@ function recorder(ok = true) {
 }
 
 describe("usepilot init", () => {
-  it("says which agent Pilot will run, or what to install or sign in to; ends with npx usepilot", async () => {
+  it("says which agent Pilot will run; signing in is left for the page, not a step before Pilot works", async () => {
     await files({ "package.json": { devDependencies: { vite: "^7" } } });
     const ready = await init({ env: {}, detect: found({ kind: "claude", bin: "/bin/claude", signedIn: true }), home, cwd: dir, install: false });
     expect(ready).toContain("Pilot will run Claude Code, signed in here, for each job.");
-    expect(ready).toContain(`run \`npx usepilot\` in ${dir}`);
     const both = await init({ env: {}, detect: found({ kind: "claude", bin: "c", signedIn: true }, { kind: "codex", bin: "x", signedIn: true }), home, cwd: dir, install: false });
     expect(both).toContain("Found Claude Code and Codex signed in");
+    // Installed, not signed in: Pilot runs it, and the user signs in when Pilot asks (on the page).
     const out = await init({ env: {}, detect: found({ kind: "cursor", bin: "/bin/cursor-agent", signedIn: false }), home, cwd: dir, install: false });
-    expect(out).toContain("sign in to Cursor (`cursor-agent login`)");
+    expect(out).toContain("Pilot will run Cursor for this project.");
+    expect(out).toContain("They sign in to Cursor once, when Pilot asks");
+    expect(out).toContain("`cursor-agent login`");
     const nothing = await init({ detect: none, env: {}, home, cwd: dir, install: false });
-    expect(nothing).toContain("none is installed here");
+    expect(nothing).toContain("**Ask the user which coding agent Pilot should run**");
     expect(nothing).toContain("`claude auth login`");
+  });
+
+  it("the install commands are the platform's: PowerShell's on Windows, where curl | bash doesn't run", async () => {
+    await files({ "package.json": { devDependencies: { vite: "^7" } } });
+    const mac = await init({ detect: none, env: {}, agent: "claude", home, cwd: dir, install: false, platform: "darwin", configFile: join(home, "a.json") });
+    expect(mac).toContain("`curl -fsSL https://claude.ai/install.sh | bash`");
+    const win = await init({ detect: none, env: {}, agent: "claude", home, cwd: dir, install: false, platform: "win32", configFile: join(home, "b.json") });
+    expect(win).toContain("`irm https://claude.ai/install.ps1 | iex` in PowerShell");
+    expect(win).not.toContain("install.sh");
+    // Codex installs with npm everywhere.
+    const codex = await init({ detect: none, env: {}, agent: "codex", home, cwd: dir, install: false, platform: "win32", configFile: join(home, "c.json") });
+    expect(codex).toContain("`npm install -g @openai/codex`");
   });
 
   it("every loader names the project (its package.json name), so npx usepilot runs for its own pages only", async () => {
@@ -84,19 +98,72 @@ describe("usepilot init", () => {
     const out = await init({ detect: both, env: { CURSOR_TRACE_ID: "1" }, configFile, home, cwd: dir, install: false });
     expect(out).toContain("Pilot will run Cursor for this project");
     expect(savedAgent(dir, configFile)).toBe("cursor");
-    // Run in Cursor's editor without its command-line tool: what to install.
-    const missing = await init({ detect: found({ kind: "claude", bin: "c", signedIn: true }), env: { CURSOR_TRACE_ID: "1" }, configFile: join(home, "o.json"), home, cwd: dir, install: false });
-    expect(missing).toContain("install Cursor's command-line tool");
+    // Run in Cursor's editor without its command-line tool: the agent installs it (asking first), and it's saved already,
+    // so Pilot waits for that one.
+    const other = join(home, "o.json");
+    const missing = await init({ detect: found({ kind: "claude", bin: "c", signedIn: true }), env: { CURSOR_TRACE_ID: "1" }, configFile: other, home, cwd: dir, install: false });
+    expect(missing).toContain("**Install Cursor's command-line tool**");
+    expect(missing).toContain("Ask the user first");
+    expect(savedAgent(dir, other)).toBe("cursor");
   });
 
-  it("--agent: saves the agent for the project when it's ready", async () => {
+  it("--agent: saves the agent for the project, ready or not", async () => {
     await files({ "package.json": { devDependencies: { vite: "^7" } } });
     const configFile = join(home, "projects.json");
     const out = await init({ env: {}, detect: found({ kind: "codex", bin: "x", signedIn: true }), agent: "codex", configFile, home, cwd: dir, install: false });
     expect(out).toContain("Pilot will run Codex for this project");
     expect(savedAgent(dir, configFile)).toBe("codex");
-    const missing = await init({ detect: none, env: {}, agent: "claude-code", configFile: join(home, "other.json"), home, cwd: dir, install: false });
-    expect(missing).toContain("install Claude Code's command-line tool");
+    const other = join(home, "other.json");
+    const missing = await init({ detect: none, env: {}, agent: "claude-code", configFile: other, home, cwd: dir, install: false });
+    expect(missing).toContain("**Install Claude Code's command-line tool**");
+    expect(savedAgent(dir, other)).toBe("claude");
+  });
+
+  it("starts Pilot with the dev server: Vite's plugin, Next.js's withPilot, else the dev script through usepilot dev", async () => {
+    // Vite (and the frameworks on it): the plugin, in its config.
+    await files({ "package.json": { devDependencies: { vite: "^7" } }, "vite.config.ts": "export default {}", "src/main.ts": "" });
+    const vite = await init({ detect: none, env: {}, home, cwd: dir, install: false });
+    expect(vite).toContain("**Start Pilot with the app's dev server**");
+    expect(vite).toContain("in `vite.config.ts`, add Pilot's Vite plugin");
+    expect(vite).toContain('import { pilot } from "usepilot/vite";');
+    expect(vite).toContain("restart it (if it's running)");
+    expect(vite).not.toContain("run `npx usepilot`");
+    // Already there: said done, nothing to do.
+    await files({ "vite.config.ts": 'import { pilot } from "usepilot/vite";\nexport default { plugins: [pilot()] }' });
+    const again = await init({ detect: none, env: {}, home, cwd: dir, install: false });
+    expect(again).toContain("Pilot starts with the dev server (`usepilot/vite` in `vite.config.ts`).");
+    expect(again).not.toContain("**Start Pilot with the app's dev server**");
+    // The plugin's import isn't Pilot's loader: the page's loader is still looked for (and its step given).
+    expect(again).not.toContain("loader** (`vite.config.ts`)");
+    expect(again).toContain("**Load Pilot in the app, in development only**");
+    // Astro: under its config's `vite.plugins`.
+    await files({ "package.json": { devDependencies: { astro: "^5" } }, "astro.config.mjs": "export default {}" });
+    expect(await init({ detect: none, env: {}, home, cwd: dir, install: false })).toContain("in `astro.config.mjs`, add Pilot's Vite plugin to its `vite.plugins`");
+  });
+
+  it("Next.js: wraps its config in withPilot, which starts Pilot in next dev only", async () => {
+    await files({ "package.json": { dependencies: { next: "^16" } }, "app/layout.tsx": "", "next.config.ts": "export default {}" });
+    const out = await init({ detect: none, env: {}, home, cwd: dir, install: false });
+    expect(out).toContain("in `next.config.ts`, wrap the exported config with `withPilot`");
+    expect(out).toContain("export default withPilot(nextConfig);");
+    expect(out).toContain("Pilot starts only in `next dev`");
+  });
+
+  it("other dev servers: the dev script through usepilot dev; never a script that may serve production", async () => {
+    await files({ "package.json": { dependencies: { "@angular/core": "^20" }, scripts: { start: "ng serve", build: "ng build" } }, "src/main.ts": "" });
+    const angular = await init({ detect: none, env: {}, home, cwd: dir, install: false });
+    expect(angular).toContain('`"start": "usepilot dev -- ng serve"`');
+    // Several commands: in quotes, whole (usepilot dev runs it through a shell).
+    await files({ "package.json": { devDependencies: { webpack: "^5" }, scripts: { dev: "tsc -w & webpack serve" } } });
+    expect(await init({ detect: none, env: {}, home, cwd: dir, install: false })).toContain('`"dev": "usepilot dev -- \\"tsc -w & webpack serve\\""`');
+    // A start script that runs a server, not a dev server: left alone, and the user runs npx usepilot.
+    await files({ "package.json": { devDependencies: { webpack: "^5" }, scripts: { start: "node server.js" } } });
+    const server = await init({ detect: none, env: {}, home, cwd: dir, install: false });
+    expect(server).not.toContain("usepilot dev");
+    expect(server).toContain(`run \`npx usepilot\` in ${dir}`);
+    // Already through usepilot dev.
+    await files({ "package.json": { devDependencies: { webpack: "^5" }, scripts: { dev: "usepilot dev -- webpack serve" } } });
+    expect(await init({ detect: none, env: {}, home, cwd: dir, install: false })).toContain("Pilot starts with the dev server (`dev` runs through `usepilot dev`).");
   });
 
   it("removes Pilot's old chat setup (its MCP server and /pilot skill), and only Pilot's", async () => {

@@ -10,8 +10,8 @@
  */
 import type { AgentSession, ChangeSet, PropSpec, PropValue } from "./types.ts";
 
-/** Bumped when the hub's HTTP API changes incompatibly. 2: width checks (`/agents/check`, `/checks/:id`). 3: comment images (`/attachments`). 4: the agent's questions (`question` on `/agents/done`, `/jobs/:id/answer`). 5: the project's components (`/components`, the agent's `folder`) and `/props` (`props` on `/agents/done`). 6: the project's token files (`/tokens`, and what they stand for in the prompt: `fileTokens`). 7: Pilot runs the agent (`npx usepilot`): a job's agent `session` and `error`, `/agents/job`, and quit closes pages only. 8: pages say their project (`/events?project=`), `/agents/pages` lists them with it. */
-export const BRIDGE_VERSION = 8;
+/** Bumped when the hub's HTTP API changes incompatibly. 2: width checks (`/agents/check`, `/checks/:id`). 3: comment images (`/attachments`). 4: the agent's questions (`question` on `/agents/done`, `/jobs/:id/answer`). 5: the project's components (`/components`, the agent's `folder`) and `/props` (`props` on `/agents/done`). 6: the project's token files (`/tokens`, and what they stand for in the prompt: `fileTokens`). 7: Pilot runs the agent (`npx usepilot`): a job's agent `session` and `error`, `/agents/job`, and quit closes pages only. 8: pages say their project (`/events?project=`), `/agents/pages` lists them with it. 9: Pilot runs before its agent is ready (an agent's `setup`), and signing in from the page (`/setup/sign-in`, `/agents/setup`). */
+export const BRIDGE_VERSION = 9;
 
 /**
  * The hub's port: one per bridge version (4747 + the version, so 4750 for
@@ -74,6 +74,40 @@ export interface AgentInfo {
    * know it passes it on, harmless (no path in it).
    */
   kind?: string;
+  /**
+   * Pilot runs for the site, but its agent can't take jobs yet (see
+   * AgentSetup): jobs wait, and the page says what to do. Absent once the
+   * agent is ready.
+   */
+  setup?: AgentSetup;
+}
+
+/**
+ * Why the agent Pilot runs for a site can't take jobs yet: started with
+ * the dev server (or `npx usepilot`) before the agent's command-line tool
+ * was installed or signed in. Pilot keeps looking, and takes the jobs that
+ * waited once it's ready, with no restart. What the page shows is all here,
+ * in words: no path, nothing secret.
+ */
+export interface AgentSetup {
+  /**
+   * - not-installed: the agent's command-line tool isn't on this computer
+   *   (`agent` absent: none of them is);
+   * - not-signed-in: it is, and isn't signed in;
+   * - signing-in: a sign-in started from the page is under way (the agent's
+   *   page opened in the browser).
+   */
+  state: "not-installed" | "not-signed-in" | "signing-in";
+  /** The agent's name ("Claude Code"), when Pilot knows which one it waits for. */
+  agent?: string;
+  /** What to run in a terminal to get it ready (install, then sign in). */
+  command: string;
+  /** Pilot can start the sign-in itself (`POST /setup/sign-in`): it opens the agent's sign-in page in the browser. */
+  canSignIn?: boolean;
+  /** The sign-in page's address, when the agent printed one (in case the browser didn't open). */
+  url?: string;
+  /** A sign-in started from the page that didn't finish: what to do instead. */
+  error?: string;
 }
 
 /**
@@ -213,6 +247,30 @@ export function jobErrorOf(value: unknown): JobError | undefined {
   const e = value as { title?: unknown; detail?: unknown } | undefined;
   if (typeof e?.title !== "string" || !e.title.trim()) return undefined;
   return { title: e.title.trim().slice(0, 200), detail: typeof e.detail === "string" ? e.detail.trim().slice(0, 1000) : "" };
+}
+
+const SETUP_STATES: readonly AgentSetup["state"][] = ["not-installed", "not-signed-in", "signing-in"];
+
+/**
+ * An agent's setup (see AgentSetup) as another process sent it, checked:
+ * the known states, plain strings, capped; a `url` only when it's https (the
+ * page shows it as a link). Undefined for anything else.
+ */
+export function setupOf(value: unknown): AgentSetup | undefined {
+  const s = value as Record<string, unknown> | null | undefined;
+  if (!s || !SETUP_STATES.includes(s.state as AgentSetup["state"]) || typeof s.command !== "string") return undefined;
+  const text = (v: unknown, max: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : undefined);
+  const agent = text(s.agent, 60);
+  const url = text(s.url, 2000);
+  const error = text(s.error, 500);
+  return {
+    state: s.state as AgentSetup["state"],
+    command: s.command.trim().slice(0, 500),
+    ...(agent ? { agent } : {}),
+    ...(s.canSignIn === true ? { canSignIn: true } : {}),
+    ...(url && /^https:\/\/[^\s"'<>]+$/.test(url) ? { url } : {}),
+    ...(error ? { error } : {}),
+  };
 }
 
 /** Props at most, from one `/props` answer. */

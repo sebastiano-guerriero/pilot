@@ -204,6 +204,14 @@ export class BridgeClient {
     return this.post(`/jobs/${encodeURIComponent(jobId)}/answer`, { answer });
   }
 
+  /**
+   * Sign in the agent Pilot waits for (AgentSetup.canSignIn): its runner starts the agent's own sign-in, which opens
+   * its page in the browser. False when no agent here can (none waits for one, or one is signing in already).
+   */
+  signIn(): Promise<boolean> {
+    return this.post("/setup/sign-in", {});
+  }
+
   /** The designer closed Pilot on this site: its other pages close it too (false: no hub to tell). */
   quit(): Promise<boolean> {
     return this.post("/quit", {});

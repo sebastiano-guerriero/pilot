@@ -1,6 +1,7 @@
 import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { readFile, rm, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { shownPath } from "./paths.ts";
 
 /**
  * Pilot's old setup, from before agent runs (0.13 and earlier): its MCP
@@ -106,7 +107,7 @@ function vscodeUserDir(home: string, platform: NodeJS.Platform): string {
 }
 
 function tilde(path: string, home: string): string {
-  return path.startsWith(home) ? `~${path.slice(home.length)}` : path;
+  return shownPath(path.startsWith(home) ? `~${path.slice(home.length)}` : path);
 }
 
 function readText(file: string): string {
