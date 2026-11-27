@@ -41,6 +41,11 @@ describe("page tokens", () => {
   it("kinds, by the value first", () => {
     expect(kindOf("--z", "10")).toBe("number");
     expect(kindOf("--gap", "calc(1rem + 2px)")).toBe("length");
+    // Fluid spacing: a length when one is in it.
+    expect(kindOf("--space-block-xs", "clamp(1.5rem, calc(1.5rem + (100vw - 40rem) * 0.5 / 56), 2rem)")).toBe("length");
+    expect(kindOf("--grid-gap", "clamp(1rem, 0.5rem + 1.25vw, 1.5rem)")).toBe("length");
+    expect(kindOf("--gutter", "min(2rem, 5%)")).toBe("length");
+    expect(kindOf("--scale", "clamp(1, 1.2, 1.5)")).toBe("number");
     expect(kindOf("--bg", "oklch(0.7 0.1 150)")).toBe("color");
     expect(kindOf("--font-mono", "Menlo")).toBe("font");
     expect(kindOf("--shadow", "0 1px 2px black")).toBe("shadow");
