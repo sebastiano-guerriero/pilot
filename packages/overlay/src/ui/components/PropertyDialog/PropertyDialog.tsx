@@ -776,7 +776,7 @@ function editorsWithValues(
     const { declared, at } = page[p] as PageValue;
     if (history.removalOf(element, p, at, states)) return false;
     if (history.valueOf(element, p, at, states) !== null) return true;
-    return !!declared?.value && !isFromReset(declared);
+    return !!declared?.value && !isFromReset(declared, p);
   };
   const shown = editors.filter((e) => e.properties.some(isSet) || (e.listsEmbeds && (e.embeds ?? []).some((x) => x.properties.some(isSet))));
   const embedded = new Set(shown.flatMap((e) => e.embeds ?? []));
@@ -890,7 +890,7 @@ function resetValues(
   return new Set(
     properties.filter((p) => {
       const { declared, at } = page[p] as PageValue;
-      return !history.removalOf(element, p, at, states) && history.valueOf(element, p, at, states) === null && isFromReset(declared);
+      return !history.removalOf(element, p, at, states) && history.valueOf(element, p, at, states) === null && isFromReset(declared, p);
     }),
   );
 }

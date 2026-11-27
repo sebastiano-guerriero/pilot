@@ -117,18 +117,27 @@ describe("the cascade", () => {
 });
 
 describe("isFromReset", () => {
-  const rule = (selector: string) => ({ value: "0", important: false, source: { selector } });
-  it("a rule for every element: *, :where(*), :is(*)", () => {
-    for (const s of ["*", " * ", ":where(*)", ":is( * )", "::before", "::after", ":after", "*::after", "::placeholder", "::backdrop"]) expect(isFromReset(rule(s)), s).toBe(true);
+  const rule = (selector: string, value = "0") => ({ value, important: false, source: { selector } });
+  it("a rule for every element: *, :where(*), :is(*), any value", () => {
+    for (const s of ["*", " * ", ":where(*)", ":is( * )", "::before", "::after", ":after", "*::after", "::placeholder", "::backdrop"])
+      expect(isFromReset(rule(s, "border-box"), "box-sizing"), s).toBe(true);
   });
-  it("a rule for a kind of element, as a reset writes it: button, h1, :where(input), input::file-selector-button", () => {
-    for (const s of ["button", " h1 ", "div", ":where(input)", "input::file-selector-button", "my-element"]) expect(isFromReset(rule(s)), s).toBe(true);
+  it("a rule for a kind of element (button, h1, :where(input)) only when it sets nothing of its own: inherit, or the property's default", () => {
+    for (const s of ["button", " h1 ", ":where(input)", "input::file-selector-button", "my-element"]) expect(isFromReset(rule(s, "inherit"), "color"), s).toBe(true);
+    expect(isFromReset(rule("button", "0"), "border-top-left-radius")).toBe(true);
+    expect(isFromReset(rule("button", "0px"), "border-top-left-radius")).toBe(true);
+    expect(isFromReset(rule("button", "transparent"), "background-color")).toBe(true);
+    expect(isFromReset(rule("button", "1"), "opacity")).toBe(true);
+    // What it sets on purpose: a project's heading, preflight's image.
+    expect(isFromReset(rule("h1", "2rem"), "font-size")).toBe(false);
+    expect(isFromReset(rule("img", "block"), "display")).toBe(false);
+    expect(isFromReset(rule("button", "4px"), "border-top-left-radius")).toBe(false);
   });
   it("not an element's own rule, the style attribute, or nothing", () => {
     for (const s of ["*.card", ".card", "button.primary", "button:hover", "nav a", "a[href]", "#main", "html *", "* + *", "*:hover", ".card::after", "::selection"])
-      expect(isFromReset(rule(s)), s).toBe(false);
-    expect(isFromReset({ value: "0", important: false, source: "inline" })).toBe(false);
-    expect(isFromReset(null)).toBe(false);
+      expect(isFromReset(rule(s, "inherit"), "color"), s).toBe(false);
+    expect(isFromReset({ value: "0", important: false, source: "inline" }, "margin-top")).toBe(false);
+    expect(isFromReset(null, "margin-top")).toBe(false);
   });
 });
 

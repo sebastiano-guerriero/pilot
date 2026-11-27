@@ -47,7 +47,7 @@ export function clearProperty(
   // without, its rule outside any media query (the base, or those states'). None: nothing of the page's to remove.
   const base = !widths;
   const page = widths ? rangeValue(element, property, widths, states) : baseValue(element, property, states);
-  if (!page || isFromReset(page)) return history.apply(element, property, "", gesture, { widths, states });
+  if (!page || isFromReset(page, property)) return history.apply(element, property, "", gesture, { widths, states });
 
   // Without the removed declaration: for the app's style attribute, the
   // stylesheets' value; for a rule, everything else (the style attribute

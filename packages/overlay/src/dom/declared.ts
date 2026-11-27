@@ -1,4 +1,5 @@
 import { type ColorScheme, type ElementState, STATES, isColorScheme, isPseudoElement, sortStates } from "@pilot/protocol";
+import { cssProperty, GLOBAL_KEYWORDS } from "../css/properties.ts";
 import { mediaRange } from "./breakpoints.ts";
 import { mediaScheme, selectorScheme, withoutScheme } from "./scheme.ts";
 import { EDIT_ATTRIBUTE, isPilotSheet } from "./preview.ts";
@@ -69,18 +70,32 @@ const ELEMENT_ONLY = /^(?:[a-z][a-z0-9]*(?:-[a-z0-9]+)*|:(?:where|is)\(\s*[a-z][
 
 /**
  * Whether a declared value comes from a reset: its winning rule's selector
- * matches every element, or names only an element (the owner's call,
- * 2026-11-27: preflight's `inherit`s listed on every button; a project's own
- * `h1 { font-size: 2rem }` goes with them, still found by searching it). The
- * empty search's list leaves these out, so the reset's box-sizing, margin: 0,
- * padding: 0 don't list on every element (PropertyDialog's
- * editorsWithValues). An element's own rule (`.card { box-sizing:
- * border-box }`, a `box-border` class) still counts.
+ * matches every element (`*`: any value), or names only an element and the
+ * value sets nothing of its own: a CSS-wide keyword (`inherit`) or the
+ * property's default (`border-radius: 0`, `background-color: transparent`,
+ * `opacity: 1`). Tailwind's preflight's `button, input… { font: inherit;
+ * color: inherit; border-radius: 0… }` so doesn't list on every button, while
+ * a project's `h1 { font-size: 2rem }` and preflight's `img { display: block }`
+ * do (the owner's call, 2026-11-27: every element-only rule hid the project's
+ * own headings). The empty search's list leaves these out, so the reset's
+ * box-sizing, margin: 0, padding: 0 don't list on every element
+ * (PropertyDialog's editorsWithValues). An element's own rule
+ * (`.card { box-sizing: border-box }`, a `box-border` class) still counts.
  */
-export function isFromReset(declared: Declared | null | undefined): boolean {
+export function isFromReset(declared: Declared | null | undefined, property: string): boolean {
   if (!declared || declared.source === "inline") return false;
   const selector = declared.source.selector.trim();
-  return isUniversal(selector) || ELEMENT_ONLY.test(selector);
+  if (isUniversal(selector)) return true;
+  return ELEMENT_ONLY.test(selector) && setsNothing(property, declared.value);
+}
+
+/** A value that sets nothing of its own: a CSS-wide keyword, or the property's default (css/properties.ts; 0 in any unit). */
+function setsNothing(property: string, value: string): boolean {
+  const v = value.trim().toLowerCase();
+  if ((GLOBAL_KEYWORDS as readonly string[]).includes(v)) return true;
+  const initial = cssProperty(property).initial.toLowerCase();
+  const zero = (x: string) => /^[-+]?0*\.?0+(?:[a-z]+|%)?$/.test(x);
+  return !!initial && (v === initial || (zero(v) && zero(initial)));
 }
 
 /** The selector matches every element (see UNIVERSAL). */

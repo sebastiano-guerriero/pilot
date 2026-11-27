@@ -31,7 +31,7 @@ export function currentStyle(element: Element): CurrentStyle[] {
   const add = (property: string, found: Declared | null, inherited = false) => {
     const now = computed.getPropertyValue(property).trim();
     // A reset's (`* { margin: 0 }`, a heading's `font-size: inherit`) isn't the element's own: typography is said as inherited.
-    const d = found && (found.value.trim() === "inherit" || isFromReset(found)) ? null : found;
+    const d = found && (found.value.trim() === "inherit" || isFromReset(found, property)) ? null : found;
     if (d) {
       const value = d.value.trim();
       out.push({ property, value: cut(value), ...(now && now !== value ? { computed: cut(now) } : {}), source: sourceOf(element, d) });
