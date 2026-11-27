@@ -41,6 +41,9 @@ describe("stylesheetPreview", () => {
     expect(text).toContain(`.card:focus-within [${EDIT_ATTRIBUTE}="${id}"]:hover { color: red !important; }`);
     expect(text).toContain(`@media print and (min-width: 768px) { [${EDIT_ATTRIBUTE}="${id}"] { color: blue !important; } }`);
     expect(text).toContain(`@media (prefers-reduced-motion: reduce) { [${EDIT_ATTRIBUTE}="${id}"][data-open] { opacity: 0.5 !important; } }`);
+    // A container query: around the rule, inside its media.
+    stylesheetPreview.render([{ element: el, property: "gap", value: "8px", condition: { container: "(width < 400px)" } }]);
+    expect(sheet()?.textContent).toContain(`@container (width < 400px) { [${EDIT_ATTRIBUTE}="${id}"] { gap: 8px !important; } }`);
     // A forced one (no CSS left): still in the layer, on the element, over the project's rules.
     stylesheetPreview.render([{ element: el, property: "color", value: "red", condition: {} }]);
     expect(sheet()?.textContent).toContain(`[${EDIT_ATTRIBUTE}="${id}"] { color: red !important; }`);

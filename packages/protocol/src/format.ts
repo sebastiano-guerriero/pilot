@@ -648,9 +648,9 @@ function mediaNote(c: StyleChange): string | null {
 function conditionNote(c: StyleChange): string | null {
   const when = c.condition;
   if (!when) return null;
-  const css = [when.media && `@media ${when.media}`, when.selector && `\`${when.selector}\``].filter(Boolean).join(" and ");
+  const css = [when.media && `@media ${when.media}`, when.container && `@container ${when.container}`, when.selector && `\`${when.selector}\``].filter(Boolean).join(" and ");
   const read = when.selector ? `${css}, \`&\` being this element` : css;
-  return `\`${c.property}\` is only for when ${JSON.stringify(when.words)} (the designer's words; Pilot read it as ${when.selector ? read : `\`${read}\``}): the change applies only while that holds. Write it the project's way (Tailwind's \`group-*\`, \`peer-*\`, \`has-*\`, \`data-*\` or an arbitrary variant; CSS nesting or a selector around the element), the element's other styles as they are. If the words and Pilot's reading disagree, follow the words and say so.`;
+  return `\`${c.property}\` is only for when ${JSON.stringify(when.words)} (the designer's words; Pilot read it as ${when.selector ? read : `\`${read}\``}): the change applies only while that holds. Write it the project's way (Tailwind's \`group-*\`, \`peer-*\`, \`has-*\`, \`data-*\` or an arbitrary variant; CSS nesting or a selector around the element), the element's other styles as they are. If the words and Pilot's reading disagree, follow the words and say so.${when.container ? " A container query is about the element's nearest container (an ancestor with `container-type`): make the one the words name a container if it isn't one yet." : ""}`;
 }
 
 /**

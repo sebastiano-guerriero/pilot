@@ -65,6 +65,17 @@ describe("Create modifier: words after / that match no modifier", () => {
     expect(set).toEqual([]);
     expect(container.querySelector("input")?.getAttribute("aria-label")).toBe("Describe when");
     expect(container.querySelector(".condition-reading[data-error]")).not.toBeNull();
+    // Short: what's wrong in red, how to put it after.
+    expect(container.querySelector(".condition-error")?.textContent).toBe("Pilot can't read that yet.");
+    expect(container.querySelector(".condition-reading")?.textContent).toContain("Try “the parent .card is hovered”");
+    // Everything deleted: back to the search as it was.
+    act(() => {
+      const input = container.querySelector("input") as HTMLInputElement;
+      input.value = "";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(container.querySelector("input")?.getAttribute("aria-label")).toBe("Add a property");
+    expect(container.querySelector(".condition-reading")).toBeNull();
   });
 
   it("a word that matches a modifier lists it, not Create modifier", () => {

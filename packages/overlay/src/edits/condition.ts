@@ -18,11 +18,10 @@ import type { StyleCondition } from "@pilot/protocol";
 export type Condition = StyleCondition;
 
 /** What `readCondition` makes of the words: the condition and the element it's about (the parent…), or why not. */
-export type Reading = { condition: Condition; target?: Element } | { error: string };
+export type Reading = { condition: Condition; target?: Element } | { error: string; hint?: string };
 
-/** Said when the words don't read: how to put it. */
-export const REWORD =
-  "Pilot can't read that yet. Try “the parent .card has focus inside”, “it has data-open”, “the previous sibling is checked”, “with reduced motion”, or CSS with & for the element (.card:hover &).";
+/** Said when the words don't read (short, the owner's call), and how to put them. */
+export const REWORD = { error: "Pilot can't read that yet.", hint: "Try “the parent .card is hovered”, “it has data-open”, or CSS (.card:hover &)." };
 
 /** Media conditions in words. */
 const MEDIA: Array<[RegExp, string]> = [
@@ -41,16 +40,79 @@ const STATES: Array<[RegExp, string]> = [
   [/\b(?:is\s+|gets\s+|has\s+)?focus(?:ed)?\b/, ":focus"],
   [/\b(?:is\s+)?hover(?:ed)?\b|\bmouse\s+(?:is\s+)?over\b/, ":hover"],
   [/\b(?:is\s+)?(?:pressed|active)\b/, ":active"],
+  [/\bplaceholder\s+(?:is\s+)?(?:shown|showing|visible)\b|\bshow(?:s|ing)\s+(?:its\s+|the\s+|a\s+)?placeholder\b/, ":placeholder-shown"],
   [/\b(?:is\s+)?(?:checked|ticked|selected)\b|\bon\b(?=\s*$)/, ":checked"],
   [/\b(?:is\s+)?disabled\b/, ":disabled"],
   [/\b(?:is\s+)?expanded\b/, '[aria-expanded="true"]'],
   [/\b(?:is\s+)?open(?:ed)?\b/, "[open]"],
+  [/\b(?:is\s+)?closed\b/, ":not([open])"],
+  [/\b(?:is\s+)?(?:the\s+)?only\s+(?:child|one|item)\b/, ":only-child"],
+  [/\b(?:odd|every\s+other)(?:\s+(?:one|row|item|child))?\b/, ":nth-child(odd)"],
+  [/\beven(?:\s+(?:ones?|rows?|items?|child(?:ren)?))?\b/, ":nth-child(even)"],
   [/\b(?:is\s+)?(?:the\s+)?first(?:\s+child|\s+one|\s+item)?\b/, ":first-child"],
   [/\b(?:is\s+)?(?:the\s+)?last(?:\s+child|\s+one|\s+item)?\b/, ":last-child"],
   [/\b(?:is\s+)?empty\b/, ":empty"],
   [/\b(?:is\s+)?(?:invalid)\b/, ":invalid"],
+  [/\b(?:is\s+)?valid\b/, ":valid"],
   [/\b(?:is\s+)?(?:required)\b/, ":required"],
+  [/\b(?:is\s+)?read[-\s]?only\b/, ":read-only"],
+  [/\b(?:is\s+|was\s+|been\s+)?visited\b/, ":visited"],
+  [/\b(?:is\s+)?(?:the\s+)?(?:url'?s?\s+)?target(?:ed)?\b|\blinked\s+to\b/, ":target"],
 ];
+
+/** Ordinals in words, for "the third item" (first and last are their own). */
+const ORDINALS = ["second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
+
+/** What it may contain, in words → a selector inside `:has()`: "contains an image" → `:has(img)`. */
+const CONTAINS: Record<string, string> = {
+  image: "img",
+  picture: "img",
+  photo: "img",
+  img: "img",
+  icon: "svg",
+  svg: "svg",
+  link: "a",
+  button: "button",
+  input: "input",
+  field: ":is(input, textarea, select)",
+  checkbox: 'input[type="checkbox"]',
+  video: "video",
+  list: ":is(ul, ol)",
+  table: "table",
+  heading: ":is(h1, h2, h3, h4, h5, h6)",
+  title: ":is(h1, h2, h3, h4, h5, h6)",
+  label: "label",
+};
+
+/** Elements named in plain words that are tags ("the list is hovered"); other nouns are looked for as classes. */
+const NOUN_TAGS: Record<string, string> = {
+  list: ":is(ul, ol)",
+  item: "li",
+  row: "tr",
+  form: "form",
+  section: "section",
+  nav: "nav",
+  navigation: "nav",
+  header: "header",
+  footer: "footer",
+  table: "table",
+  button: "button",
+  link: "a",
+  dialog: "dialog",
+  details: "details",
+  article: "article",
+  aside: "aside",
+  sidebar: "aside",
+  label: "label",
+  figure: "figure",
+};
+
+/** Words that aren't an element's name: who words, pronouns, the page. */
+const NOT_NOUNS = new Set([
+  "it", "this", "that", "element", "one", "parent", "ancestor", "container", "wrapper", "sibling", "previous", "next",
+  "preceding", "following", "prior", "page", "screen", "window", "viewport", "browser", "user", "mouse", "pointer",
+  "attribute", "class", "same", "other", "only", "first", "last", "url", "placeholder", "keyboard",
+]);
 
 /** Who the condition is about, before the "what": the element itself, its parent or an ancestor, a sibling. */
 type Who = "self" | "parent" | "ancestor" | "previous" | "next";
@@ -64,36 +126,55 @@ const WHO: Array<[RegExp, Who]> = [
 /** Read `words` for `element`: a condition (and the element it names), or why it can't. */
 export function readCondition(words: string, element: Element): Reading {
   const text = words.trim();
-  if (!text) return { error: "Describe when: “the parent .card has focus inside”." };
+  if (!text) return { error: "Describe when.", hint: "Like “the parent .card is hovered”." };
 
   // CSS as written: a selector with & for the element, or a media condition.
   if (text.includes("&")) {
     const selector = subjectLast(text.replace(/\s+/g, " "));
-    if (!validSelector(selector)) return { error: `“${text}” isn't a selector the browser takes.` };
+    if (!validSelector(selector)) return { error: "The browser doesn't take that selector.", hint: "Check its syntax, with & for the element." };
     return { condition: { words: text, selector }, ...targetOfSelector(selector, element) };
   }
   if (/^@media\s/i.test(text) || /^\(.*\)$/.test(text)) {
     const media = text.replace(/^@media\s+/i, "");
-    if (!validMedia(media)) return { error: `“${text}” isn't a media condition the browser takes.` };
+    if (!validMedia(media)) return { error: "The browser doesn't take that media condition.", hint: "Check its syntax: (prefers-reduced-motion: reduce)." };
     return { condition: { words: text, media } };
   }
 
   const lower = text.toLowerCase();
   const negated = /\b(?:not|isn'?t|doesn'?t|does\s+not|hasn'?t|has\s+no|without)\b/.test(lower);
+  // A size: the screen's (a media condition) or a container's ("the card is narrower than 400px": `@container`).
+  const size = sizeOf(lower);
 
-  // What: a state, a class, an attribute.
+  // What: a state, a class, an attribute, what it contains, its place in a list.
   const what = whatOf(text, lower);
   if (!what) {
+    if (size) return sizeReading(text, size, element, nounOf(lower.slice(0, lower.search(/\b(?:is|are|gets)\b/) >>> 0)));
     // Only media words: a media condition.
     for (const [pattern, media] of MEDIA) if (pattern.test(lower)) return { condition: { words: text, media: negated ? `not all and ${wrap(media)}` : media } };
-    return { error: REWORD };
+    return REWORD;
   }
-  const css = negated ? `:not(${what.css})` : what.css;
+  let css = negated ? `:not(${what.css})` : what.css;
 
   // Who, from the words before the "what" (else the element itself), and its own class or attribute (`.card`).
   const before = lower.slice(0, what.at);
-  const who = WHO.find(([pattern]) => pattern.test(before))?.[1] ?? "self";
-  const qualifier = qualifierOf(text.slice(0, what.at));
+  let who = WHO.find(([pattern]) => pattern.test(before))?.[1] ?? "self";
+  let qualifier = qualifierOf(text.slice(0, what.at));
+  // An element named in plain words ("the card is hovered", "the parent card", "the list"): found around this one,
+  // as a tag or by its class; the element itself when it's the one named.
+  if (!qualifier) {
+    const noun = nounOf(before);
+    if (noun) {
+      const found = resolveNoun(noun, element, who);
+      if (!found) return { error: `No “${noun}” around this element.`, hint: `Name it by its class: “the parent .${noun} is hovered”.` };
+      if (found.self && who === "self") qualifier = "";
+      else {
+        qualifier = found.selector;
+        if (who === "self") who = "ancestor";
+      }
+    }
+  }
+  // A field that's empty is one showing its placeholder (`:empty` is always true for an input).
+  if (who === "self" && /^(?:input|textarea)$/i.test(element.tagName)) css = css.replace(":empty", ":placeholder-shown");
 
   let selector: string;
   let target: Element | null | undefined;
@@ -106,13 +187,13 @@ export function readCondition(words: string, element: Element): Reading {
       const parent = element.parentElement;
       // "The parent .card": the nearest ancestor that is one (designers say parent loosely); none: the direct parent.
       target = qualifier ? (parent?.matches(qualifier) ? parent : parent?.closest(qualifier)) : parent;
-      if (qualifier && !target) return { error: `No ${qualifier} around this element.` };
+      if (qualifier && !target) return { error: `No ${qualifier} around this element.`, hint: "Check its class, or say “the parent”." };
       selector = qualifier && target !== parent ? `${qualifier}${css} &` : `${qualifier}${css} > &`;
       break;
     }
     case "ancestor":
       target = qualifier ? element.parentElement?.closest(qualifier) : element.parentElement;
-      if (qualifier && !target) return { error: `No ${qualifier} around this element.` };
+      if (qualifier && !target) return { error: `No ${qualifier} around this element.`, hint: "Check its class, or say “the parent”." };
       selector = `${qualifier}${css} &`;
       break;
     case "previous":
@@ -124,10 +205,87 @@ export function readCondition(words: string, element: Element): Reading {
       selector = `&:has(+ ${qualifier || "*"}${css})`;
       break;
   }
-  if (!validSelector(selector)) return { error: REWORD };
-  // With a media word too ("hovered, with reduced motion"): both.
-  const media = MEDIA.find(([pattern]) => pattern.test(lower))?.[1];
-  return { condition: { words: text, selector, ...(media ? { media } : {}) }, ...(target ? { target } : {}) };
+  if (!validSelector(selector)) return REWORD;
+  // With a media word or a size too ("hovered, with reduced motion"): both.
+  const media = size?.screen ? size.query : MEDIA.find(([pattern]) => pattern.test(lower))?.[1];
+  const container = size && !size.screen ? size.query : undefined;
+  return {
+    condition: { words: text, selector, ...(media ? { media } : {}), ...(container ? { container } : {}) },
+    ...(target ? { target } : {}),
+  };
+}
+
+/**
+ * A width in the words: the screen's ("when the screen is narrower than 600px": a media condition) or, otherwise, a
+ * container's ("the card is narrower than 400px": `@container`, its nearest container ancestor's size). Range
+ * syntax, as both take it: `(width < 400px)`.
+ */
+function sizeOf(lower: string): { query: string; screen: boolean } | null {
+  const m =
+    /\b(narrower|smaller|thinner|less\s+wide|wider|larger|bigger|less|more|under|below|over|above|at\s+least|at\s+most)\s+(?:than\s+)?(\d+(?:\.\d+)?)\s*(px|rem|em)?/.exec(lower);
+  if (!m) return null;
+  const [, word, number, unit] = m as unknown as [string, string, string, string | undefined];
+  // Without a unit, only words that say width ("narrower than 400"): "more than 3 items" is a count.
+  const widthWord = /narrower|thinner|wider|less\s+wide/.test(word);
+  if (!unit && !widthWord) return null;
+  if (!widthWord && !/\b(?:wide|width|narrow|size|big|small)\b/.test(lower) && unit === undefined) return null;
+  const op = /narrower|smaller|thinner|less|under|below/.test(word) ? "<" : /at\s+most/.test(word) ? "<=" : /at\s+least/.test(word) ? ">=" : ">";
+  const query = `(width ${op} ${number}${unit ?? "px"})`;
+  return { query, screen: /\b(?:screen|window|viewport|browser|page|display|device)\b/.test(lower) };
+}
+
+/**
+ * A size alone: the screen's (media), or a container's. A container query is about the element's nearest container
+ * (an ancestor with `container-type`), whatever the words name: the one named ("the card") is highlighted, else
+ * that nearest container; the agent makes the one meant a container if it isn't (the prompt's note).
+ */
+function sizeReading(words: string, size: { query: string; screen: boolean }, element: Element, noun: string | null): Reading {
+  if (size.screen) return { condition: { words, media: size.query } };
+  const named = noun ? resolveNoun(noun, element, "ancestor") : null;
+  let container: Element | null = named ? element.parentElement?.closest(named.selector) ?? null : element.parentElement;
+  if (!named) {
+    while (container && typeof getComputedStyle === "function" && !/size/.test(getComputedStyle(container).containerType ?? "")) container = container.parentElement;
+  }
+  return { condition: { words, container: size.query }, ...(container ? { target: container } : {}) };
+}
+
+/** The element named in plain words before the "what": "the card", "the parent card", "a list". */
+function nounOf(before: string): string | null {
+  const found: string[] = [];
+  for (const m of before.matchAll(/\b(?:the|a|an|its|this)\s+([a-z][\w-]*)/g)) found.push(m[1] as string);
+  for (const m of before.matchAll(/\b(?:parent|ancestor|container|wrapper|sibling)\s+([a-z][\w-]*)/g)) found.push(m[1] as string);
+  // Verbs and their contractions ("the parent isn't…") aren't names either.
+  const verb = /^(?:is|isn|are|aren|was|has|hasn|have|does|doesn|do|not|no|with|without|that|which|gets|got|when|if|being)$/;
+  return found.filter((w) => !NOT_NOUNS.has(w) && !verb.test(w)).at(-1) ?? null;
+}
+
+/**
+ * A noun as a selector, for this element: a tag (list, item, form…) or a class (`card`, or one it's part of:
+ * `rounded-card`), on the element itself or around it (for "the parent", from its parent up). Null: none there.
+ */
+function resolveNoun(noun: string, element: Element, who: Who): { selector: string; self: boolean } | null {
+  const singular = noun.replace(/s$/, "");
+  const candidates = [...new Set([noun, singular])];
+  const chain: Element[] = [];
+  if (who === "self") chain.push(element);
+  for (let e = element.parentElement; e && e !== document.documentElement; e = e.parentElement) chain.push(e);
+  const exact = (e: Element, word: string) => (e.classList.contains(word) ? `.${word}` : null);
+  const part = (e: Element, word: string) => [...e.classList].find((c) => c.split(/[-_:]/).includes(word));
+  for (const word of candidates) {
+    const tag = NOUN_TAGS[word];
+    for (const e of chain) {
+      if (tag && e.matches(tag)) return { selector: tag, self: e === element };
+      const cls = exact(e, word);
+      if (cls) return { selector: cls, self: e === element };
+    }
+  }
+  for (const word of candidates) {
+    for (const e of chain) {
+      const cls = part(e, word);
+      if (cls) return { selector: `.${CSS.escape(cls)}`, self: e === element };
+    }
+  }
+  return null;
 }
 
 /** The "what" of the words: its CSS, and where in the words it starts (the "who" is before it). */
@@ -155,6 +313,28 @@ function whatOf(text: string, lower: string): { css: string; at: number } | null
   if (attribute && ownAt(attribute.index))
     consider(attribute[2] ? `[${attribute[1]}="${attribute[2]}"]` : `[${attribute[1]}]`, verbAt(lower, attribute.index));
   if (bracket && ownAt(bracket.index)) consider(bracket[0], verbAt(lower, bracket.index));
+  // What it contains: "contains an image", "has a checked checkbox", "contains a .badge"; how many children.
+  const contains =
+    /\b(?:contains?|containing|includes?|has|with)\s+(?:an?\s+|any\s+|some\s+|one\s+or\s+more\s+)?(checked\s+)?(images?|pictures?|photos?|img|icons?|svg|links?|buttons?|inputs?|fields?|checkbox(?:es)?|videos?|list|table|headings?|titles?|labels?)\b/.exec(
+      lower,
+    );
+  if (contains) {
+    const word = contains[2] as string;
+    const inside = CONTAINS[word] ?? CONTAINS[word.replace(/es$/, "")] ?? CONTAINS[word.replace(/s$/, "")];
+    if (inside) consider(`:has(${inside}${contains[1] ? ":checked" : ""})`, contains.index);
+  }
+  const containsClass = /\b(?:contains?|containing|includes?)\s+(?:an?\s+)?([.#][\w-]+)/.exec(text);
+  if (containsClass) consider(`:has(${containsClass[1]})`, containsClass.index);
+  const count = /\b(?:has|contains|with)\s+(more\s+than|at\s+least|fewer\s+than|less\s+than)\s+(\d+)\s+(?:items|children|elements|rows|entries|cards|things|ones)\b/.exec(lower);
+  if (count) {
+    const n = Number(count[2]);
+    const kind = count[1] as string;
+    const css = /more/.test(kind) ? `:has(> :nth-child(${n + 1}))` : /least/.test(kind) ? `:has(> :nth-child(${n}))` : `:not(:has(> :nth-child(${n})))`;
+    consider(css, count.index);
+  }
+  // Its place in a list: "the third item", "the 5th one".
+  const ordinal = new RegExp(`\\b(?:the\\s+)?(${ORDINALS.join("|")}|(\\d+)(?:st|nd|rd|th))\\s+(?:child|item|one|row|element|entry|card)\\b`).exec(lower);
+  if (ordinal) consider(`:nth-child(${ordinal[2] ?? ORDINALS.indexOf(ordinal[1] as string) + 2})`, ordinal.index);
   for (const [pattern, css] of STATES) {
     const m = pattern.exec(lower);
     if (m) {
@@ -216,6 +396,8 @@ export function holdsNow(condition: Condition, element: Element): boolean {
   try {
     if (condition.selector && !element.matches(condition.selector.replace(/&/g, ":scope"))) return false;
     if (condition.media && typeof matchMedia === "function" && !matchMedia(condition.media).matches) return false;
+    // A container's size: the page can't be asked whether it holds (it's only for the check after done: unchecked).
+    if (condition.container) return false;
     return true;
   } catch {
     return false;
@@ -224,7 +406,7 @@ export function holdsNow(condition: Condition, element: Element): boolean {
 
 /** The condition's identity: its CSS, not its words (two phrasings of one condition are one). */
 export function conditionKey(condition: Condition | null | undefined): string {
-  return condition ? `${condition.selector ?? ""}|${condition.media ?? ""}` : "";
+  return condition ? `${condition.selector ?? ""}|${condition.media ?? ""}|${condition.container ?? ""}` : "";
 }
 
 /** The same condition (or both none). */
@@ -234,7 +416,9 @@ export function sameCondition(a: Condition | null | undefined, b: Condition | nu
 
 /** The condition as CSS, for the agent: the selector, the `@media`, or both. */
 export function conditionCss(condition: Condition): string {
-  return [condition.media && `@media ${condition.media}`, condition.selector].filter(Boolean).join(" ");
+  return [condition.media && `@media ${condition.media}`, condition.container && `@container ${condition.container}`, condition.selector]
+    .filter(Boolean)
+    .join(" ");
 }
 
 /** Its element, for the on-page highlight, found again from the selector (a raw one): an ancestor or sibling it names. */
@@ -287,6 +471,14 @@ const PSEUDO_VARIANTS: Record<string, string> = {
   ":required": "required",
   ":first-child": "first",
   ":last-child": "last",
+  ":only-child": "only",
+  ":nth-child(odd)": "odd",
+  ":nth-child(even)": "even",
+  ":placeholder-shown": "placeholder-shown",
+  ":valid": "valid",
+  ":read-only": "read-only",
+  ":visited": "visited",
+  ":target": "target",
 };
 
 /** Media conditions Tailwind has a variant for. */
@@ -300,13 +492,19 @@ const MEDIA_VARIANTS: Record<string, string> = {
 
 /** One compound's pieces (`.card`, `:hover`, `[data-open]`, `:not(…)`), as Tailwind variants; null when one has none. */
 function piecesVariant(compound: string): { qualifier: string; variants: string[] } | null {
-  const pieces = compound.match(/:not\((?:[^()]|\([^()]*\))*\)|\[[^\]]+\]|::?[\w-]+(?:\([^)]*\))?|[.#][\w-]+|\*/g) ?? [];
+  const pieces = compound.match(/:(?:not|has)\((?:[^()]|\([^()]*\))*\)|\[[^\]]+\]|::?[\w-]+(?:\([^)]*\))?|[.#][\w-]+|\*/g) ?? [];
   let qualifier = "";
   const variants: string[] = [];
   for (const piece of pieces) {
     if (piece === "*") continue;
     if (piece.startsWith(".") || piece.startsWith("#")) {
       qualifier ||= piece.slice(1);
+      continue;
+    }
+    // What it contains: Tailwind's `has-[…]`.
+    const has = /^:has\((.*)\)$/.exec(piece);
+    if (has) {
+      variants.push(`has-[${(has[1] as string).replace(/\s+/g, "_")}]`);
       continue;
     }
     const not = /^:not\((.*)\)$/.exec(piece);
@@ -340,9 +538,18 @@ function piecesVariant(compound: string): { qualifier: string; variants: string[
  */
 export function conditionVariant(condition: Condition): string {
   const parts: string[] = [];
-  if (condition.media) parts.push(MEDIA_VARIANTS[condition.media] ?? `[@media${condition.media.replace(/\s+/g, "")}]`);
+  if (condition.media) parts.push(MEDIA_VARIANTS[condition.media] ?? widthVariant(condition.media, "") ?? `[@media${condition.media.replace(/\s+/g, "")}]`);
+  // A container's width: Tailwind's `@max-[400px]`, `@min-[600px]`.
+  if (condition.container) parts.push(widthVariant(condition.container, "@") ?? `[@container${condition.container.replace(/\s+/g, "")}]`);
   if (condition.selector) parts.push(selectorVariant(condition.selector));
   return parts.join(":");
+}
+
+/** `(width < 400px)` → `max-[400px]` (with `@` for a container's), `(width >= 600px)` → `min-[600px]`; null for others. */
+function widthVariant(query: string, prefix: string): string | null {
+  const m = /^\(width\s*(<=?|>=?)\s*([\d.]+[a-z]+)\)$/.exec(query.trim());
+  if (!m) return null;
+  return `${prefix}${(m[1] as string).startsWith("<") ? "max" : "min"}-[${m[2]}]`;
 }
 
 function selectorVariant(selector: string): string {

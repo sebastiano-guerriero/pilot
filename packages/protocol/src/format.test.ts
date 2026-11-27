@@ -184,6 +184,15 @@ describe("formatPrompt", () => {
     expect(prompt).toContain("follow the words and say so");
   });
 
+  it("a container query: the agent makes the one named a container", () => {
+    const prompt = formatPrompt({
+      ...changeSet,
+      edits: [{ target: changeSet.edits[0]!.target, changes: [{ property: "gap", from: "", to: "8px", condition: { words: "the card is narrower than 400px", container: "(width < 400px)" } }] }],
+    });
+    expect(prompt).toContain("Pilot read it as `@container (width < 400px)`");
+    expect(prompt).toContain("make the one the words name a container");
+  });
+
   it("an !important value in the project: the agent keeps it important", () => {
     const prompt = formatPrompt({
       ...changeSet,

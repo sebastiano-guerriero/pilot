@@ -167,13 +167,15 @@ export interface StyleChange {
  * A condition described in words, read into CSS. `selector` has `&` for the
  * element, as its subject (`.card:focus-within &`, `&[data-open]`,
  * `&:has(+ .error)`); `media` is a media condition (`print`,
- * `(prefers-reduced-motion: reduce)`). One or both.
+ * `(prefers-reduced-motion: reduce)`); `container` a container query. Any of them.
  */
 export interface StyleCondition {
   /** The designer's words, as typed. */
   words: string;
   selector?: string;
   media?: string;
+  /** A container query: the width of the element's nearest container (`(width < 400px)`). */
+  container?: string;
 }
 
 export type ElementState = ColorScheme | "hover" | "focus" | "focus-visible" | "active" | PseudoElement;

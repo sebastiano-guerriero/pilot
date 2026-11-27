@@ -143,3 +143,82 @@ describe("conditionVariant, conditionName: Tailwind's words for it", () => {
     expect(conditionName({ words: "the next one is hovered", selector: "&:has(+ *:hover)" })).toBe("the next one is hovered");
   });
 });
+
+describe("readCondition: more rules", () => {
+  const on = (html: string, id: string) => {
+    document.body.innerHTML = html;
+    return document.getElementById(id) as HTMLElement;
+  };
+  const sel = (words: string, el: Element) => {
+    const r = readCondition(words, el);
+    if (!("condition" in r)) return `error: ${r.error}`;
+    const c = r.condition;
+    return c.selector ?? [c.media && `media ${c.media}`, c.container && `container ${c.container}`].filter(Boolean).join(" ");
+  };
+
+  it("an element named in plain words: a tag, a class, or one it's part of; the element itself when it's the one", () => {
+    const title = on(`<ul><li class="rounded-card"><p id="t">x</p></li></ul>`, "t");
+    expect(sel("the card is hovered", title)).toBe(".rounded-card:hover &");
+    expect(sel("the list has focus inside", title)).toBe(":is(ul, ol):focus-within &");
+    expect(sel("the parent item is hovered", title)).toBe("li:hover > &");
+    const card = on(`<div class="card" id="c"></div>`, "c");
+    expect(sel("the card is hovered", card)).toBe("&:hover");
+    expect(sel("the sidebar is open", card)).toMatch(/^error: No “sidebar” around/);
+  });
+
+  it("what it contains, and how many", () => {
+    const el = on(`<div id="d"></div>`, "d");
+    expect(sel("it contains an image", el)).toBe("&:has(img)");
+    expect(sel("it has a checked checkbox", el)).toBe('&:has(input[type="checkbox"]:checked)');
+    expect(sel("it contains a .badge", el)).toBe("&:has(.badge)");
+    expect(sel("it has more than 3 items", el)).toBe("&:has(> :nth-child(4))");
+    expect(sel("it has fewer than 2 items", el)).toBe("&:not(:has(> :nth-child(2)))");
+  });
+
+  it("its place in a list", () => {
+    const el = on(`<div id="d"></div>`, "d");
+    expect(sel("every other row", el)).toBe("&:nth-child(odd)");
+    expect(sel("the even rows", el)).toBe("&:nth-child(even)");
+    expect(sel("the third item", el)).toBe("&:nth-child(3)");
+    expect(sel("the 5th one", el)).toBe("&:nth-child(5)");
+    expect(sel("it is the only child", el)).toBe("&:only-child");
+  });
+
+  it("more states: a field showing its placeholder (an empty field), valid, read only, visited, closed", () => {
+    const input = on(`<input id="i">`, "i");
+    expect(sel("it is empty", input)).toBe("&:placeholder-shown");
+    expect(sel("the placeholder is shown", input)).toBe("&:placeholder-shown");
+    expect(sel("it is valid", input)).toBe("&:valid");
+    expect(sel("it is invalid", input)).toBe("&:invalid");
+    expect(sel("it is read only", input)).toBe("&:read-only");
+    const link = on(`<a id="a" href="#">x</a>`, "a");
+    expect(sel("it was visited", link)).toBe("&:visited");
+    const details = on(`<details id="d"></details>`, "d");
+    expect(sel("it is closed", details)).toBe("&:not([open])");
+  });
+
+  it("sizes: a container's (container query), the screen's (media); a count isn't one", () => {
+    const el = on(`<div id="d"></div>`, "d");
+    // A container query is about the nearest container, whatever is named; the one named is what's highlighted.
+    const p = on(`<div class="card"><p id="p"></p></div>`, "p");
+    expect(sel("the card is narrower than 400px", p)).toBe("container (width < 400px)");
+    const reading = readCondition("the card is narrower than 400px", p);
+    expect("target" in reading && (reading.target as Element).className).toBe("card");
+    expect(sel("narrower than 400px", el)).toBe("container (width < 400px)");
+    expect(sel("wider than 30rem", el)).toBe("container (width > 30rem)");
+    expect(sel("when the screen is narrower than 600px", el)).toBe("media (width < 600px)");
+    expect(sel("it has more than 3 items", el)).toBe("&:has(> :nth-child(4))");
+  });
+
+  it("Tailwind's words for the new ones", () => {
+    const el = on(`<div id="d"></div>`, "d");
+    const variantOf = (words: string) => {
+      const r = readCondition(words, el);
+      return "condition" in r ? conditionVariant(r.condition) : `error: ${r.error}`;
+    };
+    expect(variantOf("every other row")).toBe("odd");
+    expect(variantOf("it contains an image")).toBe("has-[img]");
+    expect(variantOf("narrower than 400px")).toBe("@max-[400px]");
+    expect(variantOf("when the screen is wider than 600px")).toBe("min-[600px]");
+  });
+});

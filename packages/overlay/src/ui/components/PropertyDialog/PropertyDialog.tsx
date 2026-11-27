@@ -211,7 +211,9 @@ export function PropertyDialog({
   // `from-` / `to-` being finished: its widths are listed (PropertySearch), not properties.
   const finishingWidth = !!widthToFinish(query);
   // After `/` it's the modifiers (and Create modifier's words), never a property: "if it has" found aspect-ratio.
-  const matches = empty ? withValues : finishingWidth || isModifierQuery(query) ? [] : matchEditors(query, editors);
+  // A condition's words being described (Create modifier): nothing but the search and its reading line.
+  const [describing, setDescribing] = useState(false);
+  const matches = describing ? [] : empty ? withValues : finishingWidth || isModifierQuery(query) ? [] : matchEditors(query, editors);
   const matchKey = matches.map((m) => m.id).join(",");
 
   const searchRef = useRef<HTMLInputElement>(null);
@@ -552,6 +554,7 @@ export function PropertyDialog({
           onConditionChange={onConditionChange}
           history={history}
           onPeek={onPeek}
+          onDescribingChange={setDescribing}
         />
         {matches.length > 0 && (
           // Wrapper for the property editors shown below the search. Only

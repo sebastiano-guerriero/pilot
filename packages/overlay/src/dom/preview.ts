@@ -52,7 +52,7 @@ export interface PreviewRule {
    * A condition described in words (edits/condition.ts): the rule applies only while it holds. Always in Pilot's
    * layer: beside the page's rule for the element as it is, it would apply all the time.
    */
-  condition?: { selector?: string; media?: string };
+  condition?: { selector?: string; media?: string; container?: string };
   /** A cleared field the page's CSS declares (EditHistory's removal): `value` is only what shows without it, the layer's fallback. */
   removal?: unknown;
 }
@@ -117,7 +117,9 @@ function draw(rules: PreviewRule[], check: boolean) {
       const own = condition?.media ? wrapMedia(condition.media) : "";
       const isType = /^[a-z]+$/i.test(own);
       const media = [isType && own, widths && mediaQuery(widths), scheme.media, !isType && own].filter(Boolean).join(" and ");
-      byRoot.get(root)?.push(media ? `@media ${media} { ${selector} { ${text} } }` : `${selector} { ${text} }`);
+      // A container query inside the media query, around the rule.
+      const rule = condition?.container ? `@container ${condition.container} { ${selector} { ${text} } }` : `${selector} { ${text} }`;
+      byRoot.get(root)?.push(media ? `@media ${media} { ${rule} }` : rule);
       used.add(element);
     };
     // A change for some states is a rule for those states (`:hover:active`),

@@ -48,6 +48,8 @@ interface PropertySearchProps {
   history?: EditHistory;
   /** Show this element on the page (the ancestor a condition names), or none. */
   onPeek?(element: Element | null): void;
+  /** A condition's words are being described (the dialog hides its properties meanwhile), or not anymore. */
+  onDescribingChange?(on: boolean): void;
 }
 
 /**
@@ -74,6 +76,7 @@ export function PropertySearch({
   onConditionChange,
   history,
   onPeek,
+  onDescribingChange,
 }: PropertySearchProps) {
   useEffect(() => {
     if (!autoFocus) return;
@@ -93,6 +96,7 @@ export function PropertySearch({
     onPeek?.(target);
   }, [target]);
   useEffect(() => () => onPeek?.(null), []);
+  useEffect(() => onDescribingChange?.(!!describing), [!!describing]);
   const stopDescribing = (back: string) => {
     setDescribing(null);
     onPeek?.(null);
@@ -101,7 +105,8 @@ export function PropertySearch({
 
   const onInput = (e: Event) => {
     const input = e.currentTarget as HTMLInputElement;
-    if (describing) return setDescribing({ ...describing, words: input.value });
+    // Everything deleted: back to the search as it was at first (no line asking for words).
+    if (describing) return input.value ? setDescribing({ ...describing, words: input.value }) : stopDescribing("");
     let rest = input.value;
     let range = widths;
     let nextStates = states;
@@ -376,16 +381,18 @@ export function PropertySearch({
         // How the words read, as they're typed: Pilot's CSS for them and what they name (highlighted on the page),
         // or how to put them. In the `/` menu's row look, pending the owner's design.
         <div class="condition-reading" role="status" data-error={(reading && "error" in reading) || undefined}>
-          {!describing.words.trim() ? (
-            <span class="modifier-description">Enter sets it, Esc goes back</span>
-          ) : reading && "condition" in reading ? (
+          {reading && "condition" in reading ? (
             <>
               <span class="modifier-syntax">{conditionCss(reading.condition)}</span>
               <span class="modifier-description">Enter sets it</span>
             </>
-          ) : (
-            <span class="modifier-description">{reading && "error" in reading ? reading.error : ""}</span>
-          )}
+          ) : reading && "error" in reading ? (
+            // Short: what's wrong in red, how to put it after, dimmed (the owner's design, 2026-11-27).
+            <span class="modifier-description">
+              <span class="condition-error">{reading.error}</span>
+              {reading.hint && ` ${reading.hint}`}
+            </span>
+          ) : null}
         </div>
       )}
       {menuOpen && (

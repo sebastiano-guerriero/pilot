@@ -299,7 +299,9 @@
   .condition-reading {
     display: grid;
     gap: 2px;
-    padding: 8px 16px;
+    /* 16px all around, the same space as on its sides (the owner's call). */
+    padding: 16px;
+    line-height: 1.2;
     border-top: 1px solid var(--plt-color-border);
 
     .modifier-syntax {
@@ -313,7 +315,8 @@
       white-space: normal;
     }
 
-    &[data-error] .modifier-description {
+    /* What's wrong in red; how to put it, after, stays dimmed. */
+    .condition-error {
       color: var(--plt-color-red);
     }
   }
