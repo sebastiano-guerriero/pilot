@@ -475,35 +475,37 @@ export class EditHistory {
   }
 
   /**
-   * The stylesheet's rules: the CSS changes (text changes are shown by the text preview). A condition shown as if
-   * true is left out of its changes (they apply as for the element as it is), as if false they aren't shown.
+   * The stylesheet's rules: the CSS changes (text changes are shown by the text preview). A forced condition's
+   * changes lose its CSS but stay its changes (an empty condition): in Pilot's layer, over the project's rules as
+   * the condition's would be, as if it held. Not the element's own value: the project's `dark:` or `hover:` rules
+   * would win over that, and nothing would show (found on a dark page, 2026-11-27).
    */
   private previewRules() {
     return this.rules()
       .filter((r) => textRunOf(r.property) === null)
-      .filter((r) => !r.condition || this.simulated.get(conditionKey(r.condition)) !== "false")
-      .map((r) => (r.condition && this.simulated.get(conditionKey(r.condition)) === "true" ? { ...r, condition: undefined } : r))
+      .map((r) => (r.condition && this.forcedKeys.has(conditionKey(r.condition)) ? { ...r, condition: { words: r.condition.words } } : r))
       .map((r) => (r.value === "" ? { ...r, value: "revert-layer" } : r));
   }
 
-  /** Conditions shown as if true or false, by key: the preview's only, never saved or sent (see simulate). */
-  private simulated = new Map<string, "true" | "false">();
+  /** The conditions forced on, by key: the preview's only, never saved or sent (see force). */
+  private forcedKeys = new Set<string>();
 
   /**
-   * Show a condition's changes as if it held ("true") or didn't ("false"), whatever the page does, or as the page
-   * says again (null). The preview only: nothing is recorded, saved or sent, and the page isn't touched.
+   * Force a condition on (the pill's "force state", as the browser's developer tools force a state): its changes
+   * show as if it held, whatever the page does. Off, Pilot doesn't interfere. The preview only: nothing is
+   * recorded, saved or sent, and the page isn't touched.
    */
-  simulate(condition: Condition, mode: "true" | "false" | null): void {
+  force(condition: Condition, on: boolean): void {
     const key = conditionKey(condition);
-    if ((this.simulated.get(key) ?? null) === mode) return;
-    if (mode) this.simulated.set(key, mode);
-    else this.simulated.delete(key);
+    if (this.forcedKeys.has(key) === on) return;
+    if (on) this.forcedKeys.add(key);
+    else this.forcedKeys.delete(key);
     this.preview.render(this.previewRules());
   }
 
-  /** How a condition is shown now: as if true or false, or null (as the page says). */
-  simulation(condition: Condition | null | undefined): "true" | "false" | null {
-    return condition ? (this.simulated.get(conditionKey(condition)) ?? null) : null;
+  /** Whether a condition is forced on (see force). */
+  forced(condition: Condition | null | undefined): boolean {
+    return !!condition && this.forcedKeys.has(conditionKey(condition));
   }
 
   /**

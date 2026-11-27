@@ -140,7 +140,7 @@ Start the search with a state, Tailwind style, or type `/` to pick one:
 
 For a condition no modifier lists, type `/` and describe it right there, then pick **Create modifier** (the menu offers it when your words match no modifier): "the parent .card has focus inside", "it has data-open", "the previous sibling is checked", "with reduced motion". Pilot shows how it reads your words as you type (and highlights the parent or sibling they name); **Enter** sets it. Your edits are then only for when it holds.
 
-- The modifiers' pill says whether it holds right now (**true now**, **false now**). Click that to see your edits **as if true**, then **as if false**, whatever the page is doing; click again for the real thing.
+- To see your edits without making the condition happen, check **force state** beside the pill: Pilot shows them as if it held, whatever the page is doing. Uncheck it for the page as it is.
 - If Pilot can't read your words, it says how to put them. CSS works too, with `&` for the element: `.card:hover &`.
 - Backspace at the start of the search removes it, like the other modifiers.
 

@@ -45,11 +45,11 @@ describe("a change under a condition", () => {
     history.send("job-1");
     // Without data-open: the condition doesn't hold, nothing to compare.
     expect(checkJob(history, "job-1").results.map((r) => r.outcome)).toEqual(["unchecked"]);
-    // Shown as if true: still not the page as it is.
+    // Forced: still not the page as it is.
     el.setAttribute("data-open", "");
-    history.simulate(open, "true");
+    history.force(open, true);
     expect(checkJob(history, "job-1").results.map((r) => r.outcome)).toEqual(["unchecked"]);
-    history.simulate(open, null);
+    history.force(open, false);
     expect(checkJob(history, "job-1").results.map((r) => r.outcome)).not.toEqual(["unchecked"]);
     el.remove();
   });

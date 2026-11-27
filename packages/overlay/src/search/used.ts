@@ -2,6 +2,7 @@ import { describeWidths, type ElementState, STATES, type WidthRange } from "@pil
 import { mediaRange } from "../dom/breakpoints.ts";
 import { isUniversal, matchedRules, mediaOf, subjectStates } from "../dom/declared.ts";
 import type { EditableElement } from "../dom/target.ts";
+import { type Condition, conditionKey, conditionName, conditionVariant } from "../edits/condition.ts";
 import type { EditHistory } from "../edits/history.ts";
 import { listedIds } from "../editors/listOrder.ts";
 import { editors } from "../editors/registry.ts";
@@ -22,12 +23,12 @@ import type { Modifier } from "./modifiers.ts";
  * reset) left out. The element as it is, with no modifier, isn't one.
  */
 export function usedModifiers(element: EditableElement, history: EditHistory): Modifier[] {
-  const found = new Map<string, { states: ElementState[]; widths?: WidthRange; properties: Set<string> }>();
-  const add = (states: readonly ElementState[], widths: WidthRange | undefined, properties: Iterable<string>) => {
-    if (!states.length && !widths) return;
+  const found = new Map<string, { states: ElementState[]; widths?: WidthRange; condition?: Condition; properties: Set<string> }>();
+  const add = (states: readonly ElementState[], widths: WidthRange | undefined, properties: Iterable<string>, condition?: Condition) => {
+    if (!states.length && !widths && !condition) return;
     const sorted = STATES.filter((s) => states.includes(s));
-    const key = `${sorted.join(",")}|${widths?.min ?? ""}-${widths?.max ?? ""}`;
-    const entry = found.get(key) ?? { states: sorted, ...(widths && { widths }), properties: new Set<string>() };
+    const key = `${sorted.join(",")}|${widths?.min ?? ""}-${widths?.max ?? ""}|${conditionKey(condition)}`;
+    const entry = found.get(key) ?? { states: sorted, ...(widths && { widths }), ...(condition && { condition }), properties: new Set<string>() };
     for (const p of properties) if (!p.startsWith("--")) entry.properties.add(familyOf(p));
     if (entry.properties.size) found.set(key, entry);
   };
@@ -41,27 +42,29 @@ export function usedModifiers(element: EditableElement, history: EditHistory): M
     // Its states as the walk read them: the scheme of a `prefers-color-scheme` query it sits in too.
     add(rule.states ?? [], widths, Array.from({ length: rule.style.length }, (_, i) => rule.style.item(i)));
   }
-  for (const c of history.changes()) {
-    // A change under a condition is its own (the condition's pill), not one of these.
-    if (c.element === element && !c.removal && !c.condition) add(c.states ?? [], c.widths, [c.property]);
-  }
+  // Pilot's own changes, those under a condition too (named the way Tailwind writes it, `data-selected:`; the
+  // project's own conditional rules aren't read yet).
+  for (const c of history.changes()) if (c.element === element && !c.removal) add(c.states ?? [], c.widths, [c.property], c.condition);
 
-  return [...found.values()].sort(byPlace).map(({ states, widths, properties }) => {
-    const syntax = [...states.map((s) => `${s}:`), widths ? widthSyntax(widths) : ""].join("");
+  return [...found.values()].sort(byPlace).map(({ states, widths, condition, properties }) => {
+    const syntax = [...states.map((s) => `${s}:`), condition ? `${conditionVariant(condition)}:` : "", widths ? widthSyntax(widths) : ""].join("");
     return {
-      id: `used:${syntax}`,
-      name: [states.map(stateName).join(" + "), widths ? describeWidths(widths) : ""].filter(Boolean).join(", "),
+      id: `used:${syntax}|${conditionKey(condition)}`,
+      name: [states.map(stateName).join(" + "), widths ? describeWidths(widths) : "", condition ? conditionName(condition) : ""].filter(Boolean).join(", "),
       description: inListOrder([...properties]).join(", "),
       syntax,
       insert: "",
-      used: { states, ...(widths && { widths }) },
+      used: { states, ...(widths && { widths }), ...(condition && { condition }) },
     };
   });
 }
 
-/** States first (in STATES order), then widths from the narrowest up, then both together. */
-function byPlace(a: { states: ElementState[]; widths?: WidthRange }, b: { states: ElementState[]; widths?: WidthRange }): number {
-  const kind = (m: typeof a) => (m.widths ? (m.states.length ? 2 : 1) : 0);
+/** States first (in STATES order), then widths from the narrowest up, then both together; conditions last. */
+function byPlace(
+  a: { states: ElementState[]; widths?: WidthRange; condition?: Condition },
+  b: { states: ElementState[]; widths?: WidthRange; condition?: Condition },
+): number {
+  const kind = (m: typeof a) => (m.condition ? 3 : m.widths ? (m.states.length ? 2 : 1) : 0);
   if (kind(a) !== kind(b)) return kind(a) - kind(b);
   const w = (a.widths?.min ?? a.widths?.max ?? 0) - (b.widths?.min ?? b.widths?.max ?? 0);
   if (w) return w;

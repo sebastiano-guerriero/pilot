@@ -57,6 +57,15 @@ describe("usedModifiers", () => {
     expect(rows(history)).toContain("Active | active: | opacity");
   });
 
+  it("Pilot's changes under a condition: a row named by its words, last, picked it sets the condition", () => {
+    const history = new EditHistory({ render() {} });
+    const selected = { words: "it has data-selected", selector: "&[data-selected]" };
+    history.apply(element, "background-color", "red", undefined, { condition: selected });
+    // Named the way Tailwind writes it.
+    expect(rows(history).at(-1)).toBe("Data selected | data-selected: | background");
+    expect(usedModifiers(element, history).at(-1)?.used).toEqual({ states: [], condition: selected });
+  });
+
   it("picking one sets exactly its pills", () => {
     const md = usedModifiers(element, new EditHistory({ render() {} })).find((m) => m.syntax === "hover:from-768");
     expect(md?.used).toEqual({ states: ["hover"], widths: { min: 768 } });

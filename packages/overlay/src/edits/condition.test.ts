@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { conditionKey, conditionSelector, holdsNow, readCondition, sameCondition } from "./condition.ts";
+import { conditionKey, conditionName, conditionSelector, conditionVariant, holdsNow, readCondition, sameCondition } from "./condition.ts";
 
 let element: HTMLElement;
 beforeEach(() => {
@@ -111,5 +111,35 @@ describe("holdsNow, keys", () => {
     expect(sameCondition({ words: "it has data-open", selector: "&[data-open]" }, { words: "with data-open", selector: "&[data-open]" })).toBe(true);
     expect(conditionKey(null)).toBe("");
     expect(conditionSelector({ words: "", selector: ".card:hover &" }, '[data-pilot-edit="3"]')).toBe('.card:hover [data-pilot-edit="3"]');
+  });
+});
+
+describe("conditionVariant, conditionName: Tailwind's words for it", () => {
+  const variantOf = (words: string) => {
+    const r = read(words);
+    return "condition" in r ? conditionVariant(r.condition) : `error: ${r.error}`;
+  };
+  it("the element's own: data-*, aria-*, states, not-*", () => {
+    expect(variantOf("it has data-open")).toBe("data-open");
+    expect(variantOf('data-state is "open"')).toBe("data-[state=open]");
+    expect(variantOf("it is expanded")).toBe("aria-expanded");
+    expect(variantOf("it is the first child")).toBe("first");
+    expect(variantOf("it doesn't have data-open")).toBe("not-data-open");
+  });
+  it("an ancestor or the parent: group-*, named by its class; the previous sibling: peer-*", () => {
+    expect(variantOf("the parent .card has focus inside")).toBe("group-focus-within/card");
+    expect(variantOf("inside .card that is open")).toBe("group-open/card");
+    expect(variantOf("the previous sibling is checked")).toBe("peer-checked");
+  });
+  it("media: motion-reduce, print…; none: Tailwind's brackets", () => {
+    expect(variantOf("with reduced motion")).toBe("motion-reduce");
+    expect(variantOf("when printing")).toBe("print");
+    expect(variantOf("on touch screens")).toBe("[@media(hover:none)]");
+    expect(variantOf("the next sibling is hovered")).toBe("[&:has(+_*:hover)]");
+  });
+  it("the name: Tailwind's words, or the designer's when it's brackets", () => {
+    expect(conditionName({ words: "it has data-selected", selector: "&[data-selected]" })).toBe("Data selected");
+    expect(conditionName({ words: "the parent .card is hovered", selector: ".card:hover &" })).toBe("Group hover card");
+    expect(conditionName({ words: "the next one is hovered", selector: "&:has(+ *:hover)" })).toBe("the next one is hovered");
   });
 });

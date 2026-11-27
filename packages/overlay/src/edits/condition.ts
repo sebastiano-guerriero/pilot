@@ -272,3 +272,103 @@ function validMedia(media: string): boolean {
     return false;
   }
 }
+
+/** A state's selector → Tailwind's variant name, for the pieces Tailwind has one for. */
+const PSEUDO_VARIANTS: Record<string, string> = {
+  ":hover": "hover",
+  ":focus": "focus",
+  ":focus-within": "focus-within",
+  ":focus-visible": "focus-visible",
+  ":active": "active",
+  ":checked": "checked",
+  ":disabled": "disabled",
+  ":empty": "empty",
+  ":invalid": "invalid",
+  ":required": "required",
+  ":first-child": "first",
+  ":last-child": "last",
+};
+
+/** Media conditions Tailwind has a variant for. */
+const MEDIA_VARIANTS: Record<string, string> = {
+  "(prefers-reduced-motion: reduce)": "motion-reduce",
+  print: "print",
+  "(orientation: portrait)": "portrait",
+  "(orientation: landscape)": "landscape",
+  "(prefers-contrast: more)": "contrast-more",
+};
+
+/** One compound's pieces (`.card`, `:hover`, `[data-open]`, `:not(…)`), as Tailwind variants; null when one has none. */
+function piecesVariant(compound: string): { qualifier: string; variants: string[] } | null {
+  const pieces = compound.match(/:not\((?:[^()]|\([^()]*\))*\)|\[[^\]]+\]|::?[\w-]+(?:\([^)]*\))?|[.#][\w-]+|\*/g) ?? [];
+  let qualifier = "";
+  const variants: string[] = [];
+  for (const piece of pieces) {
+    if (piece === "*") continue;
+    if (piece.startsWith(".") || piece.startsWith("#")) {
+      qualifier ||= piece.slice(1);
+      continue;
+    }
+    const not = /^:not\((.*)\)$/.exec(piece);
+    if (not) {
+      const inner = piecesVariant(not[1] as string);
+      if (!inner || inner.variants.length !== 1) return null;
+      variants.push(`not-${inner.variants[0]}`);
+      continue;
+    }
+    const attribute = /^\[([\w-]+)(?:="?([^"\]]*)"?)?\]$/.exec(piece);
+    if (attribute) {
+      const [, name, value] = attribute as unknown as [string, string, string | undefined];
+      if (name === "open" && value === undefined) variants.push("open");
+      else if (name.startsWith("data-")) variants.push(value === undefined ? name : `data-[${name.slice(5)}=${value}]`);
+      else if (name.startsWith("aria-")) variants.push(value === undefined || value === "true" ? name : `aria-[${name.slice(5)}=${value}]`);
+      else return null;
+      continue;
+    }
+    const pseudo = PSEUDO_VARIANTS[piece];
+    if (!pseudo) return null;
+    variants.push(pseudo);
+  }
+  return { qualifier, variants };
+}
+
+/**
+ * The condition as Tailwind would write its variant, for the `/` menu's row (the owner's call, 2026-11-27: Tailwind
+ * as the reference for the words): `data-selected`, `hover`, `group-hover/card` (an ancestor `.card`),
+ * `peer-checked` (the previous sibling), `motion-reduce`; Tailwind's bracket syntax when it has none
+ * (`[.card:hover_&]`). Without the trailing colon.
+ */
+export function conditionVariant(condition: Condition): string {
+  const parts: string[] = [];
+  if (condition.media) parts.push(MEDIA_VARIANTS[condition.media] ?? `[@media${condition.media.replace(/\s+/g, "")}]`);
+  if (condition.selector) parts.push(selectorVariant(condition.selector));
+  return parts.join(":");
+}
+
+function selectorVariant(selector: string): string {
+  const bracket = `[${selector.replace(/\s+/g, "_")}]`;
+  const s = selector.trim();
+  // The element itself: `&[data-open]`, `&:hover`.
+  const self = /^&([^\s>+~]*)$/.exec(s);
+  if (self) {
+    const own = piecesVariant(self[1] as string);
+    return own && !own.qualifier && own.variants.length ? own.variants.join(":") : bracket;
+  }
+  // An ancestor or the parent (group-*), the previous sibling (peer-*): its compound before the combinator.
+  const around = /^([^\s>+~]+)\s*([>+]?)\s*&$/.exec(s);
+  if (around) {
+    const other = piecesVariant(around[1] as string);
+    if (!other || other.variants.length !== 1) return bracket;
+    const kind = around[2] === "+" ? "peer" : "group";
+    return `${kind}-${other.variants[0]}${other.qualifier ? `/${other.qualifier}` : ""}`;
+  }
+  return bracket;
+}
+
+/** The row's name, Tailwind's words for it: `data-selected` → "Data selected", `group-hover/card` → "Group hover card". */
+export function conditionName(condition: Condition): string {
+  const variant = conditionVariant(condition);
+  if (variant.includes("[")) return condition.words;
+  const name = variant.replace(/[-/:]/g, " ").replace(/\s+/g, " ").trim();
+  return name.charAt(0).toUpperCase() + name.slice(1);
+}

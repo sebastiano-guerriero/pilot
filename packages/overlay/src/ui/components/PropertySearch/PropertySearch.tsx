@@ -2,7 +2,7 @@ import type { ElementState } from "@pilot/protocol";
 import type { RefObject } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { takeStates } from "../../../edits/states.ts";
-import { type Condition, conditionCss, holdsNow, readCondition } from "../../../edits/condition.ts";
+import { type Condition, conditionCss, conditionKey, readCondition } from "../../../edits/condition.ts";
 import type { EditHistory } from "../../../edits/history.ts";
 import { pageBreakpoints } from "../../../dom/breakpoints.ts";
 import { ALL_WIDTHS, type PartialWidth, type WidthChip, chipRange, inWidths, isBaseChip, takeWidths, widthSuggestion, widthToFinish } from "../../../edits/widths.ts";
@@ -44,7 +44,7 @@ interface PropertySearchProps {
   condition?: Condition | null;
   /** The condition was set (Create modifier) or removed. Without it, no Create modifier. */
   onConditionChange?(condition: Condition | null): void;
-  /** Where a condition is shown as if true or false (the preview only): EditHistory.simulate. */
+  /** Where a condition is forced on (the preview only): EditHistory.force. */
   history?: EditHistory;
   /** Show this element on the page (the ancestor a condition names), or none. */
   onPeek?(element: Element | null): void;
@@ -196,6 +196,9 @@ export function PropertySearch({
     } else if (modifier.used) {
       onStatesChange?.(modifier.used.states);
       onWidthsChange?.(modifier.used.widths ?? null);
+      // Exactly its pills: its condition, or none.
+      if (condition && conditionKey(condition) !== conditionKey(modifier.used.condition)) history?.force(condition, false);
+      onConditionChange?.(modifier.used.condition ?? null);
       onChange("");
     } else if (modifier.state) {
       onStatesChange?.(takeStates(modifier.insert, states).states ?? states);
@@ -207,7 +210,7 @@ export function PropertySearch({
       // Create modifier: set at once when read; else the words go on being described, the line saying how to put them.
       const read = readCondition(modifier.words, element);
       if ("condition" in read) {
-        if (condition) history?.simulate(condition, null);
+        if (condition) history?.force(condition, false);
         onConditionChange?.(read.condition);
         onChange("");
       } else {
@@ -230,7 +233,7 @@ export function PropertySearch({
         e.preventDefault();
         // Set only when read: otherwise the line under the field says how to put it.
         if (reading && "condition" in reading) {
-          if (condition) history?.simulate(condition, null);
+          if (condition) history?.force(condition, false);
           onConditionChange?.(reading.condition);
           stopDescribing("");
         }
@@ -275,7 +278,7 @@ export function PropertySearch({
     if (e.key === "Backspace" && (condition || states.length || widths) && input.selectionStart === 0 && input.selectionEnd === 0) {
       e.preventDefault();
       if (condition) {
-        history?.simulate(condition, null);
+        history?.force(condition, false);
         onConditionChange?.(null);
       } else if (states.length) onStatesChange?.(states.slice(0, -1));
       else onWidthsChange?.(null);
@@ -325,7 +328,6 @@ export function PropertySearch({
             >
               {modifiersLabel(widths, states, condition)}
             </button>
-            {condition && element && history && <ConditionReading condition={condition} element={element} history={history} />}
             <button
               type="button"
               class="pill-remove"
@@ -334,7 +336,7 @@ export function PropertySearch({
               onClick={() => {
                 onWidthsChange?.(null);
                 onStatesChange?.([]);
-                if (condition) history?.simulate(condition, null);
+                if (condition) history?.force(condition, false);
                 onConditionChange?.(null);
                 inputRef.current?.focus();
               }}
@@ -342,6 +344,8 @@ export function PropertySearch({
               <Icon name="close-small" />
             </button>
           </span>
+          {/* Where it lives is the owner's to decide: here for now, after the pill. */}
+          {condition && history && <ForceState condition={condition} history={history} />}
         </div>
       )}
       <div class="field">
@@ -441,45 +445,38 @@ function createRow(words: string): Modifier {
  * ones, less a state used alone (its used row stands for it).
  */
 function menuList(used: readonly Modifier[]): Modifier[] {
-  const alone = new Set(used.filter((u) => u.used && !u.used.widths && u.used.states.length === 1).map((u) => u.used?.states[0]));
+  const alone = new Set(used.filter((u) => u.used && !u.used.widths && !u.used.condition && u.used.states.length === 1).map((u) => u.used?.states[0]));
   return [...used, ...MODIFIERS.filter((m) => !m.state || !alone.has(m.state))];
 }
 
 /**
- * A condition's live reading, at the end of the modifiers' pill: whether it holds for the element now (read again
- * every quarter second while shown: focus, hover, attributes change without telling), or that it's shown as if true
- * or false. A click goes live → as if true → as if false → live (EditHistory.simulate: the preview only).
+ * A condition's "force state" checkbox (the owner's call, 2026-11-27, as the browser's developer tools force a
+ * state): checked, its changes show as if it held, whatever the page does; unchecked, Pilot doesn't interfere.
+ * EditHistory.force: the preview only, the page isn't touched. A reading of whether it held right now (true now,
+ * false now) and forcing it false were tried first: too many states for one control.
  */
-function ConditionReading({ condition, element, history }: { condition: Condition; element: Element; history: EditHistory }) {
-  const [holds, setHolds] = useState(() => holdsNow(condition, element));
-  const [mode, setMode] = useState(() => history.simulation(condition));
-  useEffect(() => {
-    setMode(history.simulation(condition));
-    const read = () => setHolds(holdsNow(condition, element));
-    read();
-    const timer = setInterval(read, 250);
-    return () => clearInterval(timer);
-  }, [condition, element]);
-  const next = mode === null ? "true" : mode === "true" ? "false" : null;
-  const label = mode === "true" ? "as if true" : mode === "false" ? "as if false" : holds ? "true now" : "false now";
+function ForceState({ condition, history }: { condition: Condition; history: EditHistory }) {
+  const [on, setOn] = useState(() => history.forced(condition));
+  useEffect(() => setOn(history.forced(condition)), [condition]);
+  const set = (next: boolean) => {
+    history.force(condition, next);
+    setOn(next);
+  };
   return (
-    <button
-      type="button"
-      class="pill-reading"
-      data-mode={mode ?? (holds ? "holds" : "not")}
-      title={
-        mode
-          ? `Shown as if the condition ${mode === "true" ? "held" : "didn't hold"}, whatever the page does (the preview only). Click to switch.`
-          : "Whether the condition holds on the page right now. Click to show it as if true, then as if false."
-      }
+    // The label's text toggles it too, by hand (the owner found a click on it did nothing, 2026-11-27): the click is
+    // handled here and the browser's own label activation held back, so it toggles once.
+    <label
+      class="pill-force"
       onMouseDown={(e) => e.preventDefault()}
-      onClick={() => {
-        history.simulate(condition, next);
-        setMode(next);
+      onClick={(e) => {
+        if ((e.target as Element).tagName === "INPUT") return;
+        e.preventDefault();
+        set(!on);
       }}
     >
-      {label}
-    </button>
+      <input type="checkbox" checked={on} onChange={(e) => set((e.currentTarget as HTMLInputElement).checked)} />
+      <span>force state</span>
+    </label>
   );
 }
 

@@ -43,8 +43,8 @@ export function checkJob(history: EditHistory, jobId: string, width = window.inn
   const changes = history.changes({ job: jobId });
   // Changes the project's own rules hide at this width, by design (read on the page alone, Pilot's changes left out).
   const hidden = new Set(history.probe([], () => changes.filter((c) => !c.states?.length && c.element.isConnected && hiddenHere(c))));
-  // A change under a condition is checked only while it holds on the page, shown as it is (not as if true or false).
-  const conditionHere = (c: RecordedChange) => !c.condition || (holdsNow(c.condition, c.element) && history.simulation(c.condition) === null);
+  // A change under a condition is checked only while it holds on the page as it is (not forced).
+  const conditionHere = (c: RecordedChange) => !c.condition || (holdsNow(c.condition, c.element) && !history.forced(c.condition));
   const checkable = changes.filter(
     (c) => c.element.isConnected && !c.states?.length && conditionHere(c) && inWidths(c.widths ?? null, width) && !hidden.has(c),
   );

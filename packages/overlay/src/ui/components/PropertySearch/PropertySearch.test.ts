@@ -73,3 +73,38 @@ describe("Create modifier: words after / that match no modifier", () => {
     expect(rows()).toEqual(["Hover"]);
   });
 });
+
+describe("a condition's force state checkbox", () => {
+  it("checked: its changes shown as if it held (the preview only); unchecked: Pilot doesn't interfere", async () => {
+    const { EditHistory } = await import("../../../edits/history.ts");
+    const { inlinePreview } = await import("../../../test/inlinePreview.ts");
+    document.body.innerHTML = `<p id="title">Title</p>`;
+    const element = document.getElementById("title") as HTMLElement;
+    const container = document.createElement("div");
+    document.body.append(container);
+    const history = new EditHistory(inlinePreview());
+    const open = { words: "it has data-open", selector: "&[data-open]" };
+    act(() => {
+      render(
+        h(PropertySearch, { value: "", onChange: () => {}, inputRef: createRef<HTMLInputElement>(), element, condition: open, history, onConditionChange: () => {} }),
+        container,
+      );
+    });
+    const box = () => container.querySelector(".pill-force input") as HTMLInputElement;
+    expect(container.querySelector(".pill-force")?.textContent).toBe("force state");
+    expect(box().checked).toBe(false);
+    act(() => box().click());
+    expect(box().checked).toBe(true);
+    expect(history.forced(open)).toBe(true);
+    act(() => box().click());
+    expect(history.forced(open)).toBe(false);
+    // Its text too.
+    act(() => (container.querySelector(".pill-force span") as HTMLElement).click());
+    expect(history.forced(open)).toBe(true);
+    expect(box().checked).toBe(true);
+    act(() => (container.querySelector(".pill-force span") as HTMLElement).click());
+    expect(history.forced(open)).toBe(false);
+    render(null, container);
+    document.body.innerHTML = "";
+  });
+});

@@ -255,16 +255,15 @@ describe("changes under a condition", () => {
     ]);
   });
 
-  it("shown as if true (the condition left out) or false (not shown), the preview only; null: as the page says", () => {
+  it("forced, shown as if it held (the condition left out), the preview only; not forced: as the page says", () => {
     const h = recording();
     h.apply(el, "color", "blue", undefined, { condition: open });
     expect(shown).toEqual([{ property: "color", value: "blue", condition: open }]);
-    h.simulate(open, "true");
-    expect(shown).toEqual([{ property: "color", value: "blue" }]);
-    expect(h.simulation(open)).toBe("true");
-    h.simulate(open, "false");
-    expect(shown).toEqual([]);
-    h.simulate(open, null);
+    h.force(open, true);
+    // Its CSS left out, still a condition's change (in Pilot's layer, over the project's rules).
+    expect(shown).toEqual([{ property: "color", value: "blue", condition: { words: open.words } }]);
+    expect(h.forced(open)).toBe(true);
+    h.force(open, false);
     expect(shown).toEqual([{ property: "color", value: "blue", condition: open }]);
     // Never recorded: the change is the same.
     expect(h.changes()[0]?.condition).toEqual(open);

@@ -210,7 +210,8 @@ export function PropertyDialog({
   );
   // `from-` / `to-` being finished: its widths are listed (PropertySearch), not properties.
   const finishingWidth = !!widthToFinish(query);
-  const matches = empty ? withValues : finishingWidth ? [] : matchEditors(query, editors);
+  // After `/` it's the modifiers (and Create modifier's words), never a property: "if it has" found aspect-ratio.
+  const matches = empty ? withValues : finishingWidth || isModifierQuery(query) ? [] : matchEditors(query, editors);
   const matchKey = matches.map((m) => m.id).join(",");
 
   const searchRef = useRef<HTMLInputElement>(null);

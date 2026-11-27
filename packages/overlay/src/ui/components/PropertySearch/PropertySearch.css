@@ -318,26 +318,19 @@
     }
   }
 
-  /* A condition's live reading, at the end of the modifiers' pill (true now,
-     false now, as if true, as if false): a click switches. Placeholder look. */
-  .pill-reading {
-    all: unset;
-    flex: none;
-    padding-inline: 4px;
-    opacity: 0.6;
-    cursor: pointer;
+  /* A condition's "force state" checkbox, after the modifiers' pill: where it
+     lives is the owner's to decide (a placeholder). */
+  .pill-force {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--plt-color-contrast-low);
     white-space: nowrap;
+    cursor: pointer;
 
-    &[data-mode="true"],
-    &[data-mode="false"] {
-      opacity: 1;
-      text-decoration: underline dotted;
-    }
-
-    &:focus-visible {
-      outline: 2px solid var(--plt-color-accent);
-      outline-offset: -2px;
-      border-radius: 4px;
+    input {
+      margin: 0;
+      accent-color: var(--plt-color-accent);
     }
   }
 }
