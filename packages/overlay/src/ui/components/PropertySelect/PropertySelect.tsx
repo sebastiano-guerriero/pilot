@@ -43,6 +43,11 @@ interface PropertySelectProps {
    * no chevron: a 24px button (border's style). The menu is as usual.
    */
   iconOnly?: boolean;
+  /**
+   * The option a line in the menu goes above: what follows it is apart from the
+   * rest (custom and none, after the values).
+   */
+  separateFrom?: string;
 }
 
 /** The menu's padding: its options line up with the trigger once it's moved left by this. */
@@ -86,6 +91,7 @@ export function PropertySelect({
   hintFor,
   placeholder = "Select",
   iconOnly = false,
+  separateFrom,
 }: PropertySelectProps) {
   // "" is the "Select" option: no value.
   const list = [...(clearable ? [""] : []), ...(value && !options.includes(value) ? [value] : []), ...options];
@@ -243,7 +249,8 @@ export function PropertySelect({
           onMouseDown={(e) => e.preventDefault()}
         >
         <div ref={menu} id={`${id}-menu`} class="menu-list" role="listbox" aria-label={label}>
-          {list.map((option, index) => (
+          {list.map((option, index) => [
+            option === separateFrom && index > 0 && <div key={`${option}-separator`} class="separator" role="separator" />,
             <div
               key={option || "\u0000"}
               id={optionId(index)}
@@ -263,8 +270,8 @@ export function PropertySelect({
                   {option && hintFor?.(option) && <span class="hint">{hintFor(option)}</span>}
                 </span>
               </span>
-            </div>
-          ))}
+            </div>,
+          ])}
         </div>
         <ScrollThumb target={menu} />
         </div>

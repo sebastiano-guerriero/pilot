@@ -122,6 +122,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [x] Position: position (with inset), inset, z-index, isolation
 - [x] Appearance: background color, border radius (one value or each corner), opacity
 - [ ] Transform: translate, rotate and scale (one value or X, Y, Z; prototypes to try), one Transform row and panel (default, custom, none: translate, rotate, scale and skew in one place), transform-origin, transform-style, backface-visibility, perspective, perspective-origin
+- [ ] Transition: the properties as chips with their own timing in a panel, and shared duration, easing and delay rows (to review)
 - [x] Effects: box-shadow (outer and inset shadows, a panel per shadow; manual or smooth, a layered stack from distance, direction, elevation, layers and color), mix-blend-mode, background-blend-mode, filter (chips and a panel per function, like mask-image), backdrop-filter (the same editor)
 - [x] Typography: color, font-family, font-size, font-style, font-weight, font-variant-numeric, line-height, letter-spacing, text-align, text-decoration-line, text-decoration-color, text-decoration-style, text-decoration-thickness, text-underline-offset, text-transform, text-indent, vertical-align, text-wrap, white-space, text-overflow, line-clamp, list-style-type, list-style-position
 - [x] Interactivity: cursor, pointer-events, user-select, appearance, will-change

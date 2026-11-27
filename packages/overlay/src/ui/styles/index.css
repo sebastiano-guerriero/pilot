@@ -44,6 +44,7 @@
 @import "../../editors/split/SplitEditor.css" layer(components);
 @import "../../editors/size/SizeEditor.css" layer(components);
 @import "../../editors/reveal/RevealEditor.css" layer(components);
+@import "../../editors/transition/TransitionEditor.css" layer(components);
 @import "../../editors/color/ColorEditor.css" layer(components);
 @import "../../editors/mask/MaskImageEditor.css" layer(components);
 @import "../../editors/box-shadow/BoxShadowEditor.css" layer(components);

@@ -101,6 +101,12 @@ export const LIST_ORDER: ReadonlyArray<{ group: string; entries: readonly ListEn
     entries: ["transform", "transform-origin", "transform-style", "backface-visibility", "perspective", "perspective-origin"],
   },
   {
+    // How changes of value animate (placed after Transform for the owner to move, 2026-11-27): the properties, then
+    // the timing every one of them shares.
+    group: "Transition",
+    entries: [{ id: "transition", rows: { "*": ["transition-duration", "transition-timing-function", "transition-delay"] } }],
+  },
+  {
     group: "Typography",
     entries: [
       "color",

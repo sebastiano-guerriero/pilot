@@ -1,0 +1,8 @@
+/* Transition: the chips' row, then the timing rows, spaced like the dialog's editors (8px), as display's. */
+@scope (.transition-editor) {
+  :scope {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+}

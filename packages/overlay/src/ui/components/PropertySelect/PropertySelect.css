@@ -114,6 +114,13 @@
     }
   }
 
+  /* A line between groups of options (separateFrom): custom and none, apart from the values. */
+  .separator {
+    height: 1px;
+    margin-block: 4px;
+    background: var(--plt-color-border);
+  }
+
   /* Icon variant: a 12px icon slot, 6px before the text, on the trigger and
      on every option (empty where a value has no icon, so labels line up). */
   .option-icon {

@@ -31,6 +31,12 @@ import {
   transformOriginEditor,
   transformStyleEditor,
 } from "./perspective/PerspectiveEditors.tsx";
+import {
+  transitionDelayEditor,
+  transitionDurationEditor,
+  transitionEasingEditor,
+  transitionEditor,
+} from "./transition/TransitionEditor.tsx";
 import { boxShadowEditor } from "./box-shadow/BoxShadowEditor.tsx";
 import { aspectRatioEditor } from "./aspect-ratio/AspectRatioEditor.tsx";
 import { borderEditor } from "./border/BorderEditor.tsx";
@@ -154,6 +160,11 @@ export const editors: PropertyEditor[] = [
   backfaceVisibilityEditor,
   perspectiveEditor,
   perspectiveOriginEditor,
+  // Its timing rows are editors of their own too: `duration-300` shows just that row.
+  transitionEditor,
+  transitionDurationEditor,
+  transitionEasingEditor,
+  transitionDelayEditor,
   visibilityEditor,
   maskImageEditor,
   maskCompositeEditor,

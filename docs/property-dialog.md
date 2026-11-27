@@ -17,7 +17,7 @@ The dialog is never taller than the window: the properties scroll inside it, the
 
 ## With nothing typed
 
-The dialog **lists the editors for every property the element has a value for** (from any source), in the order kept in [editors/listOrder.ts](../packages/overlay/src/editors/listOrder.ts) (`LIST_ORDER`), by group: Layout, Position, Appearance, Effects, Transform, Typography, Interactivity, SVG, Visibility. The project owner keeps that order; every editor that writes properties needs a place there, and `listOrder.test.ts` fails without it.
+The dialog **lists the editors for every property the element has a value for** (from any source), in the order kept in [editors/listOrder.ts](../packages/overlay/src/editors/listOrder.ts) (`LIST_ORDER`), by group: Layout, Position, Appearance, Effects, Transform, Transition, Typography, Interactivity, SVG, Visibility. The project owner keeps that order; every editor that writes properties needs a place there, and `listOrder.test.ts` fails without it.
 
 - The list (and only this one: searching shows the matches alone) is **grouped**: each group starts with its label, and a dotted line separates groups (`groupOf()`).
 - Rows a revealing editor shows are set in `LIST_ORDER` too, per value (`rowsOf()`): display's grid and flex rows, position's inset. An editor another one shows as a row (gap under `display: grid`) is left to that one. A row that shows on its own (gap on an element that isn't a grid) is listed right after display.
