@@ -121,8 +121,12 @@ describe("isFromReset", () => {
   it("a rule for every element: *, :where(*), :is(*)", () => {
     for (const s of ["*", " * ", ":where(*)", ":is( * )", "::before", "::after", ":after", "*::after", "::placeholder", "::backdrop"]) expect(isFromReset(rule(s)), s).toBe(true);
   });
+  it("a rule for a kind of element, as a reset writes it: button, h1, :where(input), input::file-selector-button", () => {
+    for (const s of ["button", " h1 ", "div", ":where(input)", "input::file-selector-button", "my-element"]) expect(isFromReset(rule(s)), s).toBe(true);
+  });
   it("not an element's own rule, the style attribute, or nothing", () => {
-    for (const s of ["*.card", ".card", "div", "html *", "* + *", "*:hover", ".card::after", "::selection"]) expect(isFromReset(rule(s)), s).toBe(false);
+    for (const s of ["*.card", ".card", "button.primary", "button:hover", "nav a", "a[href]", "#main", "html *", "* + *", "*:hover", ".card::after", "::selection"])
+      expect(isFromReset(rule(s)), s).toBe(false);
     expect(isFromReset({ value: "0", important: false, source: "inline" })).toBe(false);
     expect(isFromReset(null)).toBe(false);
   });

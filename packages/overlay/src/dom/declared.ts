@@ -61,14 +61,26 @@ const UNIVERSAL =
   /^(?:(?:\*|:(?:where|is)\(\s*\*\s*\))(?:::?(?:before|after)|::(?:placeholder|backdrop|marker|file-selector-button))?|::?(?:before|after)|::(?:placeholder|backdrop|marker|file-selector-button))$/;
 
 /**
+ * A selector of an element's name alone (`button`, `h1`, `:where(input)`, with a pseudo-element:
+ * `input::file-selector-button`): what a reset writes for kinds of elements (Tailwind's preflight's
+ * `button, input, select… { font: inherit; color: inherit }`, normalize.css's), the matching part of its list.
+ */
+const ELEMENT_ONLY = /^(?:[a-z][a-z0-9]*(?:-[a-z0-9]+)*|:(?:where|is)\(\s*[a-z][a-z0-9]*(?:-[a-z0-9]+)*\s*\))(?:::[a-z-]+)?$/i;
+
+/**
  * Whether a declared value comes from a reset: its winning rule's selector
- * matches every element. The empty search's list leaves these out, so the
- * reset's box-sizing, margin: 0, padding: 0 don't list on every element
- * (PropertyDialog's editorsWithValues). An element's own rule
- * (`.card { box-sizing: border-box }`, a `box-border` class) still counts.
+ * matches every element, or names only an element (the owner's call,
+ * 2026-11-27: preflight's `inherit`s listed on every button; a project's own
+ * `h1 { font-size: 2rem }` goes with them, still found by searching it). The
+ * empty search's list leaves these out, so the reset's box-sizing, margin: 0,
+ * padding: 0 don't list on every element (PropertyDialog's
+ * editorsWithValues). An element's own rule (`.card { box-sizing:
+ * border-box }`, a `box-border` class) still counts.
  */
 export function isFromReset(declared: Declared | null | undefined): boolean {
-  return !!declared && declared.source !== "inline" && isUniversal(declared.source.selector);
+  if (!declared || declared.source === "inline") return false;
+  const selector = declared.source.selector.trim();
+  return isUniversal(selector) || ELEMENT_ONLY.test(selector);
 }
 
 /** The selector matches every element (see UNIVERSAL). */
