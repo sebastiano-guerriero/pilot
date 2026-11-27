@@ -495,7 +495,8 @@ function modifiersLabel(widths: WidthChip | null, states: readonly ElementState[
           ? [range.min !== undefined ? `from-${range.min}` : "", range.max !== undefined ? `to-${range.max}` : ""].filter(Boolean)
           : [];
   const typed = [...width, ...states].join(":");
-  return condition ? [typed, `when ${condition.words}`].filter(Boolean).join(" · ") : typed;
+  // The condition's words as typed, without a "when" before them (the owner's call, 2026-11-27).
+  return condition ? [typed, condition.words].filter(Boolean).join(" · ") : typed;
 }
 
 /**
