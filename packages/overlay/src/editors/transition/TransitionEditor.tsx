@@ -43,6 +43,9 @@ const HINTS = {
   none: "Declares transition-property: none, taking off the page's transitions. × on the chip declares nothing instead.",
 };
 
+/** What a timing shows with nothing set: CSS's for the times (0s), "" for easing's select ("Select", as any). */
+const placeholderOf = (t: Timing) => (t === "transition-timing-function" ? "" : TIMING_INITIAL[t]);
+
 /** What the property select shows for a transition: its property, custom (any other), or none. */
 function optionOf(name: string): string {
   if (name === "none") return "none";
@@ -144,7 +147,7 @@ function TransitionEditor(props: PropertyEditorProps) {
             name={current}
             custom={custom}
             timing={(t) => (current === "none" ? "" : uniformOf(timing(t), n) === null ? itemTiming(timing(t), n, open) : "")}
-            shared={(t) => uniformOf(timing(t), n) || TIMING_INITIAL[t]}
+            shared={(t) => uniformOf(timing(t), n) || placeholderOf(t)}
             onPick={(option) => {
               if (option === CUSTOM) return setPickedCustom(true);
               setPickedCustom(false);
@@ -300,7 +303,8 @@ function EasingRow({
         value={option}
         options={[...EASINGS, CUSTOM]}
         label={`${of} easing`}
-        placeholder={fromPlaceholder ? CUSTOM : placeholder}
+        // Nothing set (here or shared): "Select", as any select with no value.
+        placeholder={fromPlaceholder ? CUSTOM : placeholder || undefined}
         onChange={(next) => {
           if (next === CUSTOM) return setPickedCustom(true);
           setPickedCustom(false);
@@ -336,7 +340,7 @@ function SharedTimingEditor({ timing, ...props }: PropertyEditorProps & { timing
     <TimingRow
       timing={timing}
       value={uniform ?? ""}
-      placeholder={isMixed(props, timing) || uniform === null ? PER_TRANSITION : TIMING_INITIAL[timing]}
+      placeholder={isMixed(props, timing) || uniform === null ? PER_TRANSITION : placeholderOf(timing)}
       onSet={(next, gesture) => props.onChange(timing, next, { gesture: gesture ?? {} })}
     />
   );

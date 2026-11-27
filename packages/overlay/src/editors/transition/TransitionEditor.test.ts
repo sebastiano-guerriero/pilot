@@ -65,6 +65,9 @@ describe("transition", () => {
   it("+ adds opacity with Tailwind's 150ms (no duration set), one undo step, and opens its panel", () => {
     mount();
     expect(labels()).toEqual(["transition", "duration", "easing", "delay"]);
+    // Nothing set: the easing select says Select, as any; the times, CSS's 0s.
+    expect(container.querySelector('[aria-label="transition easing"] .placeholder')?.textContent).toBe("Select");
+    expect(field("transition duration").placeholder).toBe("0s");
     add();
     expect(changes).toEqual([
       ["transition-property", "opacity"],
