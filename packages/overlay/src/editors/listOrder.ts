@@ -94,9 +94,10 @@ export const LIST_ORDER: ReadonlyArray<{ group: string; entries: readonly ListEn
     ],
   },
   {
-    // How the element is moved, turned and sized as a whole (translate, scale… will join rotate), around its origin; then its 3D, and its children's depth.
+    // How the element is moved, turned and sized as a whole (in CSS's order: translate, rotate, scale; skew will join),
+    // around its origin; then its 3D, and its children's depth.
     group: "Transform",
-    entries: ["rotate", "transform-origin", "transform-style", "backface-visibility", "perspective", "perspective-origin"],
+    entries: ["translate", "rotate", "scale", "transform-origin", "transform-style", "backface-visibility", "perspective", "perspective-origin"],
   },
   {
     group: "Typography",

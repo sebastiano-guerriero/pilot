@@ -27,6 +27,14 @@ export interface PropertyEditor {
    */
   aliases?: string[];
   /**
+   * The CSS shorthand this editor's property is a part of, when that's what
+   * people search for: `transform` for rotate (and scale, translate, skew),
+   * the individual transforms CSS split out of it. Searching it (or its
+   * start) finds the editor beside the properties named for it
+   * (transform-origin), not above them (the owner's call, 2026-11-27).
+   */
+  partOf?: string;
+  /**
    * The id of the editor this one belongs with (min-width → "width"). A search
    * that lands on that editor shows the whole family; a search that lands on
    * this one shows just it.

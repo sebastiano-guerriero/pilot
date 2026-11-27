@@ -86,6 +86,9 @@ export interface CssPropertyInfo {
    *   its quotes; `""` (the empty box), `none`, `normal` and functions
    *   (`attr(data-label)`, `counter(step)`, `url(…)`, `var(…)`) as typed.
    *   Not stepped.
+   * - "scale": a scale factor (scale's axes): a number (`1.5`, `-1` to
+   *   mirror) or a percentage (`150%`, Tailwind's), as typed. Steps by 0.01,
+   *   a percentage by 1%; from an empty field, from 1.
    * - "position": where a box sits inside another (object-position): up to
    *   four parts, each a side keyword (`top`, `left`, `center`…), a length
    *   (a bare number is px) or a percentage, separated by spaces, or by `_`
@@ -104,6 +107,7 @@ export interface CssPropertyInfo {
     | "idents"
     | "marker"
     | "content"
+    | "scale"
     | "position";
 }
 
@@ -379,6 +383,10 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   "box-shadow": { initial: "none", keywords: ["none"], negative: false },
   filter: { initial: "none", keywords: ["none"], negative: false },
   rotate: { initial: "none", keywords: ["none"], negative: true },
+  // translate and scale as one value (several parts: the transforms' own parsers, editors/transforms), and each
+  // axis (a length; a factor), which these say.
+  translate: { initial: "none", keywords: ["none"], negative: true },
+  scale: { initial: "none", keywords: ["none"], negative: true, kind: "scale" },
   perspective: { initial: "none", keywords: ["none"], negative: false },
   "perspective-origin": {
     initial: "50% 50%",

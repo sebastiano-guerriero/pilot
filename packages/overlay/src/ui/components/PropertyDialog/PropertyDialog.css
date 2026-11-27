@@ -159,6 +159,11 @@
     font: inherit;
     color: var(--plt-color-contrast-high);
   }
+
+  /* What's missing, in an editor's message (rotate: "Add perspective" to the parent). */
+  .footer .alert {
+    color: var(--plt-color-red);
+  }
 }
 
 /* A row whose value changed as the window was resized, not by an edit

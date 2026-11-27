@@ -977,6 +977,82 @@ const ICONS = {
       </>
     ),
   },
+  // translate's and scale's split button. One value: the owner's (translate-all, scale-all), and translate-x.
+  // The other axes are derived from them, for the owner to replace: translate-y moved up instead of right,
+  // translate-z the square brought toward you (its outline grown); scale-x and -y stretched to the frame
+  // along one axis, scale-z a dot toward you (as rotate-z's).
+  "translate-all": {
+    size: 12,
+    body: (
+      <>
+        <rect opacity="0.2" y="4" width="8" height="8" fill="var(--plt-color-contrast-high)" />
+        <rect x="4" width="8" height="8" fill="var(--plt-color-accent)" />
+      </>
+    ),
+  },
+  "translate-x": {
+    size: 12,
+    body: (
+      <>
+        <rect opacity="0.2" y="2" width="8" height="8" fill="var(--plt-color-contrast-high)" />
+        <rect x="4" y="2" width="8" height="8" fill="var(--plt-color-accent)" />
+      </>
+    ),
+  },
+  "translate-y": {
+    size: 12,
+    body: (
+      <>
+        <rect opacity="0.2" x="2" y="4" width="8" height="8" fill="var(--plt-color-contrast-high)" />
+        <rect x="2" width="8" height="8" fill="var(--plt-color-accent)" />
+      </>
+    ),
+  },
+  "translate-z": {
+    size: 12,
+    body: (
+      <>
+        <rect opacity="0.2" x="2" y="2" width="8" height="8" fill="var(--plt-color-contrast-high)" />
+        <rect x="0.5" y="0.5" width="11" height="11" stroke="var(--plt-color-accent)" />
+      </>
+    ),
+  },
+  "scale-all": {
+    size: 12,
+    body: (
+      <>
+        <rect x="3" y="3" width="6" height="6" fill="var(--plt-color-accent)" />
+        <rect opacity="0.2" width="12" height="12" fill="var(--plt-color-contrast-high)" />
+      </>
+    ),
+  },
+  "scale-x": {
+    size: 12,
+    body: (
+      <>
+        <rect y="3" width="12" height="6" fill="var(--plt-color-accent)" />
+        <rect opacity="0.2" width="12" height="12" fill="var(--plt-color-contrast-high)" />
+      </>
+    ),
+  },
+  "scale-y": {
+    size: 12,
+    body: (
+      <>
+        <rect x="3" width="6" height="12" fill="var(--plt-color-accent)" />
+        <rect opacity="0.2" width="12" height="12" fill="var(--plt-color-contrast-high)" />
+      </>
+    ),
+  },
+  "scale-z": {
+    size: 12,
+    body: (
+      <>
+        <circle cx="6" cy="6" r="1.5" fill="var(--plt-color-accent)" />
+        <rect opacity="0.2" width="12" height="12" fill="var(--plt-color-contrast-high)" />
+      </>
+    ),
+  },
   // box-shadow: the designed icons. Outer and custom are 12×14 (the shadow
   // hangs below the 12px frame), the outer ring 14×14 (it rings the frame).
   "shadow-outer": {

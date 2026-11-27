@@ -256,6 +256,9 @@ function parseOther(kind: NonLengthKind, negative: boolean, t: string): string |
     case "marker":
     case "content":
       return null; // parsed before (parseMarker, parseContent)
+    case "scale":
+      // A factor (`1.5`, `-1` mirrors) or a percentage (`150%`).
+      return /^-?\d*\.?\d+%?$/.test(t) ? t.replace(/^(-?)0*(\d)/, "$1$2") : null;
     case "position": {
       // Up to four parts: side keywords, lengths (a bare number is px) and
       // percentages, by spaces or Tailwind's `_`.
@@ -290,6 +293,7 @@ type NonLengthKind =
   | "idents"
   | "marker"
   | "content"
+  | "scale"
   | "position";
 
 const POSITION_KEYWORDS = ["top", "right", "bottom", "left", "center"];
@@ -416,6 +420,14 @@ function stepOther(
     case "content":
     case "position":
       return null;
+    case "scale": {
+      // By hundredths of a factor (Shift: tenths), a percentage by whole percents; from empty, from 1.
+      const m = (t || "1").match(/^(-?\d*\.?\d+)(%?)$/);
+      if (!m) return null;
+      const percent = m[2] === "%";
+      const next = Math.round((Number(m[1]) + (percent ? delta : delta / 100)) * 100) / 100;
+      return `${next}${m[2]}`;
+    }
     case "percent": {
       // `t` is the field's text, 0–100 (`50` or `50%`); an empty field steps
       // from the computed value, a fraction (opacity's `1` is 100).

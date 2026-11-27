@@ -7,6 +7,7 @@ import { PropertySelect } from "../../ui/components/PropertySelect/PropertySelec
 import { declaredOf, isMixed, MIXED } from "../declared.ts";
 import { normalizeQuery } from "../query.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
+import { usePerspectiveHint } from "../transforms/perspective.tsx";
 import { AXES, type Axis, axesTransform, axisVar, isAxesTransform, parseAxis, parseRotate, stepAngle } from "./rotate.ts";
 
 const PROPERTY = "rotate";
@@ -76,6 +77,10 @@ function RotateEditor(props: PropertyEditorProps) {
 
   const tabOut = (direction: 1 | -1) => (onTabOut ? onTabOut(direction) : onReturnToSearch?.());
 
+  // Turning around X or Y tilts it in 3D: the footer asks for a perspective on the parent when it has none.
+  const [tilting, setTilting] = useState(false);
+  usePerspectiveHint(props.element, tilting, props.onHint);
+
   // An axis, with the transform that combines them, as one undo step; the
   // transform goes when the last axis does (only Pilot's: the page's stays).
   const writeAxis = (axis: Axis, next: string, gesture: object = {}) => {
@@ -119,7 +124,8 @@ function RotateEditor(props: PropertyEditorProps) {
               value={mode}
               options={MODES}
               label="rotate"
-              placeholder={isMixed(props, PROPERTY) ? MIXED : undefined}
+              // The axes set and no one value: Mixed, as a split editor's parts that differ.
+              placeholder={isMixed(props, PROPERTY) || (anyAxis && !value) ? MIXED : undefined}
               triggerRef={selectRef}
               // With an angle, a 24px icon beside the field (it gets the room); otherwise the select fills the row.
               iconOnly={mode === "angle"}
@@ -187,7 +193,12 @@ function RotateEditor(props: PropertyEditorProps) {
       >
         <div class="stack">
           {AXES.map((axis, i) => (
-            <span key={axis} class="field">
+            <span
+              key={axis}
+              class="field"
+              onFocusIn={axis === "z" ? undefined : () => setTilting(true)}
+              onFocusOut={axis === "z" ? undefined : () => setTilting(false)}
+            >
               <PropertyInputText
                 value={axisValue(axis)}
                 label={`rotate ${axis}`}
@@ -232,6 +243,8 @@ export const rotateEditor: PropertyEditor = {
   properties: [PROPERTY, ...AXES.map(axisVar)],
   // The axes write the transform that combines them.
   reads: ["transform"],
+  // One of the transforms: searching `transform` finds it.
+  partOf: "transform",
   // Tailwind's rotate-*, rotate-x-*, rotate-y-*, rotate-z-*.
   aliases: ["rotate-45", "rotate-none", "rotate-x-45", "rotate-y-45", "rotate-z-45"],
   component: RotateEditor,

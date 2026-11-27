@@ -81,14 +81,16 @@ Drag the toolbar by the strip along its top edge; it stays where you put it.
 
 Select an element and its **property dialog** opens beside it.
 
-- **With nothing typed**, it lists every property the element sets, grouped (Layout, Position, Appearance, Effects, Transform, Typography, Interactivity, SVG, Visibility).
-- **Search** by CSS name or Tailwind class: `p`, `pt`, `px`, `w`, `min-w`, `gap`, `display`, `items`, `aspect`, `bg`, `font`, `text`, `rounded`, `shadow`… Abbreviations work too (`mxw` is max-width). The search finds properties only: type values in the editor (`pt-4` in the search isn't a value).
+- **With nothing typed**, it lists every property the element sets, grouped (Content, for a `::before` or `::after`; Layout, Position, Appearance, Effects, Transform, Typography, Interactivity, SVG, Visibility).
+- **Search** by CSS name or Tailwind class: `p`, `pt`, `px`, `w`, `min-w`, `gap`, `display`, `items`, `aspect`, `bg`, `font`, `text`, `rounded`, `shadow`… Abbreviations work too (`mxw` is max-width), and `transform` finds rotate with the other transform properties. The search finds properties only: type values in the editor (`pt-4` in the search isn't a value).
 - **Tab** or **Enter** goes into the editor, **Enter** applies and goes back to the search for the next property: `pt` Tab `24` Enter.
 - **Values:** type a number (`12` is 12px), any CSS unit, a keyword (`auto`), math (`100% - 20px`), or a [variable](#variables-and-tokens). **↑/↓** step by 1, **Shift** by 10; the scroll wheel does the same on a field being edited. Some fields have a **drag handle** to scrub the value.
 - **Linked sides** work like Tailwind: `p` sets all four sides, `px` left and right, `py` top and bottom. The button beside padding, margin, inset, gap and radius switches between one value and each side.
 - **Several selected:** each change goes to all of them. A field whose value differs between them says **Mixed**; typing a value sets it on all.
 - **Clearing a field** (empty it and press Enter) means "this element doesn't set this property": Pilot takes the property off that element, not set to 0.
 - **Rich properties** (box shadow, filter, backdrop filter, mask image) show their values as chips: click one to edit it in a panel beside the dialog, **+** to add one.
+- **Translate, rotate and scale:** one value, or each axis on its own with the button at the right of the row (`translate-y` in the search goes straight to Y). Scale takes a factor (`1.5`) or a percentage (`150%`).
+- **3D:** turning an element around X or Y, or moving it along Z, only looks 3D with a perspective on its parent; without one, the footer says "Add perspective to the parent". Select the parent and set its perspective.
 - **Copy and paste:** right-click a property's name for **Copy CSS**, **Copy properties** and **Paste properties** (onto the selected elements).
 - **Fields show what your CSS declares**, not computed values; hover a field to see what math or a variable comes to.
 - The dialog stays where it opened while you edit; drag it by the strip along its top edge.
