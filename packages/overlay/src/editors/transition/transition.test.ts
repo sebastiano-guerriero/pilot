@@ -1,17 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  collapse,
-  itemTiming,
-  parseEasing,
-  parsePropertyName,
-  parseTime,
-  parseTransitionProperty,
-  stepTime,
-  uniformOf,
-  withAddedTiming,
-  withItemTiming,
-  withoutItemTiming,
-} from "./transition.ts";
+import { formatShorthand, parseEasing, parsePropertyName, parseShorthand, parseTime, parseTransitionProperty, stepTime } from "./transition.ts";
 
 describe("transition's lists", () => {
   it("reads the properties as chips: none on its own, nothing set as null", () => {
@@ -20,31 +8,21 @@ describe("transition's lists", () => {
     expect(parseTransitionProperty("")).toBeNull();
   });
 
-  it("one value while they're all the same (CSS repeats it), a list when one differs", () => {
-    expect(collapse(["200ms", "200ms", "200ms"])).toBe("200ms");
-    expect(collapse(["200ms", "500ms"])).toBe("200ms, 500ms");
-    expect(uniformOf("200ms", 3)).toBe("200ms");
-    expect(uniformOf("200ms, 200ms", 2)).toBe("200ms");
-    expect(uniformOf("200ms, 500ms", 2)).toBeNull();
-    expect(uniformOf("", 2)).toBe("");
-  });
-
-  it("one transition's timing: set on its own, the others keep theirs; emptied, it's the others' again", () => {
-    // Nothing set: the others take CSS's 0s.
-    expect(withItemTiming("", "transition-duration", 2, 1, "500ms")).toBe("0s, 500ms");
-    expect(withItemTiming("200ms", "transition-duration", 3, 1, "500ms")).toBe("200ms, 500ms, 200ms");
-    expect(withItemTiming("200ms, 500ms, 200ms", "transition-duration", 3, 1, "")).toBe("200ms");
-    expect(withItemTiming("200ms, 500ms", "transition-duration", 2, 1, "200ms")).toBe("200ms");
-    expect(itemTiming("200ms, 500ms", 3, 2)).toBe("200ms");
-  });
-
-  it("taking one off takes its timing; adding one gives it the value most have (a single value stays as it is)", () => {
-    expect(withoutItemTiming("200ms, 500ms, 200ms", 3, 1)).toBe("200ms");
-    expect(withoutItemTiming("200ms", 3, 1)).toBe("200ms");
-    expect(withAddedTiming("200ms, 500ms, 200ms", 3)).toBe("200ms, 500ms, 200ms, 200ms");
-    expect(withAddedTiming("200ms", 3)).toBe("200ms");
-    // A tie: the first one's.
-    expect(withAddedTiming("ease, ease-out", 2)).toBe("ease, ease-out, ease");
+  it("the shorthand's transitions: each its property, then its own timing; written back the same way", () => {
+    expect(parseShorthand("opacity 300ms ease-out, transform 0.2s 50ms")).toEqual([
+      { name: "opacity", duration: "300ms", easing: "ease-out", delay: "", behavior: "" },
+      { name: "transform", duration: "0.2s", easing: "", delay: "50ms", behavior: "" },
+    ]);
+    // No property named: all.
+    expect(parseShorthand("0.2s")?.[0]).toMatchObject({ name: "all", duration: "0.2s" });
+    expect(parseShorthand("none")).toBe("none");
+    expect(parseShorthand("")).toBeNull();
+    expect(parseShorthand("var(--transition)")).toBeNull();
+    // A delay needs a duration before it.
+    expect(formatShorthand([{ name: "opacity", duration: "", easing: "", delay: "50ms", behavior: "" }])).toBe("opacity 0s 50ms");
+    expect(formatShorthand(parseShorthand("opacity 300ms cubic-bezier(0, 0, 0.58, 1), --x 1s") as never)).toBe(
+      "opacity 300ms cubic-bezier(0, 0, 0.58, 1), --x 1s",
+    );
   });
 });
 

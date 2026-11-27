@@ -14,7 +14,7 @@ import { PREVIEW_ATTRIBUTE } from "./preview.ts";
  * docs/design-tokens.md). Tailwind's own `--tw-*` plumbing isn't a token.
  */
 
-export type TokenKind = "color" | "length" | "font" | "number" | "shadow" | "other";
+export type TokenKind = "color" | "length" | "font" | "number" | "shadow" | "easing" | "time" | "other";
 
 export interface Token {
   /** As written: `--color-accent`. A file's token: the CSS variable Pilot gives it (see fileTokenVariable). */
@@ -93,6 +93,9 @@ export function kindOf(name: string, value: string): TokenKind {
   // A font's name can read as a color keyword's shape (one word): the name decides first.
   if (/font|family/i.test(name) || /,\s*(sans-serif|serif|monospace|system-ui)\b/.test(value)) return "font";
   if (isShadow(value)) return "shadow";
+  // An easing (Tailwind's `--ease-out`, a spring's `linear(…)`), a duration (`--default-transition-duration`).
+  if (/^(cubic-bezier|linear|steps)\(/i.test(value) || /^(linear|ease|ease-in|ease-out|ease-in-out|step-start|step-end)$/i.test(value)) return "easing";
+  if (/^-?\d*\.?\d+(ms|s)$/i.test(value)) return "time";
   return isNamedColor(value) ? "color" : "other";
 }
 

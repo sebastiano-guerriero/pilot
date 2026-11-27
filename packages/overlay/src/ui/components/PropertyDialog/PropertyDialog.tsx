@@ -1058,6 +1058,11 @@ function MatchedEditor({
   for (const p of mixed) declared[p] = "";
   // Values only a reset gives (Pilot sets none, the page's comes from a `*` rule).
   const reset = resetValues(element, properties, history, states, widths, width);
+  // The page's own, without Pilot's changes, and what Pilot sets itself (transition: a longhand a shorthand gives isn't
+  // one set on its own).
+  const pageNow = pageValues(element, properties, history, states, widths, width);
+  const page = Object.fromEntries(Object.entries(pageNow).map(([p, v]) => [p, v.declared?.value ?? ""]));
+  const own = new Set(properties.filter((p) => history.setsItself(element, p, (pageNow[p] as PageValue).at, states)));
   // What the fields show changed with the window's width, not an edit: say so (the dialog's flashRow).
   const shownKey = JSON.stringify(declared);
   const shown = useRef({ width, values: shownKey, declared });
@@ -1073,6 +1078,8 @@ function MatchedEditor({
       element={element}
       values={values}
       declared={declared}
+      page={page}
+      own={own}
       mixed={mixed}
       reset={reset}
       onChange={(property, value, options) => {
@@ -1084,7 +1091,7 @@ function MatchedEditor({
           // A ::before or ::after isn't drawn without content: its first change brings `content: ""`, in the
           // same step, when nothing gives it one (the owner's call, 2026-11-26).
           if (needsContent(el, states, property, value)) applyChange(history, el, "content", '""', gesture, { chip: widths, states, width });
-          applyChange(history, el, property, value, gesture, { chip: widths, states, width });
+          applyChange(history, el, property, value, gesture, { chip: widths, states, width, again: options?.again });
         }
         onChanged?.();
         rerender(0);

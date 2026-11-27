@@ -58,6 +58,25 @@ describe("stylesheetPreview", () => {
     expect(updateValues(style, before, [`[${EDIT_ATTRIBUTE}="2"] { padding-top: 12px !important; }`, before[1] as string])).toBe(false);
   });
 
+  it("a longhand after its shorthand stays after it in the layer, even where the page declares it", () => {
+    const page = document.createElement("style");
+    // Any shorthand (transition's rows after its panels; padding here, which the test DOM expands).
+    page.textContent = ".card { padding-top: 5px; }";
+    document.head.append(page);
+    const el = document.createElement("div");
+    el.className = "card";
+    document.body.append(el);
+    stylesheetPreview.render([
+      { element: el, property: "padding", value: "10px" },
+      { element: el, property: "padding-top", value: "20px" },
+    ]);
+    const css = previewCss();
+    expect(css.indexOf("padding: 10px")).toBeGreaterThan(-1);
+    expect(css.indexOf("padding-top: 20px")).toBeGreaterThan(css.indexOf("padding: 10px"));
+    el.remove();
+    page.remove();
+  });
+
   it("leaves out values the browser doesn't take; no rules left: empty sheet, no attribute", () => {
     const el = document.createElement("div");
     document.body.append(el);

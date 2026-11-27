@@ -15,6 +15,7 @@
   --plt-color-background: #171717;
   --plt-color-background-light: #303030;
   --plt-color-contrast-low: #737373;
+  --plt-color-contrast-lower: #404040;
   --plt-color-contrast-high: #E5E5E5;
   --plt-color-contrast-higher: #fff;
   --plt-color-border: hsl(from var(--plt-color-contrast-high) h s l / 0.125);

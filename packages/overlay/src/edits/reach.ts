@@ -236,15 +236,15 @@ export function applyChange(
   property: string,
   value: string,
   gesture: object | undefined,
-  options: { chip?: WidthChip | null; states?: readonly ElementState[]; width: number },
+  options: { chip?: WidthChip | null; states?: readonly ElementState[]; width: number; again?: boolean },
 ): void {
-  const { chip, states, width } = options;
+  const { chip, states, width, again } = options;
   // One undo step, even when it writes several (All widths, a shorthand's sides).
   gesture ??= {};
   const set = (p: string, v: string, key: WidthKey) => {
     const widths = widthsOf(key);
     if (v === "") clearProperty(history, element, p, gesture, widths, states);
-    else history.apply(element, p, v, gesture, { widths, states: states ? [...states] : undefined });
+    else history.apply(element, p, v, gesture, { widths, states: states ? [...states] : undefined, again });
   };
   const longhands = longhandsOf(property);
   if (chip === ALL_WIDTHS) {

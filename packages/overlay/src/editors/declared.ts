@@ -31,3 +31,13 @@ export function resetValueOf(props: Pick<PropertyEditorProps, "element" | "decla
 
 /** What an empty field reads when the selected elements differ on its property. */
 export const MIXED = "Mixed";
+
+/** What the page's own CSS declares for `property`, without Pilot's changes (see `page` in PropertyEditorProps). */
+export function pageOf(props: Pick<PropertyEditorProps, "page" | "declared" | "element">, property: string): string {
+  return props.page?.[property] ?? declaredOf(props, property);
+}
+
+/** Whether Pilot sets `property` itself (see `own` in PropertyEditorProps). */
+export function isOwn(props: Pick<PropertyEditorProps, "own">, property: string): boolean {
+  return !!props.own?.has(property);
+}

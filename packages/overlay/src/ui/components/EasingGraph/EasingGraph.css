@@ -1,0 +1,48 @@
+/* An easing's curve (EasingGraph): a square as wide as a row's value area, at its right edge, on the + button's
+   background (LayerList's .layer-add: the darkest, a 1px ring at 20%); the curve and its handles in contrast-high, their lines in contrast-lower. */
+@scope (.easing-graph) {
+  :scope {
+    width: 128px;
+    margin-inline-start: auto;
+    border-radius: 6px;
+    background: var(--plt-color-background-dark);
+    box-shadow: inset 0 0 0 1px hsl(from var(--plt-color-contrast-high) h s l / 0.2);
+  }
+
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  /* The lines across: where the curve starts and ends (a spring's: and the pattern every 0.25), all alike (the
+     owner's): 22.5%, dotted (1px dots, 2px apart). */
+  .guide,
+  .grid {
+    stroke: hsl(from var(--plt-color-contrast-high) h s l / 0.225);
+    stroke-dasharray: 1 2;
+  }
+
+  .arm {
+    stroke: var(--plt-color-contrast-lower);
+    stroke-width: 1;
+  }
+
+  .curve {
+    fill: none;
+    stroke: var(--plt-color-contrast-high);
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+  }
+
+  .handle {
+    fill: var(--plt-color-contrast-high);
+    cursor: grab;
+    touch-action: none;
+
+    &:active {
+      cursor: grabbing;
+    }
+  }
+}

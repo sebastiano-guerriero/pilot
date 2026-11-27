@@ -1,5 +1,6 @@
 import type { ElementState, ElementTarget, StyleSource, WidthRange } from "@pilot/protocol";
 import { sortStates } from "@pilot/protocol";
+import { longhandsOf } from "../css/longhands.ts";
 import { type Preview, stylesheetPreview } from "../dom/preview.ts";
 import { type TextPreview, domTextPreview, textRunOf } from "../dom/text.ts";
 import { sameStates } from "./states.ts";
@@ -198,7 +199,7 @@ export class EditHistory {
     property: string,
     value: string,
     gesture?: object,
-    options: { removal?: Removal; widths?: WidthRange; states?: readonly ElementState[]; from?: string } = {},
+    options: { removal?: Removal; widths?: WidthRange; states?: readonly ElementState[]; from?: string; again?: boolean } = {},
   ): void {
     const { removal, widths } = options;
     const states = options.states?.length ? sortStates(options.states) : undefined;
@@ -210,9 +211,13 @@ export class EditHistory {
     if (existing) {
       existing.value = value;
       existing.removal = removal;
+      // Again: after what the step wrote since (a shorthand it must come after).
+      if (options.again && step) step.entries.push(...step.entries.splice(step.entries.indexOf(existing), 1));
     } else {
       const current = this.currentFor(element, property, widths, states);
-      if (!removal && !current?.removal && (current?.value ?? "") === value) return;
+      // Unchanged: nothing to record, unless asked for again (`again`: written after a shorthand that set it since,
+      // so it stays a change of its own, as transition's rows do after its shorthand).
+      if (!options.again && !removal && !current?.removal && (current?.value ?? "") === value) return;
       const entry: Entry = { element, target: this.targetOf(element), path: location.pathname, property, value, removal, widths, states };
       if (options.from !== undefined) entry.from = options.from;
       if (step) step.entries.push(entry);
@@ -332,6 +337,12 @@ export class EditHistory {
   valueOf(element: EditableElement, property: string, width: number | "base" | WidthRange = window.innerWidth, states?: readonly ElementState[]): string | null {
     const rule = this.activeRule(element, property, width, states);
     return rule ? valueIn(rule, property) || null : null;
+  }
+
+  /** Whether Pilot sets `property` itself there (a value of its own, not one its shorthand gives). */
+  setsItself(element: EditableElement, property: string, width: number | "base" | WidthRange = window.innerWidth, states?: readonly ElementState[]): boolean {
+    const rule = this.activeRule(element, property, width, states);
+    return rule?.property === property && !rule.removal && rule.value !== "";
   }
 
   /**
@@ -529,23 +540,8 @@ function valueIn(entry: Entry, property: string): string {
   return style.getPropertyValue(property);
 }
 
-/**
- * The longhands a property sets: `grid-column` → grid-column-start and
- * grid-column-end. Just the property itself when it isn't a shorthand.
- * A change to a shorthand replaces Pilot's earlier changes to its longhands.
- */
-const longhandCache = new Map<string, string[]>();
-export function longhandsOf(property: string): string[] {
-  let longhands = longhandCache.get(property);
-  if (!longhands) {
-    const style = document.createElement("div").style;
-    style.setProperty(property, "initial");
-    longhands = Array.from({ length: style.length }, (_, i) => style.item(i));
-    if (longhands.length <= 1) longhands = [property];
-    longhandCache.set(property, longhands);
-  }
-  return longhands;
-}
+// A change to a shorthand replaces Pilot's earlier changes to its longhands (css/longhands.ts).
+export { longhandsOf };
 
 function sameWidths(a?: WidthRange, b?: WidthRange): boolean {
   return a?.min === b?.min && a?.max === b?.max;

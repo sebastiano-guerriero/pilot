@@ -402,6 +402,8 @@ export const CSS_PROPERTIES: Record<string, CssPropertyInfo> = {
   },
   "transform-style": { initial: "flat", keywords: ["flat", "preserve-3d"], negative: false },
   "backface-visibility": { initial: "visible", keywords: ["visible", "hidden"], negative: false },
+  // The shorthand: the panels' transitions (TransitionEditor), each its property and timing.
+  transition: { initial: "all 0s ease 0s", keywords: ["none"], negative: false },
   "transition-property": { initial: "all", keywords: ["all", "none"], negative: false },
   "transition-duration": { initial: "0s", keywords: [], negative: false },
   "transition-timing-function": {

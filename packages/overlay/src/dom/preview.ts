@@ -1,5 +1,6 @@
 import type { ElementState } from "@pilot/protocol";
-import { stateSelector } from "../edits/states.ts";
+import { longhandsOf } from "../css/longhands.ts";
+import { sameStates, stateSelector } from "../edits/states.ts";
 import type { WidthRange } from "@pilot/protocol";
 import { type AnchorRequest, anchoredElements, renderAnchored } from "./anchored.ts";
 import { type ExclusionRequest, renderExclusions } from "./excluded.ts";
@@ -81,8 +82,11 @@ function draw(rules: PreviewRule[], check: boolean) {
     const used = new Set<Element>();
     // Base changes beside the page's declarations; those with nothing to sit beside stay in the layer below.
     const requests: Array<AnchorRequest & { rule: PreviewRule }> = [];
-    for (const rule of rules) {
+    for (const [i, rule] of rules.entries()) {
       if (!isPlaced(rule) || !rule.element.isConnected) continue;
+      // After its shorthand (transition's rows after its panels): in the layer, after it, where it wins as CSS
+      // reads them. Beside the page's own declaration, the shorthand in the layer would beat it.
+      if (rules.slice(0, i).some((r) => afterShorthand(rule, r))) continue;
       const text = plainDeclaration(rule.property, rule.value);
       if (text)
         requests.push({ element: rule.element, property: rule.property, text, id: idOf(rule.element), widths: rule.widths, states: rule.states, rule });
@@ -138,6 +142,18 @@ function draw(rules: PreviewRule[], check: boolean) {
       if (!before || !updateValues(style, before.lines, lines)) style.textContent = text;
       written.set(style, { lines, text });
     }
+}
+
+/** Whether `rule` sets a longhand of `earlier`'s shorthand, on the same element, widths and states. */
+function afterShorthand(rule: PreviewRule, earlier: PreviewRule): boolean {
+  return (
+    earlier.element === rule.element &&
+    earlier.property !== rule.property &&
+    earlier.widths?.min === rule.widths?.min &&
+    earlier.widths?.max === rule.widths?.max &&
+    sameStates(earlier.states, rule.states) &&
+    longhandsOf(earlier.property).includes(rule.property)
+  );
 }
 
 /**

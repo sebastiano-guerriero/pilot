@@ -76,6 +76,15 @@ export interface PropertyEditorProps {
    */
   declared?: Record<string, string>;
   /**
+   * What the page's own CSS declares for each of `properties`, without
+   * Pilot's changes ("" when it declares nothing): where an editor needs to
+   * tell its own from the page's (transition: a longhand the page's
+   * shorthand gives isn't one set on its own). Read it with `pageOf()`.
+   */
+  page?: Record<string, string>;
+  /** The properties Pilot sets itself (a value of its own, not one its shorthand gives). Read it with `isOwn()`. */
+  own?: ReadonlySet<string>;
+  /**
    * Properties whose value differs across the selected elements (several
    * selected, see PropertyDialog's `others`): their `declared` value is ""
    * and their field reads "Mixed". A change sets it on all of them. Read it
@@ -97,8 +106,11 @@ export interface PropertyEditorProps {
    * edits/clear.ts).
    * For a continuous interaction (a drag), pass the same `gesture` object on
    * every change so the whole interaction is undone in one step.
+   * `again`: record it even when the value is what applies already, as the
+   * latest change (a longhand written after its shorthand, which would
+   * otherwise replace it: transition's rows after its panels).
    */
-  onChange(property: string, value: string, options?: { gesture?: object }): void;
+  onChange(property: string, value: string, options?: { gesture?: object; again?: boolean }): void;
   /**
    * Take back what the ongoing `gesture` did to `property`, restoring exactly
    * what it was before (e.g. releasing Alt un-mirrors the opposite side).

@@ -48,7 +48,10 @@ describe("page tokens", () => {
     expect(kindOf("--ring", "inset 0 0 0 1px var(--border)")).toBe("shadow");
     // A border's shorthand isn't one: a single length.
     expect(kindOf("--border", "1px solid red")).toBe("other");
-    expect(kindOf("--ease", "cubic-bezier(0.2, 0, 0, 1)")).toBe("other");
+    // Easings and durations, for transition's fields.
+    expect(kindOf("--ease", "cubic-bezier(0.2, 0, 0, 1)")).toBe("easing");
+    expect(kindOf("--spring-easing", "linear(0, 0.5 20%, 1)")).toBe("easing");
+    expect(kindOf("--default-transition-duration", "150ms")).toBe("time");
   });
 });
 

@@ -37,6 +37,22 @@ describe("EditHistory", () => {
     expect(el.style.paddingTop).toBe("10px");
   });
 
+  it("a shorthand replaces its longhands' changes; `again` writes one after it even when it gives the same value", () => {
+    // Any shorthand (transition's rows after its panels; padding here, which the test DOM expands).
+    history.apply(el, "padding-top", "10px");
+    expect(history.setsItself(el, "padding-top", "base")).toBe(true);
+    history.apply(el, "padding", "10px");
+    // Replaced: the shorthand gives it now.
+    expect(history.setsItself(el, "padding-top", "base")).toBe(false);
+    expect(history.changes().map((c) => c.property)).toEqual(["padding"]);
+    // Unchanged, so nothing to record; again, a change of its own, after the shorthand.
+    history.apply(el, "padding-top", "10px");
+    expect(history.changes().map((c) => c.property)).toEqual(["padding"]);
+    history.apply(el, "padding-top", "10px", undefined, { again: true });
+    expect(history.changes().map((c) => c.property)).toEqual(["padding", "padding-top"]);
+    expect(history.setsItself(el, "padding-top", "base")).toBe(true);
+  });
+
   it("groups a gesture (e.g. a drag) into one step", () => {
     const drag = {};
     for (const v of ["11px", "12px", "13px", "14px"]) history.apply(el, "padding-top", v, drag);
