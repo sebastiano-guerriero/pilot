@@ -143,6 +143,12 @@ export interface StyleChange {
    */
   states?: ElementState[];
   /**
+   * A condition the designer described in words ("the parent .card has
+   * focus inside"), with Pilot's reading of it as CSS: the change applies
+   * only while it holds, besides its widths and states. Absent: none.
+   */
+  condition?: StyleCondition;
+  /**
    * What already gives `to` on the page now: its tokens (`var(--space-md)`)
    * and its single-purpose classes (`.padding-md`), compared as the browser
    * computes them. `fluid`: some tokens change with the viewport, equal at
@@ -157,6 +163,19 @@ export interface StyleChange {
  * pseudo-elements (`before`, `after`, `placeholder`). Named states, as most
  * are.
  */
+/**
+ * A condition described in words, read into CSS. `selector` has `&` for the
+ * element, as its subject (`.card:focus-within &`, `&[data-open]`,
+ * `&:has(+ .error)`); `media` is a media condition (`print`,
+ * `(prefers-reduced-motion: reduce)`). One or both.
+ */
+export interface StyleCondition {
+  /** The designer's words, as typed. */
+  words: string;
+  selector?: string;
+  media?: string;
+}
+
 export type ElementState = ColorScheme | "hover" | "focus" | "focus-visible" | "active" | PseudoElement;
 
 /** A color scheme: the page in dark or light mode. */

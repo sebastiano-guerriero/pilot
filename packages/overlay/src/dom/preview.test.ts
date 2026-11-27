@@ -28,6 +28,22 @@ describe("stylesheetPreview", () => {
     el.remove();
   });
 
+  it("a condition: in the layer, its selector around the element (states after it), its media with the widths", () => {
+    const el = document.createElement("div");
+    document.body.append(el);
+    stylesheetPreview.render([
+      { element: el, property: "color", value: "red", condition: { selector: ".card:focus-within &" }, states: ["hover"] },
+      { element: el, property: "color", value: "blue", condition: { media: "print" }, widths: { min: 768 } },
+      { element: el, property: "opacity", value: "0.5", condition: { selector: "&[data-open]", media: "(prefers-reduced-motion: reduce)" } },
+    ]);
+    const id = el.getAttribute(EDIT_ATTRIBUTE);
+    const text = sheet()?.textContent ?? "";
+    expect(text).toContain(`.card:focus-within [${EDIT_ATTRIBUTE}="${id}"]:hover { color: red !important; }`);
+    expect(text).toContain(`@media print and (min-width: 768px) { [${EDIT_ATTRIBUTE}="${id}"] { color: blue !important; } }`);
+    expect(text).toContain(`@media (prefers-reduced-motion: reduce) { [${EDIT_ATTRIBUTE}="${id}"][data-open] { opacity: 0.5 !important; } }`);
+    el.remove();
+  });
+
   it("the same rules with other values (a drag): written as text, read back as written (previewCss)", () => {
     const el = document.createElement("div");
     document.body.append(el);

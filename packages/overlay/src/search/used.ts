@@ -42,7 +42,8 @@ export function usedModifiers(element: EditableElement, history: EditHistory): M
     add(rule.states ?? [], widths, Array.from({ length: rule.style.length }, (_, i) => rule.style.item(i)));
   }
   for (const c of history.changes()) {
-    if (c.element === element && !c.removal) add(c.states ?? [], c.widths, [c.property]);
+    // A change under a condition is its own (the condition's pill), not one of these.
+    if (c.element === element && !c.removal && !c.condition) add(c.states ?? [], c.widths, [c.property]);
   }
 
   return [...found.values()].sort(byPlace).map(({ states, widths, properties }) => {

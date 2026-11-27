@@ -90,7 +90,8 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [x] The `/` menu lists the modifiers (and combinations) used on the element first, marked, each with what it sets. [property-dialog.md](property-dialog.md), *The `/` menu*.
 - [x] Dark and light modifiers (the project's media query or root class), and pseudo-elements: before, after, placeholder. [property-dialog.md](property-dialog.md), *States*.
 - [x] A content field for `::before` / `::after`, and `content: ""` added with a pseudo-element's first change. [editors.md](editors.md), [property-dialog.md](property-dialog.md), *States*.
-- [ ] Modifiers, next: conditions on a parent or an attribute (`group-hover:`, `peer-checked:`, `data-[state=open]:`, `aria-expanded:`), more states (`disabled:`, `focus-within:`, `checked:`, `first:`/`last:`/`odd:`), container queries (`@container`), print
+- [x] Conditions in words: Create modifier in the `/` menu, read into CSS by Pilot's own rules (a parent, an ancestor, a sibling or the element; hover, focus inside, checked, open, an attribute, a class; reduced motion, print…), in the modifiers' pill with its live reading and as if true / as if false. [property-dialog.md](property-dialog.md), *Conditions*.
+- [ ] Conditions, next: an agent run for words Pilot can't read (its loader, its stuck message); reading the project's own rules for a condition (fields, the `/` menu's used rows); the owner's design of the pill and the reading line; container queries (`@container`)
 - [x] Changes for widths and states in the page's CSS too: beside the project's rule for them, else placed among its breakpoints or after the base (a state); no state forced on the element while its pill is set ([edits.md](edits.md), *The preview*)
   - [x] DOM / Components switch: the page's component instances as a tree (React, Server Components, Vue 3)
 - [x] Preview from a stylesheet Pilot adds (`@layer` + `!important`, `@media` per width range)

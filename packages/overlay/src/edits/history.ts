@@ -2,6 +2,7 @@ import type { ElementState, ElementTarget, StyleSource, WidthRange } from "@pilo
 import { sortStates } from "@pilot/protocol";
 import { type Preview, stylesheetPreview } from "../dom/preview.ts";
 import { type TextPreview, domTextPreview, textRunOf } from "../dom/text.ts";
+import { type Condition, conditionKey, sameCondition } from "./condition.ts";
 import { sameStates } from "./states.ts";
 import { type EditableElement, describeElement } from "../dom/target.ts";
 import { inWidths } from "./widths.ts";
@@ -36,6 +37,8 @@ interface Entry {
   widths?: WidthRange;
   /** The element states it's for, together (the search's state pills). None: the element as it is. */
   states?: ElementState[];
+  /** A condition described in words it's for, besides widths and states (edits/condition.ts). None: always. */
+  condition?: Condition;
   /**
    * The job it was sent in (Send to the agent, see bridge/jobs.ts): sent
    * changes stay on the page until the agent is done and they're checked,
@@ -60,6 +63,7 @@ export interface RecordedChange {
   removal?: Removal;
   widths?: WidthRange;
   states?: ElementState[];
+  condition?: Condition;
   /** The job it was sent in; none when not sent yet. */
   job?: string;
   /** A text change: the page's own text when it was made (see Entry). */
@@ -198,22 +202,29 @@ export class EditHistory {
     property: string,
     value: string,
     gesture?: object,
-    options: { removal?: Removal; widths?: WidthRange; states?: readonly ElementState[]; from?: string } = {},
+    options: { removal?: Removal; widths?: WidthRange; states?: readonly ElementState[]; condition?: Condition | null; from?: string } = {},
   ): void {
     const { removal, widths } = options;
+    const condition = options.condition ?? undefined;
     const states = options.states?.length ? sortStates(options.states) : undefined;
     const last = this.done.at(-1);
     const step = gesture && last?.gesture === gesture ? last : undefined;
     const existing = step?.entries.find(
-      (e) => e.element === element && e.property === property && sameWidths(e.widths, widths) && sameStates(e.states, states),
+      (e) =>
+        e.element === element &&
+        e.property === property &&
+        sameWidths(e.widths, widths) &&
+        sameStates(e.states, states) &&
+        sameCondition(e.condition, condition),
     );
     if (existing) {
       existing.value = value;
       existing.removal = removal;
     } else {
-      const current = this.currentFor(element, property, widths, states);
+      const current = this.currentFor(element, property, widths, states, condition);
       if (!removal && !current?.removal && (current?.value ?? "") === value) return;
       const entry: Entry = { element, target: this.targetOf(element), path: location.pathname, property, value, removal, widths, states };
+      if (condition) entry.condition = condition;
       if (options.from !== undefined) entry.from = options.from;
       if (step) step.entries.push(entry);
       else this.done.push({ gesture, entries: [entry] });
@@ -232,7 +243,7 @@ export class EditHistory {
     return this.rules()
       .filter((r) => r.value !== "")
       .filter((r) => (filter.unsent ? !r.job : true) && (filter.job === undefined || r.job === filter.job))
-      .map(({ element, target, property, value, removal, widths, states, job, from }) => ({
+      .map(({ element, target, property, value, removal, widths, states, condition, job, from }) => ({
         element,
         target,
         property,
@@ -240,6 +251,7 @@ export class EditHistory {
         removal,
         widths,
         states,
+        ...(condition && { condition }),
         job,
         ...(from !== undefined && { from }),
       }));
@@ -329,8 +341,14 @@ export class EditHistory {
    * those widths, what a field shows with the chip set. Both whatever the
    * window's width.
    */
-  valueOf(element: EditableElement, property: string, width: number | "base" | WidthRange = window.innerWidth, states?: readonly ElementState[]): string | null {
-    const rule = this.activeRule(element, property, width, states);
+  valueOf(
+    element: EditableElement,
+    property: string,
+    width: number | "base" | WidthRange = window.innerWidth,
+    states?: readonly ElementState[],
+    condition?: Condition | null,
+  ): string | null {
+    const rule = this.activeRule(element, property, width, states, condition);
     return rule ? valueIn(rule, property) || null : null;
   }
 
@@ -339,14 +357,20 @@ export class EditHistory {
    * (the window's, by default): the change in effect there is a removal. The
    * field then shows nothing, and the change set says "remove".
    */
-  removalOf(element: EditableElement, property: string, width: number | "base" | WidthRange = window.innerWidth, states?: readonly ElementState[]): Removal | null {
-    const rule = this.activeRule(element, property, width, states);
+  removalOf(
+    element: EditableElement,
+    property: string,
+    width: number | "base" | WidthRange = window.innerWidth,
+    states?: readonly ElementState[],
+    condition?: Condition | null,
+  ): Removal | null {
+    const rule = this.activeRule(element, property, width, states, condition);
     return rule?.property === property ? (rule.removal ?? null) : null;
   }
 
   /** Whether Pilot removed the page's `property` there: its own removal, or its shorthand's (`padding` for padding-top). */
-  removes(element: EditableElement, property: string, width: "base" | WidthRange, states?: readonly ElementState[]): boolean {
-    return !!this.activeRule(element, property, width, states)?.removal;
+  removes(element: EditableElement, property: string, width: "base" | WidthRange, states?: readonly ElementState[], condition?: Condition | null): boolean {
+    return !!this.activeRule(element, property, width, states, condition)?.removal;
   }
 
   /**
@@ -433,7 +457,7 @@ export class EditHistory {
         for (let i = out.length - 1; i >= 0; i--) if (covers(entry, out[i] as Entry)) out.splice(i, 1);
         const needed =
           entry.value !== "" ||
-          out.some((r) => r.element === entry.element && sameStates(r.states, entry.states) && sets(r, entry.property));
+          out.some((r) => r.element === entry.element && sameStates(r.states, entry.states) && sameCondition(r.condition, entry.condition) && sets(r, entry.property));
         if (needed) out.push(entry);
       }
     }
@@ -450,11 +474,36 @@ export class EditHistory {
     for (const listener of this.listeners) listener();
   }
 
-  /** The stylesheet's rules: the CSS changes (text changes are shown by the text preview). */
+  /**
+   * The stylesheet's rules: the CSS changes (text changes are shown by the text preview). A condition shown as if
+   * true is left out of its changes (they apply as for the element as it is), as if false they aren't shown.
+   */
   private previewRules() {
     return this.rules()
       .filter((r) => textRunOf(r.property) === null)
+      .filter((r) => !r.condition || this.simulated.get(conditionKey(r.condition)) !== "false")
+      .map((r) => (r.condition && this.simulated.get(conditionKey(r.condition)) === "true" ? { ...r, condition: undefined } : r))
       .map((r) => (r.value === "" ? { ...r, value: "revert-layer" } : r));
+  }
+
+  /** Conditions shown as if true or false, by key: the preview's only, never saved or sent (see simulate). */
+  private simulated = new Map<string, "true" | "false">();
+
+  /**
+   * Show a condition's changes as if it held ("true") or didn't ("false"), whatever the page does, or as the page
+   * says again (null). The preview only: nothing is recorded, saved or sent, and the page isn't touched.
+   */
+  simulate(condition: Condition, mode: "true" | "false" | null): void {
+    const key = conditionKey(condition);
+    if ((this.simulated.get(key) ?? null) === mode) return;
+    if (mode) this.simulated.set(key, mode);
+    else this.simulated.delete(key);
+    this.preview.render(this.previewRules());
+  }
+
+  /** How a condition is shown now: as if true or false, or null (as the page says). */
+  simulation(condition: Condition | null | undefined): "true" | "false" | null {
+    return condition ? (this.simulated.get(conditionKey(condition)) ?? null) : null;
   }
 
   /**
@@ -476,12 +525,18 @@ export class EditHistory {
   }
 
   /** The rule that wins for `property` on `element` at `width`: the latest that sets it there. */
-  private activeRule(element: EditableElement, property: string, width: number | "base" | WidthRange, states?: readonly ElementState[]): Entry | undefined {
+  private activeRule(
+    element: EditableElement,
+    property: string,
+    width: number | "base" | WidthRange,
+    states?: readonly ElementState[],
+    condition?: Condition | null,
+  ): Entry | undefined {
     const rules = this.rules();
     for (let i = rules.length - 1; i >= 0; i--) {
       const r = rules[i] as Entry;
       const there = width === "base" ? !r.widths : typeof width === "object" ? sameWidths(r.widths, width) : inWidths(r.widths ?? null, width);
-      if (r.element === element && sameStates(r.states, states) && sets(r, property) && there) return r;
+      if (r.element === element && sameStates(r.states, states) && sameCondition(r.condition, condition) && sets(r, property) && there) return r;
     }
     return undefined;
   }
@@ -495,11 +550,13 @@ export class EditHistory {
     property: string,
     widths?: WidthRange,
     states?: readonly ElementState[],
+    condition?: Condition | null,
   ): { value: string; removal?: Removal } | undefined {
     const rules = this.rules();
     for (let i = rules.length - 1; i >= 0; i--) {
       const r = rules[i] as Entry;
-      if (r.element !== element || !sameWidths(r.widths, widths) || !sameStates(r.states, states) || !sets(r, property)) continue;
+      if (r.element !== element || !sameWidths(r.widths, widths) || !sameStates(r.states, states) || !sameCondition(r.condition, condition) || !sets(r, property))
+        continue;
       return { value: valueIn(r, property), removal: r.property === property ? r.removal : undefined };
     }
     return undefined;
@@ -513,6 +570,7 @@ function covers(later: Entry, earlier: Entry): boolean {
     later.element === earlier.element &&
     sameWidths(later.widths, earlier.widths) &&
     sameStates(later.states, earlier.states) &&
+    sameCondition(later.condition, earlier.condition) &&
     sets(later, earlier.property)
   );
 }

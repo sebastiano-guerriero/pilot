@@ -48,6 +48,11 @@ export interface PreviewRule {
   value: string;
   widths?: WidthRange;
   states?: ElementState[];
+  /**
+   * A condition described in words (edits/condition.ts): the rule applies only while it holds. Always in Pilot's
+   * layer: beside the page's rule for the element as it is, it would apply all the time.
+   */
+  condition?: { selector?: string; media?: string };
   /** A cleared field the page's CSS declares (EditHistory's removal): `value` is only what shows without it, the layer's fallback. */
   removal?: unknown;
 }
@@ -74,7 +79,7 @@ export const stylesheetPreview: Preview = {
 let last: PreviewRule[] = [];
 
 /** A value shown in the page's own CSS (dom/anchored.ts): all but removals (dom/excluded.ts) and `revert-layer` (only meaningful in Pilot's layer). */
-const isPlaced = (rule: PreviewRule) => !rule.removal && rule.value !== "revert-layer";
+const isPlaced = (rule: PreviewRule) => !rule.removal && rule.value !== "revert-layer" && !rule.condition;
 
 function draw(rules: PreviewRule[], check: boolean) {
     const byRoot = new Map<Document | ShadowRoot, string[]>();
@@ -89,7 +94,7 @@ function draw(rules: PreviewRule[], check: boolean) {
     }
     // Cleared fields the page's CSS declares: its rule skips the element, a copy keeps the rest (dom/excluded.ts).
     const removals: Array<ExclusionRequest & { rule: PreviewRule }> = rules
-      .filter((r) => r.removal && r.element.isConnected)
+      .filter((r) => r.removal && !r.condition && r.element.isConnected)
       .map((rule) => ({ element: rule.element, property: rule.property, id: idOf(rule.element), widths: rule.widths, states: rule.states, rule }));
     const excluded = renderExclusions(removals, check);
     const notExcluded = new Set(excluded.left);
@@ -99,13 +104,19 @@ function draw(rules: PreviewRule[], check: boolean) {
     const anchored = new Set([...requests.filter((r) => !left.has(r)).map((r) => r.rule), ...removals.filter((r) => !notExcluded.has(r)).map((r) => r.rule)]);
     for (const rule of anchored) used.add(rule.element);
     watch(anchored.size > 0);
-    const add = (element: Element, text: string, widths?: WidthRange, states?: ElementState[]) => {
+    const add = (element: Element, text: string, widths?: WidthRange, states?: ElementState[], condition?: PreviewRule["condition"]) => {
       const root = element.getRootNode() as Document | ShadowRoot;
       if (!byRoot.has(root)) byRoot.set(root, []);
-      // The scheme the project's way (dom/scheme.ts), the states and pseudo-element after the element.
+      // The scheme the project's way (dom/scheme.ts), the states and pseudo-element after the element. A condition's
+      // selector around it (`.card:focus-within &`: the element in `&`'s place, its states after the whole, the
+      // element being its subject), its media with the rest.
       const scheme = schemeParts(schemeOf(states));
-      const selector = `[${EDIT_ATTRIBUTE}="${idOf(element)}"]${scheme.selector}${stateSelector(states)}`;
-      const media = [widths && mediaQuery(widths), scheme.media].filter(Boolean).join(" and ");
+      const subject = `[${EDIT_ATTRIBUTE}="${idOf(element)}"]`;
+      const selector = `${condition?.selector ? condition.selector.replace(/&/g, subject) : subject}${scheme.selector}${stateSelector(states)}`;
+      // A media type (`print`) first, as CSS wants it: `print and (min-width: 768px)`.
+      const own = condition?.media ? wrapMedia(condition.media) : "";
+      const isType = /^[a-z]+$/i.test(own);
+      const media = [isType && own, widths && mediaQuery(widths), scheme.media, !isType && own].filter(Boolean).join(" and ");
       byRoot.get(root)?.push(media ? `@media ${media} { ${selector} { ${text} } }` : `${selector} { ${text} }`);
       used.add(element);
     };
@@ -114,7 +125,7 @@ function draw(rules: PreviewRule[], check: boolean) {
     for (const rule of rules) {
       if (anchored.has(rule)) continue;
       const text = declaration(rule.property, rule.value);
-      if (text) add(rule.element, text, rule.widths, rule.states);
+      if (text) add(rule.element, text, rule.widths, rule.states, rule.condition);
     }
     for (const element of used) {
       element.setAttribute(EDIT_ATTRIBUTE, String(idOf(element)));
@@ -138,6 +149,12 @@ function draw(rules: PreviewRule[], check: boolean) {
       if (!before || !updateValues(style, before.lines, lines)) style.textContent = text;
       written.set(style, { lines, text });
     }
+}
+
+/** A media condition to join others with ` and `: a media type (`print`) as it is, a feature in parentheses. */
+function wrapMedia(media: string): string {
+  const m = media.trim();
+  return /^[a-z]+$/i.test(m) || m.startsWith("(") || /^not\s/i.test(m) ? m : `(${m})`;
 }
 
 /**

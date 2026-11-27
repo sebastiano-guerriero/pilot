@@ -1,3 +1,5 @@
+import { sameStates } from "./states.ts";
+import { holdsNow, sameCondition } from "./condition.ts";
 import type { ChangeResult } from "@pilot/protocol";
 import { mediaRange } from "../dom/breakpoints.ts";
 import { baseValue, declaredValue, mediaOf } from "../dom/declared.ts";
@@ -41,7 +43,11 @@ export function checkJob(history: EditHistory, jobId: string, width = window.inn
   const changes = history.changes({ job: jobId });
   // Changes the project's own rules hide at this width, by design (read on the page alone, Pilot's changes left out).
   const hidden = new Set(history.probe([], () => changes.filter((c) => !c.states?.length && c.element.isConnected && hiddenHere(c))));
-  const checkable = changes.filter((c) => c.element.isConnected && !c.states?.length && inWidths(c.widths ?? null, width) && !hidden.has(c));
+  // A change under a condition is checked only while it holds on the page, shown as it is (not as if true or false).
+  const conditionHere = (c: RecordedChange) => !c.condition || (holdsNow(c.condition, c.element) && history.simulation(c.condition) === null);
+  const checkable = changes.filter(
+    (c) => c.element.isConnected && !c.states?.length && conditionHere(c) && inWidths(c.widths ?? null, width) && !hidden.has(c),
+  );
   const isText = (c: RecordedChange) => textRunOf(c.property) !== null;
   const css = checkable.filter((c) => !isText(c));
   const read = () => css.map((c) => computed(c.element, c.property));
@@ -263,7 +269,14 @@ export function watchJob(
 }
 
 function same(a: RecordedChange, b: RecordedChange): boolean {
-  return a.element === b.element && a.property === b.property && a.widths?.min === b.widths?.min && a.widths?.max === b.widths?.max;
+  return (
+    a.element === b.element &&
+    a.property === b.property &&
+    a.widths?.min === b.widths?.min &&
+    a.widths?.max === b.widths?.max &&
+    sameStates(a.states, b.states) &&
+    sameCondition(a.condition, b.condition)
+  );
 }
 
 /**

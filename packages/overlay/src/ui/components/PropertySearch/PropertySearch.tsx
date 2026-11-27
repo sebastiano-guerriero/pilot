@@ -2,6 +2,8 @@ import type { ElementState } from "@pilot/protocol";
 import type { RefObject } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { takeStates } from "../../../edits/states.ts";
+import { type Condition, conditionCss, holdsNow, readCondition } from "../../../edits/condition.ts";
+import type { EditHistory } from "../../../edits/history.ts";
 import { pageBreakpoints } from "../../../dom/breakpoints.ts";
 import { ALL_WIDTHS, type PartialWidth, type WidthChip, chipRange, inWidths, isBaseChip, takeWidths, widthSuggestion, widthToFinish } from "../../../edits/widths.ts";
 import { MODIFIERS, type Modifier, isModifierQuery, matchModifiers } from "../../../search/modifiers.ts";
@@ -36,6 +38,16 @@ interface PropertySearchProps {
   used?: Modifier[];
   /** Take focus when it appears (default). False when the selection came from somewhere that keeps focus (the DOM tree). */
   autoFocus?: boolean;
+  /** The element edited: what a condition's words are read for (edits/condition.ts). */
+  element?: Element;
+  /** A condition described in words, in the modifiers' pill (null: none). */
+  condition?: Condition | null;
+  /** The condition was set (Create modifier) or removed. Without it, no Create modifier. */
+  onConditionChange?(condition: Condition | null): void;
+  /** Where a condition is shown as if true or false (the preview only): EditHistory.simulate. */
+  history?: EditHistory;
+  /** Show this element on the page (the ancestor a condition names), or none. */
+  onPeek?(element: Element | null): void;
 }
 
 /**
@@ -57,6 +69,11 @@ export function PropertySearch({
   onDefaultStateChange,
   used = NO_MODIFIERS,
   autoFocus = true,
+  element,
+  condition = null,
+  onConditionChange,
+  history,
+  onPeek,
 }: PropertySearchProps) {
   useEffect(() => {
     if (!autoFocus) return;
@@ -67,8 +84,24 @@ export function PropertySearch({
   // Modifiers typed at the start become pills: `from-1200 ` / `to-767 ` the
   // width chip, `hover:` / `active:`… a state; the rest is the search. They
   // can come in any order (`hover:from-768 `).
+  // Create modifier picked with words Pilot can't read: the field takes the condition's words (not a property, nor modifiers), read as they're
+  // typed (the line under it says how), Enter sets it, Esc goes back to the `/` menu.
+  const [describing, setDescribing] = useState<{ words: string; cameFrom: string } | null>(null);
+  const reading = describing && element ? readCondition(describing.words, element) : null;
+  const target = reading && "condition" in reading ? (reading.target ?? null) : null;
+  useEffect(() => {
+    onPeek?.(target);
+  }, [target]);
+  useEffect(() => () => onPeek?.(null), []);
+  const stopDescribing = (back: string) => {
+    setDescribing(null);
+    onPeek?.(null);
+    onChange(back);
+  };
+
   const onInput = (e: Event) => {
     const input = e.currentTarget as HTMLInputElement;
+    if (describing) return setDescribing({ ...describing, words: input.value });
     let rest = input.value;
     let range = widths;
     let nextStates = states;
@@ -110,8 +143,17 @@ export function PropertySearch({
   // window's first, then the page's breakpoints (widthOptions).
   const typedWidth = onWidthsChange ? widthToFinish(value) : null;
   const widthList = !!typedWidth;
-  const menuOpen = !!onWidthsChange && (isModifierQuery(value) || widthList);
-  const options = !menuOpen ? [] : widthList && typedWidth ? widthOptions(typedWidth, viewportWidth, used) : matchModifiers(value, menuList(used));
+  const menuOpen = !!onWidthsChange && !describing && (isModifierQuery(value) || widthList);
+  const matched = !menuOpen
+    ? []
+    : widthList && typedWidth
+      ? widthOptions(typedWidth, viewportWidth, used)
+      : matchModifiers(value, menuList(used));
+  // Typed after `/` and matching nothing: Create modifier, the words as a condition, rather than "no match" (the
+  // owner's call, 2026-11-27: the only way in, an Only when… row was dropped).
+  const typedWords = menuOpen && !widthList ? value.replace(/^\//, "").trim() : "";
+  const options =
+    !matched.length && typedWords && onConditionChange && element ? [createRow(typedWords)] : matched;
   const [active, setActive] = useState(0);
   useEffect(() => setActive(0), [value]);
   // The menu scrolls past its max height (PropertySearch.css): the highlighted row kept in view, and a fade
@@ -161,6 +203,17 @@ export function PropertySearch({
     } else if (modifier.chip) {
       onWidthsChange?.(modifier.chip === "base" ? {} : modifier.chip);
       onChange("");
+    } else if (modifier.words !== undefined && element) {
+      // Create modifier: set at once when read; else the words go on being described, the line saying how to put them.
+      const read = readCondition(modifier.words, element);
+      if ("condition" in read) {
+        if (condition) history?.simulate(condition, null);
+        onConditionChange?.(read.condition);
+        onChange("");
+      } else {
+        setDescribing({ words: modifier.words, cameFrom: value });
+        onChange("");
+      }
     } else {
       setCameFrom(value);
       onChange(modifier.insert);
@@ -172,6 +225,26 @@ export function PropertySearch({
   // suggested width: the chip, as if `from-1108 ` had been typed.
   const onSearchKeyDown = (e: KeyboardEvent) => {
     const input = e.currentTarget as HTMLInputElement;
+    if (describing) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        // Set only when read: otherwise the line under the field says how to put it.
+        if (reading && "condition" in reading) {
+          if (condition) history?.simulate(condition, null);
+          onConditionChange?.(reading.condition);
+          stopDescribing("");
+        }
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation(); // a step back to the `/` menu, not a step of the dialog
+        stopDescribing(describing.cameFrom);
+        return;
+      }
+      if (e.key === "Tab") e.preventDefault();
+      return;
+    }
     if (menuOpen) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
@@ -198,10 +271,13 @@ export function PropertySearch({
       onChange("");
       return;
     }
-    // Backspace at the very start removes the last pill: a state, then the width chip.
-    if (e.key === "Backspace" && (states.length || widths) && input.selectionStart === 0 && input.selectionEnd === 0) {
+    // Backspace at the very start removes the last pill: the condition, a state, then the width chip.
+    if (e.key === "Backspace" && (condition || states.length || widths) && input.selectionStart === 0 && input.selectionEnd === 0) {
       e.preventDefault();
-      if (states.length) onStatesChange?.(states.slice(0, -1));
+      if (condition) {
+        history?.simulate(condition, null);
+        onConditionChange?.(null);
+      } else if (states.length) onStatesChange?.(states.slice(0, -1));
       else onWidthsChange?.(null);
       return;
     }
@@ -211,10 +287,10 @@ export function PropertySearch({
   const outside = !!widths && viewportWidth !== undefined && !inWidths(widths, viewportWidth);
 
   return (
-    <div class="property-search" data-pills={widths || states.length ? "" : undefined}>
+    <div class="property-search" data-pills={widths || states.length || condition ? "" : undefined}>
       {/* Pills: the search's modifiers (today the width chip), in a row of their
           own above the field, so more can sit side by side. */}
-      {(widths || states.length > 0) && (
+      {(widths || states.length > 0 || !!condition) && (
         // The modifiers as a pair: `default`, the element with none (its fields following the rule that
         // applies at the window's width), and the modifiers together as one pill, written as they're typed
         // (`from-988:hover:focus`), one of the two on, a click switching. To compare a property with and
@@ -247,16 +323,19 @@ export function PropertySearch({
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => onDefaultStateChange?.(false)}
             >
-              {modifiersLabel(widths, states)}
+              {modifiersLabel(widths, states, condition)}
             </button>
+            {condition && element && history && <ConditionReading condition={condition} element={element} history={history} />}
             <button
               type="button"
               class="pill-remove"
-              aria-label={`No ${modifiersLabel(widths, states)}`}
+              aria-label={`No ${modifiersLabel(widths, states, condition)}`}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
                 onWidthsChange?.(null);
                 onStatesChange?.([]);
+                if (condition) history?.simulate(condition, null);
+                onConditionChange?.(null);
                 inputRef.current?.focus();
               }}
             >
@@ -270,14 +349,14 @@ export function PropertySearch({
           ref={inputRef}
           class="input"
           type="search"
-          aria-label="Add a property"
-          placeholder="Add a property, or / for modifiers"
+          aria-label={describing ? "Describe when" : "Add a property"}
+          placeholder={describing ? "Describe when: the parent .card has focus inside" : "Add a property, or / for modifiers"}
           role="combobox"
           list={undefined}
           aria-expanded={menuOpen}
           aria-controls={menuOpen ? "pilot-modifiers" : undefined}
           aria-activedescendant={menuOpen && options[active] ? `pilot-modifier-${options[active].id}` : undefined}
-          value={value}
+          value={describing ? describing.words : value}
           onInput={onInput}
           onKeyDown={onSearchKeyDown}
         />
@@ -289,6 +368,22 @@ export function PropertySearch({
           </span>
         )}
       </div>
+      {describing && (
+        // How the words read, as they're typed: Pilot's CSS for them and what they name (highlighted on the page),
+        // or how to put them. In the `/` menu's row look, pending the owner's design.
+        <div class="condition-reading" role="status" data-error={(reading && "error" in reading) || undefined}>
+          {!describing.words.trim() ? (
+            <span class="modifier-description">Enter sets it, Esc goes back</span>
+          ) : reading && "condition" in reading ? (
+            <>
+              <span class="modifier-syntax">{conditionCss(reading.condition)}</span>
+              <span class="modifier-description">Enter sets it</span>
+            </>
+          ) : (
+            <span class="modifier-description">{reading && "error" in reading ? reading.error : ""}</span>
+          )}
+        </div>
+      )}
       {menuOpen && (
         <div class="modifiers-frame">
         <div
@@ -336,6 +431,11 @@ export function PropertySearch({
 
 const NO_MODIFIERS: Modifier[] = [];
 
+/** The `/` menu's row for words that match no modifier: a condition made of them (the owner's wording). */
+function createRow(words: string): Modifier {
+  return { id: "create", name: "Create modifier", syntax: "", description: "Use natural language to describe when", insert: "", words };
+}
+
 /**
  * The `/` menu's list: the ones used on the element first, then the general
  * ones, less a state used alone (its used row stands for it).
@@ -345,8 +445,46 @@ function menuList(used: readonly Modifier[]): Modifier[] {
   return [...used, ...MODIFIERS.filter((m) => !m.state || !alone.has(m.state))];
 }
 
-/** The modifiers as typed, together: `from-988:hover:focus`, `base:hover`, `all-widths`. */
-function modifiersLabel(widths: WidthChip | null, states: readonly ElementState[]): string {
+/**
+ * A condition's live reading, at the end of the modifiers' pill: whether it holds for the element now (read again
+ * every quarter second while shown: focus, hover, attributes change without telling), or that it's shown as if true
+ * or false. A click goes live → as if true → as if false → live (EditHistory.simulate: the preview only).
+ */
+function ConditionReading({ condition, element, history }: { condition: Condition; element: Element; history: EditHistory }) {
+  const [holds, setHolds] = useState(() => holdsNow(condition, element));
+  const [mode, setMode] = useState(() => history.simulation(condition));
+  useEffect(() => {
+    setMode(history.simulation(condition));
+    const read = () => setHolds(holdsNow(condition, element));
+    read();
+    const timer = setInterval(read, 250);
+    return () => clearInterval(timer);
+  }, [condition, element]);
+  const next = mode === null ? "true" : mode === "true" ? "false" : null;
+  const label = mode === "true" ? "as if true" : mode === "false" ? "as if false" : holds ? "true now" : "false now";
+  return (
+    <button
+      type="button"
+      class="pill-reading"
+      data-mode={mode ?? (holds ? "holds" : "not")}
+      title={
+        mode
+          ? `Shown as if the condition ${mode === "true" ? "held" : "didn't hold"}, whatever the page does (the preview only). Click to switch.`
+          : "Whether the condition holds on the page right now. Click to show it as if true, then as if false."
+      }
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => {
+        history.simulate(condition, next);
+        setMode(next);
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+/** The modifiers as typed, together: `from-988:hover:focus`, `base:hover`, `all-widths`; a condition after them, in its words. */
+function modifiersLabel(widths: WidthChip | null, states: readonly ElementState[], condition?: Condition | null): string {
   const range = chipRange(widths);
   const width =
     widths === ALL_WIDTHS
@@ -356,7 +494,8 @@ function modifiersLabel(widths: WidthChip | null, states: readonly ElementState[
         : range
           ? [range.min !== undefined ? `from-${range.min}` : "", range.max !== undefined ? `to-${range.max}` : ""].filter(Boolean)
           : [];
-  return [...width, ...states].join(":");
+  const typed = [...width, ...states].join(":");
+  return condition ? [typed, `when ${condition.words}`].filter(Boolean).join(" · ") : typed;
 }
 
 /**

@@ -163,6 +163,27 @@ describe("formatPrompt", () => {
     expect(prompt).not.toContain("no existing media query should override it");
   });
 
+  it("a condition: a When column with the designer's words, and a note with Pilot's reading", () => {
+    const prompt = formatPrompt({
+      ...changeSet,
+      edits: [
+        {
+          target: changeSet.edits[0]!.target,
+          changes: [
+            { property: "color", from: "", to: "red", condition: { words: "the parent .card has focus inside", selector: ".card:focus-within &" } },
+            { property: "opacity", from: "1", to: "0.5" },
+          ],
+        },
+      ],
+    });
+    expect(prompt).toContain("| Property | From | To | Widths | When |");
+    expect(prompt).toContain("| `color` | *not set* | `red` | base | the parent .card has focus inside |");
+    expect(prompt).toContain("| `opacity` | `1` | `0.5` | base | — |");
+    expect(prompt).toContain('`color` is only for when "the parent .card has focus inside"');
+    expect(prompt).toContain("Pilot read it as `.card:focus-within &`, `&` being this element");
+    expect(prompt).toContain("follow the words and say so");
+  });
+
   it("an !important value in the project: the agent keeps it important", () => {
     const prompt = formatPrompt({
       ...changeSet,

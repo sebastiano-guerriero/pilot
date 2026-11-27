@@ -136,6 +136,14 @@ Start the search with a state, Tailwind style, or type `/` to pick one:
 - **Pilot doesn't force the state on the page.** The fields show and edit what's set for that state; to see it, hide Pilot (Option+P) and hover or focus the element, or switch your system or site to dark mode.
 - **`/` at the start of the search** lists every modifier, and first the combinations this element already uses, with what each sets.
 
+## Any other condition, in words
+
+For a condition no modifier lists, type `/` and describe it right there, then pick **Create modifier** (the menu offers it when your words match no modifier): "the parent .card has focus inside", "it has data-open", "the previous sibling is checked", "with reduced motion". Pilot shows how it reads your words as you type (and highlights the parent or sibling they name); **Enter** sets it. Your edits are then only for when it holds.
+
+- The modifiers' pill says whether it holds right now (**true now**, **false now**). Click that to see your edits **as if true**, then **as if false**, whatever the page is doing; click again for the real thing.
+- If Pilot can't read your words, it says how to put them. CSS works too, with `&` for the element: `.card:hover &`.
+- Backspace at the start of the search removes it, like the other modifiers.
+
 ## Editing text
 
 With **Select** on, **double-click** a text to edit it in place. **Enter** is done, **Esc** cancels. In an element with other elements inside, you edit the run of text under the pointer. Text edits are sent and undone like any other change.

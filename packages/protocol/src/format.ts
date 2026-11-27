@@ -591,18 +591,20 @@ function formatEdit(edit: ElementEdit, n: number): string[] {
   if (!changes.length) return out;
   // The State column only when a change has one, so most prompts stay as they were.
   const withStates = changes.some((c) => c.states?.length);
-  out.push(
-    "",
-    withStates ? "| Property | From | To | Widths | State |" : "| Property | From | To | Widths |",
-    withStates ? "| --- | --- | --- | --- | --- |" : "| --- | --- | --- | --- |",
-  );
+  // The When column (a condition in the designer's words) the same way.
+  const withWhen = changes.some((c) => c.condition);
+  const head = ["Property", "From", "To", "Widths", ...(withStates ? ["State"] : []), ...(withWhen ? ["When"] : [])];
+  out.push("", `| ${head.join(" | ")} |`, `| ${head.map(() => "---").join(" | ")} |`);
   for (const c of changes) {
     const to = c.removed ? "*removed*" : `\`${c.to}\``;
     const from = c.from ? `\`${c.from}\`` : "*not set*";
     const widths = c.widths ? describeWidths(c.widths) : "base";
-    out.push(`| \`${c.property}\` | ${from} | ${to} | ${widths} |${withStates ? ` ${describeStates(c.states)} |` : ""}`);
+    const cells = [`\`${c.property}\``, from, to, widths, ...(withStates ? [describeStates(c.states)] : []), ...(withWhen ? [c.condition ? c.condition.words.replace(/\|/g, "\\|") : "—"] : [])];
+    out.push(`| ${cells.join(" | ")} |`);
   }
-  const notes = changes.flatMap((c) => [c.removed && removalNote(c), mediaNote(c), importantNote(c), equivalentsNote(c)].filter((n): n is string => !!n));
+  const notes = changes.flatMap((c) =>
+    [c.removed && removalNote(c), mediaNote(c), conditionNote(c), importantNote(c), equivalentsNote(c)].filter((n): n is string => !!n),
+  );
   if (notes.length) out.push("", ...notes.map((n) => `- ${n}`));
   return out;
 }
@@ -637,6 +639,18 @@ function mediaNote(c: StyleChange): string | null {
   return c.widths
     ? `${today} The change is for ${describeWidths(c.widths)}.`
     : `${today} The change has no width: set it without a media query, and keep that one as it is.`;
+}
+
+/**
+ * A condition the designer described in words (When), with Pilot's reading of it as CSS: the agent writes it the
+ * project's way, and follows the words where the two disagree.
+ */
+function conditionNote(c: StyleChange): string | null {
+  const when = c.condition;
+  if (!when) return null;
+  const css = [when.media && `@media ${when.media}`, when.selector && `\`${when.selector}\``].filter(Boolean).join(" and ");
+  const read = when.selector ? `${css}, \`&\` being this element` : css;
+  return `\`${c.property}\` is only for when ${JSON.stringify(when.words)} (the designer's words; Pilot read it as ${when.selector ? read : `\`${read}\``}): the change applies only while that holds. Write it the project's way (Tailwind's \`group-*\`, \`peer-*\`, \`has-*\`, \`data-*\` or an arbitrary variant; CSS nesting or a selector around the element), the element's other styles as they are. If the words and Pilot's reading disagree, follow the words and say so.`;
 }
 
 /**

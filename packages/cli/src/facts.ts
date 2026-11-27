@@ -530,8 +530,10 @@ export function factsSection(job: Job, root: string, near: string[] = []): strin
         const cls = classFor(change.property, change.to, tw.theme);
         if (cls) {
           const prefix = prefixFor(change, tw.theme);
+          // A condition (the designer's words) has no one variant: the class goes under the one the agent picks for it.
+          const when = change.condition ? ", under the condition's variant (its note)" : "";
           add(
-            `- \`${change.property}: ${change.to}\`${prefix ? ` (${prefix.slice(0, -1).replaceAll(":", ", ")})` : ""} is \`${prefix}${cls.exact}\`${cls.closest ? `, no step of the scale; its closest is \`${prefix}${cls.closest.cls}\` (${px(cls.closest.px)})` : ""}${cls.note ? ` (${cls.note})` : ""}.`,
+            `- \`${change.property}: ${change.to}\`${prefix ? ` (${prefix.slice(0, -1).replaceAll(":", ", ")})` : ""} is \`${prefix}${cls.exact}\`${cls.closest ? `, no step of the scale; its closest is \`${prefix}${cls.closest.cls}\` (${px(cls.closest.px)})` : ""}${cls.note ? ` (${cls.note})` : ""}${when}.`,
           );
         }
       }

@@ -1,5 +1,8 @@
+// @vitest-environment happy-dom
 import { describe, expect, it } from "vitest";
-import { sameLook } from "./verify.ts";
+import { inlinePreview } from "../test/inlinePreview.ts";
+import { EditHistory } from "./history.ts";
+import { checkJob, sameLook } from "./verify.ts";
 
 describe("a change landed when it looks the same", () => {
   it("shadows: the layers that draw nothing don't count (Tailwind's empty ones)", () => {
@@ -29,5 +32,25 @@ describe("a change landed when it looks the same", () => {
     expect(sameLook("transform", "matrix(1, 0, 0, 1, 0, 0)", "matrix(1, 0, 0, 1, 1, 0)")).toBe(false);
     expect(sameLook("color", "rgb(0, 0, 1)", "rgb(0, 0, 0)")).toBe(false);
     expect(sameLook("display", "block", "flex")).toBe(false);
+  });
+});
+
+describe("a change under a condition", () => {
+  it("is checked only while the condition holds on the page, as it is; else settled on the agent's word", () => {
+    const el = document.createElement("div");
+    document.body.append(el);
+    const history = new EditHistory(inlinePreview());
+    const open = { words: "it has data-open", selector: "&[data-open]" };
+    history.apply(el, "opacity", "0.5", undefined, { condition: open });
+    history.send("job-1");
+    // Without data-open: the condition doesn't hold, nothing to compare.
+    expect(checkJob(history, "job-1").results.map((r) => r.outcome)).toEqual(["unchecked"]);
+    // Shown as if true: still not the page as it is.
+    el.setAttribute("data-open", "");
+    history.simulate(open, "true");
+    expect(checkJob(history, "job-1").results.map((r) => r.outcome)).toEqual(["unchecked"]);
+    history.simulate(open, null);
+    expect(checkJob(history, "job-1").results.map((r) => r.outcome)).not.toEqual(["unchecked"]);
+    el.remove();
   });
 });

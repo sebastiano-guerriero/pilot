@@ -229,3 +229,44 @@ describe("the preview's rules", () => {
   });
 });
 
+
+describe("changes under a condition", () => {
+  const open = { words: "it has data-open", selector: "&[data-open]" };
+  let shown: Array<{ property: string; value: string; condition?: unknown }>;
+  const recording = () =>
+    new EditHistory({
+      render: (rules) => {
+        shown = rules.map((r) => ({ property: r.property, value: r.value, ...(r.condition ? { condition: r.condition } : {}) }));
+      },
+    });
+
+  it("are their own: they don't replace the element's value, and its value doesn't replace them", () => {
+    const h = recording();
+    h.apply(el, "color", "red");
+    h.apply(el, "color", "blue", undefined, { condition: open });
+    h.apply(el, "color", "green");
+    expect(h.valueOf(el, "color", "base")).toBe("green");
+    expect(h.valueOf(el, "color", "base", undefined, open)).toBe("blue");
+    // Another phrasing of the same condition is the same condition.
+    expect(h.valueOf(el, "color", "base", undefined, { words: "with data-open", selector: "&[data-open]" })).toBe("blue");
+    expect(h.changes().map((c) => [c.value, c.condition?.selector ?? ""])).toEqual([
+      ["blue", "&[data-open]"],
+      ["green", ""],
+    ]);
+  });
+
+  it("shown as if true (the condition left out) or false (not shown), the preview only; null: as the page says", () => {
+    const h = recording();
+    h.apply(el, "color", "blue", undefined, { condition: open });
+    expect(shown).toEqual([{ property: "color", value: "blue", condition: open }]);
+    h.simulate(open, "true");
+    expect(shown).toEqual([{ property: "color", value: "blue" }]);
+    expect(h.simulation(open)).toBe("true");
+    h.simulate(open, "false");
+    expect(shown).toEqual([]);
+    h.simulate(open, null);
+    expect(shown).toEqual([{ property: "color", value: "blue", condition: open }]);
+    // Never recorded: the change is the same.
+    expect(h.changes()[0]?.condition).toEqual(open);
+  });
+});

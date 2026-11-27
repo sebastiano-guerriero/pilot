@@ -39,6 +39,11 @@ export interface Modifier {
    * the window's, or one of the page's breakpoints. Picking it sets that end.
    */
   width?: { end: "from" | "to"; value: number; window?: boolean };
+  /**
+   * Create modifier: the words typed after `/` that matched no modifier, as a condition (edits/condition.ts), set
+   * at once when Pilot reads them, else described on in the search.
+   */
+  words?: string;
 }
 
 export const MODIFIERS: Modifier[] = [
