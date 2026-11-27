@@ -11,7 +11,8 @@ import { type AgentKind, isAgentKind } from "./agents.ts";
  */
 
 export function configFile(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, home = homedir()): string {
-  const base = platform === "win32" ? (env.APPDATA ?? join(home, "AppData", "Roaming")) : (env.XDG_CONFIG_HOME ?? join(home, ".config"));
+  // An empty variable is as good as none (the XDG spec says so): else the settings would land in the current folder.
+  const base = platform === "win32" ? env.APPDATA || join(home, "AppData", "Roaming") : env.XDG_CONFIG_HOME || join(home, ".config");
   return join(base, "usepilot", "projects.json");
 }
 

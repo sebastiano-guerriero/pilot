@@ -24,3 +24,12 @@ describe("isSetUp", () => {
     expect(isSetUp(join(dir, "nope"), file)).toBe(false);
   });
 });
+
+describe("configFile", () => {
+  it("in the home folder's config folder; an empty XDG_CONFIG_HOME or APPDATA counts as unset (not the current folder)", async () => {
+    const { configFile } = await import("./config.ts");
+    expect(configFile({ XDG_CONFIG_HOME: "" }, "linux", "/home/me")).toBe(join("/home/me", ".config", "usepilot", "projects.json"));
+    expect(configFile({ XDG_CONFIG_HOME: "/x" }, "linux", "/home/me")).toBe(join("/x", "usepilot", "projects.json"));
+    expect(configFile({ APPDATA: "" }, "win32", "C:\\Users\\me")).toBe(join("C:\\Users\\me", "AppData", "Roaming", "usepilot", "projects.json"));
+  });
+});
