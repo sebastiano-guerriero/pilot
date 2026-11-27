@@ -2,7 +2,7 @@ import { isModifierQuery } from "../../../search/modifiers.ts";
 import { usedModifiers } from "../../../search/used.ts";
 import { type ElementState, type WidthRange, isPseudoElement } from "@pilot/protocol";
 import { Component, type ComponentChildren, Fragment } from "preact";
-import { type Declared, isFromReset } from "../../../dom/declared.ts";
+import { type Declared, declaredValue, isFromReset } from "../../../dom/declared.ts";
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import type { BoxArea } from "../../../dom/boxModel.ts";
 import type { EditableElement } from "../../../dom/target.ts";
@@ -341,6 +341,17 @@ export function PropertyDialog({
     if (!(e.relatedTarget instanceof Element) || !ref.current?.contains(e.relatedTarget)) setFocusedEditor(null);
   };
 
+  // The focused editor's value is forced by the element's own style attribute (`style="…!important"`), which nothing
+  // beats: Pilot's change can't show on the page, so the footer says why (an `!important` in the project's CSS is
+  // matched instead, dom/anchored.ts).
+  const focusedMatch = focusedEditor ? matches.find((m) => m.id === focusedEditor) : undefined;
+  const forced =
+    !!focusedMatch &&
+    propertiesOf(focusedMatch).some((p) => {
+      const d = declaredValue(element, p);
+      return d?.source === "inline" && d.important;
+    });
+
   // The property in use (its field focused, dragged or just changed): where its values apply among the
   // widths, for the bars under the ruler, when it has rules for some widths (the owner's design, 2026-11-26).
   const inUse = editing ?? focusedEditor;
@@ -583,7 +594,7 @@ export function PropertyDialog({
               <ScrollThumb target={listRef} />
             </div>
             <footer class="footer" data-area={editorHint ? "editor-hint" : focusArea} aria-live="polite">
-              {editorHint ?? <Hint area={focusArea} />}
+              {editorHint ?? (forced ? <ForcedHint /> : <Hint area={focusArea} />)}
             </footer>
           </>
         )}
@@ -913,6 +924,11 @@ function Hint({ area }: { area: "search" | "editor" }) {
       <kbd>Tab</kbd> or <kbd>Enter</kbd> to edit
     </>
   );
+}
+
+/** The footer while a value is forced by the element's style attribute: why the page doesn't change. */
+function ForcedHint() {
+  return <>The element's style attribute forces this value: the page won't show changes, the agent still makes them.</>;
 }
 
 /**

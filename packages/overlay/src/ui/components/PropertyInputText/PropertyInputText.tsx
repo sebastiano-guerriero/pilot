@@ -309,6 +309,9 @@ export function PropertyInputText({
     const el = ref.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      // Not focused, a long value is cut with an ellipsis from its start: a sideways scroll (a trackpad) would show
+      // its middle under the ellipsis ("acing 300m…"), so it doesn't move. Focused, it scrolls through as usual.
+      if (!el.matches(":focus") && Math.abs(e.deltaX) > Math.abs(e.deltaY)) return void e.preventDefault();
       // Shift turns the wheel sideways on macOS: deltaX then.
       const delta = e.deltaY || e.deltaX;
       if (!onStep || !editing.current || menu || !delta) return;
@@ -325,8 +328,18 @@ export function PropertyInputText({
       commit();
       onStep((e.shiftKey ? 10 : 1) * (px < 0 ? 1 : -1), el.value, burst.gesture);
     };
+    // Left at the end after editing (or moved some other way): back to the start once it isn't focused.
+    const toStart = () => {
+      if (!el.matches(":focus") && el.scrollLeft) el.scrollLeft = 0;
+    };
     el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
+    el.addEventListener("blur", toStart);
+    el.addEventListener("scroll", toStart);
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("blur", toStart);
+      el.removeEventListener("scroll", toStart);
+    };
   });
 
   const onKeyDown = (e: KeyboardEvent) => {

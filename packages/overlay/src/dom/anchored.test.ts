@@ -61,6 +61,15 @@ describe("renderAnchored", () => {
     expect(pilotRules()).toEqual([]);
   });
 
+  it("the project's value is !important (Tailwind's !pt-4): Pilot's is too, so the change shows", () => {
+    style.textContent += "\n.box { margin: 4px !important; }";
+    renderAnchored([{ element, property: "margin", text: "margin: 20px;", id: 7 }], false);
+    expect(pilotRules().join("\n")).toContain("margin: 20px !important");
+    // Not where nothing is: padding stays plain.
+    renderAnchored([request("padding: 20px;")], false);
+    expect(pilotRules().join("\n")).not.toContain("padding: 20px !important");
+  });
+
   it("nothing to sit beside (a property the element declares nowhere): left to the caller's layer", () => {
     const left = renderAnchored([{ element, property: "color", text: "color: red;", id: 7 }], false);
     expect(left.map((r) => r.property)).toEqual(["color"]);

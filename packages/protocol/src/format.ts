@@ -96,7 +96,7 @@ function advancedTask(): string {
  */
 const DESIGN_INTENT =
   "**These are design instructions, not code**: the designer's intent, shown as plain CSS values. Use your judgment and write production code the way this project already styles things, whatever it uses (Tailwind, CSS or Sass modules, StyleX, vanilla-extract, Panda, styled-components, Emotion, a component library's props…). First look at how each element's component is styled, and follow that: its tokens and scale, its variants and props, and the rule that already styles it rather than a new override.";
-const PRODUCTION_CODE = "No inline styles, no `!important`, no hard-coded values where a token or utility fits.";
+const PRODUCTION_CODE = "No inline styles, no new `!important` (keep the ones the project has), no hard-coded values where a token or utility fits.";
 /**
  * The answers to "all of them, or only this one?" (shared code the
  * designer changed in only some copies), and what each asks of the code,
@@ -602,7 +602,7 @@ function formatEdit(edit: ElementEdit, n: number): string[] {
     const widths = c.widths ? describeWidths(c.widths) : "base";
     out.push(`| \`${c.property}\` | ${from} | ${to} | ${widths} |${withStates ? ` ${describeStates(c.states)} |` : ""}`);
   }
-  const notes = changes.flatMap((c) => [c.removed && removalNote(c), mediaNote(c), equivalentsNote(c)].filter((n): n is string => !!n));
+  const notes = changes.flatMap((c) => [c.removed && removalNote(c), mediaNote(c), importantNote(c), equivalentsNote(c)].filter((n): n is string => !!n));
   if (notes.length) out.push("", ...notes.map((n) => `- ${n}`));
   return out;
 }
@@ -637,6 +637,16 @@ function mediaNote(c: StyleChange): string | null {
   return c.widths
     ? `${today} The change is for ${describeWidths(c.widths)}.`
     : `${today} The change has no width: set it without a media query, and keep that one as it is.`;
+}
+
+/**
+ * The old value is `!important` in the project: change that declaration and
+ * keep it so, or the new value loses to whatever it was beating (Pilot's
+ * preview matched it, dom/anchored.ts, so the page showed it winning).
+ */
+function importantNote(c: StyleChange): string | null {
+  if (!c.important || c.removed) return null;
+  return `\`${c.property}\` is \`!important\` in the project today (Tailwind's \`!\` prefix, or \`!important\` in its rule): change that declaration and keep it important, so the new value still wins where the old one did.`;
 }
 
 /**

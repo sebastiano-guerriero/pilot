@@ -13,10 +13,11 @@
     align-items: center;
   }
 
+  /* Chips and the + spaced as the dialog's rows (PropertyDialog.css), so a list reads as rows of it. */
   .layer-list {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 8px;
     min-width: 0;
   }
 

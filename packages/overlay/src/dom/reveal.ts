@@ -33,12 +33,22 @@ function axis(start: number, end: number, size: number, block: "nearest" | "cent
  * Scrolls `container`, one of Pilot's own lists (the DOM tree's rows, a
  * select's options), so `item` shows: just enough, and nothing else
  * scrolls. Never `scrollIntoView()`: it would scroll every scroller around
- * the list too, the page's included.
+ * the list too, the page's included. The list's own padding stays in view
+ * around it: a select's last option keeps the menu's 4px under it (flush with
+ * the edge, it read as cut off).
  */
 export function scrollWithin(container: Element | null | undefined, item: Element | null | undefined, axes: "y" | "both" = "y"): void {
   if (!container || !item) return;
   const box = container.getBoundingClientRect();
-  const { x, y } = windowScroll(item.getBoundingClientRect(), { width: box.width, height: box.height }, "nearest", box);
+  const style = getComputedStyle(container);
+  const pad = (side: "Top" | "Bottom" | "Left" | "Right") => parseFloat(style[`padding${side}`]) || 0;
+  const inner = {
+    left: box.left + pad("Left"),
+    top: box.top + pad("Top"),
+    width: box.width - pad("Left") - pad("Right"),
+    height: box.height - pad("Top") - pad("Bottom"),
+  };
+  const { x, y } = windowScroll(item.getBoundingClientRect(), { width: inner.width, height: inner.height }, "nearest", inner);
   if (y) container.scrollTop += y;
   if (x && axes === "both") container.scrollLeft += x;
 }

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { revealInWindow, windowScroll } from "./reveal.ts";
+import { revealInWindow, scrollWithin, windowScroll } from "./reveal.ts";
 
 const viewport = { width: 1000, height: 800 };
 const box = (top: number, bottom: number, left = 100, right = 200) => ({ top, bottom, left, right });
@@ -45,6 +45,24 @@ describe("revealInWindow", () => {
     expect(scrollBy).toHaveBeenCalledWith({ left: 0, top: 2020 - window.innerHeight, behavior: "auto" });
     expect(intoView).not.toHaveBeenCalled();
     expect(frame.scrollTop).toBe(0);
+  });
+});
+
+describe("scrollWithin", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    document.body.innerHTML = "";
+  });
+
+  it("shows the item with the list's padding around it: a menu's last option keeps the 4px under it", () => {
+    document.body.innerHTML = `<div id="list" style="padding: 4px; overflow-y: auto"><p id="last">Last</p></div>`;
+    const list = document.getElementById("list") as HTMLElement;
+    const last = document.getElementById("last") as HTMLElement;
+    vi.spyOn(list, "getBoundingClientRect").mockReturnValue({ top: 0, bottom: 320, left: 0, right: 200, width: 200, height: 320 } as DOMRect);
+    vi.spyOn(last, "getBoundingClientRect").mockReturnValue({ top: 340, bottom: 380, left: 4, right: 196 } as DOMRect);
+    scrollWithin(list, last);
+    // Its bottom 4px above the list's: 380 - (320 - 4).
+    expect(list.scrollTop).toBe(64);
   });
 });
 

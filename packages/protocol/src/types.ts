@@ -123,6 +123,12 @@ export interface StyleChange {
   /** Where `from` is declared in the page's CSS, when known. */
   source?: StyleSource;
   /**
+   * `from` is declared `!important` (Tailwind's `!pt-4`, `padding: 1rem
+   * !important`): the agent changes that declaration and keeps it important,
+   * so the new value still wins where the old one did.
+   */
+  important?: boolean;
+  /**
    * The viewport widths the change is for, as the designer set them (the
    * width chip in Pilot's search). Absent: the base value, the one declared
    * without a media query (the project's breakpoints keep theirs).

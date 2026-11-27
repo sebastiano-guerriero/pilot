@@ -53,7 +53,7 @@ export function buildChangeSet(
     const page = removal || !element.isConnected ? null : widths ? rangeValue(element, property, widths, states) : baseValue(element, property, states);
     const styleChange: StyleChange = removal
       ? { property, from: removal.from, to: "", removed: true, source: removal.source }
-      : { property, from: page?.value ?? "", to: value, ...(page && { source: sourceOf(element, page) }) };
+      : { property, from: page?.value ?? "", to: value, ...(page && { source: sourceOf(element, page) }), ...(page?.important && { important: true }) };
     if (widths) styleChange.widths = widths;
     if (states?.length) styleChange.states = states;
     const equivalents = removal ? null : equivalentsOf(property, value);

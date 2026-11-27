@@ -34,7 +34,7 @@ describe("formatPrompt", () => {
     expect(prompt).toContain("**These are design instructions, not code**");
     expect(prompt).toContain("whatever it uses (Tailwind, CSS or Sass modules, StyleX");
     expect(prompt).toContain("First look at how each element's component is styled");
-    expect(prompt).toContain("no `!important`");
+    expect(prompt).toContain("no new `!important` (keep the ones the project has)");
     // One question per job: several shared components with some copies changed are asked about together.
     expect(prompt).toContain("ask one question naming each in **bold** (\"Not changed yet: every **PlanCard** and **FeatureCard**, or only the ones you changed?\")");
     // Said as what the designer did: a comment's or a task's element is "this one", their edits "the ones you changed".
@@ -161,6 +161,15 @@ describe("formatPrompt", () => {
     expect(prompt).toContain('"Base" is the element\'s base value');
     expect(prompt).toContain("keep the project's media queries, states and conditions for that property as they are");
     expect(prompt).not.toContain("no existing media query should override it");
+  });
+
+  it("an !important value in the project: the agent keeps it important", () => {
+    const prompt = formatPrompt({
+      ...changeSet,
+      edits: [{ target: changeSet.edits[0]!.target, changes: [{ property: "padding-top", from: "16px", to: "20px", important: true }] }],
+    });
+    expect(prompt).toContain("`padding-top` is `!important` in the project today");
+    expect(prompt).toContain("keep it important");
   });
 
   it("adds a State column only when a change has states", () => {

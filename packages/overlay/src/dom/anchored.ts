@@ -55,14 +55,20 @@ export interface AnchorRequest {
 }
 
 /** Where a change goes among the page's rules. */
-type Spot =
+type Spot = (
   | { kind: "beside"; declared: Placed["declared"]; media?: string }
-  | { kind: "after"; unit: CSSRule; selector: string };
+  | { kind: "after"; unit: CSSRule; selector: string }
+) & {
+  /** The project's value it competes with is `!important` (`!pt-4`, `padding: 1rem !important`): Pilot's is too. */
+  important: boolean;
+};
 
 /** One change shown in the page's CSS. */
 interface Shown {
   element: Element;
+  /** The request's text, as asked for (without the `!important` Pilot may add). */
   text: string;
+  important: boolean;
   /** What it's placed by: the declaration it sits beside, or the rule it comes after. */
   by: CSSStyleDeclaration | CSSRule;
   /** What Pilot inserted (to take it away), and the declarations it writes (to update in place). */
@@ -101,9 +107,11 @@ export function renderAnchored(requests: AnchorRequest[], check: boolean): Ancho
     const looked = !entry || check || !live(entry.rule);
     const spot = looked ? spotFor(request) : null;
     if (entry && live(entry.rule) && entry.element === request.element && (!looked || (spot && byOf(spot, request.element) === entry.by))) {
-      if (entry.text !== request.text) {
-        entry.style.cssText = request.text;
+      const important = spot ? spot.important : entry.important;
+      if (entry.text !== request.text || entry.important !== important) {
+        entry.style.cssText = withImportance(request.text, important);
         entry.text = request.text;
+        entry.important = important;
       }
       lastBy.set(entry.by, entry.rule);
       continue;
@@ -123,7 +131,7 @@ export function renderAnchored(requests: AnchorRequest[], check: boolean): Ancho
       continue;
     }
     lastBy.set(by, placed.rule);
-    shown.set(key, { element: request.element, text: request.text, by, ...placed });
+    shown.set(key, { element: request.element, text: request.text, important: spot.important, by, ...placed });
   }
   return left;
 }
@@ -152,7 +160,13 @@ function spotFor(request: AnchorRequest): Spot | null {
         !best || beats({ important: r.placed.declared.important, rule: r.placed.match }, { important: best.placed.declared.important, rule: best.placed.match }) ? r : best,
       undefined,
     );
-  if (exact) return { kind: "beside", declared: exact.placed.declared, ...(exact.placed.media ? { media: exact.placed.media } : {}) };
+  // `!important` when what it competes with is: a declaration of the project's that applies where it does, for these
+  // states or with none (the base applies in every state). Otherwise the project's `!pt-4` beats Pilot's change and
+  // nothing happens on the page while the field shows the new value (the owner's call, 2026-11-27). The agent then
+  // changes that declaration, keeping its `!important` (the prompt says so).
+  const competing = states?.length ? [...rules, ...declarationsOf(element, property).flatMap((p) => (p.media ? [] : [{ placed: p, range: {} }]))] : rules;
+  const important = competing.some((r) => r.placed.declared.important && overlaps(r.range, want));
+  if (exact) return { kind: "beside", declared: exact.placed.declared, ...(exact.placed.media ? { media: exact.placed.media } : {}), important };
   // A rule of its own: the element's selector, as its base rule writes it.
   const base = baseValue(element, property);
   const selector = base?.rule && base.source !== "inline" ? base.source.selector : rules[0] ? subjectStates(rules[0].placed.declared.source.selector).stripped : null;
@@ -169,7 +183,16 @@ function spotFor(request: AnchorRequest): Spot | null {
   }
   const by = after?.placed.declared.rule ?? (base?.rule && base.source !== "inline" ? base.rule : null);
   const unit = by && unitOf(by);
-  return unit ? { kind: "after", unit, selector } : null;
+  return unit ? { kind: "after", unit, selector, important } : null;
+}
+
+/** `padding-top: 20px;` → `padding-top: 20px !important;` when `important` (each declaration, as the browser writes them). */
+function withImportance(text: string, important: boolean): string {
+  if (!important) return text;
+  const style = document.createElement("div").style;
+  style.cssText = text;
+  for (const property of Array.from(style)) style.setProperty(property, style.getPropertyValue(property), "important");
+  return style.cssText.trim();
 }
 
 /**
@@ -217,7 +240,8 @@ function remove(rule: CSSRule) {
  * change placed by the same rule). Null when the page's stylesheet can't take
  * it (not readable, or the browser refuses).
  */
-function place(spot: Spot, request: AnchorRequest, after?: CSSRule): { rule: CSSRule; style: CSSStyleDeclaration } | null {
+function place(spot: Spot, asked: AnchorRequest, after?: CSSRule): { rule: CSSRule; style: CSSStyleDeclaration } | null {
+  const request = { ...asked, text: withImportance(asked.text, spot.important) };
   const where = `[data-pilot-edit="${request.id}"]`;
   const own = (selector: string) => {
     // A color scheme the project's way: a class on the root after the subject, or a media condition.
