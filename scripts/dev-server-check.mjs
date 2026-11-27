@@ -19,7 +19,7 @@
 // Needs the network once per run (npm installs Vite, Next.js and React into temporary projects).
 
 import { spawn, spawnSync } from "node:child_process";
-import { appendFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -263,7 +263,24 @@ function project(name, files, deps, tarball) {
     writeFileSync(join(dir, file), typeof text === "string" ? text : JSON.stringify(text, null, 2));
   }
   sh("npm", ["install", "--no-audit", "--no-fund", "--loglevel=error", tarball, ...deps], dir);
+  setUpHere(dir);
   return dir;
+}
+
+/**
+ * Pilot set up for the project on this (stand-in) computer, as `init` leaves it: the dev server starts Pilot only
+ * then (config.ts, isSetUp). In the home folder's settings, under the folder as given and as the dev server's own
+ * `process.cwd()` reads it (macOS's temp folder is a link: /var → /private/var).
+ */
+function setUpHere(dir) {
+  const file = WIN ? join(home, "AppData", "Roaming", "usepilot", "projects.json") : join(home, ".config", "usepilot", "projects.json");
+  let projects = {};
+  try {
+    projects = JSON.parse(readFileSync(file, "utf8"));
+  } catch {}
+  for (const folder of new Set([resolve(dir), realpathSync(dir)])) projects[folder] = { ...projects[folder], setUp: true };
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, `${JSON.stringify(projects, null, 2)}\n`);
 }
 
 async function check(name, fn) {

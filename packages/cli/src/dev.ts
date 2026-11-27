@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { configFile, isSetUp, projectName } from "./config.ts";
 import { type Runner, RunnerError, RunnerStopped, startRunner } from "./run.ts";
 
 /**
@@ -11,6 +12,12 @@ import { type Runner, RunnerError, RunnerStopped, startRunner } from "./run.ts";
  * (waitForAgent): the designer can try Pilot before signing in, and the page
  * says what to do (docs/handoff.md, *Starting with the dev server*).
  *
+ * Only on a computer where Pilot is set up for the project (`init` ran there,
+ * or `npx usepilot`: isSetUp in config.ts, a file of this computer's, never
+ * the repo's). The configs that start it are the team's, committed: a
+ * teammate who never set Pilot up gets one line in the dev server's log
+ * saying how to, and nothing else (the owner's call, 2026-11-27).
+ *
  * Development only, like everything Pilot sets up: never in a production
  * process (NODE_ENV=production), nor in CI (a dev server started for tests
  * must not run anyone's agent). Each hook adds its own check on top: Vite's
@@ -21,6 +28,9 @@ import { type Runner, RunnerError, RunnerStopped, startRunner } from "./run.ts";
 export const RUNNER_ENV = "USEPILOT_RUNNER";
 
 const STARTED = Symbol.for("usepilot.devRunner");
+
+/** Set once the dev server's log said Pilot isn't set up on this computer, so it's said once. */
+const OFF_SAID_ENV = "USEPILOT_OFF_SAID";
 
 export interface DevOptions {
   /** Where the dev server runs: the project is the closest folder up with a package.json. */
@@ -66,9 +76,18 @@ export function startWithDevServer(options: DevOptions = {}): DevRunner | null {
   if (global[STARTED]) return global[STARTED];
   const parent = Number(env[RUNNER_ENV]);
   if (parent && parent !== process.pid && alive(parent)) return null;
-  env[RUNNER_ENV] = String(process.pid);
 
   const project = projectFolder(options.cwd ?? process.cwd());
+  if (!isSetUp(project, options.runner?.configFile ?? configFile(env))) {
+    // Said once per dev server: not again in Next.js's other processes (they inherit the env), nor on a Vite restart.
+    if (!env[OFF_SAID_ENV]) {
+      out(`Pilot isn't set up for ${projectName(project)} on this computer, so it doesn't start. To use it: npx usepilot init (in ${project}).`);
+      env[OFF_SAID_ENV] = "1";
+    }
+    return null;
+  }
+  env[RUNNER_ENV] = String(process.pid);
+
   let closed = false;
   // Closing before it started (the dev server ended before a page opened): it stops waiting for one.
   const stop = new AbortController();

@@ -34,6 +34,8 @@ How to use Pilot, task by task. This guide is for **usepilot 0.16.0**: it ships 
 2. **Restart your dev server** and open your app. Pilot opens on every page, and you can design right away. The dev server's terminal shows each job's progress (`[pilot]` lines).
 3. **Sign in once, when Pilot asks.** The first time you send something (Send, or a comment), Pilot opens your agent's sign-in page in your browser; what you sent waits, and goes once you've signed in. Already signed in to your agent's command-line tool? Nothing to do. To sign in in a terminal instead: `claude auth login`, `codex login` or `cursor-agent login`.
 
+**Your teammates:** the setup lives in the project's files, but Pilot starts with the dev server only on computers where it's set up (where `init` or `npx usepilot` ran). Teammates who haven't set it up see one line in their dev server's terminal and nothing else; to use Pilot, they run `npx usepilot init` in the project once.
+
 **A dev server Pilot can't start with?** Run `npx usepilot` in the project's folder, in a terminal beside it, and keep it running.
 
 **Choosing the agent:** Pilot uses the agent you set it up with. `npx usepilot init --agent codex` (or `claude`, `cursor`) switches, remembered for the project; then restart your dev server. (`npx usepilot --agent codex` does the same when you run Pilot that way.)

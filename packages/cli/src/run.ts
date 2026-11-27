@@ -6,7 +6,7 @@ import { DEFAULT_BRIDGE_PORT, isLocalHost, originKey, originOf, propsOf, questio
 import { AGENTS, type AgentCli, type AgentKind, detectAgents, exec, type FoundAgent, installCommand, missingFlags, NOTHING_PRINTED, type Refused, refusedNote, refusedOf, type RunOutput } from "./agents.ts";
 import { Bridge } from "./agent.ts";
 import { attachmentBlocks, attachmentsDir, newAttachments } from "./attachments.ts";
-import { projectName, saveAgent, savedAgent } from "./config.ts";
+import { markSetUp, projectName, saveAgent, savedAgent } from "./config.ts";
 import { factsSection } from "./facts.ts";
 import { jobLocations, searchable, whereSection, withComponentFiles } from "./locate.ts";
 import { type Lease, SessionPool } from "./pool.ts";
@@ -97,6 +97,8 @@ export async function startRunner(options: RunnerOptions): Promise<Runner> {
   if (!searchable(project)) {
     throw new RunnerError(`${project} isn't a project folder (no package.json or .git). Run npx usepilot in your project's folder.`);
   }
+  // Run by hand (`npx usepilot`): Pilot is set up on this computer for the project, so its dev server starts it from now on (dev.ts).
+  if (!options.waitForAgent) markSetUp(project, options.configFile);
 
   // The agent: ready now, or (waitForAgent) the one Pilot waits for and what to do about it.
   let state = options.waitForAgent ? await readiness(options, choose) : { ready: await pickAgent(options, choose, out) };

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { FoundAgent } from "./agents.ts";
-import { savedAgent } from "./config.ts";
+import { configFile, isSetUp, savedAgent } from "./config.ts";
 import { detectFramework, init, packageManager } from "./init.ts";
 
 let dir: string;
@@ -55,6 +55,16 @@ describe("usepilot init", () => {
     const nothing = await init({ detect: none, env: {}, home, cwd: dir, install: false });
     expect(nothing).toContain("**Ask the user which coding agent Pilot should run**");
     expect(nothing).toContain("`claude auth login`");
+  });
+
+  it("marks Pilot as set up for the project on this computer, in the home folder's settings: its dev server starts it (a teammate's doesn't)", async () => {
+    await files({ "package.json": { devDependencies: { vite: "^7" } } });
+    const settings = configFile({}, "darwin", home);
+    expect(isSetUp(dir, settings)).toBe(false);
+    await init({ detect: none, env: {}, home, cwd: dir, install: false, platform: "darwin" });
+    expect(isSetUp(dir, settings)).toBe(true);
+    // An agent saved for it (npx usepilot, init --agent) counts too: set up before this marker existed.
+    expect(isSetUp(join(dir, "other"), settings)).toBe(false);
   });
 
   it("the install commands are the platform's: PowerShell's on Windows, where curl | bash doesn't run", async () => {

@@ -25,7 +25,7 @@ export interface SavedSession {
   since: number;
 }
 
-type Projects = Record<string, { agent?: string; editor?: SavedSession[] }>;
+type Projects = Record<string, { agent?: string; editor?: SavedSession[]; setUp?: boolean }>;
 
 function read(file: string): Projects {
   try {
@@ -46,6 +46,27 @@ export function savedAgent(folder: string, file = configFile()): AgentKind | und
 export function saveAgent(folder: string, agent: AgentKind, file = configFile()): void {
   const projects = read(file);
   projects[resolve(folder)] = { ...projects[resolve(folder)], agent };
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, `${JSON.stringify(projects, null, 2)}\n`);
+}
+
+/**
+ * Whether Pilot is set up for this project folder on this computer: `init`
+ * ran here (markSetUp), or an agent was saved for it (`init --agent`, or
+ * `npx usepilot` here). The dev server starts Pilot only then (dev.ts): the
+ * project's files are shared, and a teammate who never set Pilot up doesn't
+ * get it started with their dev server.
+ */
+export function isSetUp(folder: string, file = configFile()): boolean {
+  const project = read(file)[resolve(folder)];
+  return !!project && (project.setUp === true || isAgentKind(project.agent));
+}
+
+/** Marks Pilot as set up for this project folder on this computer (see isSetUp): `init` does. */
+export function markSetUp(folder: string, file = configFile()): void {
+  const projects = read(file);
+  if (projects[resolve(folder)]?.setUp) return;
+  projects[resolve(folder)] = { ...projects[resolve(folder)], setUp: true };
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, `${JSON.stringify(projects, null, 2)}\n`);
 }

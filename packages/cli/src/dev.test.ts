@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { markSetUp } from "./config.ts";
 import { devGuard, projectFolder, RUNNER_ENV, startWithDevServer } from "./dev.ts";
 
 // Below 49152: Windows reserves blocks of the dynamic range above it (listening there fails with EACCES).
@@ -11,11 +12,12 @@ afterEach(async () => {
   for (const fn of cleanup.splice(0).reverse()) await fn();
 });
 
-/** A project folder (a package.json) with a subfolder, like Vite's `root` can be. */
-function project() {
+/** A project folder (a package.json) with a subfolder, like Vite's `root` can be; set up for Pilot on this computer (its config file, runnerFor's) unless `setUp` is false. */
+function project(setUp = true) {
   const dir = mkdtempSync(join(tmpdir(), "pilot-dev-"));
   writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "app" }));
   mkdirSync(join(dir, "src"));
+  if (setUp) markSetUp(dir, join(dir, "c.json"));
   return dir;
 }
 
@@ -59,6 +61,18 @@ describe("Pilot started with the dev server", () => {
     cleanup.push(() => second?.close());
     expect(second).not.toBe(first);
     expect(await second?.started).not.toBeNull();
+  });
+
+  it("only on a computer where Pilot is set up for the project: a teammate's dev server, from the same configs, says how and starts nothing", () => {
+    const dir = project(false);
+    const env: NodeJS.ProcessEnv = {};
+    const lines: string[] = [];
+    expect(startWithDevServer({ cwd: join(dir, "src"), env, out: (l) => lines.push(l), runner: runnerFor(dir) })).toBeNull();
+    expect(lines).toEqual([`Pilot isn't set up for app on this computer, so it doesn't start. To use it: npx usepilot init (in ${dir}).`]);
+    expect(env[RUNNER_ENV]).toBeUndefined();
+    // Once per dev server: a restart, or Next.js's other processes, say nothing more.
+    expect(startWithDevServer({ cwd: dir, env, out: (l) => lines.push(l), runner: runnerFor(dir) })).toBeNull();
+    expect(lines).toHaveLength(1);
   });
 
   it("not in a child of a process that runs it", () => {

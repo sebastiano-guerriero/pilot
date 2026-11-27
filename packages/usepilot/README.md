@@ -20,7 +20,7 @@ Pilot works with **Claude Code**, **Codex** or **Cursor**, on your agent's usual
    Set up Pilot in this project: run `npx usepilot@latest init` and follow what it prints.
    ```
 
-   Your agent adds Pilot to your app and sets it to start with your dev server. Pilot only runs while you develop: it never ships to your live site. Pilot runs your agent's terminal app for each job, not its chat window, so if that isn't installed yet, your agent installs it (it asks you first).
+   Your agent adds Pilot to your app and sets it to start with your dev server, on your computer only: teammates who share the project don't get it until they run `npx usepilot init` themselves. Pilot only runs while you develop: it never ships to your live site. Pilot runs your agent's terminal app for each job, not its chat window, so if that isn't installed yet, your agent installs it (it asks you first).
 
 2. **Restart your dev server** and open your app. Pilot appears on every page, and you can start designing right away.
 

@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { AGENTS as AGENT_CLIS, type AgentKind, agentFromEnv, detectAgents, type FoundAgent, installCommand, isAgentKind } from "./agents.ts";
-import { projectName, saveAgent } from "./config.ts";
+import { configFile, markSetUp, projectName, saveAgent } from "./config.ts";
 import { removeOldSetup } from "./legacy.ts";
 import { olderThan, VERSION } from "./version.ts";
 import { relPath } from "./paths.ts";
@@ -223,11 +223,15 @@ ${cwd} is a monorepo's root, not an app. Run \`npx usepilot@latest init\` again 
   const agents = agentLines(found, wanted, platform);
   done.push(...agents.done);
   todo.push(...agents.todo);
+  // This computer's settings for the project (config.ts), in the home folder given (tests give their own).
+  const home = options.home ?? homedir();
+  const settings = options.configFile ?? configFile(options.env ?? process.env, platform, home);
   // Saved even before it's installed or signed in: Pilot waits for that one, and runs it once it's ready.
-  if (wanted) saveAgent(cwd, wanted, options.configFile);
+  if (wanted) saveAgent(cwd, wanted, settings);
+  // Pilot is set up on this computer: the dev server starts it here (a teammate's, from the same configs, doesn't).
+  markSetUp(cwd, settings);
 
   // 3. Pilot's old setup (an agent's chat running it): removed, so no chat starts an old Pilot.
-  const home = options.home ?? homedir();
   const removed = await removeOldSetup(root, home, platform, run);
   if (removed.length) done.push(`Removed Pilot's old chat setup (its MCP server and \`/pilot\` skill): ${removed.map((r) => `\`${r}\``).join(", ")}. Pilot runs the agent itself now.`);
 
