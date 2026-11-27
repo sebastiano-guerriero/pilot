@@ -768,7 +768,8 @@ function editorsWithValues(
   widths: WidthChip | null | undefined,
   width: number,
 ): PropertyEditor[] {
-  const properties = [...new Set(editors.flatMap((e) => e.properties))];
+  // Every editor's, and its embedded rows' (transform's translate, rotate and scale, not registered on their own).
+  const properties = [...new Set(editors.flatMap((e) => [...e.properties, ...(e.embeds ?? []).flatMap((x) => x.properties)]))];
   // As the fields read them (pageValues), Pilot's own changes too.
   const page = pageValues(element, properties, history, states, widths, width);
   const isSet = (p: string) => {
@@ -777,7 +778,7 @@ function editorsWithValues(
     if (history.valueOf(element, p, at, states) !== null) return true;
     return !!declared?.value && !isFromReset(declared);
   };
-  const shown = editors.filter((e) => e.properties.some(isSet));
+  const shown = editors.filter((e) => e.properties.some(isSet) || (e.listsEmbeds && (e.embeds ?? []).some((x) => x.properties.some(isSet))));
   const embedded = new Set(shown.flatMap((e) => e.embeds ?? []));
   return inListOrder(shown.filter((e) => !embedded.has(e)));
 }

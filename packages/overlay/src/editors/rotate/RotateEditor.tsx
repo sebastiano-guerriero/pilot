@@ -1,9 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
+import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import { Tooltip } from "../../ui/components/Tooltip/Tooltip.tsx";
 import { Icon } from "../../ui/components/Icon/Icon.tsx";
 import { PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
-import { PropertySelect } from "../../ui/components/PropertySelect/PropertySelect.tsx";
 import { declaredOf, isMixed, MIXED } from "../declared.ts";
 import { normalizeQuery } from "../query.ts";
 import type { PropertyEditor, PropertyEditorProps } from "../types.ts";
@@ -11,9 +10,6 @@ import { usePerspectiveHint } from "../transforms/perspective.tsx";
 import { AXES, type Axis, axesTransform, axisVar, isAxesTransform, parseAxis, parseRotate, stepAngle } from "./rotate.ts";
 
 const PROPERTY = "rotate";
-/** The one-value select: an angle (any `rotate` value), or none (`rotate: none`). "Select" is nothing set. */
-const MODES = ["angle", "none"] as const;
-
 type View = "one" | "axes";
 
 /** Where the search lands: `rotate-x`/`-y`/`-z` (Tailwind's) on that axis, split. */
@@ -26,9 +22,9 @@ function landing(query: string): Axis | null {
 /**
  * rotate (a prototype for the owner to try): one value, or split into X, Y
  * and Z, switched by the button at the right of the row (padding's way).
- * - One value: a select (angle, none) and a field with any `rotate` value
- *   (`30deg`, `x 30deg`, `1 1 0 45deg`; the dial for a plain angle). none
- *   declares `rotate: none` and hides the field.
+ * - One value: a field with any `rotate` value (`30deg`, `x 30deg`,
+ *   `1 1 0 45deg`, `none`, typed; the dial for a plain angle), as translate
+ *   and scale (no select: the owner's call, 2026-11-27).
  * - Split: a field per axis, each its own entry (so X alone can change on
  *   hover), written as a variable plus one `transform` that combines them
  *   (rotate.ts). Empty is "not set here" (the normal value applies); `0deg`
@@ -45,17 +41,9 @@ function RotateEditor(props: PropertyEditorProps) {
     if (landing(query)) setView("axes");
   }, [query]);
 
-  // The select's "angle", picked before an angle is typed: the field shows,
-  // empty, and nothing is written until it is (from none, none stays till
-  // then). Any change of value (typed, undone) clears it.
-  const [pickedAngle, setPickedAngle] = useState(false);
-  useEffect(() => setPickedAngle(false), [value]);
-  const mode = pickedAngle ? "angle" : value === "none" ? "none" : value ? "angle" : "";
-
   const refs = useRef<Record<string, { current: HTMLInputElement | null }>>(
-    Object.fromEntries(["one", "select", ...AXES].map((k) => [k, { current: null }])),
+    Object.fromEntries(["one", ...AXES].map((k) => [k, { current: null }])),
   );
-  const selectRef = useRef<HTMLButtonElement>(null);
   const [pending, setPending] = useState<string | null>(null);
   useLayoutEffect(() => {
     if (!focusRequest) return;
@@ -63,15 +51,12 @@ function RotateEditor(props: PropertyEditorProps) {
     if (axis) {
       setView("axes");
       setPending(axis);
-    } else setPending(view === "axes" ? (focusRequest.edge === "last" ? "z" : "x") : mode === "angle" ? "one" : "select");
+    } else setPending(view === "axes" ? (focusRequest.edge === "last" ? "z" : "x") : "one");
   }, [focusRequest]);
   useLayoutEffect(() => {
     if (!pending) return;
-    if (pending === "select") selectRef.current?.focus();
-    else {
-      refs.current[pending]?.current?.focus();
-      refs.current[pending]?.current?.select();
-    }
+    refs.current[pending]?.current?.focus();
+    refs.current[pending]?.current?.select();
     setPending(null);
   }, [pending, view]);
 
@@ -96,7 +81,7 @@ function RotateEditor(props: PropertyEditorProps) {
   const toggle = () => {
     const next: View = view === "one" ? "axes" : "one";
     setView(next);
-    setPending(next === "axes" ? "x" : mode === "angle" ? "one" : "select");
+    setPending(next === "axes" ? "x" : "one");
   };
   const toggleButton = (
     <Tooltip text={view === "one" ? "Split" : "One value"}>
@@ -119,58 +104,30 @@ function RotateEditor(props: PropertyEditorProps) {
     return (
       <div class="split-editor rotate-editor" data-view="one">
         <PropertyRow label={PROPERTY} action={toggleButton}>
-          <div class="rotate-value" data-joined={mode === "angle" || undefined}>
-            <PropertySelect
-              value={mode}
-              options={MODES}
-              label="rotate"
-              // The axes set and no one value: Mixed, as a split editor's parts that differ.
-              placeholder={isMixed(props, PROPERTY) || (anyAxis && !value) ? MIXED : undefined}
-              triggerRef={selectRef}
-              // With an angle, a 24px icon beside the field (it gets the room); otherwise the select fills the row.
-              iconOnly={mode === "angle"}
-              iconFor={(m) => <Icon name={m === "angle" ? "rotate-angle" : m === "none" ? "mask-none" : "layout-empty"} />}
-              onChange={(next) => {
-                if (next === "none") return value !== "none" && onChange(PROPERTY, "none");
-                if (next === "angle") {
-                  setPickedAngle(true);
-                  requestAnimationFrame(() => {
-                    refs.current.one?.current?.focus();
-                    refs.current.one?.current?.select();
-                  });
-                  return;
-                }
-                setPickedAngle(false);
-                if (value) onChange(PROPERTY, "");
-              }}
-              onTab={(direction) => (direction > 0 && mode === "angle" ? setPending("one") : tabOut(direction))}
-            />
-            {mode === "angle" && (
-              <PropertyInputText
-                value={value === "none" ? "" : value}
-                label="rotate value"
-                placeholder="0deg"
-                inputRef={refs.current.one}
-                onCommit={(text) => {
-                  if (!text.trim()) return value && onChange(PROPERTY, "");
-                  const next = parseRotate(text);
-                  if (next && next !== value) onChange(PROPERTY, next);
-                }}
-                onStep={(delta, text, gesture) => {
-                  const next = stepAngle(text, delta);
-                  if (next) onChange(PROPERTY, next, gesture && { gesture });
-                }}
-                onScrub={(steps, startText, gesture) => {
-                  if (steps === 0) return void onRevert?.(PROPERTY, gesture);
-                  const next = stepAngle(startText, steps);
-                  if (next) onChange(PROPERTY, next, { gesture });
-                }}
-                onSubmit={onReturnToSearch}
-                onTab={(direction) => (direction < 0 ? setPending("select") : tabOut(1))}
-                dial
-              />
-            )}
-          </div>
+          <PropertyInputText
+            // An axis set and no one value: empty, reading Mixed, as a split editor's parts that differ.
+            value={value}
+            label="rotate value"
+            placeholder={isMixed(props, PROPERTY) || (anyAxis && !value) ? MIXED : "0deg"}
+            inputRef={refs.current.one}
+            onCommit={(text) => {
+              if (!text.trim()) return value && onChange(PROPERTY, "");
+              const next = parseRotate(text);
+              if (next && next !== value) onChange(PROPERTY, next);
+            }}
+            onStep={(delta, text, gesture) => {
+              const next = stepAngle(text, delta);
+              if (next) onChange(PROPERTY, next, gesture && { gesture });
+            }}
+            onScrub={(steps, startText, gesture) => {
+              if (steps === 0) return void onRevert?.(PROPERTY, gesture);
+              const next = stepAngle(startText, steps);
+              if (next) onChange(PROPERTY, next, { gesture });
+            }}
+            onSubmit={onReturnToSearch}
+            onTab={tabOut}
+            dial
+          />
         </PropertyRow>
       </div>
     );
@@ -243,8 +200,6 @@ export const rotateEditor: PropertyEditor = {
   properties: [PROPERTY, ...AXES.map(axisVar)],
   // The axes write the transform that combines them.
   reads: ["transform"],
-  // One of the transforms: searching `transform` finds it.
-  partOf: "transform",
   // Tailwind's rotate-*, rotate-x-*, rotate-y-*, rotate-z-*.
   aliases: ["rotate-45", "rotate-none", "rotate-x-45", "rotate-y-45", "rotate-z-45"],
   component: RotateEditor,

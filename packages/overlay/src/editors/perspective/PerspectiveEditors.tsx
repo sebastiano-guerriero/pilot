@@ -1,5 +1,6 @@
 import { OBJECT_POSITION_VALUES } from "../../css/properties.ts";
 import type { IconName } from "../../ui/components/Icon/Icon.tsx";
+import type { PropertyEditor } from "../types.ts";
 import { keywordEditor } from "../keyword/KeywordEditor.tsx";
 import { presetEditor } from "../preset/PresetEditor.tsx";
 
@@ -60,7 +61,10 @@ const ORIGIN_ICONS: Record<string, IconName> = {
   custom: "object-custom",
 };
 
-export const transformOriginEditor = presetEditor({
+// transform-origin and transform-style: shown with the transform editor when `transform` is searched (its family).
+export const transformOriginEditor: PropertyEditor = {
+  family: "transform",
+  ...presetEditor({
   property: "transform-origin",
   label: "Transform origin",
   presets: OBJECT_POSITION_VALUES,
@@ -79,7 +83,8 @@ export const transformOriginEditor = presetEditor({
     "origin-left",
     "origin-top-left",
   ],
-});
+  }),
+};
 
 export const perspectiveOriginEditor = presetEditor({
   property: "perspective-origin",
@@ -105,13 +110,16 @@ export const perspectiveOriginEditor = presetEditor({
   ],
 });
 
-export const transformStyleEditor = keywordEditor({
-  property: "transform-style",
-  label: "Transform style",
-  options: ["flat", "preserve-3d"],
-  // Tailwind's transform-3d, transform-flat.
-  aliases: ["transform-3d", "transform-flat"],
-});
+export const transformStyleEditor: PropertyEditor = {
+  family: "transform",
+  ...keywordEditor({
+    property: "transform-style",
+    label: "Transform style",
+    options: ["flat", "preserve-3d"],
+    // Tailwind's transform-3d, transform-flat.
+    aliases: ["transform-3d", "transform-flat"],
+  }),
+};
 
 export const backfaceVisibilityEditor = keywordEditor({
   property: "backface-visibility",

@@ -113,9 +113,12 @@ export function PropertyPanel({ title, beside, anchor, onClose, children, footer
       window.removeEventListener("resize", redraw);
     };
   }, [layer]);
-  // Open: the first field has the focus.
+  // Open: the first field has the focus, unless one in it took it already (Transform's panel, opened on the row a
+  // search named: translate's Y for `translate-y`).
   useEffect(() => {
     if (layer === undefined) return;
+    const active = (ref.current?.getRootNode() as ShadowRoot | Document | undefined)?.activeElement;
+    if (active && ref.current?.contains(active)) return;
     ref.current?.querySelector<HTMLElement>(`.panel-rows ${FOCUSABLE}`)?.focus();
   }, [layer]);
 

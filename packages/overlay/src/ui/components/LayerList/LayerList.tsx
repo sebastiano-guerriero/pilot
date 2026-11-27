@@ -40,6 +40,11 @@ interface LayerListProps {
   children?: ComponentChildren;
   /** The open item's help, in the panel's footer. */
   footer?: ComponentChildren;
+  /**
+   * One panel for the whole list (transform's: the chips summarize it): any chip opens it, and + too, even with
+   * no chip yet. Without it, a panel per item, closing when its item goes.
+   */
+  single?: boolean;
 }
 
 /**
@@ -66,6 +71,7 @@ export function LayerList({
   focusRequest,
   children,
   footer,
+  single = false,
 }: LayerListProps) {
   const rowRef = useRef<HTMLDivElement>(null);
   const firstRef = useRef<HTMLButtonElement>(null);
@@ -80,7 +86,7 @@ export function LayerList({
     if (!replaced) requestAnimationFrame(() => rowRef.current?.querySelectorAll<HTMLElement>(".layer-chip-open")[at ?? 0]?.focus());
   };
 
-  const hasOpen = open !== null && open < items.length;
+  const hasOpen = open !== null && (single || open < items.length);
   // Its item undone away (or taken off elsewhere): the panel closes.
   useEffect(() => {
     if (open !== null && !hasOpen) onOpen(null);
@@ -97,7 +103,7 @@ export function LayerList({
     >
       {item.swatch}
       <span class="layer-chip-name">
-        {item.name}
+        <span class="layer-chip-label">{item.name}</span>
         {item.hint && <span class="layer-chip-hint">{item.hint}</span>}
       </span>
     </button>
@@ -133,7 +139,13 @@ export function LayerList({
         <PropertyPanel
           title={panelTitle}
           beside={() => rowRef.current?.closest(".property-dialog")?.getBoundingClientRect() ?? null}
-          anchor={() => rowRef.current?.closest(".property-row")?.getBoundingClientRect() ?? null}
+          // Level with what opened it: the open chip (or the + that opened it, nothing set yet), not the row's middle,
+          // which falls below the chip with others or the + under it.
+          anchor={() => {
+            const list = rowRef.current;
+            const by = list?.querySelector(".layer-chip[data-open]") ?? list?.querySelector(".layer-add") ?? list?.closest(".property-row");
+            return by?.getBoundingClientRect() ?? null;
+          }}
           onClose={close}
           footer={footer}
         >

@@ -37,7 +37,7 @@ Type a property (`opacity`, `padding`, `radius`…) and the matching editors rep
 
 ### What the search looks at
 
-Only these: the editor's **label**, the **CSS property names** it writes (and their logical equivalents, `padding-inline`; and the shorthand it's a part of, its `partOf`: `transform` finds rotate, and the scale, translate and skew to come, the transforms CSS split out of it, the owner's call, 2026-11-27), and **Tailwind's class names** (its `aliases`, plus a row label that's neither, like `grid-columns`). There are no extra search keywords ("spacing", "layout"…): they matched things the designer didn't mean (`spa` found padding through "spacing"). Aliases borrow Tailwind's utility names, so a designer who knows them gets there in a keystroke or two.
+Only these: the editor's **label**, the **CSS property names** it writes (and their logical equivalents, `padding-inline`), and **Tailwind's class names** (its `aliases`, plus a row label that's neither, like `grid-columns`). There are no extra search keywords ("spacing", "layout"…): they matched things the designer didn't mean (`spa` found padding through "spacing"). Aliases borrow Tailwind's utility names, so a designer who knows them gets there in a keystroke or two.
 
 **An alias is a class Tailwind really has** (`underline`, `grid`, `items-center`), not a bare prefix of a family of classes (`text`, `bg`). An exact alias beats every prefix, so `text` as font-size's alias hid text-align and the other text-* rows, and `bg` as bg-color's hid bg-blend-mode. Those families are found by their prefix instead (`text-lg` is font-size). The one-letter spacing aliases (`p`, `m`, `w`, `h`) are Tailwind's own classes for one editor on purpose.
 
@@ -47,7 +47,7 @@ Only these: the editor's **label**, the **CSS property names** it writes (and th
 
 1. an exact **alias**;
 2. an exact label or property name;
-3. a prefix (`pad`), or the start of the shorthand an editor is part of (`transform` → rotate, beside transform-origin and transform-style, not above them);
+3. a prefix (`pad`);
 4. a Tailwind class that starts with the query, within its first word or by whole words (`items` → `items-center`, align-items; `self` → align-self; `hue-rotate` → `hue-rotate-90`, filter): it beats a name that only has the word later (justify-items). Not into a later word, so `cols` isn't `col-start`;
 5. a later word starting with the query (`spa` → the "span" in col-span, `ite` → align-items, `cols` → `grid-cols`): a word being typed counts;
 6. a substring;

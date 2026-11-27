@@ -320,6 +320,20 @@ const caseLetters = (text: string, color: string) => ({
  * the color of the text around them; multi-color ones (the layout icons)
  * use tokens. Each has its own size (its viewBox, in px). Add new ones here.
  */
+/** Transform's type icon (the owner's), in one color: custom's contrast-high, default's accent. */
+function transformType(color: string) {
+  return {
+    size: 12,
+    body: (
+      <>
+        <rect opacity="0.2" width="12" height="12" fill={color} />
+        <rect opacity="0.6" y="4" width="8" height="8" fill={color} />
+        <rect y="8" width="4" height="4" fill={color} />
+      </>
+    ),
+  };
+}
+
 const ICONS = {
   "chevron-down": {
     size: 8,
@@ -935,7 +949,7 @@ const ICONS = {
     size: 12,
     body: (
       <>
-        <path opacity="0.2" d="M1.5 1.49988L10.5 1.49988V10.4999H1.5L1.5 1.49988Z" fill="var(--plt-color-contrast-high)" />
+        <path opacity="0.2" d="M1 1L11 1V11H1L1 1Z" fill="var(--plt-color-accent)" />
         <rect x="6" width="8.48527" height="8.48527" transform="rotate(45 6 0)" fill="var(--plt-color-accent)" />
       </>
     ),
@@ -967,26 +981,49 @@ const ICONS = {
       </>
     ),
   },
-  "rotate-angle": {
+  // Transform's types (the chip and its select), the owner's (2026-11-27): three nested squares, the largest at 20%,
+  // the middle at 60%. Custom in contrast-high; default the same in the accent (the owner's call).
+  "transform-custom": transformType("var(--plt-color-contrast-high)"),
+  "transform-default": transformType("var(--plt-color-accent)"),
+  // translate's and scale's split button. One value: the owner's (translate-all, scale-all; the shape at 20% in the
+  // accent, as rotate-all's). translate's axes: the owner's (the shape behind in contrast-high, as rotate's axes),
+  // translate-y derived from translate-x (moved up instead of right). scale's axes: the owner's scale-x (a double arrow
+  // across the shape), scale-y derived from it (turned upright). scale has no Z field for now.
+  // skew's split button (the Transform panel), the owner's (2026-11-27). One value: the frame at 20% in the accent and
+  // the square skewed both ways; each axis: the square at 20% in contrast-high and it slanted along X or Y in the accent.
+  "skew-all": {
     size: 12,
     body: (
       <>
-        <circle cx="6" cy="6" r="5.5" stroke="var(--plt-color-contrast-high)" stroke-opacity="0.2" />
-        {/* As dim as the circle (the owner's call): the select's icon, not the dial that drags (full white). */}
-        <path d="M6 4V2.5" stroke="var(--plt-color-contrast-high)" stroke-opacity="0.2" stroke-linecap="round" />
+        <rect opacity="0.2" x="1" y="1" width="10" height="10" fill="var(--plt-color-accent)" />
+        <path d="M3 3L11.5 0.5L9 9L0.5 11.5L3 3Z" fill="var(--plt-color-accent)" />
       </>
     ),
   },
-  // translate's and scale's split button. One value: the owner's (translate-all, scale-all), and translate-x.
-  // The other axes are derived from them, for the owner to replace: translate-y moved up instead of right,
-  // translate-z the square brought toward you (its outline grown); scale-x and -y stretched to the frame
-  // along one axis, scale-z a dot toward you (as rotate-z's).
+  "skew-x": {
+    size: 12,
+    body: (
+      <>
+        <rect opacity="0.2" x="1" y="1" width="10" height="10" fill="var(--plt-color-contrast-high)" />
+        <path d="M4 1L12 1L8 11H0L4 1Z" fill="var(--plt-color-accent)" />
+      </>
+    ),
+  },
+  "skew-y": {
+    size: 12,
+    body: (
+      <>
+        <rect opacity="0.2" x="1" y="1" width="10" height="10" fill="var(--plt-color-contrast-high)" />
+        <path d="M11 8L11 0L1 4L1 12L11 8Z" fill="var(--plt-color-accent)" />
+      </>
+    ),
+  },
   "translate-all": {
     size: 12,
     body: (
       <>
-        <rect opacity="0.2" y="4" width="8" height="8" fill="var(--plt-color-contrast-high)" />
-        <rect x="4" width="8" height="8" fill="var(--plt-color-accent)" />
+        <rect opacity="0.2" y="2" width="8" height="8" fill="var(--plt-color-accent)" />
+        <rect x="4" y="2" width="8" height="8" fill="var(--plt-color-accent)" />
       </>
     ),
   },
@@ -1012,8 +1049,8 @@ const ICONS = {
     size: 12,
     body: (
       <>
-        <rect opacity="0.2" x="2" y="2" width="8" height="8" fill="var(--plt-color-contrast-high)" />
-        <rect x="0.5" y="0.5" width="11" height="11" stroke="var(--plt-color-accent)" />
+        <rect x="3" y="3" width="6" height="6" fill="var(--plt-color-accent)" />
+        <rect opacity="0.2" width="12" height="12" fill="var(--plt-color-contrast-high)" />
       </>
     ),
   },
@@ -1022,7 +1059,7 @@ const ICONS = {
     body: (
       <>
         <rect x="3" y="3" width="6" height="6" fill="var(--plt-color-accent)" />
-        <rect opacity="0.2" width="12" height="12" fill="var(--plt-color-contrast-high)" />
+        <rect opacity="0.2" width="12" height="12" fill="var(--plt-color-accent)" />
       </>
     ),
   },
@@ -1030,8 +1067,10 @@ const ICONS = {
     size: 12,
     body: (
       <>
-        <rect y="3" width="12" height="6" fill="var(--plt-color-accent)" />
-        <rect opacity="0.2" width="12" height="12" fill="var(--plt-color-contrast-high)" />
+        <rect opacity="0.2" y="2" width="12" height="8" fill="var(--plt-color-contrast-high)" />
+        <path d="M2.5 6H9.5" stroke-linecap="round" stroke="var(--plt-color-accent)" />
+        <path d="M8.25 4.25L10 6L8.25 7.75" stroke-linecap="round" stroke-linejoin="round" stroke="var(--plt-color-accent)" />
+        <path d="M3.75 4.25L2 6L3.75 7.75" stroke-linecap="round" stroke-linejoin="round" stroke="var(--plt-color-accent)" />
       </>
     ),
   },
@@ -1039,17 +1078,10 @@ const ICONS = {
     size: 12,
     body: (
       <>
-        <rect x="3" width="6" height="12" fill="var(--plt-color-accent)" />
-        <rect opacity="0.2" width="12" height="12" fill="var(--plt-color-contrast-high)" />
-      </>
-    ),
-  },
-  "scale-z": {
-    size: 12,
-    body: (
-      <>
-        <circle cx="6" cy="6" r="1.5" fill="var(--plt-color-accent)" />
-        <rect opacity="0.2" width="12" height="12" fill="var(--plt-color-contrast-high)" />
+        <rect opacity="0.2" x="2" width="8" height="12" fill="var(--plt-color-contrast-high)" />
+        <path d="M6 2.5V9.5" stroke-linecap="round" stroke="var(--plt-color-accent)" />
+        <path d="M4.25 8.25L6 10L7.75 8.25" stroke-linecap="round" stroke-linejoin="round" stroke="var(--plt-color-accent)" />
+        <path d="M4.25 3.75L6 2L7.75 3.75" stroke-linecap="round" stroke-linejoin="round" stroke="var(--plt-color-accent)" />
       </>
     ),
   },
@@ -1238,7 +1270,11 @@ interface IconProps {
  * height]). Decorative: hidden from assistive tech.
  */
 export function Icon({ name, class: className }: IconProps) {
-  const { size, body } = ICONS[name] as { size: number | [number, number]; body: JSX.Element };
+  // A name not in the set (an icon removed while a hot reload kept an older editor asking for it): nothing, not a
+  // thrown error, which stopped Pilot's whole UI from updating (scale-z, 2026-11-27).
+  const icon = ICONS[name] as { size: number | [number, number]; body: JSX.Element } | undefined;
+  if (!icon) return null;
+  const { size, body } = icon;
   const [width, height] = typeof size === "number" ? [size, size] : size;
   return (
     <svg

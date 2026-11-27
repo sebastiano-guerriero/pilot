@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState } from "preact/hooks";
 import { stepValue } from "../../css/values.ts";
-import { Icon } from "../../ui/components/Icon/Icon.tsx";
+import { Icon, type IconName } from "../../ui/components/Icon/Icon.tsx";
 import { PropertyInputText } from "../../ui/components/PropertyInputText/PropertyInputText.tsx";
 import { PropertyRow } from "../../ui/components/PropertyRow/PropertyRow.tsx";
 import { Tooltip } from "../../ui/components/Tooltip/Tooltip.tsx";
@@ -18,6 +18,8 @@ interface AxesConfig {
   aliases: string[];
   /** What a field shows when it's empty: no move, no scaling. */
   placeholder: string;
+  /** The axes it has fields for (default X, Y and Z): scale has no Z for now (the owner's call, 2026-11-27). */
+  axes?: readonly Axis[];
   /** The axes that move it in 3D, which need a perspective on the parent to show (translate's Z). */
   depth?: readonly Axis[];
 }
@@ -45,13 +47,14 @@ const FROM: Record<TransformProperty, string> = { translate: "0px", scale: "1" }
  */
 function AxesEditor({ config, ...props }: PropertyEditorProps & { config: AxesConfig }) {
   const { property, placeholder } = config;
+  const axes = config.axes ?? AXES;
   const { onChange, onRevert, focusRequest, onReturnToSearch, onTabOut, query = "" } = props;
   const value = declaredOf(props, property);
   const axisValue = (axis: Axis) => declaredOf(props, axisVar(property, axis));
-  const anyAxis = AXES.some((a) => axisValue(a));
+  const anyAxis = axes.some((a) => axisValue(a));
   const landing = (q: string): Axis | null => {
     const n = normalizeQuery(q);
-    for (const axis of AXES) if (n.startsWith(`${property}${axis}`)) return axis;
+    for (const axis of axes) if (n.startsWith(`${property}${axis}`)) return axis;
     return null;
   };
   const [view, setView] = useState<View>(() => (anyAxis || landing(query) ? "axes" : "one"));
@@ -67,7 +70,7 @@ function AxesEditor({ config, ...props }: PropertyEditorProps & { config: AxesCo
     if (axis) {
       setView("axes");
       setPending(axis);
-    } else setPending(view === "axes" ? (focusRequest.edge === "last" ? "z" : "x") : "one");
+    } else setPending(view === "axes" ? (focusRequest.edge === "last" ? (axes.at(-1) as Axis) : "x") : "one");
   }, [focusRequest]);
   useLayoutEffect(() => {
     if (!pending) return;
@@ -84,16 +87,16 @@ function AxesEditor({ config, ...props }: PropertyEditorProps & { config: AxesCo
 
   // One value: the property, and the axes Pilot set go (one undo step), so the two never disagree.
   const writeOne = (next: string, gesture: object = {}) => {
-    for (const a of AXES) if (axisValue(a)) onChange(axisVar(property, a), "", { gesture });
+    for (const a of axes) if (axisValue(a)) onChange(axisVar(property, a), "", { gesture });
     onChange(property, next, { gesture });
   };
   // An axis, with the property combining them, as one undo step; the property goes when the last axis does
   // (only Pilot's combining value: the page's stays).
   const writeAxis = (axis: Axis, next: string, gesture: object = {}) => {
     onChange(axisVar(property, axis), next, { gesture });
-    const left = AXES.some((a) => (a === axis ? next : axisValue(a)));
+    const left = axes.some((a) => (a === axis ? next : axisValue(a)));
     if (left) {
-      const combined = axesValue(property, value);
+      const combined = axesValue(property, value, axes);
       if (combined !== value) onChange(property, combined, { gesture });
     } else if (isAxesValue(property, value)) onChange(property, "", { gesture });
   };
@@ -116,7 +119,7 @@ function AxesEditor({ config, ...props }: PropertyEditorProps & { config: AxesCo
         onMouseDown={(e) => e.preventDefault()}
         onClick={toggle}
       >
-        {view === "one" ? <Icon name={`${property}-all`} /> : AXES.map((a) => <Icon key={a} name={`${property}-${a}`} />)}
+        {view === "one" ? <Icon name={`${property}-all`} /> : axes.map((a) => <Icon key={a} name={`${property}-${a}` as IconName} />)}
       </button>
     </Tooltip>
   );
@@ -126,10 +129,11 @@ function AxesEditor({ config, ...props }: PropertyEditorProps & { config: AxesCo
       <div class="split-editor" data-view="one">
         <PropertyRow label={property} action={toggleButton}>
           <PropertyInputText
-            // The axes set (Pilot's combining value): empty, reading Mixed, as a split editor's parts that differ.
+            // An axis set: empty, reading Mixed, as a split editor's parts that differ. Pilot's combining value with no
+            // field's axis set (only one without a field: scale's Z, typed before its field went) isn't: empty, as unset.
             value={isAxesValue(property, value) ? "" : value}
             label={`${property} value`}
-            placeholder={isMixed(props, property) || isAxesValue(property, value) || anyAxis ? MIXED : placeholder}
+            placeholder={isMixed(props, property) || anyAxis ? MIXED : placeholder}
             inputRef={refs.current.one}
             onCommit={(text) => {
               if (!text.trim()) return (value || anyAxis) && writeOne("");
@@ -159,7 +163,7 @@ function AxesEditor({ config, ...props }: PropertyEditorProps & { config: AxesCo
         // Each axis's own label, level with its field: Tailwind's names (no CSS longhand per axis), as rotate's.
         label={
           <span class="row-labels">
-            {AXES.map((axis) => (
+            {axes.map((axis) => (
               <span key={axis}>{`${property}-${axis}`}</span>
             ))}
           </span>
@@ -168,7 +172,7 @@ function AxesEditor({ config, ...props }: PropertyEditorProps & { config: AxesCo
         action={toggleButton}
       >
         <div class="stack">
-          {AXES.map((axis, i) => (
+          {axes.map((axis, i) => (
             <span
               key={axis}
               class="field"
@@ -200,7 +204,7 @@ function AxesEditor({ config, ...props }: PropertyEditorProps & { config: AxesCo
                 onSubmit={onReturnToSearch}
                 onTab={(direction) => {
                   const next = i + direction;
-                  if (next >= 0 && next < AXES.length) setPending(AXES[next] as Axis);
+                  if (next >= 0 && next < axes.length) setPending(axes[next] as Axis);
                   else tabOut(direction);
                 }}
               />
@@ -217,9 +221,7 @@ export function axesEditor(config: AxesConfig): PropertyEditor {
   return {
     id: config.property,
     label: config.label,
-    properties: [config.property, ...AXES.map((a) => axisVar(config.property, a))],
-    // One of the transforms: searching `transform` finds it.
-    partOf: "transform",
+    properties: [config.property, ...(config.axes ?? AXES).map((a) => axisVar(config.property, a))],
     aliases: config.aliases,
     component: (props: PropertyEditorProps) => <AxesEditor {...props} config={config} />,
   };
@@ -242,4 +244,6 @@ export const scaleEditor = axesEditor({
   // Tailwind's scale-*, scale-x-*, scale-y-*, scale-z-*.
   aliases: ["scale-50", "scale-x-50", "scale-y-50", "scale-z-50", "scale-none"],
   placeholder: "1",
+  // Z only shows in 3D, where few designs need it: typed as the third value instead (`1 1 2`).
+  axes: ["x", "y"],
 });

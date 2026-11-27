@@ -42,7 +42,6 @@
 
 /* Property editors */
 @import "../../editors/split/SplitEditor.css" layer(components);
-@import "../../editors/rotate/RotateEditor.css" layer(components);
 @import "../../editors/size/SizeEditor.css" layer(components);
 @import "../../editors/reveal/RevealEditor.css" layer(components);
 @import "../../editors/color/ColorEditor.css" layer(components);

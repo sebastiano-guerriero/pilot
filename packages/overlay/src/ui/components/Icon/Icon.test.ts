@@ -4,6 +4,12 @@ import { describe, expect, it } from "vitest";
 import { Icon } from "./Icon.tsx";
 
 describe("Icon", () => {
+  it("a name not in the set draws nothing, rather than throwing (which froze Pilot's whole UI)", () => {
+    const host = document.createElement("div");
+    expect(() => render(h(Icon, { name: "no-such-icon" as never }), host)).not.toThrow();
+    expect(host.querySelector("svg")).toBeNull();
+  });
+
   it("renders at its own size, in currentColor, hidden from assistive tech", () => {
     const host = document.createElement("div");
     render(h(Icon, { name: "chevron-down", class: "chevron" }), host);

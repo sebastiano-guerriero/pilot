@@ -46,10 +46,13 @@ export function pageAxes(property: TransformProperty, pageValue: string): Record
  * page's own for it. Once written, it's kept as it is (its fallbacks are the
  * page's, read the first time).
  */
-export function axesValue(property: TransformProperty, current: string): string {
+export function axesValue(property: TransformProperty, current: string, axes: readonly Axis[] = AXES): string {
   if (isAxesValue(property, current)) return current;
   const page = pageAxes(property, current);
-  return AXES.map((a) => `var(${axisVar(property, a)}, ${page[a]})`).join(" ");
+  // An axis without a field (scale's Z) keeps the page's value as it is; left out when it's the neutral one.
+  const parts = AXES.map((a) => (axes.includes(a) ? `var(${axisVar(property, a)}, ${page[a]})` : page[a]));
+  if (!axes.includes("z") && page.z === NEUTRAL[property]) parts.pop();
+  return parts.join(" ");
 }
 
 /**

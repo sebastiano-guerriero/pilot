@@ -23,8 +23,7 @@ import { listStylePositionEditor, listStyleTypeEditor } from "./list-style/ListS
 import { overscrollEditor } from "./overscroll/OverscrollEditor.tsx";
 import { fillEditor, strokeEditor, strokeWidthEditor } from "./svg/SvgEditors.tsx";
 import { backdropFilterEditor, filterEditor } from "./filter/FilterEditor.tsx";
-import { rotateEditor } from "./rotate/RotateEditor.tsx";
-import { scaleEditor, translateEditor } from "./transforms/AxesEditor.tsx";
+import { transformEditor } from "./transform/TransformEditor.tsx";
 import {
   backfaceVisibilityEditor,
   perspectiveEditor,
@@ -148,9 +147,8 @@ export const editors: PropertyEditor[] = [
   boxShadowEditor,
   filterEditor,
   backdropFilterEditor,
-  translateEditor,
-  rotateEditor,
-  scaleEditor,
+  // translate, rotate and scale are its panel's rows (its embeds), not editors of their own.
+  transformEditor,
   transformOriginEditor,
   transformStyleEditor,
   backfaceVisibilityEditor,
@@ -264,8 +262,6 @@ function rank(q: string, list: PropertyEditor[]): Array<{ editor: PropertyEditor
     const names = [e.label, ...e.properties].map(normalizeQuery);
     if (names.some((n) => n === q)) return 3;
     if (names.some((n) => n.startsWith(q))) return 2;
-    // A part of the shorthand typed (rotate in `transform`): beside the properties named for it, not above them.
-    if (e.partOf && normalizeQuery(e.partOf).startsWith(q)) return 2;
     // A Tailwind class that starts with it, by whole words, or the first
     // word's start (`items` → items-center: align-items, not justify-items,
     // whose name only has the word later; `hue-rotate` → hue-rotate-90).

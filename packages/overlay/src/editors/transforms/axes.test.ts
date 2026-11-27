@@ -23,6 +23,9 @@ describe("translate and scale's axes", () => {
     expect(isAxesValue("translate", value)).toBe(true);
     expect(axesValue("translate", value)).toBe(value);
     expect(axesValue("scale", "")).toBe("var(--pilot-scale-x, 1) var(--pilot-scale-y, 1) var(--pilot-scale-z, 1)");
+    // scale's fields are X and Y: Z keeps the page's value, left out when it's 1.
+    expect(axesValue("scale", "", ["x", "y"])).toBe("var(--pilot-scale-x, 1) var(--pilot-scale-y, 1)");
+    expect(axesValue("scale", "1.5 1.5 2", ["x", "y"])).toBe("var(--pilot-scale-x, 1.5) var(--pilot-scale-y, 1.5) 2");
   });
 
   it("one value as typed: up to three parts, a bare number px for translate, a factor for scale; none", () => {
@@ -116,6 +119,8 @@ describe("the translate and scale editors", () => {
     mount(scaleEditor);
     // An axis set: it opens split; one value is a click away.
     expect(container.querySelector('input[aria-label="scale x"]')).not.toBeNull();
+    // No Z field for scale (typed as the third value instead).
+    expect(container.querySelector('input[aria-label="scale z"]')).toBeNull();
     toggle();
     // One value with the axes set reads Mixed (a split editor's parts that differ), not 1.
     const one = container.querySelector('input[aria-label="scale value"]') as HTMLInputElement;
@@ -138,10 +143,17 @@ describe("the translate and scale editors", () => {
     expect(changes[0]).toEqual(["--pilot-translate-x", "-1px"]);
   });
 
-  it("found by transform, and by Tailwind's classes", () => {
+  it("Mixed only when a field's axis is set: a combining value left from an axis without a field isn't", () => {
+    declared.scale = "var(--pilot-scale-x, 1) var(--pilot-scale-y, 1) var(--pilot-scale-z, 1)";
+    mount(scaleEditor);
+    const one = container.querySelector('input[aria-label="scale value"]') as HTMLInputElement;
+    expect([one.value, one.placeholder]).toEqual(["", "1"]);
+  });
+
+  it("found by Tailwind's classes", () => {
     const ids = (q: string) => matchEditors(q).map((e) => e.id);
-    expect(ids("translate-y-4")[0]).toBe("translate");
-    expect(ids("scale-50")[0]).toBe("scale");
-    expect(ids("transform")).toEqual(expect.arrayContaining(["translate", "rotate", "scale"]));
+    // Through Transform, whose panel holds them.
+    expect(ids("translate-y-4")[0]).toBe("transform");
+    expect(ids("scale-50")[0]).toBe("transform");
   });
 });

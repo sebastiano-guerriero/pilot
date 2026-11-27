@@ -33,6 +33,11 @@ const BLOCKED_EVENTS = [
  * Events coming from Pilot's own UI (inside `host`) pass through untouched.
  * Scrolling, keyboard and hover styles keep working normally.
  */
+/** Whether the event's target is a disabled form control (or inside one, `<button disabled><span>`): it gets no click. */
+function isDisabled(e: Event): boolean {
+  return e.composedPath().some((n) => n instanceof Element && n.matches(":disabled"));
+}
+
 export function useElementPicker(
   active: boolean,
   host: HTMLElement,
@@ -64,6 +69,10 @@ export function useElementPicker(
     const onLeave = (e: MouseEvent) => {
       if (!e.relatedTarget) setHovered(null);
     };
+    // A disabled control (`<button disabled>`) gets no click, in Chromium nor Safari: only pointer events. So it's
+    // picked on pointerup, when the press started on it, and a click that may still follow doesn't pick it again.
+    let pressed: EditableElement | null = null;
+    let pickedOnUp = false;
     const onBlocked = (e: Event) => {
       const el = fromPage(e);
       if (!el) return;
@@ -74,7 +83,19 @@ export function useElementPicker(
       }
       e.preventDefault();
       e.stopImmediatePropagation();
-      if (e.type === "click") onPick(el, { shift: e instanceof MouseEvent && e.shiftKey });
+      const shift = e instanceof MouseEvent && e.shiftKey;
+      if (e.type === "pointerdown") {
+        pressed = (e as PointerEvent).button === 0 ? el : null;
+        pickedOnUp = false;
+      }
+      if (e.type === "pointerup" && el === pressed && isDisabled(e)) {
+        pickedOnUp = true;
+        onPick(el, { shift });
+      }
+      if (e.type === "click") {
+        if (!pickedOnUp) onPick(el, { shift });
+        pickedOnUp = false;
+      }
       if (e.type === "dblclick" && e instanceof MouseEvent) onDoubleClick?.(el, { x: e.clientX, y: e.clientY });
     };
 

@@ -57,8 +57,9 @@
     }
   }
 
-  /* The name, then the value: the value gives way, ending in an ellipsis of
-     its own (dimmed, as it is). Names are short: they don't. */
+  /* The name, then the value: the value gives way first, ending in an
+     ellipsis of its own (dimmed, as it is); then the name, in its own
+     (transform's lists what's set: `translate, rotate, scale`). */
   .layer-chip-name {
     display: flex;
     align-items: baseline;
@@ -68,10 +69,18 @@
     white-space: nowrap;
   }
 
+  .layer-chip-label {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   /* Its value, dimmed, 4px after the name (as PropertySelect's hints), in
      tabular figures as in the fields, so it doesn't jitter while it changes. */
   .layer-chip-hint {
-    flex: 0 1 auto;
+    /* Shrinks long before the name does. */
+    flex: 0 100 auto;
     min-width: 0;
     margin-left: 4px;
     overflow: hidden;

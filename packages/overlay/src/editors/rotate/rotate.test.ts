@@ -81,29 +81,17 @@ describe("the rotate editor", () => {
       input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
     });
   };
-  const pick = (name: string) => {
-    act(() => (container.querySelector('[role="combobox"][aria-label="rotate"]') as HTMLButtonElement).click());
-    const option = [...container.querySelectorAll('[role="option"]')].find((o) => o.textContent === name);
-    act(() => (option as HTMLElement).click());
-  };
   const toggle = () => act(() => (container.querySelector(".split-toggle") as HTMLButtonElement).click());
 
-  it("one value: the select's angle shows the field, which writes rotate; none declares none and hides it", () => {
+  it("one value: a field, no select; it writes rotate, none typed", () => {
     mount();
-    expect(field("rotate value")).toBeNull();
-    expect(container.querySelector(".property-select[data-icon-only]")).toBeNull();
-    pick("angle");
+    expect(container.querySelector('[role="combobox"]')).toBeNull();
     typeAndEnter("rotate value", "x 30");
     expect(changes).toEqual([["rotate", "x 30deg"]]);
-    pick("none");
+    typeAndEnter("rotate value", "none");
     expect(changes.at(-1)).toEqual(["rotate", "none"]);
-    expect(field("rotate value")).toBeNull();
-    // Back to angle: the field shows, none stays until an angle is typed, which replaces it.
-    pick("angle");
-    expect(field("rotate value")?.value).toBe("");
-    expect(changes.at(-1)).toEqual(["rotate", "none"]);
-    typeAndEnter("rotate value", "15");
-    expect(changes.at(-1)).toEqual(["rotate", "15deg"]);
+    typeAndEnter("rotate value", "");
+    expect(changes.at(-1)).toEqual(["rotate", ""]);
   });
 
   it("split: each axis is a variable, with one transform combining them, as one undo step; the last one cleared takes it away", () => {
@@ -125,14 +113,11 @@ describe("the rotate editor", () => {
     ]);
   });
 
-  it("the fields' drag handle is the dial: turned to the angle at the end (x 30deg), at 0 when empty; select and field joined", () => {
+  it("the fields' drag handle is the dial: turned to the angle at the end (x 30deg), at 0 when empty", () => {
     declared.rotate = "x 30deg";
     mount();
     const tick = () => container.querySelector('.scrub-handle[data-dial] path[d="M8 6V4.5"]')?.getAttribute("transform");
     expect(tick()).toBe("rotate(30 8 8)");
-    expect(container.querySelector(".rotate-value[data-joined]")).not.toBeNull();
-    // With an angle, the select is its 12px icon (a 24px button); otherwise the full select.
-    expect(container.querySelector(".property-select[data-icon-only] .trigger svg")).not.toBeNull();
     toggle();
     expect(container.querySelectorAll(".scrub-handle[data-dial]")).toHaveLength(3);
   });
@@ -142,7 +127,8 @@ describe("the rotate editor", () => {
     mount();
     expect(field("rotate y")?.value).toBe("15deg");
     expect(rotateEditor.aliases).toContain("rotate-x-45");
-    expect(matchEditors("rotate-x").map((e) => e.id)).toEqual(["rotate"]);
-    expect(groupOf("rotate")).toBe("Transform");
+    // Found through Transform, whose panel holds it.
+    expect(matchEditors("rotate-x")[0]?.id).toBe("transform");
+    expect(groupOf("transform")).toBe("Transform");
   });
 });

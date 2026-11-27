@@ -45,11 +45,11 @@ describe("searchEditors", () => {
     }
   });
 
-  it("transform finds the transforms CSS split out of it (rotate) beside the properties named for it", () => {
+  it("transform lands on the Transform row (translate, rotate, scale and skew are in its panel), with transform-origin and transform-style", () => {
     const ids = (q: string) => matchEditors(q).map((e) => e.id);
-    for (const q of ["transform", "trans"]) expect(ids(q)).toEqual(expect.arrayContaining(["translate", "rotate", "scale", "transform-origin", "transform-style"]));
-    expect(ids("transform-origin")).toEqual(["transform-origin"]);
-    expect(ids("rotate")[0]).toBe("rotate");
+    expect(ids("transform")).toEqual(["transform", "transform-origin", "transform-style"]);
+    // translate, rotate and scale are its panel's rows: their names find it.
+    for (const q of ["rotate", "translate", "scale"]) expect(ids(q)[0]).toBe("transform");
   });
 
   it("finds object-fit, isolation and overflow by their names and Tailwind's", async () => {
