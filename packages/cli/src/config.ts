@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { projectNameOf } from "@pilot/protocol";
@@ -58,8 +58,27 @@ export function saveAgent(folder: string, agent: AgentKind, file = configFile())
  * get it started with their dev server.
  */
 export function isSetUp(folder: string, file = configFile()): boolean {
-  const project = read(file)[resolve(folder)];
-  return !!project && (project.setUp === true || isAgentKind(project.agent));
+  const here = canonical(folder);
+  return Object.entries(read(file)).some(
+    ([key, project]) => !!project && (project.setUp === true || isAgentKind(project.agent)) && canonical(key) === here,
+  );
+}
+
+/**
+ * A folder as one spelling, to tell the same folder from two paths: its real
+ * path (links followed, Windows' short names like `RUNNER~1` expanded), and
+ * on Windows without case. `init` and the dev server can name the project
+ * differently (Vite's root, a temp folder's short name): found on Windows'
+ * check machines, where the dev server didn't start Pilot.
+ */
+function canonical(folder: string, platform: NodeJS.Platform = process.platform): string {
+  let path = resolve(folder);
+  try {
+    path = realpathSync.native(path);
+  } catch {
+    // Gone, or not readable: as given.
+  }
+  return platform === "win32" ? path.toLowerCase() : path;
 }
 
 /** Marks Pilot as set up for this project folder on this computer (see isSetUp): `init` does. */

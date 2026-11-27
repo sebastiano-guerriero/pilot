@@ -184,9 +184,11 @@ async function check(id, root) {
   const jobOk = after1 === "8px 16px" && !!job.session;
   row("job", jobOk, jobOk ? `padding ${after1}, session ${job.session}` : `padding "${after1}", session ${job.session}, ${job.error ?? job.raw}`, job.seconds);
 
-  // 2. A follow-up in the same session, naming nothing: it must remember.
+  // 2. A follow-up in the same session, naming no element or file: it must remember which. (Since 2026-11-26 Cursor
+  // asks what "a bit more" alone means, while naming the button: it remembers, the request was vague. So the
+  // property is said, the element isn't.)
   if (job.session) {
-    const follow = await ask("Designer, in the same thread: a bit more. Reply in one short sentence.", job.session);
+    const follow = await ask("Designer, in the same thread: a bit more padding. Reply in one short sentence.", job.session);
     const after2 = paddingOf(project);
     const sameSession = !follow.session || follow.session === job.session;
     const ok = after2 !== after1 && after2 !== "" && sameSession;
