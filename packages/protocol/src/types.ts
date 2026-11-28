@@ -392,6 +392,8 @@ export interface CommentMessage {
   references?: CommentReference[];
   /** The props the designer set on the instance, from the agent's `/props` list: where it's written, not in the component. */
   props?: { component: string; usedIn?: string; set: PropChange[] };
+  /** Written with a condition in the modifiers' pill (StyleCondition): the comment is about the element only when it holds. */
+  condition?: StyleCondition;
 }
 
 /**

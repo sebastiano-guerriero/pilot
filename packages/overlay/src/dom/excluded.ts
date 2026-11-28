@@ -129,7 +129,7 @@ export function copyFor(declarations: CSSStyleDeclaration, element: Element): CS
 /** The project's declaration for exactly the request's pills: the rule holding it, when Pilot can skip it. */
 function ruleFor(request: ExclusionRequest): CSSStyleRule | null {
   const declared = request.condition
-    ? conditionValue(request.element, request.property, { words: "", ...request.condition }, request.states ?? [])
+    ? conditionValue(request.element, request.property, { words: "", ...request.condition }, request.states ?? [], request.widths)
     : request.widths
     ? rangeValue(request.element, request.property, request.widths, request.states)
     : baseValue(request.element, request.property, request.states);

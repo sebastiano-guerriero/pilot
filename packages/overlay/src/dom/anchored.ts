@@ -208,10 +208,10 @@ function withImportance(text: string, important: boolean): string {
  */
 function conditionSpot(request: AnchorRequest): Spot | null {
   const condition = { words: "", ...request.condition };
-  const found = conditionFound(request.element, condition, request.states ?? []);
+  const found = conditionFound(request.element, condition, request.states ?? [], request.widths);
   const first = found?.rules[0];
   if (!found || !first) return null;
-  const own = conditionValue(request.element, request.property, condition, request.states ?? []);
+  const own = conditionValue(request.element, request.property, condition, request.states ?? [], request.widths);
   const declared: Placed["declared"] =
     own?.rule && own.source !== "inline"
       ? (own as Placed["declared"])

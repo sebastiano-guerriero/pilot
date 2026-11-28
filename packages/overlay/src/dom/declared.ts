@@ -1,6 +1,6 @@
 import { type Condition, conditionCss, conditionKey } from "../edits/condition.ts";
-import { conditionOfSelector, relaxSelector, variantName } from "./conditionSelectors.ts";
-import { type ColorScheme, type ElementState, STATES, isColorScheme, isPseudoElement, sortStates } from "@pilot/protocol";
+import { conditionOfSelector, needsInteraction, relaxSelector, variantName } from "./conditionSelectors.ts";
+import { type ColorScheme, type ElementState, type WidthRange, STATES, isColorScheme, isPseudoElement, sortStates } from "@pilot/protocol";
 import { cssProperty, GLOBAL_KEYWORDS } from "../css/properties.ts";
 import { mediaRange } from "./breakpoints.ts";
 import { mediaScheme, selectorScheme, withoutScheme } from "./scheme.ts";
@@ -559,7 +559,7 @@ interface Walk {
   /** The color scheme of the `@media (prefers-color-scheme: …)` being walked, if any: its rules are for that scheme. */
   scheme?: ColorScheme;
   /** Collecting the project's conditional rules (see conditionalRules) instead of the matching ones. */
-  conditional?: { found: Map<string, FoundCondition>; media: string[]; container: string[] };
+  conditional?: { found: Map<string, FoundCondition>; media: string[]; container: string[]; widths: WidthRange[] };
 }
 
 /** A condition the project's CSS puts on the element (see conditionalRules), with its rules. */
@@ -567,6 +567,8 @@ export interface FoundCondition {
   condition: Condition;
   /** The element's own states with it (`group-hover:hover:`): its pills, beside the condition's. */
   states: ElementState[];
+  /** The widths it's for (`md:group-hover:`, in a width media query): the width chip's, beside it. None: every width. */
+  widths?: WidthRange;
   rules: MatchedRule[];
 }
 
@@ -595,7 +597,7 @@ export function conditionalRules(element: Element): FoundCondition[] {
     media: new Map(),
     base: false,
     anyMedia: true,
-    conditional: { found: new Map(), media: [], container: [] },
+    conditional: { found: new Map(), media: [], container: [], widths: [] },
   };
   for (const sheet of sheetsOf(element)) walkSheet(walk, sheet, "", null);
   const found = [...(walk.conditional as NonNullable<Walk["conditional"]>).found.values()];
@@ -604,15 +606,34 @@ export function conditionalRules(element: Element): FoundCondition[] {
 }
 
 /** The project's rules for `condition` with exactly `states` on `element` (see conditionalRules), or null. */
-export function conditionFound(element: Element, condition: Condition, states: readonly ElementState[] = []): FoundCondition | null {
+export function conditionFound(
+  element: Element,
+  condition: Condition,
+  states: readonly ElementState[] = [],
+  widths?: WidthRange,
+): FoundCondition | null {
   const key = conditionKey(condition);
-  return conditionalRules(element).find((f) => conditionKey(f.condition) === key && sameStateSet(f.states, states)) ?? null;
+  const sameWidths = (w?: WidthRange) => w?.min === widths?.min && w?.max === widths?.max;
+  return conditionalRules(element).find((f) => conditionKey(f.condition) === key && sameStateSet(f.states, states) && sameWidths(f.widths)) ?? null;
 }
 
-/** The project's value of `property` on `element` under `condition` (and `states`): its own rules for them, or null. */
-export function conditionValue(element: Element, property: string, condition: Condition, states: readonly ElementState[] = []): Declared | null {
-  const found = conditionFound(element, condition, states);
+/** The project's value of `property` on `element` under `condition` (and `states`, `widths`): its own rules for them, or null. */
+export function conditionValue(
+  element: Element,
+  property: string,
+  condition: Condition,
+  states: readonly ElementState[] = [],
+  widths?: WidthRange,
+): Declared | null {
+  const found = conditionFound(element, condition, states, widths);
   return found ? resolve(property, undefined, found.rules) : null;
+}
+
+/** A Tailwind variant name without its breakpoints (`md:group-hover/hero` → `group-hover/hero`), when the width chip says them. */
+function withoutBreakpoints(name: string | null, widths: boolean): string | null {
+  if (!name || !widths) return name;
+  const parts = name.split(/:(?![^[]*\])/).filter((p) => !/^(?:max-|min-)?(?:sm|md|lg|xl|\d?xl)$|^(?:max|min)-\[[^\]]+\]$/.test(p));
+  return parts.length ? parts.join(":") : name;
 }
 
 /** A rule's selectors, collected as a condition when one puts the element under one (see conditionalRules). */
@@ -640,10 +661,24 @@ function addConditional(walk: Walk, style: CSSStyleDeclaration, selectors: strin
       ...(c.media.length ? { media: c.media.join(" and ") } : {}),
       ...(c.container.length ? { container: c.container.join(" and ") } : {}),
     };
-    const key = `${subject.states.join(",")}|${conditionKey({ words: "", ...css })}`;
-    // Named by the class (its variants, the element's own states among them: `group-hover:hover`), else by its CSS.
-    const name = variantName(selector) ?? conditionCss({ words: "", ...css });
-    const entry: FoundCondition = c.found.get(key) ?? { condition: { words: name, label: name, ...css, project: true }, states: subject.states, rules: [] };
+    // Its widths: the width media queries it's in, together (`md:` and `max-lg:` inside it: from 768 to 1023).
+    const widths = c.widths.reduce<WidthRange | undefined>(
+      (all, w) => ({
+        ...(w.min !== undefined || all?.min !== undefined ? { min: Math.max(w.min ?? 0, all?.min ?? 0) } : {}),
+        ...(w.max !== undefined || all?.max !== undefined ? { max: Math.min(w.max ?? Number.POSITIVE_INFINITY, all?.max ?? Number.POSITIVE_INFINITY) } : {}),
+      }),
+      undefined,
+    );
+    const key = `${subject.states.join(",")}|${widths?.min ?? ""}-${widths?.max ?? ""}|${conditionKey({ words: "", ...css })}`;
+    // Named by the class (its variants, the element's own states among them: `group-hover:hover`; a breakpoint's
+    // left to the width chip: `md:`), else by its CSS.
+    const name = withoutBreakpoints(variantName(selector), !!widths) ?? conditionCss({ words: "", ...css });
+    const entry: FoundCondition = c.found.get(key) ?? {
+      condition: { words: name, label: name, ...css, project: true },
+      states: subject.states,
+      ...(widths ? { widths } : {}),
+      rules: [],
+    };
     c.found.set(key, entry);
     entry.rules.push({ style, selector, specificity: specificity(selector), layer: layerPath(walk, layer), order, states: subject.states });
     return;
@@ -727,10 +762,15 @@ function walkRule(walk: Walk, rule: CSSRule, layer: string, parents: string[] | 
       const own = withoutScheme(text);
       const outer = walk.scheme;
       walk.scheme = mediaScheme(text) ?? outer;
-      const condition = own && !mediaRange(own) ? own : "";
+      const range = own ? mediaRange(own) : null;
+      const condition = own && !range ? own : "";
+      // A width: kept with the condition (the width chip's), not the condition itself.
+      const width = range && (range.min !== undefined || range.max !== undefined) ? range : null;
       if (condition) walk.conditional.media.push(condition);
+      if (width) walk.conditional.widths.push(width);
       walkRules(walk, r.cssRules, layer, parents);
       if (condition) walk.conditional.media.pop();
+      if (width) walk.conditional.widths.pop();
       walk.scheme = outer;
       return;
     }
@@ -803,6 +843,8 @@ function addIfMatching(walk: Walk, style: CSSStyleDeclaration, selectors: string
     const states = walk.scheme && !subject.states.some(isColorScheme) ? sortStates([...subject.states, walk.scheme]) : subject.states;
     const filter = walk.filter;
     if (!filter && states.length) continue;
+    // Under an ancestor's or a sibling's hover or focus: a condition (conditionalRules), even while it holds.
+    if (needsInteraction(subject.stripped)) continue;
     if (filter?.mode === "exact" && !sameStateSet(states, filter.states)) continue;
     let matches = false;
     try {

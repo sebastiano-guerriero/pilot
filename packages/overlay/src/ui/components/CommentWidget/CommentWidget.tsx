@@ -98,6 +98,8 @@ interface CommentWidgetProps {
    * for Send). Not with an action: a task goes apart from the changes.
    */
   edits?: ChangeCounts;
+  /** The condition in the modifiers' pill, by its label: the comment is about the element only then (its placeholder says so). */
+  when?: string;
   /** The component the selection is an instance of (its top-level element), alone: `/props` is offered then. */
   component?: string;
   /** The instance's props now, from the page (see componentProps): the props list shows them. */
@@ -143,9 +145,9 @@ function FileTile({ name }: { name: string }) {
 }
 
 /** The field's placeholder: what to write, and the two lists it opens (`/` actions, `@` mentions, when there's something to mention). */
-function placeholder(withAction: boolean, reply: boolean, mentions: boolean): string {
+function placeholder(withAction: boolean, reply: boolean, mentions: boolean, when?: string): string {
   if (withAction) return mentions ? "Add details (optional), @ to mention" : "Add details (optional)";
-  const lead = reply ? "Reply" : "Ask the agent";
+  const lead = `${reply ? "Reply" : "Ask the agent"}${when ? ` (only when ${when})` : ""}`;
   return mentions ? `${lead}, / for skills, @ to mention` : `${lead}, or / for skills`;
 }
 
@@ -224,6 +226,7 @@ export function CommentWidget({
   projectComponents,
   skills,
   edits = { styles: 0, texts: 0 },
+  when,
   component,
   currentProps,
   initialText,
@@ -890,7 +893,7 @@ export function CommentWidget({
               data-reply={count > 0 || undefined}
               rows={1}
               value={text}
-              placeholder={placeholder(!!action || !!skill, count > 0, !!mentions)}
+              placeholder={placeholder(!!action || !!skill, count > 0, !!mentions, when)}
               aria-label="Comment"
               onInput={(e) => {
                 const field = e.currentTarget as HTMLTextAreaElement;

@@ -47,7 +47,7 @@ export function clearProperty(
 ): void {
   // Under a condition: its rule skips the element in the preview (dom/excluded.ts), the agent removes the declaration.
   if (condition) {
-    const own = conditionValue(element, property, condition, states ?? []);
+    const own = conditionValue(element, property, condition, states ?? [], widths);
     if (!own) return history.apply(element, property, "", gesture, { widths, states, condition });
     return history.apply(element, property, "revert-layer", gesture, { removal: { from: own.value, source: sourceOf(element, own) }, widths, states, condition });
   }

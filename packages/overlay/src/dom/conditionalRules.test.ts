@@ -90,3 +90,22 @@ describe("edits under the project's condition: beside its rule", async () => {
     expect(conditionValue(document.getElementById("t") as Element, "outline-style", found!.condition, ["focus"])?.value).toBe("solid");
   });
 });
+
+describe("a condition inside a width (md:group-hover:)", () => {
+  it("kept with its widths, named without the breakpoint (the width chip says it), read for exactly those widths", () => {
+    document.body.innerHTML = `<div class="group"><p id="p" class="group-hover:text-red md:group-hover:text-blue"></p></div>`;
+    style.textContent = [
+      ".group:hover .group-hover\\:text-red { color: red; }",
+      "@media (min-width: 768px) { .group:hover .md\\:group-hover\\:text-blue { color: blue; } }",
+    ].join("\n");
+    const p = document.getElementById("p") as Element;
+    const found = conditionalRules(p);
+    expect(found.map((f) => [f.condition.label, f.widths ?? null])).toEqual([
+      ["group-hover", null],
+      ["group-hover", { min: 768 }],
+    ]);
+    const condition = found[0]!.condition;
+    expect(conditionValue(p, "color", condition)?.value).toBe("red");
+    expect(conditionValue(p, "color", condition, [], { min: 768 })?.value).toBe("blue");
+  });
+});

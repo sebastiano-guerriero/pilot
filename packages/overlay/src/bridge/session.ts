@@ -501,6 +501,8 @@ export class PilotSession {
     takesEdits = false,
     props?: CommentMessage["props"],
     skill?: string,
+    /** The condition in the modifiers' pill when it was written: the comment is about the element only then. */
+    condition?: CommentMessage["condition"],
   ): { thread: CommentThread; job: JobRecord | null; changeSet: ChangeSet; waiting: boolean } {
     let thread = this.threadFor(element);
     // The agent asked something here: this message is the answer, and goes with its job.
@@ -528,6 +530,7 @@ export class PilotSession {
     // A skill goes with a comment (an action is a task of its own instead).
     else if (skill) message.skill = skill;
     if (references.length) message.references = references;
+    if (condition && !action) message.condition = condition;
     // Not with an action: a task goes apart from the changes (see request), which wait for Send.
     if (takesEdits && !action) message.takesEdits = true;
     // Not with an action either: props go with a comment.
@@ -545,7 +548,7 @@ export class PilotSession {
   /** A comment job's change set: the thread so far, as the agent reads it. */
   private commentSet(element: Element, messages: ThreadMessage[], others: Element[], id?: string, session?: AgentSession): ChangeSet {
     // Attachments go by id (the hub adds where it saved them); their previews stay here.
-    const thread = messages.map(({ from, text, at, attachments, action, skill, references, props, stopped }) => ({
+    const thread = messages.map(({ from, text, at, attachments, action, skill, references, props, condition, stopped }) => ({
       from,
       // Pilot's note, not the agent's words: what it means for the work.
       text: stopped ? STOPPED_FOR_AGENT : text,
@@ -555,6 +558,7 @@ export class PilotSession {
       ...(skill ? { skill } : {}),
       ...(references?.length ? { references } : {}),
       ...(props ? { props } : {}),
+      ...(condition ? { condition } : {}),
     }));
     const set = buildRequest(element, "comment", { id, thread, others });
     // The thread's agent session: resumed, so the agent remembers the thread.

@@ -67,6 +67,22 @@ describe("usedModifiers", () => {
     expect(usedModifiers(element, history).at(-1)?.used).toEqual({ states: [], condition: selected });
   });
 
+  it("several selected: only the conditions every one of them has", () => {
+    style.textContent += "\n.card:hover .btn { color: red; } .card:focus-within .btn.only { color: blue; }";
+    const other = document.createElement("button");
+    other.className = "btn";
+    element.parentElement?.append(other);
+    element.classList.add("only");
+    const names = (others: Element[]) =>
+      usedModifiers(element, new EditHistory({ render() {} }), others)
+        .filter((m) => m.used && "condition" in m.used)
+        .map((m) => m.name);
+    expect(names([])).toEqual([".card:hover &", ".card:focus-within &"]);
+    expect(names([other])).toEqual([".card:hover &"]);
+    other.remove();
+    element.classList.remove("only");
+  });
+
   it("picking one sets exactly its pills", () => {
     const md = usedModifiers(element, new EditHistory({ render() {} })).find((m) => m.syntax === "hover:from-768");
     expect(md?.used).toEqual({ states: ["hover"], widths: { min: 768 } });

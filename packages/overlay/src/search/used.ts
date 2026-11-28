@@ -22,7 +22,7 @@ import type { Modifier } from "./modifiers.ts";
  * true now: Tailwind v4's `hover:`), rules for every element (`*:focus`, a
  * reset) left out. The element as it is, with no modifier, isn't one.
  */
-export function usedModifiers(element: EditableElement, history: EditHistory): Modifier[] {
+export function usedModifiers(element: EditableElement, history: EditHistory, others: readonly Element[] = []): Modifier[] {
   const found = new Map<string, { states: ElementState[]; widths?: WidthRange; condition?: Condition; properties: Set<string> }>();
   const add = (states: readonly ElementState[], widths: WidthRange | undefined, properties: Iterable<string>, condition?: Condition) => {
     if (!states.length && !widths && !condition) return;
@@ -43,9 +43,12 @@ export function usedModifiers(element: EditableElement, history: EditHistory): M
     add(rule.states ?? [], widths, Array.from({ length: rule.style.length }, (_, i) => rule.style.item(i)));
   }
   // The project's own conditions on it (its code: `group-hover/hero`, `.card:hover &`), whether they hold now or not.
-  for (const found of conditionalRules(element)) {
+  // Several selected: only the conditions every one of them has (an edit under one goes to each one's own rule).
+  const shared = (f: ReturnType<typeof conditionalRules>[number]) =>
+    others.every((o) => conditionalRules(o).some((g) => conditionKey(g.condition) === conditionKey(f.condition) && g.states.join() === f.states.join() && g.widths?.min === f.widths?.min && g.widths?.max === f.widths?.max));
+  for (const found of conditionalRules(element).filter(shared)) {
     const properties = found.rules.flatMap((r) => Array.from({ length: r.style.length }, (_, i) => r.style.item(i)));
-    add(found.states, undefined, properties, found.condition);
+    add(found.states, found.widths, properties, found.condition);
   }
   // Pilot's own changes, those under a condition too (named by the agent's label once it named it, else the words).
   for (const c of history.changes()) if (c.element === element && !c.removal) add(c.states ?? [], c.widths, [c.property], c.condition);

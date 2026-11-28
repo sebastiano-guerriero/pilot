@@ -185,6 +185,19 @@ describe("formatPrompt", () => {
     expect(prompt).not.toContain("Pilot read it");
   });
 
+  it("a comment written with a condition set: about the element only when it holds", () => {
+    const comment = (condition: object) =>
+      formatPrompt({
+        ...changeSet,
+        edits: [],
+        request: { kind: "comment", target: changeSet.edits[0]!.target, thread: [{ from: "designer", text: "Make it pop", at: "", condition }], breakpoints: [] },
+      } as never);
+    expect(comment({ words: "the card is hovered" })).toContain('It\'s about this element only when "the card is hovered" holds (the designer\'s words: work out what on the page marks that');
+    expect(comment({ words: "group-hover/hero", label: "group-hover/hero", selector: ".group\\/hero:hover &", project: true })).toContain(
+      "a condition the project already has (`group-hover/hero`",
+    );
+  });
+
   it("a condition the project already has: its rule changes, no other added", () => {
     const prompt = formatPrompt({
       ...changeSet,

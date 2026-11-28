@@ -141,6 +141,18 @@ export function relaxSelector(selector: string): string {
   return out.join("");
 }
 
+/** Pseudo-classes that hold while someone points at or focuses something: what selecting with Pilot itself sets off. */
+const INTERACTION = /:(?:hover|active|focus|focus-visible|focus-within)(?![\w-])/;
+
+/**
+ * Whether a selector, its subject's own states taken out (subjectStates), still needs the pointer or focus
+ * somewhere else (`.group:hover .title`, Tailwind's group-hover): a condition, not how the element is, even
+ * while it holds (clicking the title hovers its card).
+ */
+export function needsInteraction(stripped: string): boolean {
+  return INTERACTION.test(stripped);
+}
+
 /** Whether a selector has something dynamic in it. */
 export function isDynamic(selector: string): boolean {
   return relaxSelector(selector) !== selector.trim();
@@ -153,17 +165,33 @@ export function isDynamic(selector: string): boolean {
  * its classes and tag left out, so every rule under one condition gives the same one. Null: nothing dynamic.
  */
 export function conditionOfSelector(selector: string): string | null {
-  const parts = tokens(selector.trim());
+  const parts = tokens(unwrap(selector.trim()));
   // The subject: the last compound.
   let last = parts.length;
   while (last > 0 && !isCombinator(parts[last - 1] as string)) last--;
   const head = parts.slice(0, last).join("");
   const subject = parts.slice(last);
-  const own = subject.filter((t) => !t.startsWith("::") && relaxPiece(t) !== t);
+  let own = subject.filter((t) => !t.startsWith("::") && relaxPiece(t) !== t);
   // What's around it counts when something there is dynamic; else only the element's own.
-  const around = head && isDynamic(head.replace(/[\s>+~]+$/, "")) ? head : "";
+  let around = head && isDynamic(head.replace(/[\s>+~]+$/, "")) ? head : "";
+  // `&:is(A *)` (Tailwind v4's group-hover, nested) is `A &`: one condition however it's written.
+  if (!around) {
+    const ancestry = own.map((t) => /^:(?:is|where)\((.+?)(\s*[\s>+~]\s*)\*\)$/s.exec(t)).find((m) => m && list(m[1] as string).length === 1);
+    if (ancestry) {
+      around = `${ancestry[1]}${/\S/.test(ancestry[2] as string) ? ` ${(ancestry[2] as string).trim()} ` : " "}`;
+      own = own.filter((t) => t !== ancestry[0]);
+    }
+  }
   if (!around && !own.length) return null;
   return `${around}&${own.join("")}`;
+}
+
+/** A selector that's all one `:is(…)` holding one complex selector (Tailwind v4's `:is(:where(.group):hover .x)`): that selector. */
+function unwrap(selector: string): string {
+  const m = /^:(?:is|where)\((.*)\)$/s.exec(selector);
+  if (!m || tokens(selector).length !== 1) return selector;
+  const inner = list(m[1] as string);
+  return inner.length === 1 && tokens(inner[0] as string).some(isCombinator) ? unwrap(inner[0] as string) : selector;
 }
 
 /**

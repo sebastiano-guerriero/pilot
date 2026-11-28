@@ -541,7 +541,7 @@ export function PropertyDialog({
           onStatesChange={onStatesChange}
           defaultState={defaultState}
           onDefaultStateChange={onDefaultStateChange}
-          used={isModifierQuery(query) || finishingWidth ? usedModifiers(element, history) : undefined}
+          used={isModifierQuery(query) || finishingWidth ? usedModifiers(element, history, others) : undefined}
           viewportWidth={viewportWidth}
           autoFocus={autoFocus}
           element={element}
@@ -882,7 +882,7 @@ function pageValues(
     properties.map((p) => {
       const key = keyFor(element, p, widths, states, width, history, condition);
       // Under a condition: the project's own value for it (its rules for that condition), else none.
-      return [p, { declared: condition ? conditionValue(element, p, condition, states ?? []) : pageValueAt(element, p, key, states), at: key }];
+      return [p, { declared: condition ? conditionValue(element, p, condition, states ?? [], key === "base" ? undefined : key) : pageValueAt(element, p, key, states), at: key }];
     }),
   );
 }

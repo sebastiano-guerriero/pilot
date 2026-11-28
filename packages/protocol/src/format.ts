@@ -17,6 +17,7 @@ import type {
   PropValue,
   ResponsiveRequest,
   StyleChange,
+  StyleCondition,
   WidthRange,
 } from "./types.ts";
 
@@ -448,6 +449,8 @@ function commentLines(message: CommentMessage | undefined): string[] {
   const text = message?.text.trim() ?? "";
   const files = message?.attachments ?? [];
   const out = text ? [quote(text)] : [];
+  // Written with a condition set: about the element only while it holds.
+  if (message?.condition) out.push("", whenLine(message.condition));
   // What the designer mentioned with `@`, picked from Pilot's list: exact names, to use as they are.
   const references = message?.references ?? [];
   if (references.length) out.push("", ...referenceLines(references));
@@ -462,6 +465,17 @@ function commentLines(message: CommentMessage | undefined): string[] {
     ...attachmentLines(files),
   );
   return out;
+}
+
+/** A comment written with a condition set: what it's about, and how to write it. */
+function whenLine(when: StyleCondition): string {
+  const css = [when.media && `@media ${when.media}`, when.container && `@container ${when.container}`, when.selector && `\`${when.selector}\``].filter(Boolean).join(" and ");
+  const how = when.project
+    ? `a condition the project already has (\`${when.words}\`, ${css}${when.selector ? ", `&` being this element" : ""}): change its rule, don't add another`
+    : css
+      ? `${css}${when.selector ? ", `&` being this element" : ""}: write it the project's way`
+      : `the designer's words: work out what on the page marks that, write it the project's way, and ask if you can't tell`;
+  return `It's about this element only when ${JSON.stringify(when.label ?? when.words)} holds (${how}); the rest of the time it stays as it is.`;
 }
 
 /** What the designer mentioned with `@`, exact, as the agent reads it. */

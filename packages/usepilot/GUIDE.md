@@ -144,6 +144,7 @@ For a condition no modifier lists, type `/` and describe it right there: "the pa
 - When the job comes back, the agent gives the condition a short name, which the pill and the `/` menu show from then on, and your edits show live when the condition holds.
 - If the agent can't tell what you mean, it asks you in the thread. A modifier only stays in the menu once the agent has written it as CSS; if it doesn't say how it wrote it (even after Pilot asks again), the job's notes tell you, and the modifier isn't kept.
 - CSS works too, with `&` for the element (`.card:hover &`): that one shows live right away.
+- A comment you write while a condition is in the pill is about that condition only: the comment box says so.
 - The `/` menu also lists the conditions your code already has on the element (`group-hover/hero`, `.card:hover &`, `motion-reduce`), even when they don't hold right now. Pick one to see and edit its values.
 - Backspace at the start of the search removes it, like the other modifiers.
 

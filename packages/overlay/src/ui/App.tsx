@@ -1,4 +1,4 @@
-import type { Condition } from "../edits/condition.ts";
+import { type Condition, conditionLabel } from "../edits/condition.ts";
 import type { CommentAction, CommentReference, ElementState, ElementTarget, PropChange, WidthRange } from "@pilot/protocol";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import { type BoxArea, hidesSelection } from "../dom/boxModel.ts";
@@ -636,7 +636,8 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     // Props picked from the agent's `/props` list: set on this instance, where it's written.
     const instance = props.length ? componentProps(element) : null;
     const setting = instance ? { component: instance.component, ...(instance.usedIn ? { usedIn: instance.usedIn } : {}), set: props } : undefined;
-    session.comment(element, text, attachments, action, othersRef.current, mentions.flatMap(toReference), withEdits, setting, skill);
+    // With a condition in the modifiers' pill (not default): the comment is about the element only then.
+    session.comment(element, text, attachments, action, othersRef.current, mentions.flatMap(toReference), withEdits, setting, skill, defaultState ? undefined : (condition ?? undefined));
     return "sent";
   };
   // How many of them there are, for the chip (the history's changes re-render this).
@@ -778,6 +779,7 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
             <CommentWidget
               key={selected.key}
               element={selected.element}
+              when={!defaultState && condition ? conditionLabel(condition) : undefined}
               initialText={selectedDraft}
               onTextChange={(text) => keepDraft(selected.element, text)}
               anchor={selectedRect}
