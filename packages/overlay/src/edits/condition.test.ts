@@ -135,7 +135,7 @@ describe("conditionVariant, conditionName: Tailwind's words for it", () => {
     expect(variantOf("with reduced motion")).toBe("motion-reduce");
     expect(variantOf("when printing")).toBe("print");
     expect(variantOf("on touch screens")).toBe("[@media(hover:none)]");
-    expect(variantOf("the next sibling is hovered")).toBe("[&:has(+_*:hover)]");
+    expect(variantOf("the next sibling is hovered")).toBe("has-[+_*:hover]");
   });
   it("the name: Tailwind's words, or the designer's when it's brackets", () => {
     expect(conditionName({ words: "it has data-selected", selector: "&[data-selected]" })).toBe("Data selected");
@@ -249,5 +249,46 @@ describe("readCondition: several together, Tailwind's peer and group", () => {
   it("a part that doesn't read: the whole doesn't (nothing dropped)", () => {
     const el = on(`<div><p id="t">x</p></div>`, "t");
     expect(read2("it is hovered and feels right", el)).toMatch(/^error: Pilot can't read/);
+  });
+});
+
+describe("readCondition: a sibling on either side; children and what's inside", () => {
+  const on = (html: string, id: string) => {
+    document.body.innerHTML = html;
+    return document.getElementById(id) as HTMLElement;
+  };
+  const sel = (words: string, el: Element) => {
+    const r = readCondition(words, el);
+    return "condition" in r ? `${r.condition.selector} | ${conditionVariant(r.condition)}` : `error: ${r.error}`;
+  };
+
+  it("a sibling, neither previous nor next: one on either side", () => {
+    const el = on(`<div><em></em><p id="t">x</p><span class="featured"></span></div>`, "t");
+    expect(sel("a sibling is hovered", el)).toBe("&:is(*:hover ~ *, :has(~ *:hover)) | [&:is(*:hover_~_*,_:has(~_*:hover))]");
+    expect(sel("the sibling .featured is disabled", el)).toBe("&:is(.featured:disabled ~ *, :has(~ .featured:disabled)) | [&:is(.featured:disabled_~_*,_:has(~_.featured:disabled))]");
+    expect(sel("a sibling .nope is checked", el)).toMatch(/^error: No \.nope beside/);
+    // Previous and next still say which side.
+    expect(sel("the previous sibling is checked", el)).toBe(":checked + & | peer-checked");
+  });
+
+  it("a child, children, a descendant, something inside: the element has one", () => {
+    const el = on(`<ul id="u"><li class="item"><span class="badge"></span></li></ul>`, "u");
+    expect(sel("a child is hovered", el)).toBe("&:has(> :hover) | has-[>_:hover]");
+    expect(sel("it has a child .item that is checked", el)).toBe("&:has(> .item:checked) | has-[>_.item:checked]");
+    expect(sel("has a child item", el)).toBe("&:has(> li) | has-[>_li]");
+    expect(sel("any descendant has focus", el)).toBe("&:has(:focus) | has-[:focus]");
+    expect(sel("something inside is checked and disabled", el)).toBe("&:has(:checked:disabled) | has-[:checked:disabled]");
+    // Named deeper than a child: anywhere inside.
+    expect(sel("a child .badge is hovered", el)).toBe("&:has(.badge:hover) | has-[.badge:hover]");
+    expect(sel("it has no children", el)).toBe("&:not(:has(> *)) | not-has-[>_*]");
+    // One named by its class that isn't inside right now: taken (what's inside often comes later, a badge added).
+    expect(sel("a child .nope is hovered", el)).toBe("&:has(.nope:hover) | has-[.nope:hover]");
+  });
+
+  it("its own place and counts aren't children", () => {
+    const el = on(`<div id="d"></div>`, "d");
+    expect(sel("it is the first child", el)).toBe("&:first-child | first");
+    expect(sel("it is the only child", el)).toBe("&:only-child | only");
+    expect(sel("it has more than 3 children", el)).toBe("&:has(> :nth-child(4)) | has-[>_:nth-child(4)]");
   });
 });

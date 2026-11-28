@@ -114,24 +114,104 @@ const NOUN_TAGS: Record<string, string> = {
 /** Words that aren't an element's name: who words, pronouns, the page. */
 const NOT_NOUNS = new Set([
   "it", "this", "that", "element", "one", "parent", "parents", "ancestor", "container", "wrapper", "sibling", "previous", "next",
-  "peer", "peers", "group",
+  "peer", "peers", "group", "siblings", "child", "children", "kid", "kids", "descendant", "descendants",
   "preceding", "following", "prior", "page", "screen", "window", "viewport", "browser", "user", "mouse", "pointer",
   "attribute", "class", "same", "other", "only", "first", "last", "url", "placeholder", "keyboard",
 ]);
 
 /** Who the condition is about, before the "what": the element itself, its parent or an ancestor, a sibling. */
-type Who = "self" | "parent" | "ancestor" | "previous" | "peer" | "next";
+type Who = "self" | "parent" | "ancestor" | "previous" | "peer" | "next" | "sibling";
 const WHO: Array<[RegExp, Who]> = [
   [/\b(?:previous|preceding|prior)\s+(?:sibling|element|one)\b|\bthe\s+(?:sibling|element)\s+before\b/, "previous"],
   [/\bnext\s+(?:sibling|element|one)\b|\bthe\s+(?:sibling|element)\s+after\b|\bfollowing\s+(?:sibling|element)\b/, "next"],
   // Tailwind's words: a peer is any sibling before it (`peer-*`, `~`), a group an ancestor (`group-*`).
   [/\bpeers?\b/, "peer"],
+  // A sibling, neither previous nor next said: one on either side.
+  [/\bsiblings?\b/, "sibling"],
   [/\bparents?\b/, "parent"],
   [/\b(?:ancestors?|groups?|container|wrapper|inside|within|in\s+a|in\s+an|in\s+the)\b/, "ancestor"],
 ];
 
 /** Words that turn a condition around. */
 const NEGATION = /\b(?:not|isn'?t|doesn'?t|does\s+not|hasn'?t|has\s+no|without|un(?=checked|selected))/;
+
+/**
+ * The "what" parts of the words, from where the first starts: several joined by "and" or a comma ("has
+ * data-checked=true and focus-within") each read on its own, all of them together, each turned around by its own
+ * "not" (the first one's may come before it: `lead`). Null when one doesn't read (it'd be dropped); "" for none.
+ */
+function combineWhats(part: string, lead: string): string | null {
+  const parts = part.split(/\s*(?:,|\band\b|\bplus\b)\s*/i).filter(Boolean);
+  let css = "";
+  for (const [i, piece] of parts.entries()) {
+    const pieceLower = piece.toLowerCase();
+    const found = whatOf(piece, pieceLower);
+    if (!found) {
+      if (MEDIA.some(([pattern]) => pattern.test(pieceLower)) || sizeOf(pieceLower)) continue;
+      return null;
+    }
+    const not = NEGATION.test(i === 0 ? lead + pieceLower : pieceLower);
+    css += not ? `:not(${found.css})` : found.css;
+  }
+  return css;
+}
+
+/**
+ * A child or what's inside, as who the condition is about ("a child is checked", "has a child .badge", "any
+ * descendant has focus", "something inside is hovered", Tailwind's `has-*`): the element having one, `&:has(…)`.
+ * Not "the first child" (its own place) nor "more than 3 children" (a count): those are its own.
+ */
+const CHILD =
+  /\b(?:(?:has|have|contains?|with)\s+)?(?:(?:a|an|any|some|one|one\s+or\s+more|its|every|all(?:\s+of)?(?:\s+its)?|no)\s+)?(direct\s+)?(child(?:ren)?|kids?|descendants?)\b|\b(?:something|anything)\s+(?:inside|within)\b/;
+
+function childReading(text: string, lower: string, element: Element, size: { query: string; screen: boolean } | null): Reading | null {
+  const m = CHILD.exec(lower);
+  if (!m) return null;
+  const head = lower.slice(0, m.index);
+  if (/(?:first|last|only|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|\d+(?:st|nd|rd|th)?|than|least)\s+$/.test(head)) return null;
+  // Another "who" before it (the parent…): not the element's own children.
+  if (WHO.some(([pattern]) => pattern.test(head))) return null;
+  const anywhere = !m[2] || /descendant|inside|within/.test(m[0]);
+  const rest = text.slice(m.index + m[0].length);
+  const restLower = rest.toLowerCase();
+  // Which one: a class, an id, an attribute ("a child .badge"), or named in a word ("a child item").
+  let qualifier = qualifierOf(rest.slice(0, firstWhatAt(rest)));
+  if (!qualifier) {
+    const noun = /^\s*(?:that\s+is\s+an?\s+|called\s+|named\s+)?([a-z][\w-]*)/.exec(restLower)?.[1];
+    if (noun && !NOT_NOUNS.has(noun) && !/^(?:is|are|has|have|that|which|with|gets|get|being|was|were)$/.test(noun) && !whatOf(noun, noun)) {
+      const found = resolveNoun(noun, element, "child");
+      if (!found) return { error: `No “${noun}” inside this element.`, hint: `Name it by its class: “it has a child .${noun}”.` };
+      qualifier = found.selector;
+    }
+  }
+  const whatAt = firstWhatAt(rest);
+  const css = whatAt < 0 ? "" : combineWhats(rest.slice(whatAt), restLower.slice(0, whatAt));
+  if (css === null) return REWORD;
+  const inner = `${qualifier}${css}` || "*";
+  // "Child": a direct one (`>`), unless the one named is only deeper; "descendant", "inside": anywhere.
+  const direct = !anywhere && (!qualifier || [...element.children].some((c) => c.matches(qualifier)));
+  const has = `:has(${direct ? "> " : ""}${inner})`;
+  const none = /\b(?:has|have)\s+no\b|\bwithout\b|\bno\s+(?:child|kid|descendant)/.test(lower);
+  const selector = `&${none ? `:not(${has})` : has}`;
+  if (!validSelector(selector)) return REWORD;
+  let target: Element | null = null;
+  try {
+    target = element.querySelector(`${direct ? ":scope > " : ""}${qualifier || "*"}`);
+  } catch {
+    target = null;
+  }
+  const media = size?.screen ? size.query : MEDIA.find(([pattern]) => pattern.test(lower))?.[1];
+  const container = size && !size.screen ? size.query : undefined;
+  return {
+    condition: { words: text, selector, ...(media ? { media } : {}), ...(container ? { container } : {}) },
+    ...(target ? { target } : {}),
+  };
+}
+
+/** Where the first "what" starts in `text`, or -1. */
+function firstWhatAt(text: string): number {
+  return whatOf(text, text.toLowerCase())?.at ?? -1;
+}
 
 /** Read `words` for `element`: a condition (and the element it names), or why it can't. */
 export function readCondition(words: string, element: Element): Reading {
@@ -155,6 +235,10 @@ export function readCondition(words: string, element: Element): Reading {
   // A size: the screen's (a media condition) or a container's ("the card is narrower than 400px": `@container`).
   const size = sizeOf(lower);
 
+  // A child or what's inside as who it's about: the element having one (`&:has(…)`).
+  const child = childReading(text, lower, element, size);
+  if (child) return child;
+
   // What: a state, a class, an attribute, what it contains, its place in a list.
   const what = whatOf(text, lower);
   if (!what) {
@@ -163,22 +247,10 @@ export function readCondition(words: string, element: Element): Reading {
     for (const [pattern, media] of MEDIA) if (pattern.test(lower)) return { condition: { words: text, media: negated ? `not all and ${wrap(media)}` : media } };
     return REWORD;
   }
-  // Several joined by "and" or a comma ("has data-checked=true and focus-within"): each read on its own, all of them
-  // together, each turned around by its own "not". One that doesn't read: the whole doesn't (it'd be dropped).
-  const parts = text.slice(what.at).split(/\s*(?:,|\band\b|\bplus\b)\s*/i).filter(Boolean);
-  let css = "";
-  for (const [i, part] of parts.entries()) {
-    const partLower = part.toLowerCase();
-    const found = whatOf(part, partLower);
-    if (!found) {
-      if (MEDIA.some(([pattern]) => pattern.test(partLower)) || sizeOf(partLower)) continue;
-      return REWORD;
-    }
-    // The first part's "not" may come before it ("the parent isn't hovered").
-    const not = NEGATION.test(i === 0 ? lower.slice(0, what.at) + partLower : partLower);
-    css += not ? `:not(${found.css})` : found.css;
-  }
-  if (!css) css = negated ? `:not(${what.css})` : what.css;
+  // Several joined by "and" or a comma, each read on its own (combineWhats); one that doesn't read: the whole doesn't.
+  const combined = combineWhats(text.slice(what.at), lower.slice(0, what.at));
+  if (combined === null) return REWORD;
+  let css = combined || (negated ? `:not(${what.css})` : what.css);
 
   // Who, from the words before the "what" (else the element itself), and its own class or attribute (`.card`).
   const before = lower.slice(0, what.at);
@@ -238,6 +310,15 @@ export function readCondition(words: string, element: Element): Reading {
       target = element.nextElementSibling;
       selector = `&:has(+ ${qualifier || "*"}${css})`;
       break;
+    case "sibling": {
+      // On either side: after one (`X ~ *`), or before one (`:has(~ X)`), the element the subject.
+      const other = `${qualifier || "*"}${css}`;
+      const siblings = [...(element.parentElement?.children ?? [])].filter((e) => e !== element);
+      target = siblings.find((e) => !qualifier || e.matches(qualifier)) ?? null;
+      if (qualifier && !target) return { error: `No ${qualifier} beside this element.`, hint: "A sibling is in the same parent." };
+      selector = `&:is(${other} ~ *, :has(~ ${other}))`;
+      break;
+    }
   }
   if (!validSelector(selector)) return REWORD;
   // With a media word or a size too ("hovered, with reduced motion"): both.
@@ -297,13 +378,15 @@ function nounOf(before: string): string | null {
  * A noun as a selector, for this element: a tag (list, item, form…) or a class (`card`, or one it's part of:
  * `rounded-card`), on the element itself or around it (for "the parent", from its parent up). Null: none there.
  */
-function resolveNoun(noun: string, element: Element, who: Who): { selector: string; self: boolean } | null {
+function resolveNoun(noun: string, element: Element, who: Who | "child"): { selector: string; self: boolean } | null {
   const singular = noun.replace(/s$/, "");
   const candidates = [...new Set([noun, singular])];
   const chain: Element[] = [];
   if (who === "self") chain.push(element);
-  // A sibling before it (peer, previous): among those; else around it.
+  // A sibling before it (peer, previous): among those; any sibling: both sides; a child: inside it; else around it.
   if (who === "peer" || who === "previous") for (let e = element.previousElementSibling; e; e = e.previousElementSibling) chain.push(e);
+  else if (who === "sibling") chain.push(...[...(element.parentElement?.children ?? [])].filter((e) => e !== element));
+  else if (who === "child") chain.push(...element.querySelectorAll("*"));
   else for (let e = element.parentElement; e && e !== document.documentElement; e = e.parentElement) chain.push(e);
   const exact = (e: Element, word: string) => (e.classList.contains(word) ? `.${word}` : null);
   const part = (e: Element, word: string) => [...e.classList].find((c) => c.split(/[-_:]/).includes(word));
@@ -484,13 +567,15 @@ function targetOfSelector(selector: string, element: Element): { target?: Elemen
 
 function validSelector(selector: string): boolean {
   const probe = selector.replace(/&/g, "a");
+  const supports = typeof CSS !== "undefined" && typeof CSS.supports === "function";
   try {
     // Throws on a selector the browser can't parse; `CSS.supports` also refuses what it doesn't support.
     document.createDocumentFragment().querySelector(probe);
-    if (typeof CSS !== "undefined" && typeof CSS.supports === "function") return CSS.supports(`selector(${probe})`);
-    return true;
+    return supports ? CSS.supports(`selector(${probe})`) : true;
   } catch {
-    return false;
+    // A relative selector in `:has()` inside `:is()` (a sibling on either side): browsers parse it, some DOMs
+    // (the tests') don't; `CSS.supports` decides.
+    return supports && probe.includes(":has(") && CSS.supports(`selector(${probe})`);
   }
 }
 
@@ -601,8 +686,8 @@ function widthVariant(query: string, prefix: string): string | null {
 function selectorVariant(selector: string): string {
   const bracket = `[${selector.replace(/\s+/g, "_")}]`;
   const s = selector.trim();
-  // The element itself: `&[data-open]`, `&:hover`.
-  const self = /^&([^\s>+~]*)$/.exec(s);
+  // The element itself: `&[data-open]`, `&:hover`, `&:has(> .x)` (combinators only inside parentheses).
+  const self = s.startsWith("&") && !hasTopLevelCombinator(s.slice(1)) ? [s, s.slice(1)] : null;
   if (self) {
     const own = piecesVariant(self[1] as string);
     return own && !own.qualifier && own.variants.length ? own.variants.join(":") : bracket;
@@ -617,6 +702,17 @@ function selectorVariant(selector: string): string {
     return other.variants.map((v) => `${kind}-${v}${other.qualifier ? `/${other.qualifier}` : ""}`).join(":");
   }
   return bracket;
+}
+
+/** Whether a combinator (space, >, +, ~) is outside parentheses: another element in the selector. */
+function hasTopLevelCombinator(text: string): boolean {
+  let depth = 0;
+  for (const c of text) {
+    if (c === "(") depth++;
+    else if (c === ")") depth--;
+    else if (depth === 0 && /[\s>+~]/.test(c)) return true;
+  }
+  return false;
 }
 
 /** The row's name, Tailwind's words for it: `data-selected` → "Data selected", `group-hover/card` → "Group hover card". */
