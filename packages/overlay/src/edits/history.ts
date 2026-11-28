@@ -2,7 +2,7 @@ import type { ElementState, ElementTarget, StyleSource, WidthRange } from "@pilo
 import { sortStates } from "@pilot/protocol";
 import { type Preview, stylesheetPreview } from "../dom/preview.ts";
 import { type TextPreview, domTextPreview, textRunOf } from "../dom/text.ts";
-import { type Condition, conditionKey, sameCondition } from "./condition.ts";
+import { type Condition, conditionKey, hasCss, sameCondition } from "./condition.ts";
 import { sameStates } from "./states.ts";
 import { type EditableElement, describeElement } from "../dom/target.ts";
 import { inWidths } from "./widths.ts";
@@ -481,10 +481,16 @@ export class EditHistory {
    * would win over that, and nothing would show (found on a dark page, 2026-11-27).
    */
   private previewRules() {
-    return this.rules()
-      .filter((r) => textRunOf(r.property) === null)
-      .map((r) => (r.condition && this.forcedKeys.has(conditionKey(r.condition)) ? { ...r, condition: { words: r.condition.words } } : r))
-      .map((r) => (r.value === "" ? { ...r, value: "revert-layer" } : r));
+    const forced = (r: Entry) => !!r.condition && this.forcedKeys.has(conditionKey(r.condition));
+    return (
+      this.rules()
+        .filter((r) => textRunOf(r.property) === null)
+        // Words only (no CSS to show it by): shown only when forced.
+        .filter((r) => !r.condition || hasCss(r.condition) || forced(r))
+        // Forced: an empty condition, so the preview keeps it in Pilot's layer (no CSS of its own).
+        .map((r) => (forced(r) ? { ...r, condition: {} } : r))
+        .map((r) => (r.value === "" ? { ...r, value: "revert-layer" } : r))
+    );
   }
 
   /** The conditions forced on, by key: the preview's only, never saved or sent (see force). */

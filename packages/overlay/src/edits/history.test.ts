@@ -261,11 +261,22 @@ describe("changes under a condition", () => {
     expect(shown).toEqual([{ property: "color", value: "blue", condition: open }]);
     h.force(open, true);
     // Its CSS left out, still a condition's change (in Pilot's layer, over the project's rules).
-    expect(shown).toEqual([{ property: "color", value: "blue", condition: { words: open.words } }]);
+    expect(shown).toEqual([{ property: "color", value: "blue", condition: {} }]);
     expect(h.forced(open)).toBe(true);
     h.force(open, false);
     expect(shown).toEqual([{ property: "color", value: "blue", condition: open }]);
     // Never recorded: the change is the same.
     expect(h.changes()[0]?.condition).toEqual(open);
+  });
+
+  it("words only (Pilot couldn't read them): recorded, shown only when forced; two of them are two conditions", () => {
+    const h = recording();
+    const loggedIn = { words: "when the user is logged in" };
+    h.apply(el, "color", "red", undefined, { condition: loggedIn });
+    h.apply(el, "color", "blue", undefined, { condition: { words: "on sale" } });
+    expect(shown).toEqual([]);
+    expect(h.valueOf(el, "color", "base", undefined, loggedIn)).toBe("red");
+    h.force(loggedIn, true);
+    expect(shown).toEqual([{ property: "color", value: "red", condition: {} }]);
   });
 });

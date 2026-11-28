@@ -57,12 +57,13 @@ describe("Create modifier: words after / that match no modifier", () => {
     expect(value).toBe("");
   });
 
-  it("words Pilot can't read: picked, they go on being described, the line saying how to put them", () => {
+  it("words Pilot can't read: picked, they go on being described, the line saying so; Enter sets them anyway", () => {
     value = "/when it feels right";
     mount();
     expect(rows()).toEqual(["Create modifier"]);
     enter();
     expect(set).toEqual([]);
+    expect(container.querySelector(".condition-reading")?.textContent).toContain("Enter sets it anyway, without a live preview.");
     expect(container.querySelector("input")?.getAttribute("aria-label")).toBe("Describe when");
     expect(container.querySelector(".condition-reading[data-error]")).not.toBeNull();
     // Short: what's wrong in red, how to put it after.
@@ -76,6 +77,12 @@ describe("Create modifier: words after / that match no modifier", () => {
     });
     expect(container.querySelector("input")?.getAttribute("aria-label")).toBe("Add a property");
     expect(container.querySelector(".condition-reading")).toBeNull();
+    // Described again and entered: set as the words.
+    value = "/when it feels right";
+    mount();
+    enter();
+    enter();
+    expect(set).toEqual([{ words: "when it feels right" }]);
   });
 
   it("a word that matches a modifier lists it, not Create modifier", () => {

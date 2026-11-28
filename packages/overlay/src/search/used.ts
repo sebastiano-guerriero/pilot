@@ -47,7 +47,7 @@ export function usedModifiers(element: EditableElement, history: EditHistory): M
   for (const c of history.changes()) if (c.element === element && !c.removal) add(c.states ?? [], c.widths, [c.property], c.condition);
 
   return [...found.values()].sort(byPlace).map(({ states, widths, condition, properties }) => {
-    const syntax = [...states.map((s) => `${s}:`), condition ? `${conditionVariant(condition)}:` : "", widths ? widthSyntax(widths) : ""].join("");
+    const syntax = [...states.map((s) => `${s}:`), condition && conditionVariant(condition) ? `${conditionVariant(condition)}:` : "", widths ? widthSyntax(widths) : ""].join("");
     return {
       id: `used:${syntax}|${conditionKey(condition)}`,
       name: [states.map(stateName).join(" + "), widths ? describeWidths(widths) : "", condition ? conditionName(condition) : ""].filter(Boolean).join(", "),

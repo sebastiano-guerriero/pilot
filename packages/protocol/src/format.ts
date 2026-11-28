@@ -649,6 +649,9 @@ function conditionNote(c: StyleChange): string | null {
   const when = c.condition;
   if (!when) return null;
   const css = [when.media && `@media ${when.media}`, when.container && `@container ${when.container}`, when.selector && `\`${when.selector}\``].filter(Boolean).join(" and ");
+  // Words only: Pilot couldn't read them into CSS, the agent works from them alone.
+  if (!css)
+    return `\`${c.property}\` is only for when ${JSON.stringify(when.words)} (the designer's words; Pilot couldn't read them as CSS): work out what on the page marks that (a class, an attribute, a parent's state, a media or container query), write the change for it the project's way, the element's other styles as they are, and say what you used.`;
   const read = when.selector ? `${css}, \`&\` being this element` : css;
   return `\`${c.property}\` is only for when ${JSON.stringify(when.words)} (the designer's words; Pilot read it as ${when.selector ? read : `\`${read}\``}): the change applies only while that holds. Write it the project's way (Tailwind's \`group-*\`, \`peer-*\`, \`has-*\`, \`data-*\` or an arbitrary variant; CSS nesting or a selector around the element), the element's other styles as they are. If the words and Pilot's reading disagree, follow the words and say so.${when.container ? " A container query is about the element's nearest container (an ancestor with `container-type`): make the one the words name a container if it isn't one yet." : ""}`;
 }

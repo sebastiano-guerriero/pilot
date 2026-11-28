@@ -184,6 +184,15 @@ describe("formatPrompt", () => {
     expect(prompt).toContain("follow the words and say so");
   });
 
+  it("words Pilot couldn't read: the agent works out what marks them", () => {
+    const prompt = formatPrompt({
+      ...changeSet,
+      edits: [{ target: changeSet.edits[0]!.target, changes: [{ property: "color", from: "", to: "red", condition: { words: "when the user is logged in" } }] }],
+    });
+    expect(prompt).toContain("| `color` | *not set* | `red` | base | when the user is logged in |");
+    expect(prompt).toContain("Pilot couldn't read them as CSS): work out what on the page marks that");
+  });
+
   it("a container query: the agent makes the one named a container", () => {
     const prompt = formatPrompt({
       ...changeSet,

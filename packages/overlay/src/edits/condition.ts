@@ -393,6 +393,8 @@ export function conditionSelector(condition: Condition, subject: string): string
 
 /** Whether the condition holds for `element` right now: its selector matches it (`:scope` is the element), its media matches. */
 export function holdsNow(condition: Condition, element: Element): boolean {
+  // Words only (Pilot couldn't read them): nothing to ask the page.
+  if (!hasCss(condition)) return false;
   try {
     if (condition.selector && !element.matches(condition.selector.replace(/&/g, ":scope"))) return false;
     if (condition.media && typeof matchMedia === "function" && !matchMedia(condition.media).matches) return false;
@@ -404,9 +406,19 @@ export function holdsNow(condition: Condition, element: Element): boolean {
   }
 }
 
-/** The condition's identity: its CSS, not its words (two phrasings of one condition are one). */
+/**
+ * Whether Pilot read the words into CSS. Words only (accepted as typed when Pilot can't read them, the owner's call,
+ * 2026-11-27): no live preview (force state shows it), the agent writes it from the words, the check after done
+ * leaves it to the agent's word.
+ */
+export function hasCss(condition: Condition): boolean {
+  return !!(condition.selector || condition.media || condition.container);
+}
+
+/** The condition's identity: its CSS, not its words (two phrasings of one condition are one); words only: its words. */
 export function conditionKey(condition: Condition | null | undefined): string {
-  return condition ? `${condition.selector ?? ""}|${condition.media ?? ""}|${condition.container ?? ""}` : "";
+  if (!condition) return "";
+  return hasCss(condition) ? `${condition.selector ?? ""}|${condition.media ?? ""}|${condition.container ?? ""}` : `words:${condition.words.trim().toLowerCase()}`;
 }
 
 /** The same condition (or both none). */
@@ -575,7 +587,7 @@ function selectorVariant(selector: string): string {
 /** The row's name, Tailwind's words for it: `data-selected` → "Data selected", `group-hover/card` → "Group hover card". */
 export function conditionName(condition: Condition): string {
   const variant = conditionVariant(condition);
-  if (variant.includes("[")) return condition.words;
+  if (!variant || variant.includes("[")) return condition.words;
   const name = variant.replace(/[-/:]/g, " ").replace(/\s+/g, " ").trim();
   return name.charAt(0).toUpperCase() + name.slice(1);
 }

@@ -236,12 +236,13 @@ export function PropertySearch({
     if (describing) {
       if (e.key === "Enter") {
         e.preventDefault();
-        // Set only when read: otherwise the line under the field says how to put it.
-        if (reading && "condition" in reading) {
-          if (condition) history?.force(condition, false);
-          onConditionChange?.(reading.condition);
-          stopDescribing("");
-        }
+        // Set as read, or, when Pilot can't read the words, as they are (no live preview; force state shows it, the
+        // agent writes it from the words). Not empty words.
+        const words = describing.words.trim();
+        if (!words || !reading) return;
+        if (condition) history?.force(condition, false);
+        onConditionChange?.("condition" in reading ? reading.condition : { words });
+        stopDescribing("");
         return;
       }
       if (e.key === "Escape") {
@@ -390,7 +391,7 @@ export function PropertySearch({
             // Short: what's wrong in red, how to put it after, dimmed (the owner's design, 2026-11-27).
             <span class="modifier-description">
               <span class="condition-error">{reading.error}</span>
-              {reading.hint && ` ${reading.hint}`}
+              {reading.hint && ` ${reading.hint}`} Enter sets it anyway, without a live preview.
             </span>
           ) : null}
         </div>
