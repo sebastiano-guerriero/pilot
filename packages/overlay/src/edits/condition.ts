@@ -105,23 +105,33 @@ const NOUN_TAGS: Record<string, string> = {
   sidebar: "aside",
   label: "label",
   figure: "figure",
+  input: "input",
+  field: ":is(input, textarea, select)",
+  textarea: "textarea",
+  select: "select",
 };
 
 /** Words that aren't an element's name: who words, pronouns, the page. */
 const NOT_NOUNS = new Set([
-  "it", "this", "that", "element", "one", "parent", "ancestor", "container", "wrapper", "sibling", "previous", "next",
+  "it", "this", "that", "element", "one", "parent", "parents", "ancestor", "container", "wrapper", "sibling", "previous", "next",
+  "peer", "peers", "group",
   "preceding", "following", "prior", "page", "screen", "window", "viewport", "browser", "user", "mouse", "pointer",
   "attribute", "class", "same", "other", "only", "first", "last", "url", "placeholder", "keyboard",
 ]);
 
 /** Who the condition is about, before the "what": the element itself, its parent or an ancestor, a sibling. */
-type Who = "self" | "parent" | "ancestor" | "previous" | "next";
+type Who = "self" | "parent" | "ancestor" | "previous" | "peer" | "next";
 const WHO: Array<[RegExp, Who]> = [
   [/\b(?:previous|preceding|prior)\s+(?:sibling|element|one)\b|\bthe\s+(?:sibling|element)\s+before\b/, "previous"],
   [/\bnext\s+(?:sibling|element|one)\b|\bthe\s+(?:sibling|element)\s+after\b|\bfollowing\s+(?:sibling|element)\b/, "next"],
-  [/\bparent\b/, "parent"],
-  [/\b(?:ancestor|container|wrapper|inside|within|in\s+a|in\s+an|in\s+the)\b/, "ancestor"],
+  // Tailwind's words: a peer is any sibling before it (`peer-*`, `~`), a group an ancestor (`group-*`).
+  [/\bpeers?\b/, "peer"],
+  [/\bparents?\b/, "parent"],
+  [/\b(?:ancestors?|groups?|container|wrapper|inside|within|in\s+a|in\s+an|in\s+the)\b/, "ancestor"],
 ];
+
+/** Words that turn a condition around. */
+const NEGATION = /\b(?:not|isn'?t|doesn'?t|does\s+not|hasn'?t|has\s+no|without|un(?=checked|selected))/;
 
 /** Read `words` for `element`: a condition (and the element it names), or why it can't. */
 export function readCondition(words: string, element: Element): Reading {
@@ -141,7 +151,7 @@ export function readCondition(words: string, element: Element): Reading {
   }
 
   const lower = text.toLowerCase();
-  const negated = /\b(?:not|isn'?t|doesn'?t|does\s+not|hasn'?t|has\s+no|without)\b/.test(lower);
+  const negated = NEGATION.test(lower);
   // A size: the screen's (a media condition) or a container's ("the card is narrower than 400px": `@container`).
   const size = sizeOf(lower);
 
@@ -153,7 +163,22 @@ export function readCondition(words: string, element: Element): Reading {
     for (const [pattern, media] of MEDIA) if (pattern.test(lower)) return { condition: { words: text, media: negated ? `not all and ${wrap(media)}` : media } };
     return REWORD;
   }
-  let css = negated ? `:not(${what.css})` : what.css;
+  // Several joined by "and" or a comma ("has data-checked=true and focus-within"): each read on its own, all of them
+  // together, each turned around by its own "not". One that doesn't read: the whole doesn't (it'd be dropped).
+  const parts = text.slice(what.at).split(/\s*(?:,|\band\b|\bplus\b)\s*/i).filter(Boolean);
+  let css = "";
+  for (const [i, part] of parts.entries()) {
+    const partLower = part.toLowerCase();
+    const found = whatOf(part, partLower);
+    if (!found) {
+      if (MEDIA.some(([pattern]) => pattern.test(partLower)) || sizeOf(partLower)) continue;
+      return REWORD;
+    }
+    // The first part's "not" may come before it ("the parent isn't hovered").
+    const not = NEGATION.test(i === 0 ? lower.slice(0, what.at) + partLower : partLower);
+    css += not ? `:not(${found.css})` : found.css;
+  }
+  if (!css) css = negated ? `:not(${what.css})` : what.css;
 
   // Who, from the words before the "what" (else the element itself), and its own class or attribute (`.card`).
   const before = lower.slice(0, what.at);
@@ -200,6 +225,15 @@ export function readCondition(words: string, element: Element): Reading {
       target = element.previousElementSibling;
       selector = `${qualifier}${css} + &`;
       break;
+    case "peer": {
+      // Any sibling before it (Tailwind's peer): the nearest one that is the one named.
+      let sibling = element.previousElementSibling;
+      while (sibling && qualifier && !sibling.matches(qualifier)) sibling = sibling.previousElementSibling;
+      target = sibling ?? element.previousElementSibling;
+      if (qualifier && !sibling) return { error: `No ${qualifier} before this element.`, hint: "A peer comes before it, in the same parent." };
+      selector = `${qualifier}${css} ~ &`;
+      break;
+    }
     case "next":
       target = element.nextElementSibling;
       selector = `&:has(+ ${qualifier || "*"}${css})`;
@@ -253,7 +287,7 @@ function sizeReading(words: string, size: { query: string; screen: boolean }, el
 function nounOf(before: string): string | null {
   const found: string[] = [];
   for (const m of before.matchAll(/\b(?:the|a|an|its|this)\s+([a-z][\w-]*)/g)) found.push(m[1] as string);
-  for (const m of before.matchAll(/\b(?:parent|ancestor|container|wrapper|sibling)\s+([a-z][\w-]*)/g)) found.push(m[1] as string);
+  for (const m of before.matchAll(/\b(?:parents?|ancestors?|container|wrapper|sibling|peers?|groups?)\s+([a-z][\w-]*)/g)) found.push(m[1] as string);
   // Verbs and their contractions ("the parent isn't…") aren't names either.
   const verb = /^(?:is|isn|are|aren|was|has|hasn|have|does|doesn|do|not|no|with|without|that|which|gets|got|when|if|being)$/;
   return found.filter((w) => !NOT_NOUNS.has(w) && !verb.test(w)).at(-1) ?? null;
@@ -268,7 +302,9 @@ function resolveNoun(noun: string, element: Element, who: Who): { selector: stri
   const candidates = [...new Set([noun, singular])];
   const chain: Element[] = [];
   if (who === "self") chain.push(element);
-  for (let e = element.parentElement; e && e !== document.documentElement; e = e.parentElement) chain.push(e);
+  // A sibling before it (peer, previous): among those; else around it.
+  if (who === "peer" || who === "previous") for (let e = element.previousElementSibling; e; e = e.previousElementSibling) chain.push(e);
+  else for (let e = element.parentElement; e && e !== document.documentElement; e = e.parentElement) chain.push(e);
   const exact = (e: Element, word: string) => (e.classList.contains(word) ? `.${word}` : null);
   const part = (e: Element, word: string) => [...e.classList].find((c) => c.split(/[-_:]/).includes(word));
   for (const word of candidates) {
@@ -335,12 +371,10 @@ function whatOf(text: string, lower: string): { css: string; at: number } | null
   // Its place in a list: "the third item", "the 5th one".
   const ordinal = new RegExp(`\\b(?:the\\s+)?(${ORDINALS.join("|")}|(\\d+)(?:st|nd|rd|th))\\s+(?:child|item|one|row|element|entry|card)\\b`).exec(lower);
   if (ordinal) consider(`:nth-child(${ordinal[2] ?? ORDINALS.indexOf(ordinal[1] as string) + 2})`, ordinal.index);
+  // The state that comes first in the words (ties: the more specific, listed first: focus inside before focus).
   for (const [pattern, css] of STATES) {
     const m = pattern.exec(lower);
-    if (m) {
-      consider(css, m.index);
-      break;
-    }
+    if (m) consider(css, m.index);
   }
   return best;
 }
@@ -574,12 +608,13 @@ function selectorVariant(selector: string): string {
     return own && !own.qualifier && own.variants.length ? own.variants.join(":") : bracket;
   }
   // An ancestor or the parent (group-*), the previous sibling (peer-*): its compound before the combinator.
-  const around = /^([^\s>+~]+)\s*([>+]?)\s*&$/.exec(s);
+  const around = /^([^\s>+~]+)\s*([>+~]?)\s*&$/.exec(s);
   if (around) {
     const other = piecesVariant(around[1] as string);
-    if (!other || other.variants.length !== 1) return bracket;
-    const kind = around[2] === "+" ? "peer" : "group";
-    return `${kind}-${other.variants[0]}${other.qualifier ? `/${other.qualifier}` : ""}`;
+    if (!other || !other.variants.length) return bracket;
+    // Several at once: each its own variant, chained, as Tailwind stacks them (`group-hover:group-focus:`).
+    const kind = around[2] === "+" || around[2] === "~" ? "peer" : "group";
+    return other.variants.map((v) => `${kind}-${v}${other.qualifier ? `/${other.qualifier}` : ""}`).join(":");
   }
   return bracket;
 }

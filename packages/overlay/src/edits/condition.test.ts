@@ -222,3 +222,32 @@ describe("readCondition: more rules", () => {
     expect(variantOf("when the screen is wider than 600px")).toBe("min-[600px]");
   });
 });
+
+describe("readCondition: several together, Tailwind's peer and group", () => {
+  const on = (html: string, id: string) => {
+    document.body.innerHTML = html;
+    return document.getElementById(id) as HTMLElement;
+  };
+  const read2 = (words: string, el: Element) => {
+    const r = readCondition(words, el);
+    return "condition" in r ? `${r.condition.selector} | ${conditionVariant(r.condition)}` : `error: ${r.error}`;
+  };
+  it("joined by and: each read, all of them on the one named", () => {
+    const el = on(`<div class="wrap" data-checked="true"><span class="featured"></span><p id="t">x</p></div>`, "t");
+    expect(read2("parents has data-checked=true and focus-within", el)).toBe(
+      '[data-checked="true"]:focus-within > & | group-data-[checked=true]:group-focus-within',
+    );
+    expect(read2("it is hovered and not disabled", el)).toBe("&:hover:not(:disabled) | hover:not-disabled");
+  });
+  it("a peer: any sibling before it, by its class", () => {
+    const el = on(`<div><span class="featured"></span><em></em><p id="t">x</p></div>`, "t");
+    expect(read2("peer with class .featured and disabled", el)).toBe(".featured:disabled ~ & | peer-disabled/featured");
+    expect(read2("a peer .nope is checked", el)).toMatch(/^error: No \.nope before/);
+    const hint = on(`<label><input><span id="h">hint</span></label>`, "h");
+    expect(read2("the peer input is invalid and not focused", hint)).toBe("input:invalid:not(:focus) ~ & | peer-invalid:peer-not-focus");
+  });
+  it("a part that doesn't read: the whole doesn't (nothing dropped)", () => {
+    const el = on(`<div><p id="t">x</p></div>`, "t");
+    expect(read2("it is hovered and feels right", el)).toMatch(/^error: Pilot can't read/);
+  });
+});
