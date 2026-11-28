@@ -46,43 +46,22 @@ describe("Create modifier: words after / that match no modifier", () => {
     document.body.innerHTML = "";
   });
 
-  it("is offered instead of no match; Enter sets it at once when Pilot reads the words", () => {
+  it("words: Create modifier, the agent names it when sent; Enter sets them as typed", () => {
     value = "/the parent .card is hovered";
     mount();
     expect(rows()).toEqual(["Create modifier"]);
-    expect(container.querySelector(".modifier-description")?.textContent).toBe("Use natural language to describe when");
-    expect(container.querySelector(".modifier-syntax")?.textContent).toBe("");
+    expect(container.querySelector(".modifier-description")?.textContent).toBe("The agent names it when you send");
     enter();
-    expect(set.map((c) => c?.selector)).toEqual([".card:hover > &"]);
+    expect(set).toEqual([{ words: "the parent .card is hovered" }]);
     expect(value).toBe("");
   });
 
-  it("words Pilot can't read: picked, they go on being described, the line saying so; Enter sets them anyway", () => {
-    value = "/when it feels right";
+  it("CSS typed as such: used as written", () => {
+    value = "/.card:hover &";
     mount();
-    expect(rows()).toEqual(["Create modifier"]);
+    expect(container.querySelector(".modifier-description")?.textContent).toBe("CSS, previewed as written");
     enter();
-    expect(set).toEqual([]);
-    expect(container.querySelector(".condition-reading")?.textContent).toContain("Enter sets it anyway, without a live preview.");
-    expect(container.querySelector("input")?.getAttribute("aria-label")).toBe("Describe when");
-    expect(container.querySelector(".condition-reading[data-error]")).not.toBeNull();
-    // Short: what's wrong in red, how to put it after.
-    expect(container.querySelector(".condition-error")?.textContent).toBe("Pilot can't read that yet.");
-    expect(container.querySelector(".condition-reading")?.textContent).toContain("Try “the parent .card is hovered”");
-    // Everything deleted: back to the search as it was.
-    act(() => {
-      const input = container.querySelector("input") as HTMLInputElement;
-      input.value = "";
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    expect(container.querySelector("input")?.getAttribute("aria-label")).toBe("Add a property");
-    expect(container.querySelector(".condition-reading")).toBeNull();
-    // Described again and entered: set as the words.
-    value = "/when it feels right";
-    mount();
-    enter();
-    enter();
-    expect(set).toEqual([{ words: "when it feels right" }]);
+    expect(set).toEqual([{ words: ".card:hover &", selector: ".card:hover &" }]);
   });
 
   it("a word that matches a modifier lists it, not Create modifier", () => {

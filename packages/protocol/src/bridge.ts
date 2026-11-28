@@ -147,6 +147,11 @@ export interface Job {
   differences?: ChangeResult[];
   /** For a task's follow-up: what Pilot's width check found (see WidthCheck). */
   issues?: string[];
+  /**
+   * For the follow-up: conditions the agent wrote but didn't give back named (no CSS in `conditions`), by the
+   * element's number and the words: asked for once, since a condition Pilot keeps must translate to CSS.
+   */
+  unnamed?: Array<{ element: number; words: string }>;
   /** ISO timestamps. */
   createdAt: string;
   updatedAt: string;
@@ -171,6 +176,11 @@ export interface Job {
   answer?: string;
   /** A `/props` job's answer: the component's props, as the agent read them (see PropSpec). */
   props?: PropSpec[];
+  /**
+   * The conditions the agent wrote (the job's changes under a When): for each, a short label for Pilot's pill and
+   * menu and the CSS it wrote, so the page previews and finds it again (see ConditionResult).
+   */
+  conditions?: ConditionResult[];
   /** The agent's session for this job, when Pilot ran the agent: its follow-up resumes it, and a comment thread keeps it for its next message. */
   session?: AgentSession;
   /** Pilot couldn't run the agent for it (not installed, not signed in, the run failed): what's wrong and what to do. The job is done, unapplied. */
@@ -211,6 +221,44 @@ export interface AgentQuestion {
 export const MAX_CHOICES = 4;
 
 /** An agent's question (see AgentQuestion), its text and choices trimmed and capped; undefined when it isn't one. */
+/**
+ * A condition as the agent wrote it, given back with the job (its `pilot` block's `conditions`): the element's number
+ * (its heading's in the prompt), the designer's words, a short label (`group-hover`, a label only), and the CSS:
+ * `selector` with `&` for the element (`.card:hover &`), and/or a `media` or `container` query.
+ */
+export interface ConditionResult {
+  element: number;
+  words: string;
+  label?: string;
+  selector?: string;
+  media?: string;
+  container?: string;
+}
+
+/** The agent's `conditions`, checked: plain strings, a selector with `&`, no braces (they become CSS on the page). */
+export function conditionResultsOf(value: unknown): ConditionResult[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const text = (v: unknown, max: number) => (typeof v === "string" && v.trim() && !/[{}<>]/.test(v) ? v.trim().slice(0, max) : undefined);
+  const out: ConditionResult[] = [];
+  for (const item of value.slice(0, 50)) {
+    const c = item as Record<string, unknown> | null;
+    const element = Number.isInteger(c?.element) && (c?.element as number) >= 1 && (c?.element as number) <= 1000 ? (c?.element as number) : undefined;
+    const words = text(c?.words, 300);
+    if (!element || !words) continue;
+    const selector = text(c?.selector, 300);
+    const result: ConditionResult = {
+      element,
+      words,
+      ...(text(c?.label, 40) ? { label: text(c?.label, 40) as string } : {}),
+      ...(selector?.includes("&") ? { selector } : {}),
+      ...(text(c?.media, 200) ? { media: text(c?.media, 200) as string } : {}),
+      ...(text(c?.container, 200) ? { container: text(c?.container, 200) as string } : {}),
+    };
+    if (result.label || result.selector || result.media || result.container) out.push(result);
+  }
+  return out.length ? out : undefined;
+}
+
 export function questionOf(value: unknown): AgentQuestion | undefined {
   const q = value as { text?: unknown; choices?: unknown; element?: unknown } | undefined;
   if (typeof q?.text !== "string" || !q.text.trim()) return undefined;

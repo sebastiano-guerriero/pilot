@@ -186,6 +186,17 @@ describe("Hub", () => {
     expect(hub.retry(APP, "j1", differences)).toBeNull();
   });
 
+  it("the agent's named conditions are kept on the job; a follow-up for unnamed ones carries them", async () => {
+    const hub = new Hub();
+    hub.register(a, APP);
+    hub.postJob(APP, { id: "j1", changeSet: changeSet("j1") });
+    await hub.wait(a, APP, 10);
+    const conditions = [{ element: 1, words: "the card is hovered", label: "group-hover", selector: ".card:hover &" }];
+    expect(hub.done("a", "j1", "Done.", undefined, undefined, { conditions })?.conditions).toEqual(conditions);
+    const unnamed = [{ element: 1, words: "on sale" }];
+    expect(hub.retry(APP, "j1", [], undefined, unnamed)?.unnamed).toEqual(unnamed);
+  });
+
   it("a question: the job is done with it; the designer's answer sends it back once, preferably to the agent that asked", async () => {
     const hub = new Hub();
     const p = page(hub);

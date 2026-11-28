@@ -296,3 +296,23 @@ describe("changes under a condition", () => {
     expect(shown).toEqual([{ property: "color", value: "red", condition: {} }]);
   });
 });
+
+describe("a condition the agent named", () => {
+  it("its job's changes under those words get the label and CSS; the preview then shows it as CSS", () => {
+    document.body.append(el);
+    el.className = "title";
+    let shown: Array<{ condition?: unknown }> = [];
+    const h = new EditHistory({ render: (rules) => (shown = rules.map((r) => ({ condition: r.condition }))) });
+    h.apply(el, "color", "red", undefined, { condition: { words: "the card is hovered" } });
+    // Words only, not sent: nothing to show it by.
+    expect(shown).toEqual([]);
+    h.send("job-1");
+    h.nameCondition("job-1", el, "The card is hovered", { label: "group-hover", selector: ".card:hover &" });
+    const named = { words: "the card is hovered", label: "group-hover", selector: ".card:hover &" };
+    expect(h.changes()[0]?.condition).toEqual(named);
+    expect(shown).toEqual([{ condition: named }]);
+    // A pill still on the words becomes the named one.
+    expect(h.namedAs({ words: "the card is hovered" })).toEqual(named);
+    el.remove();
+  });
+});

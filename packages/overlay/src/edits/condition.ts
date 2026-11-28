@@ -2,486 +2,51 @@ import type { StyleCondition } from "@pilot/protocol";
 
 /**
  * Conditions: a modifier described in words ("the parent .card has focus
- * inside"), for what no pill lists. Pilot reads the words into CSS once, with
- * its own rules (`readCondition`), and from then on it's a modifier like the
- * states: changes made under it are for it, the preview applies them only
- * while it holds (real CSS), and the agent gets both the words and Pilot's
- * reading. Made with the `/` menu's "Create modifier" (the owner's call,
- * 2026-11-27); words Pilot can't read say how to reword them (an agent run
- * for those is a later step).
+ * inside"), for what no pill lists, made with the `/` menu's Create modifier.
+ * Pilot doesn't try to read the words (the owner's call, 2026-11-28: matching
+ * them with rules was fragile, one word off and it misread or missed): until
+ * the changes are sent, a condition is its words, with no live preview (force
+ * state shows its changes). The agent, which understands them, writes it the
+ * project's way and gives back a short label and the selector it wrote
+ * (EditHistory.nameCondition): from then on the pill and the `/` menu show
+ * the label, and the preview, force state and the check after done use the
+ * selector. CSS typed as such (`.card:hover &`, `(prefers-reduced-motion:
+ * reduce)`) is exact, not a guess: it's used as written from the start.
  *
  * `selector` has `&` for the element, in the subject (the last compound), so
  * the change styles the element: `.card:focus-within &`, `&[data-open]`,
- * `&:has(+ .error)`. `media` is a media condition (`(prefers-reduced-motion:
- * reduce)`, `print`). Plain JSON: saved with the history, sent to the agent.
+ * `&:has(+ .error)`. `media` is a media condition, `container` a container
+ * query. Plain JSON: saved with the history, sent to the agent.
  */
 export type Condition = StyleCondition;
 
-/** What `readCondition` makes of the words: the condition and the element it's about (the parent…), or why not. */
-export type Reading = { condition: Condition; target?: Element } | { error: string; hint?: string };
-
-/** Said when the words don't read (short, the owner's call), and how to put them. */
-export const REWORD = { error: "Pilot can't read that yet.", hint: "Try “the parent .card is hovered”, “it has data-open”, or CSS (.card:hover &)." };
-
-/** Media conditions in words. */
-const MEDIA: Array<[RegExp, string]> = [
-  [/\breduced?\s+motion\b/, "(prefers-reduced-motion: reduce)"],
-  [/\bprint(?:ing|ed)?\b/, "print"],
-  [/\bportrait\b/, "(orientation: portrait)"],
-  [/\blandscape\b/, "(orientation: landscape)"],
-  [/\b(?:touch(?:\s*screen)?s?|no\s+hover|can'?t\s+hover|cannot\s+hover)\b/, "(hover: none)"],
-  [/\b(?:more|high|higher|increased)\s+contrast\b/, "(prefers-contrast: more)"],
-];
-
-/** States in words → their CSS, most specific first ("focus inside" before "focus"). */
-const STATES: Array<[RegExp, string]> = [
-  [/\b(?:has\s+|with\s+|gets\s+)?focus\s+(?:inside|within)\b|\bfocus-within\b|\bsomething\s+inside\s+(?:it\s+)?(?:is\s+|has\s+)?focus(?:ed)?\b/, ":focus-within"],
-  [/\bfocus[-\s]visible\b|\bkeyboard\s+focus(?:ed)?\b/, ":focus-visible"],
-  [/\b(?:is\s+|gets\s+|has\s+)?focus(?:ed)?\b/, ":focus"],
-  [/\b(?:is\s+)?hover(?:ed)?\b|\bmouse\s+(?:is\s+)?over\b/, ":hover"],
-  [/\b(?:is\s+)?(?:pressed|active)\b/, ":active"],
-  [/\bplaceholder\s+(?:is\s+)?(?:shown|showing|visible)\b|\bshow(?:s|ing)\s+(?:its\s+|the\s+|a\s+)?placeholder\b/, ":placeholder-shown"],
-  [/\b(?:is\s+)?(?:checked|ticked|selected)\b|\bon\b(?=\s*$)/, ":checked"],
-  [/\b(?:is\s+)?disabled\b/, ":disabled"],
-  [/\b(?:is\s+)?expanded\b/, '[aria-expanded="true"]'],
-  [/\b(?:is\s+)?open(?:ed)?\b/, "[open]"],
-  [/\b(?:is\s+)?closed\b/, ":not([open])"],
-  [/\b(?:is\s+)?(?:the\s+)?only\s+(?:child|one|item)\b/, ":only-child"],
-  [/\b(?:odd|every\s+other)(?:\s+(?:one|row|item|child))?\b/, ":nth-child(odd)"],
-  [/\beven(?:\s+(?:ones?|rows?|items?|child(?:ren)?))?\b/, ":nth-child(even)"],
-  [/\b(?:is\s+)?(?:the\s+)?first(?:\s+child|\s+one|\s+item)?\b/, ":first-child"],
-  [/\b(?:is\s+)?(?:the\s+)?last(?:\s+child|\s+one|\s+item)?\b/, ":last-child"],
-  [/\b(?:is\s+)?empty\b/, ":empty"],
-  [/\b(?:is\s+)?(?:invalid)\b/, ":invalid"],
-  [/\b(?:is\s+)?valid\b/, ":valid"],
-  [/\b(?:is\s+)?(?:required)\b/, ":required"],
-  [/\b(?:is\s+)?read[-\s]?only\b/, ":read-only"],
-  [/\b(?:is\s+|was\s+|been\s+)?visited\b/, ":visited"],
-  [/\b(?:is\s+)?(?:the\s+)?(?:url'?s?\s+)?target(?:ed)?\b|\blinked\s+to\b/, ":target"],
-];
-
-/** Ordinals in words, for "the third item" (first and last are their own). */
-const ORDINALS = ["second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"];
-
-/** What it may contain, in words → a selector inside `:has()`: "contains an image" → `:has(img)`. */
-const CONTAINS: Record<string, string> = {
-  image: "img",
-  picture: "img",
-  photo: "img",
-  img: "img",
-  icon: "svg",
-  svg: "svg",
-  link: "a",
-  button: "button",
-  input: "input",
-  field: ":is(input, textarea, select)",
-  checkbox: 'input[type="checkbox"]',
-  video: "video",
-  list: ":is(ul, ol)",
-  table: "table",
-  heading: ":is(h1, h2, h3, h4, h5, h6)",
-  title: ":is(h1, h2, h3, h4, h5, h6)",
-  label: "label",
-};
-
-/** Elements named in plain words that are tags ("the list is hovered"); other nouns are looked for as classes. */
-const NOUN_TAGS: Record<string, string> = {
-  list: ":is(ul, ol)",
-  item: "li",
-  row: "tr",
-  form: "form",
-  section: "section",
-  nav: "nav",
-  navigation: "nav",
-  header: "header",
-  footer: "footer",
-  table: "table",
-  button: "button",
-  link: "a",
-  dialog: "dialog",
-  details: "details",
-  article: "article",
-  aside: "aside",
-  sidebar: "aside",
-  label: "label",
-  figure: "figure",
-  input: "input",
-  field: ":is(input, textarea, select)",
-  textarea: "textarea",
-  select: "select",
-};
-
-/** Words that aren't an element's name: who words, pronouns, the page. */
-const NOT_NOUNS = new Set([
-  "it", "this", "that", "element", "one", "parent", "parents", "ancestor", "container", "wrapper", "sibling", "previous", "next",
-  "peer", "peers", "group", "siblings", "child", "children", "kid", "kids", "descendant", "descendants",
-  "preceding", "following", "prior", "page", "screen", "window", "viewport", "browser", "user", "mouse", "pointer",
-  "attribute", "class", "same", "other", "only", "first", "last", "url", "placeholder", "keyboard",
-]);
-
-/** Who the condition is about, before the "what": the element itself, its parent or an ancestor, a sibling. */
-type Who = "self" | "parent" | "ancestor" | "previous" | "peer" | "next" | "sibling";
-const WHO: Array<[RegExp, Who]> = [
-  [/\b(?:previous|preceding|prior)\s+(?:sibling|element|one)\b|\bthe\s+(?:sibling|element)\s+before\b/, "previous"],
-  [/\bnext\s+(?:sibling|element|one)\b|\bthe\s+(?:sibling|element)\s+after\b|\bfollowing\s+(?:sibling|element)\b/, "next"],
-  // Tailwind's words: a peer is any sibling before it (`peer-*`, `~`), a group an ancestor (`group-*`).
-  [/\bpeers?\b/, "peer"],
-  // A sibling, neither previous nor next said: one on either side.
-  [/\bsiblings?\b/, "sibling"],
-  [/\bparents?\b/, "parent"],
-  [/\b(?:ancestors?|groups?|container|wrapper|inside|within|in\s+a|in\s+an|in\s+the)\b/, "ancestor"],
-];
-
-/** Words that turn a condition around. */
-const NEGATION = /\b(?:not|isn'?t|doesn'?t|does\s+not|hasn'?t|has\s+no|without|un(?=checked|selected))/;
-
 /**
- * The "what" parts of the words, from where the first starts: several joined by "and" or a comma ("has
- * data-checked=true and focus-within") each read on its own, all of them together, each turned around by its own
- * "not" (the first one's may come before it: `lead`). Null when one doesn't read (it'd be dropped); "" for none.
+ * A condition from what's typed after `/`: CSS as written (a selector with `&` for the element, a media
+ * condition in parentheses), or the words alone, for the agent to read.
  */
-function combineWhats(part: string, lead: string): string | null {
-  const parts = part.split(/\s*(?:,|\band\b|\bplus\b)\s*/i).filter(Boolean);
-  let css = "";
-  for (const [i, piece] of parts.entries()) {
-    const pieceLower = piece.toLowerCase();
-    const found = whatOf(piece, pieceLower);
-    if (!found) {
-      if (MEDIA.some(([pattern]) => pattern.test(pieceLower)) || sizeOf(pieceLower)) continue;
-      return null;
-    }
-    const not = NEGATION.test(i === 0 ? lead + pieceLower : pieceLower);
-    css += not ? `:not(${found.css})` : found.css;
-  }
-  return css;
-}
-
-/**
- * A child or what's inside, as who the condition is about ("a child is checked", "has a child .badge", "any
- * descendant has focus", "something inside is hovered", Tailwind's `has-*`): the element having one, `&:has(…)`.
- * Not "the first child" (its own place) nor "more than 3 children" (a count): those are its own.
- */
-const CHILD =
-  /\b(?:(?:has|have|contains?|with)\s+)?(?:(?:a|an|any|some|one|one\s+or\s+more|its|every|all(?:\s+of)?(?:\s+its)?|no)\s+)?(direct\s+)?(child(?:ren)?|kids?|descendants?)\b|\b(?:something|anything)\s+(?:inside|within)\b/;
-
-function childReading(text: string, lower: string, element: Element, size: { query: string; screen: boolean } | null): Reading | null {
-  const m = CHILD.exec(lower);
-  if (!m) return null;
-  const head = lower.slice(0, m.index);
-  if (/(?:first|last|only|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|\d+(?:st|nd|rd|th)?|than|least)\s+$/.test(head)) return null;
-  // Another "who" before it (the parent…): not the element's own children.
-  if (WHO.some(([pattern]) => pattern.test(head))) return null;
-  const anywhere = !m[2] || /descendant|inside|within/.test(m[0]);
-  const rest = text.slice(m.index + m[0].length);
-  const restLower = rest.toLowerCase();
-  // Which one: a class, an id, an attribute ("a child .badge"), or named in a word ("a child item").
-  let qualifier = qualifierOf(rest.slice(0, firstWhatAt(rest)));
-  if (!qualifier) {
-    const noun = /^\s*(?:that\s+is\s+an?\s+|called\s+|named\s+)?([a-z][\w-]*)/.exec(restLower)?.[1];
-    if (noun && !NOT_NOUNS.has(noun) && !/^(?:is|are|has|have|that|which|with|gets|get|being|was|were)$/.test(noun) && !whatOf(noun, noun)) {
-      const found = resolveNoun(noun, element, "child");
-      if (!found) return { error: `No “${noun}” inside this element.`, hint: `Name it by its class: “it has a child .${noun}”.` };
-      qualifier = found.selector;
-    }
-  }
-  const whatAt = firstWhatAt(rest);
-  const css = whatAt < 0 ? "" : combineWhats(rest.slice(whatAt), restLower.slice(0, whatAt));
-  if (css === null) return REWORD;
-  const inner = `${qualifier}${css}` || "*";
-  // "Child": a direct one (`>`), unless the one named is only deeper; "descendant", "inside": anywhere.
-  const direct = !anywhere && (!qualifier || [...element.children].some((c) => c.matches(qualifier)));
-  const has = `:has(${direct ? "> " : ""}${inner})`;
-  const none = /\b(?:has|have)\s+no\b|\bwithout\b|\bno\s+(?:child|kid|descendant)/.test(lower);
-  const selector = `&${none ? `:not(${has})` : has}`;
-  if (!validSelector(selector)) return REWORD;
-  let target: Element | null = null;
-  try {
-    target = element.querySelector(`${direct ? ":scope > " : ""}${qualifier || "*"}`);
-  } catch {
-    target = null;
-  }
-  const media = size?.screen ? size.query : MEDIA.find(([pattern]) => pattern.test(lower))?.[1];
-  const container = size && !size.screen ? size.query : undefined;
-  return {
-    condition: { words: text, selector, ...(media ? { media } : {}), ...(container ? { container } : {}) },
-    ...(target ? { target } : {}),
-  };
-}
-
-/** Where the first "what" starts in `text`, or -1. */
-function firstWhatAt(text: string): number {
-  return whatOf(text, text.toLowerCase())?.at ?? -1;
-}
-
-/** Read `words` for `element`: a condition (and the element it names), or why it can't. */
-export function readCondition(words: string, element: Element): Reading {
+export function conditionFrom(words: string): Condition {
   const text = words.trim();
-  if (!text) return { error: "Describe when.", hint: "Like “the parent .card is hovered”." };
-
-  // CSS as written: a selector with & for the element, or a media condition.
   if (text.includes("&")) {
     const selector = subjectLast(text.replace(/\s+/g, " "));
-    if (!validSelector(selector)) return { error: "The browser doesn't take that selector.", hint: "Check its syntax, with & for the element." };
-    return { condition: { words: text, selector }, ...targetOfSelector(selector, element) };
+    if (validSelector(selector)) return { words: text, selector };
   }
   if (/^@media\s/i.test(text) || /^\(.*\)$/.test(text)) {
     const media = text.replace(/^@media\s+/i, "");
-    if (!validMedia(media)) return { error: "The browser doesn't take that media condition.", hint: "Check its syntax: (prefers-reduced-motion: reduce)." };
-    return { condition: { words: text, media } };
+    if (validMedia(media)) return { words: text, media };
   }
-
-  const lower = text.toLowerCase();
-  const negated = NEGATION.test(lower);
-  // A size: the screen's (a media condition) or a container's ("the card is narrower than 400px": `@container`).
-  const size = sizeOf(lower);
-
-  // A child or what's inside as who it's about: the element having one (`&:has(…)`).
-  const child = childReading(text, lower, element, size);
-  if (child) return child;
-
-  // What: a state, a class, an attribute, what it contains, its place in a list.
-  const what = whatOf(text, lower);
-  if (!what) {
-    if (size) return sizeReading(text, size, element, nounOf(lower.slice(0, lower.search(/\b(?:is|are|gets)\b/) >>> 0)));
-    // Only media words: a media condition.
-    for (const [pattern, media] of MEDIA) if (pattern.test(lower)) return { condition: { words: text, media: negated ? `not all and ${wrap(media)}` : media } };
-    return REWORD;
-  }
-  // Several joined by "and" or a comma, each read on its own (combineWhats); one that doesn't read: the whole doesn't.
-  const combined = combineWhats(text.slice(what.at), lower.slice(0, what.at));
-  if (combined === null) return REWORD;
-  let css = combined || (negated ? `:not(${what.css})` : what.css);
-
-  // Who, from the words before the "what" (else the element itself), and its own class or attribute (`.card`).
-  const before = lower.slice(0, what.at);
-  let who = WHO.find(([pattern]) => pattern.test(before))?.[1] ?? "self";
-  let qualifier = qualifierOf(text.slice(0, what.at));
-  // An element named in plain words ("the card is hovered", "the parent card", "the list"): found around this one,
-  // as a tag or by its class; the element itself when it's the one named.
-  if (!qualifier) {
-    const noun = nounOf(before);
-    if (noun) {
-      const found = resolveNoun(noun, element, who);
-      if (!found) return { error: `No “${noun}” around this element.`, hint: `Name it by its class: “the parent .${noun} is hovered”.` };
-      if (found.self && who === "self") qualifier = "";
-      else {
-        qualifier = found.selector;
-        if (who === "self") who = "ancestor";
-      }
-    }
-  }
-  // A field that's empty is one showing its placeholder (`:empty` is always true for an input).
-  if (who === "self" && /^(?:input|textarea)$/i.test(element.tagName)) css = css.replace(":empty", ":placeholder-shown");
-
-  let selector: string;
-  let target: Element | null | undefined;
-  switch (who) {
-    case "self":
-      selector = `&${qualifier}${css}`;
-      target = undefined;
-      break;
-    case "parent": {
-      const parent = element.parentElement;
-      // "The parent .card": the nearest ancestor that is one (designers say parent loosely); none: the direct parent.
-      target = qualifier ? (parent?.matches(qualifier) ? parent : parent?.closest(qualifier)) : parent;
-      if (qualifier && !target) return { error: `No ${qualifier} around this element.`, hint: "Check its class, or say “the parent”." };
-      selector = qualifier && target !== parent ? `${qualifier}${css} &` : `${qualifier}${css} > &`;
-      break;
-    }
-    case "ancestor":
-      target = qualifier ? element.parentElement?.closest(qualifier) : element.parentElement;
-      if (qualifier && !target) return { error: `No ${qualifier} around this element.`, hint: "Check its class, or say “the parent”." };
-      selector = `${qualifier}${css} &`;
-      break;
-    case "previous":
-      target = element.previousElementSibling;
-      selector = `${qualifier}${css} + &`;
-      break;
-    case "peer": {
-      // Any sibling before it (Tailwind's peer): the nearest one that is the one named.
-      let sibling = element.previousElementSibling;
-      while (sibling && qualifier && !sibling.matches(qualifier)) sibling = sibling.previousElementSibling;
-      target = sibling ?? element.previousElementSibling;
-      if (qualifier && !sibling) return { error: `No ${qualifier} before this element.`, hint: "A peer comes before it, in the same parent." };
-      selector = `${qualifier}${css} ~ &`;
-      break;
-    }
-    case "next":
-      target = element.nextElementSibling;
-      selector = `&:has(+ ${qualifier || "*"}${css})`;
-      break;
-    case "sibling": {
-      // On either side: after one (`X ~ *`), or before one (`:has(~ X)`), the element the subject.
-      const other = `${qualifier || "*"}${css}`;
-      const siblings = [...(element.parentElement?.children ?? [])].filter((e) => e !== element);
-      target = siblings.find((e) => !qualifier || e.matches(qualifier)) ?? null;
-      if (qualifier && !target) return { error: `No ${qualifier} beside this element.`, hint: "A sibling is in the same parent." };
-      selector = `&:is(${other} ~ *, :has(~ ${other}))`;
-      break;
-    }
-  }
-  if (!validSelector(selector)) return REWORD;
-  // With a media word or a size too ("hovered, with reduced motion"): both.
-  const media = size?.screen ? size.query : MEDIA.find(([pattern]) => pattern.test(lower))?.[1];
-  const container = size && !size.screen ? size.query : undefined;
-  return {
-    condition: { words: text, selector, ...(media ? { media } : {}), ...(container ? { container } : {}) },
-    ...(target ? { target } : {}),
-  };
+  return { words: text };
 }
 
-/**
- * A width in the words: the screen's ("when the screen is narrower than 600px": a media condition) or, otherwise, a
- * container's ("the card is narrower than 400px": `@container`, its nearest container ancestor's size). Range
- * syntax, as both take it: `(width < 400px)`.
- */
-function sizeOf(lower: string): { query: string; screen: boolean } | null {
-  const m =
-    /\b(narrower|smaller|thinner|less\s+wide|wider|larger|bigger|less|more|under|below|over|above|at\s+least|at\s+most)\s+(?:than\s+)?(\d+(?:\.\d+)?)\s*(px|rem|em)?/.exec(lower);
-  if (!m) return null;
-  const [, word, number, unit] = m as unknown as [string, string, string, string | undefined];
-  // Without a unit, only words that say width ("narrower than 400"): "more than 3 items" is a count.
-  const widthWord = /narrower|thinner|wider|less\s+wide/.test(word);
-  if (!unit && !widthWord) return null;
-  if (!widthWord && !/\b(?:wide|width|narrow|size|big|small)\b/.test(lower) && unit === undefined) return null;
-  const op = /narrower|smaller|thinner|less|under|below/.test(word) ? "<" : /at\s+most/.test(word) ? "<=" : /at\s+least/.test(word) ? ">=" : ">";
-  const query = `(width ${op} ${number}${unit ?? "px"})`;
-  return { query, screen: /\b(?:screen|window|viewport|browser|page|display|device)\b/.test(lower) };
-}
-
-/**
- * A size alone: the screen's (media), or a container's. A container query is about the element's nearest container
- * (an ancestor with `container-type`), whatever the words name: the one named ("the card") is highlighted, else
- * that nearest container; the agent makes the one meant a container if it isn't (the prompt's note).
- */
-function sizeReading(words: string, size: { query: string; screen: boolean }, element: Element, noun: string | null): Reading {
-  if (size.screen) return { condition: { words, media: size.query } };
-  const named = noun ? resolveNoun(noun, element, "ancestor") : null;
-  let container: Element | null = named ? element.parentElement?.closest(named.selector) ?? null : element.parentElement;
-  if (!named) {
-    while (container && typeof getComputedStyle === "function" && !/size/.test(getComputedStyle(container).containerType ?? "")) container = container.parentElement;
-  }
-  return { condition: { words, container: size.query }, ...(container ? { target: container } : {}) };
-}
-
-/** The element named in plain words before the "what": "the card", "the parent card", "a list". */
-function nounOf(before: string): string | null {
-  const found: string[] = [];
-  for (const m of before.matchAll(/\b(?:the|a|an|its|this)\s+([a-z][\w-]*)/g)) found.push(m[1] as string);
-  for (const m of before.matchAll(/\b(?:parents?|ancestors?|container|wrapper|sibling|peers?|groups?)\s+([a-z][\w-]*)/g)) found.push(m[1] as string);
-  // Verbs and their contractions ("the parent isn't…") aren't names either.
-  const verb = /^(?:is|isn|are|aren|was|has|hasn|have|does|doesn|do|not|no|with|without|that|which|gets|got|when|if|being)$/;
-  return found.filter((w) => !NOT_NOUNS.has(w) && !verb.test(w)).at(-1) ?? null;
-}
-
-/**
- * A noun as a selector, for this element: a tag (list, item, form…) or a class (`card`, or one it's part of:
- * `rounded-card`), on the element itself or around it (for "the parent", from its parent up). Null: none there.
- */
-function resolveNoun(noun: string, element: Element, who: Who | "child"): { selector: string; self: boolean } | null {
-  const singular = noun.replace(/s$/, "");
-  const candidates = [...new Set([noun, singular])];
-  const chain: Element[] = [];
-  if (who === "self") chain.push(element);
-  // A sibling before it (peer, previous): among those; any sibling: both sides; a child: inside it; else around it.
-  if (who === "peer" || who === "previous") for (let e = element.previousElementSibling; e; e = e.previousElementSibling) chain.push(e);
-  else if (who === "sibling") chain.push(...[...(element.parentElement?.children ?? [])].filter((e) => e !== element));
-  else if (who === "child") chain.push(...element.querySelectorAll("*"));
-  else for (let e = element.parentElement; e && e !== document.documentElement; e = e.parentElement) chain.push(e);
-  const exact = (e: Element, word: string) => (e.classList.contains(word) ? `.${word}` : null);
-  const part = (e: Element, word: string) => [...e.classList].find((c) => c.split(/[-_:]/).includes(word));
-  for (const word of candidates) {
-    const tag = NOUN_TAGS[word];
-    for (const e of chain) {
-      if (tag && e.matches(tag)) return { selector: tag, self: e === element };
-      const cls = exact(e, word);
-      if (cls) return { selector: cls, self: e === element };
-    }
-  }
-  for (const word of candidates) {
-    for (const e of chain) {
-      const cls = part(e, word);
-      if (cls) return { selector: `.${CSS.escape(cls)}`, self: e === element };
-    }
-  }
-  return null;
-}
-
-/** The "what" of the words: its CSS, and where in the words it starts (the "who" is before it). */
-function whatOf(text: string, lower: string): { css: string; at: number } | null {
-  let best: { css: string; at: number } | null = null;
-  const consider = (css: string, at: number) => {
-    if (!best || at < best.at) best = { css, at };
-  };
-  // An attribute: `data-open`, `[data-state="open"]`, `aria-pressed is true`, "has the attribute hidden".
-  const bracket = /\[[^\]]+\]/.exec(text);
-  const verbs = /\b(?:has|have|with|gets|is|are|when)\b/g;
-  const attribute = /\b((?:data|aria)-[\w-]+)\b(?:\s*(?:=|is|of|set\s+to|equals)\s*["'“]?([\w-]+)["'”]?)?/i.exec(text);
-  const named = /\b(?:the\s+)?attribute\s+["'“]?([\w-]+)["'”]?(?:\s*(?:=|is|set\s+to)\s*["'“]?([\w-]+)["'”]?)?/i.exec(text);
-  const classed = /\b(?:has|gets)\s+(?:the\s+)?class\s+\.?([\w-]+)|\b(?:has|gets)\s+(\.[\w-]+)/i.exec(text);
-  // A bracket or an attribute name counts only after a verb ("the parent [data-x] is open": the parent's own).
-  const afterVerb = (at: number) => {
-    verbs.lastIndex = 0;
-    for (let m = verbs.exec(lower); m; m = verbs.exec(lower)) if (m.index < at) return true;
-    return false;
-  };
-  if (classed) consider(`.${(classed[1] ?? classed[2] ?? "").replace(/^\./, "")}`, classed.index);
-  if (named) consider(named[2] ? `[${named[1]}="${named[2]}"]` : `[${named[1]}]`, named.index);
-  // Or with no "who" before it (`data-state is open`: the element's own).
-  const ownAt = (at: number) => afterVerb(at) || !WHO.some(([pattern]) => pattern.test(lower.slice(0, at)));
-  if (attribute && ownAt(attribute.index))
-    consider(attribute[2] ? `[${attribute[1]}="${attribute[2]}"]` : `[${attribute[1]}]`, verbAt(lower, attribute.index));
-  if (bracket && ownAt(bracket.index)) consider(bracket[0], verbAt(lower, bracket.index));
-  // What it contains: "contains an image", "has a checked checkbox", "contains a .badge"; how many children.
-  const contains =
-    /\b(?:contains?|containing|includes?|has|with)\s+(?:an?\s+|any\s+|some\s+|one\s+or\s+more\s+)?(checked\s+)?(images?|pictures?|photos?|img|icons?|svg|links?|buttons?|inputs?|fields?|checkbox(?:es)?|videos?|list|table|headings?|titles?|labels?)\b/.exec(
-      lower,
-    );
-  if (contains) {
-    const word = contains[2] as string;
-    const inside = CONTAINS[word] ?? CONTAINS[word.replace(/es$/, "")] ?? CONTAINS[word.replace(/s$/, "")];
-    if (inside) consider(`:has(${inside}${contains[1] ? ":checked" : ""})`, contains.index);
-  }
-  const containsClass = /\b(?:contains?|containing|includes?)\s+(?:an?\s+)?([.#][\w-]+)/.exec(text);
-  if (containsClass) consider(`:has(${containsClass[1]})`, containsClass.index);
-  const count = /\b(?:has|contains|with)\s+(more\s+than|at\s+least|fewer\s+than|less\s+than)\s+(\d+)\s+(?:items|children|elements|rows|entries|cards|things|ones)\b/.exec(lower);
-  if (count) {
-    const n = Number(count[2]);
-    const kind = count[1] as string;
-    const css = /more/.test(kind) ? `:has(> :nth-child(${n + 1}))` : /least/.test(kind) ? `:has(> :nth-child(${n}))` : `:not(:has(> :nth-child(${n})))`;
-    consider(css, count.index);
-  }
-  // Its place in a list: "the third item", "the 5th one".
-  const ordinal = new RegExp(`\\b(?:the\\s+)?(${ORDINALS.join("|")}|(\\d+)(?:st|nd|rd|th))\\s+(?:child|item|one|row|element|entry|card)\\b`).exec(lower);
-  if (ordinal) consider(`:nth-child(${ordinal[2] ?? ORDINALS.indexOf(ordinal[1] as string) + 2})`, ordinal.index);
-  // The state that comes first in the words (ties: the more specific, listed first: focus inside before focus).
-  for (const [pattern, css] of STATES) {
-    const m = pattern.exec(lower);
-    if (m) consider(css, m.index);
-  }
-  return best;
-}
-
-/** Where the verb before `at` starts (the "what" begins there, not at the attribute's name). */
-function verbAt(lower: string, at: number): number {
-  const head = lower.slice(0, at);
-  const m = /\b(?:has|have|with|gets|is|are|when)\b(?!.*\b(?:has|have|with|gets|is|are|when)\b)/.exec(head);
-  return m ? m.index : at;
-}
-
-/** The other element's own class, id or attribute, in the words before the "what": `.card`, `#nav`, "with class card". */
-function qualifierOf(words: string): string {
-  const parts: string[] = [];
-  for (const m of words.matchAll(/(?:^|[\s(])([.#][A-Za-z_][\w-]*|\[[^\]]+\])/g)) parts.push(m[1] as string);
-  for (const m of words.matchAll(/\b(?:with\s+(?:the\s+)?)?class\s+["'“]?([A-Za-z_][\w-]*)["'”]?/gi)) parts.push(`.${m[1]}`);
-  return [...new Set(parts)].join("");
+/** What a condition is called: the agent's label once it named it, else the designer's words. */
+export function conditionLabel(condition: Condition): string {
+  return condition.label ?? condition.words;
 }
 
 /**
  * The element as the subject, last: `& + .x` and `& .x` style the other element, so they're written
- * `&:has(+ .x)`, `&:has(.x)`. Only the first `&`'s compound stays the subject.
+ * `&:has(+ .x)`, `&:has(.x)`. Only the last `&`'s compound stays the subject.
  */
-function subjectLast(selector: string): string {
+export function subjectLast(selector: string): string {
   const at = selector.lastIndexOf("&");
   const after = selector.slice(at + 1);
   // The `&`'s own compound: up to a combinator outside parentheses.
@@ -498,10 +63,8 @@ function subjectLast(selector: string): string {
   }
   const rest = after.slice(end).trim();
   if (!rest) return selector.trim();
-  return `${selector.slice(0, at)}&${after.slice(0, end)}:has(${/^[>+~]/.test(rest) ? rest : rest})`.trim();
+  return `${selector.slice(0, at)}&${after.slice(0, end)}:has(${rest})`.trim();
 }
-
-const wrap = (media: string) => (media.startsWith("(") ? media : `(${media})`);
 
 /** The selector with the element in `&`'s place (a selector the preview or a check can use). */
 export function conditionSelector(condition: Condition, subject: string): string | null {
@@ -510,7 +73,7 @@ export function conditionSelector(condition: Condition, subject: string): string
 
 /** Whether the condition holds for `element` right now: its selector matches it (`:scope` is the element), its media matches. */
 export function holdsNow(condition: Condition, element: Element): boolean {
-  // Words only (Pilot couldn't read them): nothing to ask the page.
+  // Words only (not named yet): nothing to ask the page.
   if (!hasCss(condition)) return false;
   try {
     if (condition.selector && !element.matches(condition.selector.replace(/&/g, ":scope"))) return false;
@@ -523,19 +86,20 @@ export function holdsNow(condition: Condition, element: Element): boolean {
   }
 }
 
-/**
- * Whether Pilot read the words into CSS. Words only (accepted as typed when Pilot can't read them, the owner's call,
- * 2026-11-27): no live preview (force state shows it), the agent writes it from the words, the check after done
- * leaves it to the agent's word.
- */
+/** Whether the condition has CSS (typed as such, or given back by the agent): words only have none. */
 export function hasCss(condition: Condition): boolean {
   return !!(condition.selector || condition.media || condition.container);
 }
 
-/** The condition's identity: its CSS, not its words (two phrasings of one condition are one); words only: its words. */
+/** The condition's identity: its CSS when it has some (two phrasings of one condition are one), else its words. */
 export function conditionKey(condition: Condition | null | undefined): string {
   if (!condition) return "";
-  return hasCss(condition) ? `${condition.selector ?? ""}|${condition.media ?? ""}|${condition.container ?? ""}` : `words:${condition.words.trim().toLowerCase()}`;
+  return hasCss(condition) ? `${condition.selector ?? ""}|${condition.media ?? ""}|${condition.container ?? ""}` : `words:${wordsKey(condition.words)}`;
+}
+
+/** Words compared as said: case and spacing aside. */
+export function wordsKey(words: string): string {
+  return words.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 /** The same condition (or both none). */
@@ -543,29 +107,15 @@ export function sameCondition(a: Condition | null | undefined, b: Condition | nu
   return conditionKey(a) === conditionKey(b);
 }
 
-/** The condition as CSS, for the agent: the selector, the `@media`, or both. */
+/** The condition as CSS, for the agent: the selector, the `@media`, the `@container`. */
 export function conditionCss(condition: Condition): string {
   return [condition.media && `@media ${condition.media}`, condition.container && `@container ${condition.container}`, condition.selector]
     .filter(Boolean)
     .join(" ");
 }
 
-/** Its element, for the on-page highlight, found again from the selector (a raw one): an ancestor or sibling it names. */
-function targetOfSelector(selector: string, element: Element): { target?: Element } {
-  const head = selector.slice(0, selector.indexOf("&")).trim();
-  if (!head) return {};
-  const compound = head.replace(/\s*[>+~]\s*$/, "").split(/\s+(?![^(]*\))/).at(-1) ?? "";
-  const bare = compound.replace(/:(?:hover|focus|focus-within|focus-visible|active|checked|disabled)\b/g, "") || "*";
-  try {
-    if (/\+\s*$/.test(head)) return element.previousElementSibling?.matches(bare) ? { target: element.previousElementSibling } : {};
-    const found = element.parentElement?.closest(bare);
-    return found ? { target: found } : {};
-  } catch {
-    return {};
-  }
-}
-
-function validSelector(selector: string): boolean {
+/** Whether a selector is one the browser takes (`&` standing for the element). */
+export function validSelector(selector: string): boolean {
   const probe = selector.replace(/&/g, "a");
   const supports = typeof CSS !== "undefined" && typeof CSS.supports === "function";
   try {
@@ -573,8 +123,7 @@ function validSelector(selector: string): boolean {
     document.createDocumentFragment().querySelector(probe);
     return supports ? CSS.supports(`selector(${probe})`) : true;
   } catch {
-    // A relative selector in `:has()` inside `:is()` (a sibling on either side): browsers parse it, some DOMs
-    // (the tests') don't; `CSS.supports` decides.
+    // A relative selector in `:has()` inside `:is()`: browsers parse it, some DOMs (the tests') don't; `CSS.supports` decides.
     return supports && probe.includes(":has(") && CSS.supports(`selector(${probe})`);
   }
 }
@@ -586,139 +135,4 @@ function validMedia(media: string): boolean {
   } catch {
     return false;
   }
-}
-
-/** A state's selector → Tailwind's variant name, for the pieces Tailwind has one for. */
-const PSEUDO_VARIANTS: Record<string, string> = {
-  ":hover": "hover",
-  ":focus": "focus",
-  ":focus-within": "focus-within",
-  ":focus-visible": "focus-visible",
-  ":active": "active",
-  ":checked": "checked",
-  ":disabled": "disabled",
-  ":empty": "empty",
-  ":invalid": "invalid",
-  ":required": "required",
-  ":first-child": "first",
-  ":last-child": "last",
-  ":only-child": "only",
-  ":nth-child(odd)": "odd",
-  ":nth-child(even)": "even",
-  ":placeholder-shown": "placeholder-shown",
-  ":valid": "valid",
-  ":read-only": "read-only",
-  ":visited": "visited",
-  ":target": "target",
-};
-
-/** Media conditions Tailwind has a variant for. */
-const MEDIA_VARIANTS: Record<string, string> = {
-  "(prefers-reduced-motion: reduce)": "motion-reduce",
-  print: "print",
-  "(orientation: portrait)": "portrait",
-  "(orientation: landscape)": "landscape",
-  "(prefers-contrast: more)": "contrast-more",
-};
-
-/** One compound's pieces (`.card`, `:hover`, `[data-open]`, `:not(…)`), as Tailwind variants; null when one has none. */
-function piecesVariant(compound: string): { qualifier: string; variants: string[] } | null {
-  const pieces = compound.match(/:(?:not|has)\((?:[^()]|\([^()]*\))*\)|\[[^\]]+\]|::?[\w-]+(?:\([^)]*\))?|[.#][\w-]+|\*/g) ?? [];
-  let qualifier = "";
-  const variants: string[] = [];
-  for (const piece of pieces) {
-    if (piece === "*") continue;
-    if (piece.startsWith(".") || piece.startsWith("#")) {
-      qualifier ||= piece.slice(1);
-      continue;
-    }
-    // What it contains: Tailwind's `has-[…]`.
-    const has = /^:has\((.*)\)$/.exec(piece);
-    if (has) {
-      variants.push(`has-[${(has[1] as string).replace(/\s+/g, "_")}]`);
-      continue;
-    }
-    const not = /^:not\((.*)\)$/.exec(piece);
-    if (not) {
-      const inner = piecesVariant(not[1] as string);
-      if (!inner || inner.variants.length !== 1) return null;
-      variants.push(`not-${inner.variants[0]}`);
-      continue;
-    }
-    const attribute = /^\[([\w-]+)(?:="?([^"\]]*)"?)?\]$/.exec(piece);
-    if (attribute) {
-      const [, name, value] = attribute as unknown as [string, string, string | undefined];
-      if (name === "open" && value === undefined) variants.push("open");
-      else if (name.startsWith("data-")) variants.push(value === undefined ? name : `data-[${name.slice(5)}=${value}]`);
-      else if (name.startsWith("aria-")) variants.push(value === undefined || value === "true" ? name : `aria-[${name.slice(5)}=${value}]`);
-      else return null;
-      continue;
-    }
-    const pseudo = PSEUDO_VARIANTS[piece];
-    if (!pseudo) return null;
-    variants.push(pseudo);
-  }
-  return { qualifier, variants };
-}
-
-/**
- * The condition as Tailwind would write its variant, for the `/` menu's row (the owner's call, 2026-11-27: Tailwind
- * as the reference for the words): `data-selected`, `hover`, `group-hover/card` (an ancestor `.card`),
- * `peer-checked` (the previous sibling), `motion-reduce`; Tailwind's bracket syntax when it has none
- * (`[.card:hover_&]`). Without the trailing colon.
- */
-export function conditionVariant(condition: Condition): string {
-  const parts: string[] = [];
-  if (condition.media) parts.push(MEDIA_VARIANTS[condition.media] ?? widthVariant(condition.media, "") ?? `[@media${condition.media.replace(/\s+/g, "")}]`);
-  // A container's width: Tailwind's `@max-[400px]`, `@min-[600px]`.
-  if (condition.container) parts.push(widthVariant(condition.container, "@") ?? `[@container${condition.container.replace(/\s+/g, "")}]`);
-  if (condition.selector) parts.push(selectorVariant(condition.selector));
-  return parts.join(":");
-}
-
-/** `(width < 400px)` → `max-[400px]` (with `@` for a container's), `(width >= 600px)` → `min-[600px]`; null for others. */
-function widthVariant(query: string, prefix: string): string | null {
-  const m = /^\(width\s*(<=?|>=?)\s*([\d.]+[a-z]+)\)$/.exec(query.trim());
-  if (!m) return null;
-  return `${prefix}${(m[1] as string).startsWith("<") ? "max" : "min"}-[${m[2]}]`;
-}
-
-function selectorVariant(selector: string): string {
-  const bracket = `[${selector.replace(/\s+/g, "_")}]`;
-  const s = selector.trim();
-  // The element itself: `&[data-open]`, `&:hover`, `&:has(> .x)` (combinators only inside parentheses).
-  const self = s.startsWith("&") && !hasTopLevelCombinator(s.slice(1)) ? [s, s.slice(1)] : null;
-  if (self) {
-    const own = piecesVariant(self[1] as string);
-    return own && !own.qualifier && own.variants.length ? own.variants.join(":") : bracket;
-  }
-  // An ancestor or the parent (group-*), the previous sibling (peer-*): its compound before the combinator.
-  const around = /^([^\s>+~]+)\s*([>+~]?)\s*&$/.exec(s);
-  if (around) {
-    const other = piecesVariant(around[1] as string);
-    if (!other || !other.variants.length) return bracket;
-    // Several at once: each its own variant, chained, as Tailwind stacks them (`group-hover:group-focus:`).
-    const kind = around[2] === "+" || around[2] === "~" ? "peer" : "group";
-    return other.variants.map((v) => `${kind}-${v}${other.qualifier ? `/${other.qualifier}` : ""}`).join(":");
-  }
-  return bracket;
-}
-
-/** Whether a combinator (space, >, +, ~) is outside parentheses: another element in the selector. */
-function hasTopLevelCombinator(text: string): boolean {
-  let depth = 0;
-  for (const c of text) {
-    if (c === "(") depth++;
-    else if (c === ")") depth--;
-    else if (depth === 0 && /[\s>+~]/.test(c)) return true;
-  }
-  return false;
-}
-
-/** The row's name, Tailwind's words for it: `data-selected` → "Data selected", `group-hover/card` → "Group hover card". */
-export function conditionName(condition: Condition): string {
-  const variant = conditionVariant(condition);
-  if (!variant || variant.includes("[")) return condition.words;
-  const name = variant.replace(/[-/:]/g, " ").replace(/\s+/g, " ").trim();
-  return name.charAt(0).toUpperCase() + name.slice(1);
 }

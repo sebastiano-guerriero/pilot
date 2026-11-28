@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { basename } from "node:path";
 import type { AgentInfo, AgentSession, AgentSetup, Job, JobError, PromptOptions } from "@pilot/protocol";
-import { DEFAULT_BRIDGE_PORT, isLocalHost, originKey, originOf, propsOf, questionOf, requestTargets, sessionOf } from "@pilot/protocol";
+import { DEFAULT_BRIDGE_PORT, conditionResultsOf, isLocalHost, originKey, originOf, propsOf, questionOf, requestTargets, sessionOf } from "@pilot/protocol";
 import { AGENTS, type AgentCli, type AgentKind, detectAgents, exec, type FoundAgent, installCommand, missingFlags, NOTHING_PRINTED, type Refused, refusedNote, refusedOf, type RunOutput } from "./agents.ts";
 import { Bridge } from "./agent.ts";
 import { attachmentBlocks, attachmentsDir, newAttachments } from "./attachments.ts";
@@ -494,7 +494,11 @@ export async function runJob(job: Job, ctx: RunContext): Promise<void> {
     // What it was refused: said after its reply; what can be allowed safely, a request the thread copies with a button.
     const refused = refusedNote(cli, [...(result.refused ?? []), ...(reply.refused ?? [])]);
     const notes = refused ? [reply.notes, refused.note].filter(Boolean).join("\n\n") : reply.notes;
-    await bridge.done(job.id, notes, reply.question, reply.props, { session, ...(refused?.allow ? { allow: refused.allow } : {}) });
+    await bridge.done(job.id, notes, reply.question, reply.props, {
+      session,
+      ...(refused?.allow ? { allow: refused.allow } : {}),
+      ...(reply.conditions ? { conditions: reply.conditions } : {}),
+    });
     out(`✓ ${seconds}s · ${firstLine(reply.notes) || "Done."}`);
     if (refused) out(`! ${[refused.note, refused.allow].filter(Boolean).join(" ").replaceAll("**", "").replaceAll("`", "")}`);
   } catch (error) {
@@ -577,11 +581,11 @@ export function sessionToResume(job: Job, agent: AgentKind): string | undefined 
  * The agent's reply, read: its notes, and a question or props from the
  * `pilot` block at its end (see prompt.ts), which isn't part of the notes.
  */
-export function replyOf(reply: string): { notes?: string; question?: Job["question"]; props?: Job["props"]; refused?: Refused[] } {
+export function replyOf(reply: string): { notes?: string; question?: Job["question"]; props?: Job["props"]; refused?: Refused[]; conditions?: Job["conditions"] } {
   const blocks = [...reply.matchAll(/```pilot\s*\n([\s\S]*?)```/g)];
   const last = blocks.at(-1);
   let notes = reply;
-  let data: { question?: unknown; props?: unknown; refused?: unknown } = {};
+  let data: { question?: unknown; props?: unknown; refused?: unknown; conditions?: unknown } = {};
   if (last) {
     notes = reply.replace(last[0], "");
     try {
@@ -592,7 +596,14 @@ export function replyOf(reply: string): { notes?: string; question?: Job["questi
   }
   notes = notes.trim();
   const refused = refusedOf(data.refused);
-  return { notes: notes || undefined, question: questionOf(data.question), props: propsOf(data.props), ...(refused.length ? { refused } : {}) };
+  const conditions = conditionResultsOf(data.conditions);
+  return {
+    notes: notes || undefined,
+    question: questionOf(data.question),
+    props: propsOf(data.props),
+    ...(refused.length ? { refused } : {}),
+    ...(conditions ? { conditions } : {}),
+  };
 }
 
 function signInProblem(error: string | undefined): boolean {

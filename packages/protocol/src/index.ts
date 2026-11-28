@@ -2,5 +2,5 @@ export type { AgentRequest, AgentSession, CurrentStyle, ElementContext, PageToke
 export { ATTACHMENT_ACCEPT, ATTACHMENT_ID, ATTACHMENT_TYPES, attachmentKind, attachmentType, mentionText, isColorScheme, isPseudoElement, requestTargets, STATES, sortStates, TASK_KINDS } from "./types.ts";
 export { describeStates, describeWidths, editGuidelines, formatPrompt, formatWidthCheck, SHARED_CHOICES, sharedChoiceMeaning } from "./format.ts";
 export type { PromptOptions } from "./format.ts";
-export type { AgentInfo, AgentQuestion, AgentSetup, ChangeResult, Job, JobError, JobStatus, OpenPage, FileToken, PageEvent, ProjectComponent, ProjectSkill, WidthCheck, WidthReport } from "./bridge.ts";
-export { BRIDGE_VERSION, DEFAULT_BRIDGE_PORT, isLocalHost, SKILL_NAME, MAX_CHOICES, MAX_PROPS, allowOf, jobErrorOf, originKey, originOf, projectNameOf, propsOf, questionOf, sameOrigin, sessionOf, setupOf } from "./bridge.ts";
+export type { AgentInfo, AgentQuestion, AgentSetup, ChangeResult, ConditionResult, Job, JobError, JobStatus, OpenPage, FileToken, PageEvent, ProjectComponent, ProjectSkill, WidthCheck, WidthReport } from "./bridge.ts";
+export { BRIDGE_VERSION, DEFAULT_BRIDGE_PORT, isLocalHost, SKILL_NAME, MAX_CHOICES, MAX_PROPS, allowOf, conditionResultsOf, jobErrorOf, originKey, originOf, projectNameOf, propsOf, questionOf, sameOrigin, sessionOf, setupOf } from "./bridge.ts";

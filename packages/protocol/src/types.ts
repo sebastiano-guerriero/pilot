@@ -176,6 +176,14 @@ export interface StyleCondition {
   media?: string;
   /** A container query: the width of the element's nearest container (`(width < 400px)`). */
   container?: string;
+  /**
+   * A short name for it, given by the agent when it wrote it (`group-hover`,
+   * `data-open`): what Pilot's pill and menu show from then on. A label only,
+   * not code.
+   */
+  label?: string;
+  /** A condition the project's CSS already has (found on the page): a change under it changes its rule. */
+  project?: true;
 }
 
 export type ElementState = ColorScheme | "hover" | "focus" | "focus-visible" | "active" | PseudoElement;

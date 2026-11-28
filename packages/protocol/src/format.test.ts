@@ -163,14 +163,14 @@ describe("formatPrompt", () => {
     expect(prompt).not.toContain("no existing media query should override it");
   });
 
-  it("a condition: a When column with the designer's words, and a note with Pilot's reading", () => {
+  it("a condition in words: a When column, the agent works out what marks it and asks when it can't tell", () => {
     const prompt = formatPrompt({
       ...changeSet,
       edits: [
         {
           target: changeSet.edits[0]!.target,
           changes: [
-            { property: "color", from: "", to: "red", condition: { words: "the parent .card has focus inside", selector: ".card:focus-within &" } },
+            { property: "color", from: "", to: "red", condition: { words: "the parent .card has focus inside" } },
             { property: "opacity", from: "1", to: "0.5" },
           ],
         },
@@ -179,27 +179,37 @@ describe("formatPrompt", () => {
     expect(prompt).toContain("| Property | From | To | Widths | When |");
     expect(prompt).toContain("| `color` | *not set* | `red` | base | the parent .card has focus inside |");
     expect(prompt).toContain("| `opacity` | `1` | `0.5` | base | — |");
-    expect(prompt).toContain('`color` is only for when "the parent .card has focus inside"');
-    expect(prompt).toContain("Pilot read it as `.card:focus-within &`, `&` being this element");
-    expect(prompt).toContain("follow the words and say so");
+    expect(prompt).toContain('`color` is only for when "the parent .card has focus inside" (the designer\'s words): work out what on the page marks that');
+    expect(prompt).toContain("ask the designer (a question, your best readings as its choices) rather than guess");
+    // No reading of Pilot's to follow or disagree with.
+    expect(prompt).not.toContain("Pilot read it");
   });
 
-  it("words Pilot couldn't read: the agent works out what marks them", () => {
+  it("a condition the project already has: its rule changes, no other added", () => {
     const prompt = formatPrompt({
       ...changeSet,
-      edits: [{ target: changeSet.edits[0]!.target, changes: [{ property: "color", from: "", to: "red", condition: { words: "when the user is logged in" } }] }],
+      edits: [
+        {
+          target: changeSet.edits[0]!.target,
+          changes: [{ property: "color", from: "red", to: "blue", condition: { words: "group-hover/hero", label: "group-hover/hero", selector: ".group\\/hero:hover &", project: true } }],
+        },
+      ],
     });
-    expect(prompt).toContain("| `color` | *not set* | `red` | base | when the user is logged in |");
-    expect(prompt).toContain("Pilot couldn't read them as CSS): work out what on the page marks that");
+    expect(prompt).toContain('a condition the project already has ("group-hover/hero"). Change that rule\'s value');
+    expect(prompt).toContain("don't add another rule for it");
   });
 
-  it("a container query: the agent makes the one named a container", () => {
-    const prompt = formatPrompt({
+  it("a condition typed as CSS: exact; a container query: the agent makes the one meant a container", () => {
+    const css = formatPrompt({
       ...changeSet,
-      edits: [{ target: changeSet.edits[0]!.target, changes: [{ property: "gap", from: "", to: "8px", condition: { words: "the card is narrower than 400px", container: "(width < 400px)" } }] }],
+      edits: [{ target: changeSet.edits[0]!.target, changes: [{ property: "color", from: "", to: "red", condition: { words: ".card:hover &", selector: ".card:hover &" } }] }],
     });
-    expect(prompt).toContain("Pilot read it as `@container (width < 400px)`");
-    expect(prompt).toContain("make the one the words name a container");
+    expect(css).toContain("`color` is only for when `.card:hover &`, `&` being this element (the designer wrote it as CSS)");
+    const container = formatPrompt({
+      ...changeSet,
+      edits: [{ target: changeSet.edits[0]!.target, changes: [{ property: "gap", from: "", to: "8px", condition: { words: "(width < 400px)", container: "(width < 400px)" } }] }],
+    });
+    expect(container).toContain("make the one meant a container");
   });
 
   it("an !important value in the project: the agent keeps it important", () => {

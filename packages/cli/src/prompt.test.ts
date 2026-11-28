@@ -7,6 +7,35 @@ const edit = (selector: string) => ({ target: target(selector), changes: [{ prop
 const jobOf = (...selectors: string[]) =>
   ({ id: "j", changeSet: { page: { url: "http://localhost:5173/", title: "Home", viewport: { width: 1280, height: 800 } }, edits: selectors.map(edit) } }) as unknown as Job;
 
+describe("conditions", () => {
+  it("a job with a When asks for each condition back, labelled, with its CSS; a label only, not a hint about the code", () => {
+    const job = jobOf(".card");
+    (job.changeSet.edits[0]!.changes[0] as { condition?: unknown }).condition = { words: "the card is hovered" };
+    const prompt = jobPrompt(job);
+    expect(prompt).toContain('{"conditions": [{"element": 1, "words": "the When, as given", "label": "group-hover", "selector": ".card:hover &"}]}');
+    expect(prompt).toContain("a label only, not a hint about the code, which follows the project's own way");
+    expect(jobPrompt(jobOf(".card"))).not.toContain('"conditions"');
+  });
+
+  it("a follow-up for conditions it didn't name: asks for them only, without touching the code; with differences, both", () => {
+    const job = jobOf(".card");
+    (job.changeSet.edits[0]!.changes[0] as { condition?: unknown }).condition = { words: "the card is hovered" };
+    const naming = jobPrompt({ ...job, attempt: 2, unnamed: [{ element: 1, words: "the card is hovered" }] } as Job);
+    expect(naming).toContain("didn't give back these conditions (When) in your `conditions`");
+    expect(naming).toContain('- Element 1: "the card is hovered"');
+    expect(naming).toContain("don't change the code again");
+    expect(naming).toContain('{"conditions": [{"element": 1');
+    const both = jobPrompt({
+      ...job,
+      attempt: 2,
+      differences: [{ selector: ".card", property: "color", expected: "red", actual: "blue", outcome: "differs" }],
+      unnamed: [{ element: 1, words: "the card is hovered" }],
+    } as unknown as Job);
+    expect(both).toContain("these changes don't give the designer's value yet");
+    expect(both).toContain("And give back these conditions (When)");
+  });
+});
+
 describe("a follow-up", () => {
   const differences = [{ selector: ".card", property: "margin-bottom", expected: "4px", actual: "40px", ok: false }];
 

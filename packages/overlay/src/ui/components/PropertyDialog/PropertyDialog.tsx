@@ -2,7 +2,7 @@ import { isModifierQuery } from "../../../search/modifiers.ts";
 import { usedModifiers } from "../../../search/used.ts";
 import { type ElementState, type WidthRange, isPseudoElement } from "@pilot/protocol";
 import { Component, type ComponentChildren, Fragment } from "preact";
-import { type Declared, declaredValue, isFromReset } from "../../../dom/declared.ts";
+import { type Declared, conditionValue, declaredValue, isFromReset } from "../../../dom/declared.ts";
 import { type Condition, conditionKey } from "../../../edits/condition.ts";
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import type { BoxArea } from "../../../dom/boxModel.ts";
@@ -109,8 +109,6 @@ interface PropertyDialogProps {
   condition?: Condition | null;
   /** The condition was set (Create modifier in the `/` menu) or removed. */
   onConditionChange?(condition: Condition | null): void;
-  /** Show an element on the page (the ancestor a condition being described names), or none. */
-  onPeek?(element: Element | null): void;
   /**
    * Focus the search when the dialog opens (default). False when the
    * selection came from the DOM tree, which keeps focus for its arrow keys.
@@ -177,7 +175,6 @@ export function PropertyDialog({
   onStatesChange,
   condition: pillCondition = null,
   onConditionChange,
-  onPeek,
   autoFocus = true,
   viewportWidth,
   widthPick,
@@ -211,9 +208,7 @@ export function PropertyDialog({
   // `from-` / `to-` being finished: its widths are listed (PropertySearch), not properties.
   const finishingWidth = !!widthToFinish(query);
   // After `/` it's the modifiers (and Create modifier's words), never a property: "if it has" found aspect-ratio.
-  // A condition's words being described (Create modifier): nothing but the search and its reading line.
-  const [describing, setDescribing] = useState(false);
-  const matches = describing ? [] : empty ? withValues : finishingWidth || isModifierQuery(query) ? [] : matchEditors(query, editors);
+  const matches = empty ? withValues : finishingWidth || isModifierQuery(query) ? [] : matchEditors(query, editors);
   const matchKey = matches.map((m) => m.id).join(",");
 
   const searchRef = useRef<HTMLInputElement>(null);
@@ -553,8 +548,6 @@ export function PropertyDialog({
           condition={pillCondition}
           onConditionChange={onConditionChange}
           history={history}
-          onPeek={onPeek}
-          onDescribingChange={setDescribing}
         />
         {matches.length > 0 && (
           // Wrapper for the property editors shown below the search. Only
@@ -888,8 +881,8 @@ function pageValues(
   return Object.fromEntries(
     properties.map((p) => {
       const key = keyFor(element, p, widths, states, width, history, condition);
-      // Under a condition: only Pilot's value for it (the page's own conditional rules aren't read yet).
-      return [p, { declared: condition ? null : pageValueAt(element, p, key, states), at: key }];
+      // Under a condition: the project's own value for it (its rules for that condition), else none.
+      return [p, { declared: condition ? conditionValue(element, p, condition) : pageValueAt(element, p, key, states), at: key }];
     }),
   );
 }

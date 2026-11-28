@@ -421,6 +421,13 @@ describe("a run's reply", () => {
     expect(replyOf('Done.\n```pilot\n{"refused": [{"command": "curl x"}]}\n```').refused).toEqual([{ command: "curl x" }]);
   });
 
+  it("the conditions it wrote, named, from the same block; a selector without & or with braces dropped", () => {
+    const reply = replyOf(
+      'Done.\n```pilot\n{"conditions": [{"element": 1, "words": "the card is hovered", "label": "group-hover", "selector": ".card:hover &"}, {"element": 2, "words": "x", "selector": ".card { color: red }"}]}\n```',
+    );
+    expect(reply.conditions).toEqual([{ element: 1, words: "the card is hovered", label: "group-hover", selector: ".card:hover &" }]);
+  });
+
   it("resumes only the same agent's session: the job's own for its follow-up, else the thread's", () => {
     const base = { id: "j", origin: APP, status: "queued", createdAt: "", updatedAt: "" } as const;
     const target = changeSet("x").edits[0]?.target as ChangeSet["edits"][number]["target"];

@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AgentInfo, ChangeResult, PageEvent, WidthCheck } from "@pilot/protocol";
-import { BRIDGE_VERSION, allowOf, jobErrorOf, originKey, projectNameOf, propsOf, questionOf, sessionOf } from "@pilot/protocol";
+import { BRIDGE_VERSION, allowOf, conditionResultsOf, jobErrorOf, originKey, projectNameOf, propsOf, questionOf, sessionOf } from "@pilot/protocol";
 import { attachmentsDir, extensionOf, MAX_ATTACHMENT_BYTES, saveAttachment, sweepAttachments, withAttachmentPaths } from "./attachments.ts";
 import { projectComponents } from "./components.ts";
 import { findSkills } from "./skills.ts";
@@ -158,6 +158,7 @@ async function handle(hub: Hub, req: IncomingMessage, res: ServerResponse, attac
             decodeURIComponent(id),
             ((data as { differences?: ChangeResult[] }).differences ?? []).slice(0, 200),
             stringsOf((data as { issues?: unknown }).issues),
+            unnamedOf((data as { unnamed?: unknown }).unnamed),
           );
     return job ? json(res, 200, { job }) : json(res, 409, { error: `can't ${action} this job` });
   }
@@ -191,7 +192,19 @@ function events(hub: Hub, origin: string, req: IncomingMessage, res: ServerRespo
 }
 
 async function handleAgent(hub: Hub, action: string, data: unknown, req: IncomingMessage, res: ServerResponse): Promise<void> {
-  const d = data as { agent: AgentInfo; origin?: string; jobId?: string; notes?: string; question?: unknown; props?: unknown; session?: unknown; error?: unknown; allow?: unknown; timeoutMs?: number };
+  const d = data as {
+    agent: AgentInfo;
+    origin?: string;
+    jobId?: string;
+    notes?: string;
+    question?: unknown;
+    props?: unknown;
+    session?: unknown;
+    error?: unknown;
+    allow?: unknown;
+    conditions?: unknown;
+    timeoutMs?: number;
+  };
   if (!d?.agent?.id) return json(res, 400, { error: "agent needed" });
   switch (action) {
     case "register":
@@ -215,7 +228,12 @@ async function handleAgent(hub: Hub, action: string, data: unknown, req: Incomin
     case "done":
       if (!d.jobId) return json(res, 400, { error: "jobId needed" });
       return json(res, 200, {
-        job: hub.done(d.agent.id, d.jobId, d.notes, questionOf(d.question), propsOf(d.props), { session: sessionOf(d.session), error: jobErrorOf(d.error), allow: allowOf(d.allow) }),
+        job: hub.done(d.agent.id, d.jobId, d.notes, questionOf(d.question), propsOf(d.props), {
+          session: sessionOf(d.session),
+          error: jobErrorOf(d.error),
+          allow: allowOf(d.allow),
+          conditions: conditionResultsOf(d.conditions),
+        }),
       });
     case "activity":
       if (!d.jobId) return json(res, 400, { error: "jobId needed" });
@@ -244,6 +262,17 @@ async function handleAgent(hub: Hub, action: string, data: unknown, req: Incomin
 export const CHECK_TIMEOUT = 60_000;
 
 /** Up to 100 strings of at most 2000 characters, from a page's post; undefined for anything else. */
+/** The conditions to ask the agent to name again (Job.unnamed), checked: an element's number and the words. */
+function unnamedOf(value: unknown): Array<{ element: number; words: string }> | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out = value
+    .slice(0, 50)
+    .map((v) => v as { element?: unknown; words?: unknown })
+    .filter((v) => Number.isInteger(v?.element) && (v.element as number) >= 1 && typeof v.words === "string" && v.words.trim())
+    .map((v) => ({ element: v.element as number, words: (v.words as string).trim().slice(0, 300) }));
+  return out.length ? out : undefined;
+}
+
 function stringsOf(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   return value.filter((v): v is string => typeof v === "string").slice(0, 100).map((v) => v.slice(0, 2000));

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AgentInfo, AgentQuestion, AgentSession, ChangeResult, ChangeSet, Job, JobError, OpenPage, PageEvent, PropSpec, WidthCheck } from "@pilot/protocol";
+import type { AgentInfo, AgentQuestion, AgentSession, ChangeResult, ChangeSet, ConditionResult, Job, JobError, OpenPage, PageEvent, PropSpec, WidthCheck } from "@pilot/protocol";
 import { originKey, setupOf } from "@pilot/protocol";
 import { AGENTS, type AgentKind, isAgentKind } from "./agents.ts";
 import { skillFolders } from "./skills.ts";
@@ -55,6 +55,8 @@ export interface DoneExtra {
   error?: JobError;
   /** What the designer can ask their agent to allow (Job.allow). */
   allow?: string;
+  /** The conditions the agent wrote, labelled, with their CSS (Job.conditions). */
+  conditions?: ConditionResult[];
 }
 
 interface Agent {
@@ -266,6 +268,8 @@ export class Hub {
       session: extra.session ?? job.session,
       error: extra.error,
       allow: extra.allow,
+      // The conditions it wrote (an edit's, not a question's: what it left for the answer isn't written yet).
+      ...(extra.conditions?.length && !asks.question ? { conditions: extra.conditions } : {}),
     });
     return job;
   }
@@ -380,10 +384,10 @@ export class Hub {
    * preferably to the agent that did it. Null when it can't (not done, or
    * already a follow-up: then the page takes what the code gives).
    */
-  retry(origin: string, jobId: string, differences: ChangeResult[], issues?: string[]): Job | null {
+  retry(origin: string, jobId: string, differences: ChangeResult[], issues?: string[], unnamed?: Job["unnamed"]): Job | null {
     const job = this.jobs.get(jobId);
     if (!job || job.origin !== originKey(origin) || job.status !== "done" || (job.attempt ?? 1) >= 2) return null;
-    this.update(job, { status: "queued", attempt: 2, differences, issues, notes: undefined });
+    this.update(job, { status: "queued", attempt: 2, differences, issues, notes: undefined, ...(unnamed?.length ? { unnamed } : {}) });
     this.dispatch(job.origin);
     return job;
   }

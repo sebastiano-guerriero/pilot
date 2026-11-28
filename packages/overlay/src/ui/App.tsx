@@ -163,6 +163,9 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
     setConditionValue(next);
     setDefaultState(false);
   }, []);
+  // Once the agent names the condition the pill is on (its job came back), the pill is on the named one: its label,
+  // and its CSS for the preview.
+  useEffect(() => history.subscribe(() => setConditionValue((current) => history.namedAs(current) ?? current)), [history]);
   const viewportWidth = useViewportWidth();
   // A click on the viewport width. With the dialog open, it goes to the
   // dialog, which sets the chip (a `from`/`to` typed in the search decides it).
@@ -833,7 +836,6 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
               onStatesChange={setStates}
               condition={condition}
               onConditionChange={setCondition}
-              onPeek={hoverInDom}
               defaultState={defaultState}
               onDefaultStateChange={setDefaultState}
               viewportWidth={viewportWidth}

@@ -14,7 +14,7 @@ beforeEach(() => {
     ".btn:hover:active { transform: scale(0.98); }",
     ".btn:focus, .btn:focus-visible { outline: 2px solid red; }",
     "@media (min-width: 768px) { .btn { padding: 12px; } .btn:hover { color: white; } }",
-    // Not the button's own: a reset for every element, an ancestor's state.
+    // Not a modifier of the button's: a reset for every element. An ancestor's state is a condition (listed last).
     "*:focus { outline-offset: 2px; }",
     ".card:hover .btn { color: red; }",
   ].join("\n");
@@ -43,6 +43,7 @@ describe("usedModifiers", () => {
       "Focus visible | focus-visible: | outline",
       "from 768px | from-768 | padding",
       "Hover, from 768px | hover:from-768 | color",
+      ".card:hover & |  | color",
     ]);
   });
 
@@ -61,8 +62,8 @@ describe("usedModifiers", () => {
     const history = new EditHistory({ render() {} });
     const selected = { words: "it has data-selected", selector: "&[data-selected]" };
     history.apply(element, "background-color", "red", undefined, { condition: selected });
-    // Named the way Tailwind writes it.
-    expect(rows(history).at(-1)).toBe("Data selected | data-selected: | background");
+    // Named by its words until the agent gives it a label, then by the label.
+    expect(rows(history).at(-1)).toBe("it has data-selected |  | background");
     expect(usedModifiers(element, history).at(-1)?.used).toEqual({ states: [], condition: selected });
   });
 

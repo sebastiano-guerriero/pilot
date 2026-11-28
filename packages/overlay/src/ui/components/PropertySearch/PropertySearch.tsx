@@ -2,7 +2,7 @@ import type { ElementState } from "@pilot/protocol";
 import type { RefObject } from "preact";
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { takeStates } from "../../../edits/states.ts";
-import { type Condition, conditionCss, conditionKey, readCondition } from "../../../edits/condition.ts";
+import { type Condition, conditionFrom, conditionKey, conditionLabel, hasCss } from "../../../edits/condition.ts";
 import type { EditHistory } from "../../../edits/history.ts";
 import { pageBreakpoints } from "../../../dom/breakpoints.ts";
 import { ALL_WIDTHS, type PartialWidth, type WidthChip, chipRange, inWidths, isBaseChip, takeWidths, widthSuggestion, widthToFinish } from "../../../edits/widths.ts";
@@ -46,10 +46,6 @@ interface PropertySearchProps {
   onConditionChange?(condition: Condition | null): void;
   /** Where a condition is forced on (the preview only): EditHistory.force. */
   history?: EditHistory;
-  /** Show this element on the page (the ancestor a condition names), or none. */
-  onPeek?(element: Element | null): void;
-  /** A condition's words are being described (the dialog hides its properties meanwhile), or not anymore. */
-  onDescribingChange?(on: boolean): void;
 }
 
 /**
@@ -75,8 +71,6 @@ export function PropertySearch({
   condition = null,
   onConditionChange,
   history,
-  onPeek,
-  onDescribingChange,
 }: PropertySearchProps) {
   useEffect(() => {
     if (!autoFocus) return;
@@ -87,26 +81,8 @@ export function PropertySearch({
   // Modifiers typed at the start become pills: `from-1200 ` / `to-767 ` the
   // width chip, `hover:` / `active:`… a state; the rest is the search. They
   // can come in any order (`hover:from-768 `).
-  // Create modifier picked with words Pilot can't read: the field takes the condition's words (not a property, nor modifiers), read as they're
-  // typed (the line under it says how), Enter sets it, Esc goes back to the `/` menu.
-  const [describing, setDescribing] = useState<{ words: string; cameFrom: string } | null>(null);
-  const reading = describing && element ? readCondition(describing.words, element) : null;
-  const target = reading && "condition" in reading ? (reading.target ?? null) : null;
-  useEffect(() => {
-    onPeek?.(target);
-  }, [target]);
-  useEffect(() => () => onPeek?.(null), []);
-  useEffect(() => onDescribingChange?.(!!describing), [!!describing]);
-  const stopDescribing = (back: string) => {
-    setDescribing(null);
-    onPeek?.(null);
-    onChange(back);
-  };
-
   const onInput = (e: Event) => {
     const input = e.currentTarget as HTMLInputElement;
-    // Everything deleted: back to the search as it was at first (no line asking for words).
-    if (describing) return input.value ? setDescribing({ ...describing, words: input.value }) : stopDescribing("");
     let rest = input.value;
     let range = widths;
     let nextStates = states;
@@ -148,17 +124,17 @@ export function PropertySearch({
   // window's first, then the page's breakpoints (widthOptions).
   const typedWidth = onWidthsChange ? widthToFinish(value) : null;
   const widthList = !!typedWidth;
-  const menuOpen = !!onWidthsChange && !describing && (isModifierQuery(value) || widthList);
+  const menuOpen = !!onWidthsChange && (isModifierQuery(value) || widthList);
   const matched = !menuOpen
     ? []
     : widthList && typedWidth
       ? widthOptions(typedWidth, viewportWidth, used)
       : matchModifiers(value, menuList(used));
-  // Typed after `/` and matching nothing: Create modifier, the words as a condition, rather than "no match" (the
-  // owner's call, 2026-11-27: the only way in, an Only when… row was dropped).
+  // Typed after `/` and matching no modifier: Create modifier, the words as a condition (the owner's design,
+  // 2026-11-28). Pilot doesn't read them: the agent names the condition when the changes are sent (CSS typed as such
+  // is used as written).
   const typedWords = menuOpen && !widthList ? value.replace(/^\//, "").trim() : "";
-  const options =
-    !matched.length && typedWords && onConditionChange && element ? [createRow(typedWords)] : matched;
+  const options = !matched.length && typedWords && onConditionChange ? [createRow(typedWords)] : matched;
   const [active, setActive] = useState(0);
   useEffect(() => setActive(0), [value]);
   // The menu scrolls past its max height (PropertySearch.css): the highlighted row kept in view, and a fade
@@ -211,17 +187,11 @@ export function PropertySearch({
     } else if (modifier.chip) {
       onWidthsChange?.(modifier.chip === "base" ? {} : modifier.chip);
       onChange("");
-    } else if (modifier.words !== undefined && element) {
-      // Create modifier: set at once when read; else the words go on being described, the line saying how to put them.
-      const read = readCondition(modifier.words, element);
-      if ("condition" in read) {
-        if (condition) history?.force(condition, false);
-        onConditionChange?.(read.condition);
-        onChange("");
-      } else {
-        setDescribing({ words: modifier.words, cameFrom: value });
-        onChange("");
-      }
+    } else if (modifier.words !== undefined) {
+      // Create modifier: the words, for the agent to name (or CSS typed as such, used as written).
+      if (condition) history?.force(condition, false);
+      onConditionChange?.(conditionFrom(modifier.words));
+      onChange("");
     } else {
       setCameFrom(value);
       onChange(modifier.insert);
@@ -233,27 +203,6 @@ export function PropertySearch({
   // suggested width: the chip, as if `from-1108 ` had been typed.
   const onSearchKeyDown = (e: KeyboardEvent) => {
     const input = e.currentTarget as HTMLInputElement;
-    if (describing) {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        // Set as read, or, when Pilot can't read the words, as they are (no live preview; force state shows it, the
-        // agent writes it from the words). Not empty words.
-        const words = describing.words.trim();
-        if (!words || !reading) return;
-        if (condition) history?.force(condition, false);
-        onConditionChange?.("condition" in reading ? reading.condition : { words });
-        stopDescribing("");
-        return;
-      }
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation(); // a step back to the `/` menu, not a step of the dialog
-        stopDescribing(describing.cameFrom);
-        return;
-      }
-      if (e.key === "Tab") e.preventDefault();
-      return;
-    }
     if (menuOpen) {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
@@ -366,14 +315,14 @@ export function PropertySearch({
           ref={inputRef}
           class="input"
           type="search"
-          aria-label={describing ? "Describe when" : "Add a property"}
-          placeholder={describing ? "Describe when: the parent .card has focus inside" : "Add a property, or / for modifiers"}
+          aria-label="Add a property"
+          placeholder="Add a property, or / for modifiers"
           role="combobox"
           list={undefined}
           aria-expanded={menuOpen}
           aria-controls={menuOpen ? "pilot-modifiers" : undefined}
           aria-activedescendant={menuOpen && options[active] ? `pilot-modifier-${options[active].id}` : undefined}
-          value={describing ? describing.words : value}
+          value={value}
           onInput={onInput}
           onKeyDown={onSearchKeyDown}
         />
@@ -385,24 +334,6 @@ export function PropertySearch({
           </span>
         )}
       </div>
-      {describing && (
-        // How the words read, as they're typed: Pilot's CSS for them and what they name (highlighted on the page),
-        // or how to put them. In the `/` menu's row look, pending the owner's design.
-        <div class="condition-reading" role="status" data-error={(reading && "error" in reading) || undefined}>
-          {reading && "condition" in reading ? (
-            <>
-              <span class="modifier-syntax">{conditionCss(reading.condition)}</span>
-              <span class="modifier-description">Enter sets it</span>
-            </>
-          ) : reading && "error" in reading ? (
-            // Short: what's wrong in red, how to put it after, dimmed (the owner's design, 2026-11-27).
-            <span class="modifier-description">
-              <span class="condition-error">{reading.error}</span>
-              {reading.hint && ` ${reading.hint}`} Enter sets it anyway, without a live preview.
-            </span>
-          ) : null}
-        </div>
-      )}
       {menuOpen && (
         <div class="modifiers-frame">
         <div
@@ -450,9 +381,10 @@ export function PropertySearch({
 
 const NO_MODIFIERS: Modifier[] = [];
 
-/** The `/` menu's row for words that match no modifier: a condition made of them (the owner's wording). */
+/** The `/` menu's row for words that match no modifier: Create modifier, a condition of them. */
 function createRow(words: string): Modifier {
-  return { id: "create", name: "Create modifier", syntax: "", description: "Use natural language to describe when", insert: "", words };
+  const css = hasCss(conditionFrom(words));
+  return { id: "create", name: "Create modifier", syntax: "", description: css ? "CSS, previewed as written" : "The agent names it when you send", insert: "", words };
 }
 
 /**
@@ -512,8 +444,8 @@ function modifiersLabel(widths: WidthChip | null, states: readonly ElementState[
           ? [range.min !== undefined ? `from-${range.min}` : "", range.max !== undefined ? `to-${range.max}` : ""].filter(Boolean)
           : [];
   const typed = [...width, ...states].join(":");
-  // The condition's words as typed, without a "when" before them (the owner's call, 2026-11-27).
-  return condition ? [typed, condition.words].filter(Boolean).join(" · ") : typed;
+  // The condition's label once the agent named it, else its words as typed, without a "when" (the owner's call).
+  return condition ? [typed, conditionLabel(condition)].filter(Boolean).join(" · ") : typed;
 }
 
 /**

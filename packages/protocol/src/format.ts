@@ -649,11 +649,16 @@ function conditionNote(c: StyleChange): string | null {
   const when = c.condition;
   if (!when) return null;
   const css = [when.media && `@media ${when.media}`, when.container && `@container ${when.container}`, when.selector && `\`${when.selector}\``].filter(Boolean).join(" and ");
-  // Words only: Pilot couldn't read them into CSS, the agent works from them alone.
+  const container = when.container ? " A container query is about the element's nearest container (an ancestor with `container-type`): make the one meant a container if it isn't one yet." : "";
+  // The designer's words: Pilot doesn't read them (the owner's call, 2026-11-28); the agent does, and names it back.
   if (!css)
-    return `\`${c.property}\` is only for when ${JSON.stringify(when.words)} (the designer's words; Pilot couldn't read them as CSS): work out what on the page marks that (a class, an attribute, a parent's state, a media or container query), write the change for it the project's way, the element's other styles as they are, and say what you used.`;
-  const read = when.selector ? `${css}, \`&\` being this element` : css;
-  return `\`${c.property}\` is only for when ${JSON.stringify(when.words)} (the designer's words; Pilot read it as ${when.selector ? read : `\`${read}\``}): the change applies only while that holds. Write it the project's way (Tailwind's \`group-*\`, \`peer-*\`, \`has-*\`, \`data-*\` or an arbitrary variant; CSS nesting or a selector around the element), the element's other styles as they are. If the words and Pilot's reading disagree, follow the words and say so.${when.container ? " A container query is about the element's nearest container (an ancestor with `container-type`): make the one the words name a container if it isn't one yet." : ""}`;
+    return `\`${c.property}\` is only for when ${JSON.stringify(when.words)} (the designer's words): work out what on the page marks that (a class, an attribute, a parent's or a sibling's state, what it contains, a media or container query), and write the change for it the project's way, the element's other styles as they are. If you can't tell what the words mean, ask the designer (a question, your best readings as its choices) rather than guess.`;
+  const read = when.selector ? `${css}, \`&\` being this element` : `\`${css}\``;
+  // A condition the project already has (found in its CSS): its rule changes, no other is added.
+  if (when.project)
+    return `\`${c.property}\` is only for when ${read}: a condition the project already has (${JSON.stringify(when.words)}). Change that rule's value (its source above, when there's one), or add the property to it, the project's way; don't add another rule for it.`;
+  // CSS the designer typed as such: exact.
+  return `\`${c.property}\` is only for when ${read} (the designer wrote it as CSS): write it the project's way, the element's other styles as they are.${container}`;
 }
 
 /**

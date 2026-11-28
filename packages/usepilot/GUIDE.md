@@ -138,10 +138,13 @@ Start the search with a state, Tailwind style, or type `/` to pick one:
 
 ## Any other condition, in words
 
-For a condition no modifier lists, type `/` and describe it right there, then pick **Create modifier** (the menu offers it when your words match no modifier): "the parent .card has focus inside", "it has data-open", "the previous sibling is checked", "with reduced motion". Pilot shows how it reads your words as you type (and highlights the parent or sibling they name); **Enter** sets it. Your edits are then only for when it holds.
+For a condition no modifier lists, type `/` and describe it right there: "the parent .card has focus inside", "it has data-open", "the peer input is invalid and not focused". The menu offers **Create modifier**; press **Enter**. Your edits are then only for when it holds.
 
-- To see your edits without making the condition happen, check **force state** beside the pill: Pilot shows them as if it held, whatever the page is doing. Uncheck it for the page as it is.
-- Pilot understands who (the element, the parent, an ancestor, a sibling, a peer, a child or something inside it, or something named like "the card" or "the list"), several conditions joined by "and" ("the parent has data-checked=true and focus-within"), what (hovered, focused, focus inside, checked, open, an attribute, a class, empty, what it contains, its place in a list), and sizes ("the card is narrower than 400px", "the screen is wider than 768px"). If it can't read your words, it says how to put them, and **Enter** sets them anyway: you won't see the edits live, but **force state** shows them, and the agent works from your words. CSS works too, with `&` for the element: `.card:hover &`.
+- You won't see those edits live until the agent has written them: check **force state** beside the pill to see them as if the condition held, whatever the page is doing. Uncheck it for the page as it is.
+- When the job comes back, the agent gives the condition a short name, which the pill and the `/` menu show from then on, and your edits show live when the condition holds.
+- If the agent can't tell what you mean, it asks you in the thread. A modifier only stays in the menu once the agent has written it as CSS; if it doesn't say how it wrote it (even after Pilot asks again), the job's notes tell you, and the modifier isn't kept.
+- CSS works too, with `&` for the element (`.card:hover &`): that one shows live right away.
+- The `/` menu also lists the conditions your code already has on the element (`group-hover/hero`, `.card:hover &`, `motion-reduce`), even when they don't hold right now. Pick one to see and edit its values.
 - Backspace at the start of the search removes it, like the other modifiers.
 
 ## Editing text

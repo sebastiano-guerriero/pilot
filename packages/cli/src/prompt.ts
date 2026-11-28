@@ -13,7 +13,7 @@ export function jobPrompt(job: Job, where = "", options: PromptOptions = {}): st
   const body =
     job.attempt === 2 && job.issues?.length
       ? taskFollowUp(job)
-      : job.attempt === 2 && job.differences?.length
+      : job.attempt === 2 && (job.differences?.length || job.unnamed?.length)
         ? followUp(job)
         : job.answer && job.question
           ? answered(job)
@@ -53,6 +53,7 @@ function runFooter(job: Job): string {
     ...(props ? ["", "`type` is one of `options`, `boolean`, `text`, `number`; `options` only for `options`."] : []),
     ...(!props && several ? ["", "`element`: the number of the element it's about (its heading's), so the designer sees it there; leave it out when it's about all of them."] : []),
     "",
+    ...conditionsAsk(job),
     // What runs were refused most, for nothing (a skill's checks): reading with `cat`, fetching the page with `curl`.
     "Read and search files with your own file tools, not shell commands (`cat`, `cd`, `grep`), and don't fetch or open the page (`curl`, a browser): Pilot checks it itself.",
     "",
@@ -63,6 +64,27 @@ function runFooter(job: Job): string {
     '{"refused": [{"mcp": "the MCP server\'s name"}, {"command": "the command, as you ran it"}, {"web": "the site\'s domain"}, {"tool": "any other tool\'s name"}]}',
     "```",
   ].join("\n");
+}
+
+/**
+ * The job has changes under a condition (When): the agent gives each back, in the same block, with a short label for
+ * Pilot's pill and menu and the CSS it wrote, so the page can preview it and find it again (the owner's design,
+ * 2026-11-28). The label is said to be a label only, so a project without Tailwind isn't steered toward it.
+ */
+function conditionsAsk(job: Job): string[] {
+  // Only the ones in words: CSS the designer typed, and the project's own, have their CSS already.
+  const conditions = job.changeSet.edits.some((e) => e.changes.some((c) => c.condition && !c.condition.selector && !c.condition.media && !c.condition.container));
+  if (!conditions) return [];
+  return [
+    "",
+    "For each When condition you wrote, add `conditions` to that block (one block at the very end: every key in it), after you wrote them:",
+    "",
+    "```pilot",
+    '{"conditions": [{"element": 1, "words": "the When, as given", "label": "group-hover", "selector": ".card:hover &"}]}',
+    "```",
+    "",
+    "`element`: its heading's number. `label`: a short name for it in Pilot's menu, like a variant name (`group-hover`, `data-open`, `peer-invalid`): a label only, not a hint about the code, which follows the project's own way. `selector`: the CSS selector your code makes it, `&` for this element (`.card:hover &`, `&[data-open]`, `&:has(> :checked)`); `media` or `container` (the query) for a media or container query, with or without it.",
+  ];
 }
 
 /**
@@ -101,18 +123,32 @@ export function answered(job: Job): string {
  * approximation and explain it.
  */
 export function followUp(job: Job): string {
-  const lines = [
-    "# Pilot design edits: follow-up",
-    "",
+  const lines = ["# Pilot design edits: follow-up", ""];
+  // Only conditions to name: the code is done, the names aren't.
+  if (!job.differences?.length) {
+    lines.push(
+      "You applied this job, but didn't give back these conditions (When) in your `conditions`. Pilot keeps a condition only with the CSS your code makes it, so add each to that block, as asked below; don't change the code again:",
+      "",
+      ...(job.unnamed ?? []).map((u) => `- Element ${u.element}: ${JSON.stringify(u.words)}`),
+    );
+    return lines.join("\n");
+  }
+  lines.push(
     "You applied this job, but Pilot checked the page and these changes don't give the designer's value yet (the values are what the browser computes for the element):",
     "",
-  ];
+  );
   for (const d of job.differences ?? []) {
     const edit = job.changeSet.edits.find((e) => e.target.selector === d.selector);
     const where = edit ? `\`${edit.target.path}\` (selector \`${d.selector}\`${edit.target.text ? `, text "${edit.target.text}"` : ""})` : `\`${d.selector}\``;
     // A change to the DOM itself: in words, there's no value to compare.
     lines.push(`- ${where}: \`${d.property}\` should be \`${d.expected}\`, the page gives \`${d.actual ?? "?"}\`.`);
   }
+  if (job.unnamed?.length)
+    lines.push(
+      "",
+      "And give back these conditions (When) in your `conditions`, as asked below: Pilot keeps a condition only with the CSS your code makes it.",
+      ...job.unnamed.map((u) => `- Element ${u.element}: ${JSON.stringify(u.words)}`),
+    );
   lines.push(
     "",
     "Fix them: the usual causes are a rule that overrides yours (more specific, later, or in a media query), an edit in the wrong file or component, or a missed change. A media query, state or condition the project already had for a base change is meant to win where it applies (Pilot checks a base change only where it doesn't): keep it, don't flatten it. If you chose a different value on purpose (a token or the nearest step in the project's scale), keep it and say so in your notes. Pilot takes what the code gives after this.",

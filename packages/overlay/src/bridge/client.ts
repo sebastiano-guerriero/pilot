@@ -195,8 +195,8 @@ export class BridgeClient {
    * right: the changes that differ, or a task's problems (`issues`). False
    * when the hub refused.
    */
-  retry(jobId: string, differences: ChangeResult[], issues?: string[]): Promise<boolean> {
-    return this.post(`/jobs/${encodeURIComponent(jobId)}/retry`, { differences, issues });
+  retry(jobId: string, differences: ChangeResult[], issues?: string[], unnamed?: Job["unnamed"]): Promise<boolean> {
+    return this.post(`/jobs/${encodeURIComponent(jobId)}/retry`, { differences, issues, ...(unnamed?.length ? { unnamed } : {}) });
   }
 
   /** The designer's answer to the agent's question about a done job: it goes back to the agent with it. False when the hub refused. */

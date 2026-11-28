@@ -1,5 +1,6 @@
-import type { AgentInfo, AgentQuestion, AgentRequest, AgentSetup, AgentSession, ChangeResult, ChangeSet, CommentAction, CommentAttachment, CommentMessage, CommentReference, ElementTarget, FileToken, Job, JobError, JobStatus, ProjectComponent, ProjectSkill, PropChange, PropSpec, WidthCheck } from "@pilot/protocol";
+import type { AgentInfo, AgentQuestion, AgentRequest, AgentSetup, AgentSession, ChangeResult, ChangeSet, CommentAction, ConditionResult, CommentAttachment, CommentMessage, CommentReference, ElementTarget, FileToken, Job, JobError, JobStatus, ProjectComponent, ProjectSkill, PropChange, PropSpec, WidthCheck } from "@pilot/protocol";
 import { attachmentType, requestTargets, SHARED_CHOICES } from "@pilot/protocol";
+import { hasCss, subjectLast, validSelector, wordsKey } from "../edits/condition.ts";
 import { checkWidths, problemLines, snapshotAt, type StyleSnapshot, widthsToCheck } from "../checks/widths.ts";
 import { componentProps } from "../dom/component.ts";
 import { similarOf } from "../dom/similar.ts";
@@ -896,8 +897,28 @@ export class PilotSession {
       this.history.unsend(done.id);
       return;
     }
+    // The conditions it wrote, named (Job.conditions): their label and CSS onto its changes, before they're checked.
+    if (job.conditions?.length) this.nameConditions(done.id, job.conditions);
     if (awaitsAnswer(done)) this.ask(done);
     else this.verify(done);
+  }
+
+  /**
+   * The agent's names for the conditions it wrote: each onto the job's changes under those words, on the element its
+   * number is (the change set's order: its elements as the job's changes first come). Its CSS is checked first.
+   */
+  private nameConditions(jobId: string, results: ConditionResult[]): void {
+    const elements = [...new Set(this.history.changes({ job: jobId }).map((c) => c.element))];
+    for (const r of results) {
+      const selector = r.selector && validSelector(subjectLast(r.selector)) ? subjectLast(r.selector) : undefined;
+      const named = {
+        ...(r.label ? { label: r.label } : {}),
+        ...(selector ? { selector } : {}),
+        ...(r.media ? { media: r.media } : {}),
+        ...(r.container ? { container: r.container } : {}),
+      };
+      this.history.nameCondition(jobId, elements[r.element - 1] ?? null, r.words, named);
+    }
   }
 
   /**
@@ -1100,7 +1121,15 @@ export class PilotSession {
     const stop = watchJob(this.history, job.id, (results) => {
       this.watching.delete(job.id);
       const differences = results.filter((r) => r.outcome === "differs");
-      if (differences.length && (job.attempt ?? 1) < 2) return this.followUp(job.id, differences);
+      // Conditions the agent wrote but didn't name: asked for once (a condition Pilot keeps must translate to CSS).
+      const unnamed = this.unnamedConditions(job.id);
+      if ((differences.length || unnamed.length) && (job.attempt ?? 1) < 2) return this.followUp(job.id, differences, undefined, unnamed);
+      // Still not named: not kept (never remembered, it leaves with its job), and said.
+      if (unnamed.length) {
+        const current = this.jobs.find((j) => j.id === job.id);
+        const said = unnamed.map((u) => `Pilot didn't keep the modifier “${u.words}”: the agent didn't say how it wrote it.`).join(" ");
+        this.patch(job.id, { notes: [current?.notes, said].filter(Boolean).join("\n\n") });
+      }
       this.accept(job.id);
     });
     this.watching.set(job.id, stop);
@@ -1191,14 +1220,28 @@ export class PilotSession {
     this.timers.add(t);
   }
 
-  /** Back to the agent, once, with what the page gives instead (or a task's problems). Its changes stay previewed meanwhile. */
-  private followUp(jobId: string, differences: ChangeResult[], issues?: string[]): void {
-    this.patch(jobId, { status: "queued", attempt: 2, differences, issues, notes: undefined });
+  /** The job's changes under conditions still words only (the agent didn't name them): by element number and words. */
+  private unnamedConditions(jobId: string): Array<{ element: number; words: string }> {
+    const changes = this.history.changes({ job: jobId });
+    const elements = [...new Set(changes.map((c) => c.element))];
+    const out = new Map<string, { element: number; words: string }>();
+    for (const c of changes) {
+      if (!c.condition || hasCss(c.condition)) continue;
+      const element = elements.indexOf(c.element) + 1;
+      out.set(`${element}|${wordsKey(c.condition.words)}`, { element, words: c.condition.words });
+    }
+    return [...out.values()];
+  }
+
+  /** Back to the agent, once, with what the page gives instead (or a task's problems, or conditions to name). Its changes stay previewed meanwhile. */
+  private followUp(jobId: string, differences: ChangeResult[], issues?: string[], unnamed?: Array<{ element: number; words: string }>): void {
+    const naming = unnamed?.length ? { unnamed } : {};
+    this.patch(jobId, { status: "queued", attempt: 2, differences, issues, notes: undefined, ...naming });
     const job = this.jobs.find((j) => j.id === jobId) as JobRecord;
-    void this.bridge?.retry(jobId, differences, issues).then((ok) => {
+    void this.bridge?.retry(jobId, differences, issues, unnamed).then((ok) => {
       // The hub doesn't have it as done (a new hub, after a takeover): post the follow-up as a job.
       if (!ok) {
-        void this.bridge?.postJob({ id: jobId, changeSet: job.changeSet, status: "queued", agent: job.agent, attempt: 2, differences, issues, session: job.session });
+        void this.bridge?.postJob({ id: jobId, changeSet: job.changeSet, status: "queued", agent: job.agent, attempt: 2, differences, issues, ...naming, session: job.session });
       }
     });
   }

@@ -3,7 +3,7 @@ import { sortStates } from "@pilot/protocol";
 import { longhandsOf } from "../css/longhands.ts";
 import { type Preview, stylesheetPreview } from "../dom/preview.ts";
 import { type TextPreview, domTextPreview, textRunOf } from "../dom/text.ts";
-import { type Condition, conditionKey, hasCss, sameCondition } from "./condition.ts";
+import { type Condition, conditionKey, hasCss, sameCondition, wordsKey } from "./condition.ts";
 import { sameStates } from "./states.ts";
 import { type EditableElement, describeElement } from "../dom/target.ts";
 import { inWidths } from "./widths.ts";
@@ -519,6 +519,38 @@ export class EditHistory {
 
   /** The conditions forced on, by key: the preview's only, never saved or sent (see force). */
   private forcedKeys = new Set<string>();
+
+  /** Conditions the agent named, by their words' key (see nameCondition): what a pill still on the words becomes. */
+  private named = new Map<string, Condition>();
+
+  /**
+   * The agent named a condition it wrote for job `jobId` (Job.conditions): the job's changes under those words on
+   * `element` (none: any of the job's) get its label and CSS, so the pill and the menu show the label, and the
+   * preview, force state and the check after done use the CSS. CSS the designer typed stays; only the label is added.
+   */
+  nameCondition(jobId: string, element: EditableElement | null, words: string, named: Omit<Condition, "words">): void {
+    const key = wordsKey(words);
+    let renamed: Condition | null = null;
+
+    for (const step of [...this.done, ...this.undone]) {
+      for (const entry of step.entries) {
+        const c = entry.condition;
+        if (entry.job !== jobId || !c || wordsKey(c.words) !== key || (element && entry.element !== element)) continue;
+        const before = conditionKey(c);
+        entry.condition = hasCss(c) ? { ...c, ...(named.label ? { label: named.label } : {}) } : { words: c.words, ...named };
+        if (this.forcedKeys.delete(before)) this.forcedKeys.add(conditionKey(entry.condition));
+        renamed = entry.condition;
+      }
+    }
+    if (!renamed) return;
+    this.named.set(key, renamed);
+    this.render();
+  }
+
+  /** The condition the agent made of these words, if it named them: a pill still on the words becomes it. */
+  namedAs(condition: Condition | null | undefined): Condition | null {
+    return condition && !hasCss(condition) ? (this.named.get(wordsKey(condition.words)) ?? null) : null;
+  }
 
   /**
    * Force a condition on (the pill's "force state", as the browser's developer tools force a state): its changes

@@ -1,3 +1,5 @@
+import { type Condition, conditionCss, conditionKey } from "../edits/condition.ts";
+import { conditionOfSelector, relaxSelector, variantName } from "./conditionSelectors.ts";
 import { type ColorScheme, type ElementState, STATES, isColorScheme, isPseudoElement, sortStates } from "@pilot/protocol";
 import { cssProperty, GLOBAL_KEYWORDS } from "../css/properties.ts";
 import { mediaRange } from "./breakpoints.ts";
@@ -556,6 +558,89 @@ interface Walk {
   anyMedia: boolean;
   /** The color scheme of the `@media (prefers-color-scheme: …)` being walked, if any: its rules are for that scheme. */
   scheme?: ColorScheme;
+  /** Collecting the project's conditional rules (see conditionalRules) instead of the matching ones. */
+  conditional?: { found: Map<string, FoundCondition>; media: string[]; container: string[] };
+}
+
+/** A condition the project's CSS puts on the element (see conditionalRules), with its rules. */
+export interface FoundCondition {
+  condition: Condition;
+  rules: MatchedRule[];
+}
+
+const conditionalCache = new WeakMap<Element, { signature: string; found: FoundCondition[] }>();
+
+/**
+ * The project's own conditions on `element` (the owner's call, 2026-11-28: the code is where a condition lives,
+ * not Pilot's memory): rules that apply to it only under something that isn't one of Pilot's other modifiers
+ * (widths, its own states, the scheme, pseudo-elements), whether it holds right now or not:
+ * - an ancestor's or a sibling's state, an attribute, what it contains (`.card:hover .title`, Tailwind's
+ *   `group-hover:`, `peer-*`, `data-*`, `has-*`), read relative to the element (dom/conditionSelectors.ts);
+ * - a media query that isn't a width or a capability true now (print, reduced motion), a container query.
+ * One per condition (its CSS), with every rule under it; named the way Tailwind writes it when the element's
+ * class says so (`group-hover/hero`), else by its CSS. A rule under the element's own state too isn't listed.
+ */
+export function conditionalRules(element: Element): FoundCondition[] {
+  const signature = signatureOf(element);
+  const cached = conditionalCache.get(element);
+  if (cached?.signature === signature) return cached.found;
+  const walk: Walk = {
+    element,
+    out: [],
+    order: 0,
+    layers: new Map(),
+    anonymous: 0,
+    media: new Map(),
+    base: false,
+    anyMedia: true,
+    conditional: { found: new Map(), media: [], container: [] },
+  };
+  for (const sheet of sheetsOf(element)) walkSheet(walk, sheet, "", null);
+  const found = [...(walk.conditional as NonNullable<Walk["conditional"]>).found.values()];
+  conditionalCache.set(element, { signature, found });
+  return found;
+}
+
+/** The project's value of `property` on `element` under `condition` (its own rules for it, see conditionalRules), or null. */
+export function conditionValue(element: Element, property: string, condition: Condition): Declared | null {
+  const key = conditionKey(condition);
+  const found = conditionalRules(element).find((f) => conditionKey(f.condition) === key);
+  return found ? resolve(property, undefined, found.rules) : null;
+}
+
+/** A rule's selectors, collected as a condition when one puts the element under one (see conditionalRules). */
+function addConditional(walk: Walk, style: CSSStyleDeclaration, selectors: string[], layer: string) {
+  const order = walk.order++;
+  const c = walk.conditional as NonNullable<Walk["conditional"]>;
+  // A scheme's rules are a state's (dark:), the pills'.
+  if (walk.scheme) return;
+  for (const selector of selectors) {
+    const subject = subjectStates(selector);
+    if (subject.states.length) continue;
+    const relative = conditionOfSelector(subject.stripped);
+    if (!relative && !c.media.length && !c.container.length) continue;
+    const relaxed = relaxSelector(subject.stripped);
+    // For every element (a reset's `[hidden]`, `:focus-visible` on anything): not a condition of this one's design.
+    if (!relaxed.replace(/:(?:where|is)\(\s*\*\s*\)|\*|\s/g, "")) continue;
+    let fits = false;
+    try {
+      fits = walk.element.matches(relaxed);
+    } catch {
+      // A selector this browser can't parse.
+    }
+    if (!fits) continue;
+    const css: Omit<Condition, "words"> = {
+      ...(relative ? { selector: relative } : {}),
+      ...(c.media.length ? { media: c.media.join(" and ") } : {}),
+      ...(c.container.length ? { container: c.container.join(" and ") } : {}),
+    };
+    const key = conditionKey({ words: "", ...css });
+    const name = variantName(subject.stripped) ?? conditionCss({ words: "", ...css });
+    const entry: FoundCondition = c.found.get(key) ?? { condition: { words: name, label: name, ...css, project: true }, rules: [] };
+    c.found.set(key, entry);
+    entry.rules.push({ style, selector, specificity: specificity(selector), layer: layerPath(walk, layer), order, states: [] });
+    return;
+  }
 }
 
 function collect(element: Element, filter?: StateFilter, base = false, anyMedia = false): MatchedRule[] {
@@ -601,13 +686,15 @@ function walkRule(walk: Walk, rule: CSSRule, layer: string, parents: string[] | 
     if (r.selectorText.includes(`[${EDIT_ATTRIBUTE}`)) return;
     // A rule an element skips for a cleared field (dom/excluded.ts): read as the project wrote it.
     const selectors = resolveNesting(splitTopLevel(r.selectorText.replace(SKIP_CLAUSE, ""), ","), parents);
-    addIfMatching(walk, r.style, selectors, layer);
+    if (walk.conditional) addConditional(walk, r.style, selectors, layer);
+    else addIfMatching(walk, r.style, selectors, layer);
     if (r.cssRules?.length) walkRules(walk, r.cssRules, layer, selectors);
     return;
   }
   // Declarations nested in a group rule inside a style rule: the parents' selector.
   if (r.style && parents && !r.cssRules) {
-    addIfMatching(walk, r.style, parents, layer);
+    if (walk.conditional) addConditional(walk, r.style, parents, layer);
+    else addIfMatching(walk, r.style, parents, layer);
     return;
   }
   if (kind === "CSSImportRule" || (r.styleSheet !== undefined && "href" in r)) {
@@ -628,6 +715,18 @@ function walkRule(walk: Walk, rule: CSSRule, layer: string, parents: string[] | 
   if (kind === "CSSMediaRule" || (r.media && r.cssRules)) {
     // A color scheme isn't a condition that holds or not here: it's the rules' scheme, a state (dom/scheme.ts).
     const text = r.media?.mediaText ?? "";
+    // Collecting conditions: a width or a capability true now isn't one (the width chip's); anything else is.
+    if (walk.conditional && r.cssRules) {
+      const own = withoutScheme(text);
+      const outer = walk.scheme;
+      walk.scheme = mediaScheme(text) ?? outer;
+      const condition = own && !mediaRange(own) ? own : "";
+      if (condition) walk.conditional.media.push(condition);
+      walkRules(walk, r.cssRules, layer, parents);
+      if (condition) walk.conditional.media.pop();
+      walk.scheme = outer;
+      return;
+    }
     if (conditionHolds(walk, withoutScheme(text)) && r.cssRules) {
       const outer = walk.scheme;
       walk.scheme = mediaScheme(text) ?? outer;
@@ -642,6 +741,13 @@ function walkRule(walk: Walk, rule: CSSRule, layer: string, parents: string[] | 
   }
   if (kind === "CSSScopeRule") {
     if ((!r.start || walk.element.closest(r.start)) && r.cssRules) walkRules(walk, r.cssRules, layer, parents);
+    return;
+  }
+  // A container query: a condition, when collecting them (it can't be evaluated otherwise).
+  if (walk.conditional && kind === "CSSContainerRule" && r.cssRules) {
+    walk.conditional.container.push(r.conditionText ?? "");
+    walkRules(walk, r.cssRules, layer, parents);
+    walk.conditional.container.pop();
     return;
   }
   // @container (can't be evaluated), @keyframes, @font-face, @page,

@@ -1,8 +1,8 @@
 import { describeWidths, type ElementState, STATES, type WidthRange } from "@pilot/protocol";
 import { mediaRange } from "../dom/breakpoints.ts";
-import { isUniversal, matchedRules, mediaOf, subjectStates } from "../dom/declared.ts";
+import { conditionalRules, isUniversal, matchedRules, mediaOf, subjectStates } from "../dom/declared.ts";
 import type { EditableElement } from "../dom/target.ts";
-import { type Condition, conditionKey, conditionName, conditionVariant } from "../edits/condition.ts";
+import { type Condition, conditionKey, conditionLabel } from "../edits/condition.ts";
 import type { EditHistory } from "../edits/history.ts";
 import { listedIds } from "../editors/listOrder.ts";
 import { editors } from "../editors/registry.ts";
@@ -42,15 +42,19 @@ export function usedModifiers(element: EditableElement, history: EditHistory): M
     // Its states as the walk read them: the scheme of a `prefers-color-scheme` query it sits in too.
     add(rule.states ?? [], widths, Array.from({ length: rule.style.length }, (_, i) => rule.style.item(i)));
   }
-  // Pilot's own changes, those under a condition too (named the way Tailwind writes it, `data-selected:`; the
-  // project's own conditional rules aren't read yet).
+  // The project's own conditions on it (its code: `group-hover/hero`, `.card:hover &`), whether they hold now or not.
+  for (const found of conditionalRules(element)) {
+    const properties = found.rules.flatMap((r) => Array.from({ length: r.style.length }, (_, i) => r.style.item(i)));
+    add([], undefined, properties, found.condition);
+  }
+  // Pilot's own changes, those under a condition too (named by the agent's label once it named it, else the words).
   for (const c of history.changes()) if (c.element === element && !c.removal) add(c.states ?? [], c.widths, [c.property], c.condition);
 
   return [...found.values()].sort(byPlace).map(({ states, widths, condition, properties }) => {
-    const syntax = [...states.map((s) => `${s}:`), condition && conditionVariant(condition) ? `${conditionVariant(condition)}:` : "", widths ? widthSyntax(widths) : ""].join("");
+    const syntax = [...states.map((s) => `${s}:`), widths ? widthSyntax(widths) : ""].join("");
     return {
       id: `used:${syntax}|${conditionKey(condition)}`,
-      name: [states.map(stateName).join(" + "), widths ? describeWidths(widths) : "", condition ? conditionName(condition) : ""].filter(Boolean).join(", "),
+      name: [states.map(stateName).join(" + "), widths ? describeWidths(widths) : "", condition ? conditionLabel(condition) : ""].filter(Boolean).join(", "),
       description: inListOrder([...properties]).join(", "),
       syntax,
       insert: "",
