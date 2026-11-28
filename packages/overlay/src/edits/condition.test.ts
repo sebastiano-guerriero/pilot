@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { conditionFrom, conditionKey, conditionLabel, conditionSelector, hasCss, holdsNow, sameCondition } from "./condition.ts";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { conditionFrom, conditionKey, conditionLabel, conditionSelector, containerHolds, hasCss, holdsNow, sameCondition } from "./condition.ts";
 
 let element: HTMLElement;
 beforeEach(() => {
@@ -45,5 +45,29 @@ describe("holdsNow, the selector", () => {
     expect(holdsNow({ words: "", selector: ".nope &" }, element)).toBe(false);
     expect(holdsNow({ words: "it is open" }, element)).toBe(false);
     expect(conditionSelector({ words: "", selector: ".card:hover &" }, '[data-pilot-edit="3"]')).toBe('.card:hover [data-pilot-edit="3"]');
+  });
+});
+
+describe("containerHolds: the browser asked through a probe", () => {
+  it("reads the probe on the element, and leaves the page's sheets as they were", () => {
+    const el = document.createElement("div");
+    document.body.append(el);
+    const theirs = new CSSStyleSheet();
+    document.adoptedStyleSheets = [theirs];
+    // A DOM without container queries: the probe's answer stands in for the browser's.
+    let seen: CSSStyleSheet[] = [];
+    const spy = vi.spyOn(window, "getComputedStyle").mockImplementation(() => {
+      seen = [...document.adoptedStyleSheets];
+      return { getPropertyValue: () => "1" } as unknown as CSSStyleDeclaration;
+    });
+    expect(containerHolds("(max-width: 300px)", el)).toBe(true);
+    expect(seen).toHaveLength(2);
+    expect(document.adoptedStyleSheets).toEqual([theirs]);
+    spy.mockImplementation(() => ({ getPropertyValue: () => "0" }) as unknown as CSSStyleDeclaration);
+    expect(containerHolds("(max-width: 300px)", el)).toBe(false);
+    expect(document.adoptedStyleSheets).toEqual([theirs]);
+    spy.mockRestore();
+    document.adoptedStyleSheets = [];
+    el.remove();
   });
 });

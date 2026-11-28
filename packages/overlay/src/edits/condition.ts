@@ -78,11 +78,41 @@ export function holdsNow(condition: Condition, element: Element): boolean {
   try {
     if (condition.selector && !element.matches(condition.selector.replace(/&/g, ":scope"))) return false;
     if (condition.media && typeof matchMedia === "function" && !matchMedia(condition.media).matches) return false;
-    // A container's size: the page can't be asked whether it holds (it's only for the check after done: unchecked).
-    if (condition.container) return false;
+    if (condition.container && !containerHolds(condition.container, element)) return false;
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Whether a container query holds for `element` now. Script can't evaluate one (there's no `matchMedia` for
+ * containers), so the browser is asked through a probe: a rule under the query setting a custom property on
+ * every element, in a sheet its root adopts for the moment (no element or stylesheet of the page touched), read on the
+ * element, then the sheet taken back. Each element is matched against its own nearest container, as CSS does.
+ */
+export function containerHolds(query: string, element: Element): boolean {
+  // Its root: the document, or the shadow root it's in (a sheet applies only there).
+  const doc = element.getRootNode() as Document | ShadowRoot;
+  const view = element.ownerDocument?.defaultView;
+  if (typeof CSSStyleSheet === "undefined" || !view || !("adoptedStyleSheets" in doc)) return false;
+  const probe = "--pilot-container-probe";
+  const sheet = new CSSStyleSheet();
+  try {
+    // 0 everywhere first: a custom property inherits, and an ancestor's answer (its own container's) isn't this one's.
+    sheet.replaceSync(`* { ${probe}: 0; } @container ${query} { * { ${probe}: 1; } }`);
+  } catch {
+    return false;
+  }
+  // A query the browser doesn't take is dropped, not thrown: nothing to ask.
+  if (sheet.cssRules.length < 2) return false;
+  // A copy: the list is live, and restoring it from itself would keep the probe.
+  const before = [...doc.adoptedStyleSheets];
+  doc.adoptedStyleSheets = [...before, sheet];
+  try {
+    return view.getComputedStyle(element).getPropertyValue(probe).trim() === "1";
+  } finally {
+    doc.adoptedStyleSheets = before;
   }
 }
 
