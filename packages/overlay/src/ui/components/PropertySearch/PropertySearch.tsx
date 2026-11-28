@@ -311,7 +311,8 @@ export function PropertySearch({
             data-pill="default"
             data-off={!defaultState || undefined}
             aria-pressed={defaultState}
-            title="Changes are for the element with no modifier, where the rule applies at the window's width. Click the modifiers to switch back."
+            // Tooltips as short as they can be (the owner's call, 2026-11-28).
+            title="Edits without the modifier"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => onDefaultStateChange?.(true)}
           >
@@ -324,10 +325,10 @@ export function PropertySearch({
               aria-pressed={!defaultState}
               title={
                 outside
-                  ? `The window (${viewportWidth}px) is outside these widths: what you see isn't what these changes are for`
+                  ? `The window (${viewportWidth}px) is outside this modifier`
                   : widths === "all"
-                    ? "Changes are for every width: the base value, with the property's breakpoint rules removed. Backspace at the start of the field removes the last modifier."
-                    : "Changes are for these modifiers, together. Click default to switch. Backspace at the start of the field removes the last one."
+                    ? "One value at every width"
+                    : "Edits with this modifier"
               }
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => onDefaultStateChange?.(false)}
@@ -351,7 +352,13 @@ export function PropertySearch({
             </button>
           </span>
           {/* Where it lives is the owner's to decide: here for now, after the pill. */}
-          {condition && history && <ForceState condition={condition} history={history} />}
+          {condition && history && (
+            <>
+              {/* A line between the pills and the checkbox (the owner's design), 6px each side: the row's gap. */}
+              <span class="pill-separator" aria-hidden="true" />
+              <ForceState condition={condition} history={history} />
+            </>
+          )}
         </div>
       )}
       <div class="field">
@@ -482,8 +489,13 @@ function ForceState({ condition, history }: { condition: Condition; history: Edi
         set(!on);
       }}
     >
-      <input type="checkbox" checked={on} onChange={(e) => set((e.currentTarget as HTMLInputElement).checked)} />
-      <span>force state</span>
+      {/* The owner's design: the box drawn over the native input (kept for the keyboard and screen readers),
+          checked with the select's own checkmark. */}
+      <span class="force-box">
+        <input type="checkbox" checked={on} onChange={(e) => set((e.currentTarget as HTMLInputElement).checked)} />
+        {on && <Icon name="check" />}
+      </span>
+      <span class="force-label">force state</span>
     </label>
   );
 }

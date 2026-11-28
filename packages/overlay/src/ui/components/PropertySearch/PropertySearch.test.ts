@@ -117,10 +117,12 @@ describe("a condition's force state checkbox", () => {
     act(() => box().click());
     expect(history.forced(open)).toBe(false);
     // Its text too.
-    act(() => (container.querySelector(".pill-force span") as HTMLElement).click());
+    act(() => (container.querySelector(".pill-force .force-label") as HTMLElement).click());
     expect(history.forced(open)).toBe(true);
     expect(box().checked).toBe(true);
-    act(() => (container.querySelector(".pill-force span") as HTMLElement).click());
+    // Checked: the select's checkmark over the box.
+    expect(container.querySelector(".force-box svg")).not.toBeNull();
+    act(() => (container.querySelector(".pill-force .force-label") as HTMLElement).click());
     expect(history.forced(open)).toBe(false);
     render(null, container);
     document.body.innerHTML = "";
