@@ -1,3 +1,4 @@
+import type { Condition } from "../edits/condition.ts";
 import type { CommentAction, CommentReference, ElementState, ElementTarget, PropChange, WidthRange } from "@pilot/protocol";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "preact/hooks";
 import { type BoxArea, hidesSelection } from "../dom/boxModel.ts";
@@ -153,6 +154,13 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
   }, []);
   const setWidths = useCallback((next: WidthChip | null | ((current: WidthChip | null) => WidthChip | null)) => {
     setWidthChip(next);
+    setDefaultState(false);
+  }, []);
+  // A condition described in words (Create modifier in the `/` menu, edits/condition.ts): in the modifiers' pill, kept
+  // across selections like the others.
+  const [condition, setConditionValue] = useState<Condition | null>(null);
+  const setCondition = useCallback((next: Condition | null) => {
+    setConditionValue(next);
     setDefaultState(false);
   }, []);
   const viewportWidth = useViewportWidth();
@@ -823,6 +831,9 @@ export function App({ host, dev, nameAttributes, history, session, onReattach, o
               onWidthsChange={setWidths}
               states={states}
               onStatesChange={setStates}
+              condition={condition}
+              onConditionChange={setCondition}
+              onPeek={hoverInDom}
               defaultState={defaultState}
               onDefaultStateChange={setDefaultState}
               viewportWidth={viewportWidth}

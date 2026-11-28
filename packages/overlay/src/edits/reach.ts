@@ -1,3 +1,4 @@
+import type { Condition } from "./condition.ts";
 import type { ElementState, WidthRange } from "@pilot/protocol";
 import { mediaRange } from "../dom/breakpoints.ts";
 import { type Declared, type MatchedRule, baseValue, beats, declarationsOf, rangeValue, resolve } from "../dom/declared.ts";
@@ -91,7 +92,8 @@ function candidatesOf(element: EditableElement, property: string, states: readon
   const sets = (c: RecordedChange) => c.property === property || longhandsOf(c.property).includes(property);
   const keys: WidthKey[] = [];
   for (const c of changes) {
-    if (c.element !== element || !sameStates(c.states, states) || !sets(c)) continue;
+    // A change under a condition applies only while it holds: not one of the element's own values.
+    if (c.element !== element || c.condition || !sameStates(c.states, states) || !sets(c)) continue;
     const key = c.widths ? keyOf(c.widths) : "base";
     if (!keys.some((k) => sameKey(k, key))) keys.push(key);
   }
@@ -212,9 +214,12 @@ export function keyFor(
   states: readonly ElementState[] | undefined,
   width: number,
   history: EditHistory,
+  /** A condition (edits/condition.ts): Pilot's own rule for it, for the chip's widths or the base; the page's breakpoints aren't followed. */
+  condition?: Condition | null,
 ): WidthKey {
   if (chip === ALL_WIDTHS || isBaseChip(chip)) return "base";
   if (chip) return chip;
+  if (condition) return "base";
   return targetAt(element, property, states, width, history);
 }
 
@@ -236,11 +241,18 @@ export function applyChange(
   property: string,
   value: string,
   gesture: object | undefined,
-  options: { chip?: WidthChip | null; states?: readonly ElementState[]; width: number; again?: boolean },
+  options: { chip?: WidthChip | null; states?: readonly ElementState[]; condition?: Condition | null; width: number; again?: boolean },
 ): void {
-  const { chip, states, width, again } = options;
+  const { chip, states, width, condition, again } = options;
   // One undo step, even when it writes several (All widths, a shorthand's sides).
   gesture ??= {};
+  // Under a condition: Pilot's own rule for it, for the chip's widths or the base. Cleared, Pilot's value goes (the
+  // page's own rules for a condition aren't read yet, so there's nothing of its to remove).
+  if (condition) {
+    const widths = widthsOf(keyFor(element, property, chip === ALL_WIDTHS ? null : chip, states, width, history, condition));
+    history.apply(element, property, value, gesture, { widths, states: states ? [...states] : undefined, condition, again });
+    return;
+  }
   const set = (p: string, v: string, key: WidthKey) => {
     const widths = widthsOf(key);
     if (v === "") clearProperty(history, element, p, gesture, widths, states);

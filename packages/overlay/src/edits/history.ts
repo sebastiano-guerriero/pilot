@@ -3,6 +3,7 @@ import { sortStates } from "@pilot/protocol";
 import { longhandsOf } from "../css/longhands.ts";
 import { type Preview, stylesheetPreview } from "../dom/preview.ts";
 import { type TextPreview, domTextPreview, textRunOf } from "../dom/text.ts";
+import { type Condition, conditionKey, hasCss, sameCondition } from "./condition.ts";
 import { sameStates } from "./states.ts";
 import { type EditableElement, describeElement } from "../dom/target.ts";
 import { inWidths } from "./widths.ts";
@@ -37,6 +38,8 @@ interface Entry {
   widths?: WidthRange;
   /** The element states it's for, together (the search's state pills). None: the element as it is. */
   states?: ElementState[];
+  /** A condition described in words it's for, besides widths and states (edits/condition.ts). None: always. */
+  condition?: Condition;
   /**
    * The job it was sent in (Send to the agent, see bridge/jobs.ts): sent
    * changes stay on the page until the agent is done and they're checked,
@@ -61,6 +64,7 @@ export interface RecordedChange {
   removal?: Removal;
   widths?: WidthRange;
   states?: ElementState[];
+  condition?: Condition;
   /** The job it was sent in; none when not sent yet. */
   job?: string;
   /** A text change: the page's own text when it was made (see Entry). */
@@ -199,14 +203,27 @@ export class EditHistory {
     property: string,
     value: string,
     gesture?: object,
-    options: { removal?: Removal; widths?: WidthRange; states?: readonly ElementState[]; from?: string; again?: boolean } = {},
+    options: {
+      removal?: Removal;
+      widths?: WidthRange;
+      states?: readonly ElementState[];
+      condition?: Condition | null;
+      from?: string;
+      again?: boolean;
+    } = {},
   ): void {
     const { removal, widths } = options;
+    const condition = options.condition ?? undefined;
     const states = options.states?.length ? sortStates(options.states) : undefined;
     const last = this.done.at(-1);
     const step = gesture && last?.gesture === gesture ? last : undefined;
     const existing = step?.entries.find(
-      (e) => e.element === element && e.property === property && sameWidths(e.widths, widths) && sameStates(e.states, states),
+      (e) =>
+        e.element === element &&
+        e.property === property &&
+        sameWidths(e.widths, widths) &&
+        sameStates(e.states, states) &&
+        sameCondition(e.condition, condition),
     );
     if (existing) {
       existing.value = value;
@@ -214,11 +231,12 @@ export class EditHistory {
       // Again: after what the step wrote since (a shorthand it must come after).
       if (options.again && step) step.entries.push(...step.entries.splice(step.entries.indexOf(existing), 1));
     } else {
-      const current = this.currentFor(element, property, widths, states);
+      const current = this.currentFor(element, property, widths, states, condition);
       // Unchanged: nothing to record, unless asked for again (`again`: written after a shorthand that set it since,
       // so it stays a change of its own, as transition's rows do after its shorthand).
       if (!options.again && !removal && !current?.removal && (current?.value ?? "") === value) return;
       const entry: Entry = { element, target: this.targetOf(element), path: location.pathname, property, value, removal, widths, states };
+      if (condition) entry.condition = condition;
       if (options.from !== undefined) entry.from = options.from;
       if (step) step.entries.push(entry);
       else this.done.push({ gesture, entries: [entry] });
@@ -237,7 +255,7 @@ export class EditHistory {
     return this.rules()
       .filter((r) => r.value !== "")
       .filter((r) => (filter.unsent ? !r.job : true) && (filter.job === undefined || r.job === filter.job))
-      .map(({ element, target, property, value, removal, widths, states, job, from }) => ({
+      .map(({ element, target, property, value, removal, widths, states, condition, job, from }) => ({
         element,
         target,
         property,
@@ -245,6 +263,7 @@ export class EditHistory {
         removal,
         widths,
         states,
+        ...(condition && { condition }),
         job,
         ...(from !== undefined && { from }),
       }));
@@ -334,14 +353,26 @@ export class EditHistory {
    * those widths, what a field shows with the chip set. Both whatever the
    * window's width.
    */
-  valueOf(element: EditableElement, property: string, width: number | "base" | WidthRange = window.innerWidth, states?: readonly ElementState[]): string | null {
-    const rule = this.activeRule(element, property, width, states);
+  valueOf(
+    element: EditableElement,
+    property: string,
+    width: number | "base" | WidthRange = window.innerWidth,
+    states?: readonly ElementState[],
+    condition?: Condition | null,
+  ): string | null {
+    const rule = this.activeRule(element, property, width, states, condition);
     return rule ? valueIn(rule, property) || null : null;
   }
 
   /** Whether Pilot sets `property` itself there (a value of its own, not one its shorthand gives). */
-  setsItself(element: EditableElement, property: string, width: number | "base" | WidthRange = window.innerWidth, states?: readonly ElementState[]): boolean {
-    const rule = this.activeRule(element, property, width, states);
+  setsItself(
+    element: EditableElement,
+    property: string,
+    width: number | "base" | WidthRange = window.innerWidth,
+    states?: readonly ElementState[],
+    condition?: Condition | null,
+  ): boolean {
+    const rule = this.activeRule(element, property, width, states, condition);
     return rule?.property === property && !rule.removal && rule.value !== "";
   }
 
@@ -350,14 +381,20 @@ export class EditHistory {
    * (the window's, by default): the change in effect there is a removal. The
    * field then shows nothing, and the change set says "remove".
    */
-  removalOf(element: EditableElement, property: string, width: number | "base" | WidthRange = window.innerWidth, states?: readonly ElementState[]): Removal | null {
-    const rule = this.activeRule(element, property, width, states);
+  removalOf(
+    element: EditableElement,
+    property: string,
+    width: number | "base" | WidthRange = window.innerWidth,
+    states?: readonly ElementState[],
+    condition?: Condition | null,
+  ): Removal | null {
+    const rule = this.activeRule(element, property, width, states, condition);
     return rule?.property === property ? (rule.removal ?? null) : null;
   }
 
   /** Whether Pilot removed the page's `property` there: its own removal, or its shorthand's (`padding` for padding-top). */
-  removes(element: EditableElement, property: string, width: "base" | WidthRange, states?: readonly ElementState[]): boolean {
-    return !!this.activeRule(element, property, width, states)?.removal;
+  removes(element: EditableElement, property: string, width: "base" | WidthRange, states?: readonly ElementState[], condition?: Condition | null): boolean {
+    return !!this.activeRule(element, property, width, states, condition)?.removal;
   }
 
   /**
@@ -444,7 +481,7 @@ export class EditHistory {
         for (let i = out.length - 1; i >= 0; i--) if (covers(entry, out[i] as Entry)) out.splice(i, 1);
         const needed =
           entry.value !== "" ||
-          out.some((r) => r.element === entry.element && sameStates(r.states, entry.states) && sets(r, entry.property));
+          out.some((r) => r.element === entry.element && sameStates(r.states, entry.states) && sameCondition(r.condition, entry.condition) && sets(r, entry.property));
         if (needed) out.push(entry);
       }
     }
@@ -461,11 +498,44 @@ export class EditHistory {
     for (const listener of this.listeners) listener();
   }
 
-  /** The stylesheet's rules: the CSS changes (text changes are shown by the text preview). */
+  /**
+   * The stylesheet's rules: the CSS changes (text changes are shown by the text preview). A forced condition's
+   * changes lose its CSS but stay its changes (an empty condition): in Pilot's layer, over the project's rules as
+   * the condition's would be, as if it held. Not the element's own value: the project's `dark:` or `hover:` rules
+   * would win over that, and nothing would show (found on a dark page, 2026-11-27).
+   */
   private previewRules() {
-    return this.rules()
-      .filter((r) => textRunOf(r.property) === null)
-      .map((r) => (r.value === "" ? { ...r, value: "revert-layer" } : r));
+    const forced = (r: Entry) => !!r.condition && this.forcedKeys.has(conditionKey(r.condition));
+    return (
+      this.rules()
+        .filter((r) => textRunOf(r.property) === null)
+        // Words only (no CSS to show it by): shown only when forced.
+        .filter((r) => !r.condition || hasCss(r.condition) || forced(r))
+        // Forced: an empty condition, so the preview keeps it in Pilot's layer (no CSS of its own).
+        .map((r) => (forced(r) ? { ...r, condition: {} } : r))
+        .map((r) => (r.value === "" ? { ...r, value: "revert-layer" } : r))
+    );
+  }
+
+  /** The conditions forced on, by key: the preview's only, never saved or sent (see force). */
+  private forcedKeys = new Set<string>();
+
+  /**
+   * Force a condition on (the pill's "force state", as the browser's developer tools force a state): its changes
+   * show as if it held, whatever the page does. Off, Pilot doesn't interfere. The preview only: nothing is
+   * recorded, saved or sent, and the page isn't touched.
+   */
+  force(condition: Condition, on: boolean): void {
+    const key = conditionKey(condition);
+    if (this.forcedKeys.has(key) === on) return;
+    if (on) this.forcedKeys.add(key);
+    else this.forcedKeys.delete(key);
+    this.preview.render(this.previewRules());
+  }
+
+  /** Whether a condition is forced on (see force). */
+  forced(condition: Condition | null | undefined): boolean {
+    return !!condition && this.forcedKeys.has(conditionKey(condition));
   }
 
   /**
@@ -487,12 +557,18 @@ export class EditHistory {
   }
 
   /** The rule that wins for `property` on `element` at `width`: the latest that sets it there. */
-  private activeRule(element: EditableElement, property: string, width: number | "base" | WidthRange, states?: readonly ElementState[]): Entry | undefined {
+  private activeRule(
+    element: EditableElement,
+    property: string,
+    width: number | "base" | WidthRange,
+    states?: readonly ElementState[],
+    condition?: Condition | null,
+  ): Entry | undefined {
     const rules = this.rules();
     for (let i = rules.length - 1; i >= 0; i--) {
       const r = rules[i] as Entry;
       const there = width === "base" ? !r.widths : typeof width === "object" ? sameWidths(r.widths, width) : inWidths(r.widths ?? null, width);
-      if (r.element === element && sameStates(r.states, states) && sets(r, property) && there) return r;
+      if (r.element === element && sameStates(r.states, states) && sameCondition(r.condition, condition) && sets(r, property) && there) return r;
     }
     return undefined;
   }
@@ -506,11 +582,13 @@ export class EditHistory {
     property: string,
     widths?: WidthRange,
     states?: readonly ElementState[],
+    condition?: Condition | null,
   ): { value: string; removal?: Removal } | undefined {
     const rules = this.rules();
     for (let i = rules.length - 1; i >= 0; i--) {
       const r = rules[i] as Entry;
-      if (r.element !== element || !sameWidths(r.widths, widths) || !sameStates(r.states, states) || !sets(r, property)) continue;
+      if (r.element !== element || !sameWidths(r.widths, widths) || !sameStates(r.states, states) || !sameCondition(r.condition, condition) || !sets(r, property))
+        continue;
       return { value: valueIn(r, property), removal: r.property === property ? r.removal : undefined };
     }
     return undefined;
@@ -524,6 +602,7 @@ function covers(later: Entry, earlier: Entry): boolean {
     later.element === earlier.element &&
     sameWidths(later.widths, earlier.widths) &&
     sameStates(later.states, earlier.states) &&
+    sameCondition(later.condition, earlier.condition) &&
     sets(later, earlier.property)
   );
 }

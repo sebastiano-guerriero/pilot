@@ -89,6 +89,8 @@ export function pageTokens(doc: Document = document): Token[] {
 export function kindOf(name: string, value: string): TokenKind {
   if (/^-?\d*\.?\d+$/.test(value)) return "number";
   if (/^-?\d*\.?\d+(px|rem|em|%|vw|vh|vmin|vmax|ch|ex)$/.test(value) || /^calc\(/.test(value)) return "length";
+  // Fluid spacing (`clamp(1.5rem, 1rem + 2vw, 2rem)`): a length when a length is in it, else a number (`clamp(1, 2, 3)`).
+  if (/^(clamp|min|max)\(/i.test(value)) return /\d(px|rem|em|%|vw|vh|vmin|vmax|ch|ex)\b/i.test(value) ? "length" : "number";
   if (/^#[\da-f]{3,8}$/i.test(value) || /^(rgb|hsl|hwb|lab|lch|oklab|oklch|color)a?\(/i.test(value)) return "color";
   // A font's name can read as a color keyword's shape (one word): the name decides first.
   if (/font|family/i.test(name) || /,\s*(sans-serif|serif|monospace|system-ui)\b/.test(value)) return "font";

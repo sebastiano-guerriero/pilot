@@ -108,6 +108,9 @@ describe("PropertyDialog", () => {
     // The `/` modifiers have their own menu.
     type("/");
     expect(container.querySelector(".no-match")).toBeNull();
+    // After `/`, never a property: "as" in "if it has" would find aspect-ratio, "opa" opacity.
+    type("/opa");
+    expect(editorIds()).toEqual([]);
   });
 
   it("records changes in the shared history, so they can be undone", () => {

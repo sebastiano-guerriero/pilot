@@ -1,3 +1,4 @@
+import type { Condition } from "../edits/condition.ts";
 import type { ElementState, WidthRange } from "@pilot/protocol";
 import { normalizeQuery } from "../editors/query.ts";
 
@@ -33,12 +34,17 @@ export interface Modifier {
    * One used on the element (search/used.ts): picking it sets exactly these
    * pills, the states and the width chip (none: no chip). Listed first, marked.
    */
-  used?: { states: ElementState[]; widths?: WidthRange };
+  used?: { states: ElementState[]; widths?: WidthRange; condition?: Condition };
   /**
    * A width to finish `from-` or `to-` with (PropertySearch's width list):
    * the window's, or one of the page's breakpoints. Picking it sets that end.
    */
   width?: { end: "from" | "to"; value: number; window?: boolean };
+  /**
+   * Create modifier: the words typed after `/` that matched no modifier, as a condition (edits/condition.ts), set
+   * at once when Pilot reads them, else described on in the search.
+   */
+  words?: string;
 }
 
 export const MODIFIERS: Modifier[] = [

@@ -245,3 +245,54 @@ describe("the preview's rules", () => {
   });
 });
 
+
+describe("changes under a condition", () => {
+  const open = { words: "it has data-open", selector: "&[data-open]" };
+  let shown: Array<{ property: string; value: string; condition?: unknown }>;
+  const recording = () =>
+    new EditHistory({
+      render: (rules) => {
+        shown = rules.map((r) => ({ property: r.property, value: r.value, ...(r.condition ? { condition: r.condition } : {}) }));
+      },
+    });
+
+  it("are their own: they don't replace the element's value, and its value doesn't replace them", () => {
+    const h = recording();
+    h.apply(el, "color", "red");
+    h.apply(el, "color", "blue", undefined, { condition: open });
+    h.apply(el, "color", "green");
+    expect(h.valueOf(el, "color", "base")).toBe("green");
+    expect(h.valueOf(el, "color", "base", undefined, open)).toBe("blue");
+    // Another phrasing of the same condition is the same condition.
+    expect(h.valueOf(el, "color", "base", undefined, { words: "with data-open", selector: "&[data-open]" })).toBe("blue");
+    expect(h.changes().map((c) => [c.value, c.condition?.selector ?? ""])).toEqual([
+      ["blue", "&[data-open]"],
+      ["green", ""],
+    ]);
+  });
+
+  it("forced, shown as if it held (the condition left out), the preview only; not forced: as the page says", () => {
+    const h = recording();
+    h.apply(el, "color", "blue", undefined, { condition: open });
+    expect(shown).toEqual([{ property: "color", value: "blue", condition: open }]);
+    h.force(open, true);
+    // Its CSS left out, still a condition's change (in Pilot's layer, over the project's rules).
+    expect(shown).toEqual([{ property: "color", value: "blue", condition: {} }]);
+    expect(h.forced(open)).toBe(true);
+    h.force(open, false);
+    expect(shown).toEqual([{ property: "color", value: "blue", condition: open }]);
+    // Never recorded: the change is the same.
+    expect(h.changes()[0]?.condition).toEqual(open);
+  });
+
+  it("words only (Pilot couldn't read them): recorded, shown only when forced; two of them are two conditions", () => {
+    const h = recording();
+    const loggedIn = { words: "when the user is logged in" };
+    h.apply(el, "color", "red", undefined, { condition: loggedIn });
+    h.apply(el, "color", "blue", undefined, { condition: { words: "on sale" } });
+    expect(shown).toEqual([]);
+    expect(h.valueOf(el, "color", "base", undefined, loggedIn)).toBe("red");
+    h.force(loggedIn, true);
+    expect(shown).toEqual([{ property: "color", value: "red", condition: {} }]);
+  });
+});

@@ -35,7 +35,7 @@ export function buildChangeSet(
   const edits = new Map<Element, ElementEdit>();
   for (const change of history.changes({ unsent: options.unsent })) {
     if (options.only && !options.only(change)) continue;
-    const { element, property, value, removal, widths, states } = change;
+    const { element, property, value, removal, widths, states, condition } = change;
     let edit = edits.get(element);
     if (!edit) {
       edit = { target: element.isConnected ? describeElement(element) : change.target, changes: [] };
@@ -50,12 +50,14 @@ export function buildChangeSet(
     // Read like CSS, as the fields do: without widths, where it's declared outside any media query (the base,
     // or those states'), the agent changing it there and keeping the project's breakpoints.
     // For widths: the project's rule for exactly that breakpoint (none: a new one, its From "not set").
-    const page = removal || !element.isConnected ? null : widths ? rangeValue(element, property, widths, states) : baseValue(element, property, states);
+    // Under a condition: the page's own rules for it aren't read yet, so it's new (From "not set").
+    const page = removal || condition || !element.isConnected ? null : widths ? rangeValue(element, property, widths, states) : baseValue(element, property, states);
     const styleChange: StyleChange = removal
       ? { property, from: removal.from, to: "", removed: true, source: removal.source }
       : { property, from: page?.value ?? "", to: value, ...(page && { source: sourceOf(element, page) }), ...(page?.important && { important: true }) };
     if (widths) styleChange.widths = widths;
     if (states?.length) styleChange.states = states;
+    if (condition) styleChange.condition = condition;
     const equivalents = removal ? null : equivalentsOf(property, value);
     if (equivalents) styleChange.equivalents = equivalents;
     edit.changes.push(styleChange);

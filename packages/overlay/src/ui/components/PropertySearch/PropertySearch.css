@@ -292,4 +292,48 @@
     }
   }
 
+
+  /* How a condition's words read (Create modifier), under the field: Pilot's CSS for
+     them, or how to put them (in red). The `/` menu's row look, a placeholder
+     pending the owner's design. */
+  .condition-reading {
+    display: grid;
+    gap: 2px;
+    /* 16px all around, the same space as on its sides (the owner's call). */
+    padding: 16px;
+    line-height: 1.2;
+    border-top: 1px solid var(--plt-color-border);
+
+    .modifier-syntax {
+      justify-self: start;
+      color: var(--plt-color-contrast-high);
+      font-family: var(--plt-font-mono);
+      overflow-wrap: anywhere;
+    }
+
+    .modifier-description {
+      white-space: normal;
+    }
+
+    /* What's wrong in red; how to put it, after, stays dimmed. */
+    .condition-error {
+      color: var(--plt-color-red);
+    }
+  }
+
+  /* A condition's "force state" checkbox, after the modifiers' pill: where it
+     lives is the owner's to decide (a placeholder). */
+  .pill-force {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--plt-color-contrast-low);
+    white-space: nowrap;
+    cursor: pointer;
+
+    input {
+      margin: 0;
+      accent-color: var(--plt-color-accent);
+    }
+  }
 }
