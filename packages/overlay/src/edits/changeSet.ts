@@ -51,7 +51,7 @@ export function buildChangeSet(
     // or those states'), the agent changing it there and keeping the project's breakpoints.
     // For widths: the project's rule for exactly that breakpoint (none: a new one, its From "not set").
     // Under a condition: the project's own rule for it, when it has one (else new, From "not set").
-    const page = removal || !element.isConnected ? null : condition ? conditionValue(element, property, condition) : widths ? rangeValue(element, property, widths, states) : baseValue(element, property, states);
+    const page = removal || !element.isConnected ? null : condition ? conditionValue(element, property, condition, states) : widths ? rangeValue(element, property, widths, states) : baseValue(element, property, states);
     const styleChange: StyleChange = removal
       ? { property, from: removal.from, to: "", removed: true, source: removal.source }
       : { property, from: page?.value ?? "", to: value, ...(page && { source: sourceOf(element, page) }), ...(page?.important && { important: true }) };

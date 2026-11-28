@@ -45,7 +45,7 @@ export function usedModifiers(element: EditableElement, history: EditHistory): M
   // The project's own conditions on it (its code: `group-hover/hero`, `.card:hover &`), whether they hold now or not.
   for (const found of conditionalRules(element)) {
     const properties = found.rules.flatMap((r) => Array.from({ length: r.style.length }, (_, i) => r.style.item(i)));
-    add([], undefined, properties, found.condition);
+    add(found.states, undefined, properties, found.condition);
   }
   // Pilot's own changes, those under a condition too (named by the agent's label once it named it, else the words).
   for (const c of history.changes()) if (c.element === element && !c.removal) add(c.states ?? [], c.widths, [c.property], c.condition);

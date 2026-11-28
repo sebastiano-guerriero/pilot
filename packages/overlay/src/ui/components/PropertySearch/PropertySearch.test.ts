@@ -46,11 +46,11 @@ describe("Create modifier: words after / that match no modifier", () => {
     document.body.innerHTML = "";
   });
 
-  it("words: Create modifier, the agent names it when sent; Enter sets them as typed", () => {
+  it("words: Create modifier (\"Use natural language to describe when\"); Enter sets them as typed", () => {
     value = "/the parent .card is hovered";
     mount();
     expect(rows()).toEqual(["Create modifier"]);
-    expect(container.querySelector(".modifier-description")?.textContent).toBe("The agent names it when you send");
+    expect(container.querySelector(".modifier-description")?.textContent).toBe("Use natural language to describe when");
     enter();
     expect(set).toEqual([{ words: "the parent .card is hovered" }]);
     expect(value).toBe("");

@@ -1,7 +1,8 @@
 import { type ElementState, type WidthRange, isPseudoElement } from "@pilot/protocol";
+import { conditionKey } from "../edits/condition.ts";
 import { stateSelector } from "../edits/states.ts";
 import { mediaRange } from "./breakpoints.ts";
-import { type Placed, baseValue, beats, declarationsOf, subjectStates } from "./declared.ts";
+import { type Placed, baseValue, beats, declarationsOf, subjectStates, conditionFound, conditionValue, mediaOf } from "./declared.ts";
 import { copyFor } from "./excluded.ts";
 import { schemeOf, schemeParts } from "./scheme.ts";
 
@@ -52,6 +53,8 @@ export interface AnchorRequest {
   id: number;
   widths?: WidthRange;
   states?: ElementState[];
+  /** A condition's CSS (edits/condition.ts): beside the project's own rule for it, or nowhere here (Pilot's layer). */
+  condition?: { selector?: string; media?: string; container?: string };
 }
 
 /** Where a change goes among the page's rules. */
@@ -78,7 +81,8 @@ interface Shown {
 
 const shown = new Map<string, Shown>();
 
-const keyOf = (r: AnchorRequest) => `${r.id}|${r.property}|${r.widths?.min ?? ""}-${r.widths?.max ?? ""}|${r.states?.join(",") ?? ""}`;
+const keyOf = (r: AnchorRequest) =>
+  `${r.id}|${r.property}|${r.widths?.min ?? ""}-${r.widths?.max ?? ""}|${r.states?.join(",") ?? ""}|${r.condition ? conditionKey({ words: "", ...r.condition }) : ""}`;
 
 /** The elements with a change shown in the page's CSS now (their classes are watched). */
 export function anchoredElements(): Element[] {
@@ -146,6 +150,7 @@ const overlaps = (a: { min?: number; max?: number }, b: { min?: number; max?: nu
 
 /** Where a change goes among the page's rules (see the module's comment), or null: nothing to place it by. */
 function spotFor(request: AnchorRequest): Spot | null {
+  if (request.condition) return conditionSpot(request);
   const { element, property, states } = request;
   const want = request.widths ?? {};
   const rules = declarationsOf(element, property, states).flatMap((p) => {
@@ -193,6 +198,26 @@ function withImportance(text: string, important: boolean): string {
   style.cssText = text;
   for (const property of Array.from(style)) style.setProperty(property, style.getPropertyValue(property), "important");
   return style.cssText.trim();
+}
+
+/**
+ * Under a condition the project has (dom/declared.ts conditionalRules): beside its own rule for the property, else
+ * beside any of its rules for that condition (`group-hover/hero:` adding a color where it set a background), so the
+ * change sits where the agent's will. None of the project's: null, Pilot's layer (preview.ts). Never beside the
+ * element's rule without the condition: there it would apply all the time.
+ */
+function conditionSpot(request: AnchorRequest): Spot | null {
+  const condition = { words: "", ...request.condition };
+  const found = conditionFound(request.element, condition, request.states ?? []);
+  const first = found?.rules[0];
+  if (!found || !first) return null;
+  const own = conditionValue(request.element, request.property, condition, request.states ?? []);
+  const declared: Placed["declared"] =
+    own?.rule && own.source !== "inline"
+      ? (own as Placed["declared"])
+      : { value: "", important: false, source: { selector: first.selector }, rule: first.style };
+  const media = mediaOf(declared.rule);
+  return { kind: "beside", declared, ...(media ? { media } : {}), important: !!own?.important };
 }
 
 /**

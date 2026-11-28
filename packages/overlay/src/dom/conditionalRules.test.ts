@@ -61,3 +61,32 @@ describe("conditionValue: the project's value under one of its conditions", () =
     expect(conditionValue(t, "padding-top", found!.condition)).toBeNull();
   });
 });
+
+describe("edits under the project's condition: beside its rule", async () => {
+  const { renderAnchored } = await import("./anchored.ts");
+
+  it("a change for it goes beside its rule, never beside the element's own; none of the project's: the layer's", () => {
+    document.body.innerHTML = `<div class="card"><span id="t" class="title" data-pilot-edit="7"></span></div>`;
+    style.textContent = ".title { color: black; } .card:hover .title { color: red; }";
+    const t = document.getElementById("t") as Element;
+    const condition = { selector: ".card:hover &" };
+    expect(renderAnchored([{ element: t, property: "color", text: "color: blue;", id: 7, condition }], false)).toEqual([]);
+    // Beside `.card:hover .title` (nested in it, or right after it as `:is(…)` where a DOM can't nest), not `.title`.
+    const all = (list: CSSRuleList): CSSRule[] => Array.from(list).flatMap((r) => [r, ...all((r as CSSRule & { cssRules?: CSSRuleList }).cssRules ?? ([] as unknown as CSSRuleList))]);
+    const placed = all(style.sheet?.cssRules as CSSRuleList).find((r) => (r as CSSStyleRule).selectorText?.includes('data-pilot-edit="7"')) as CSSStyleRule;
+    const where = (placed.parentRule as CSSStyleRule | null)?.selectorText ?? placed.selectorText;
+    expect(where.includes(".card:hover .title")).toBe(true);
+    // A condition the project doesn't have: left to Pilot's layer.
+    expect(renderAnchored([{ element: t, property: "color", text: "color: blue;", id: 7, condition: { selector: ".nope:hover &" } }], false)).toHaveLength(1);
+    renderAnchored([], false);
+  });
+
+  it("a condition with the element's own state too (group-hover:hover:): listed, with its states", () => {
+    document.body.innerHTML = `<div class="card"><span id="t" class="title"></span></div>`;
+    style.textContent = ".card:hover .title:focus { outline: 1px solid; }";
+    const [found] = conditionalRules(document.getElementById("t") as Element);
+    expect([found?.condition.selector, found?.states]).toEqual([".card:hover &", ["focus"]]);
+    expect(conditionValue(document.getElementById("t") as Element, "outline-style", found!.condition)).toBeNull();
+    expect(conditionValue(document.getElementById("t") as Element, "outline-style", found!.condition, ["focus"])?.value).toBe("solid");
+  });
+});

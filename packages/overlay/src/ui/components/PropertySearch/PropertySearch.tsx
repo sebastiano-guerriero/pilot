@@ -384,7 +384,7 @@ const NO_MODIFIERS: Modifier[] = [];
 /** The `/` menu's row for words that match no modifier: Create modifier, a condition of them. */
 function createRow(words: string): Modifier {
   const css = hasCss(conditionFrom(words));
-  return { id: "create", name: "Create modifier", syntax: "", description: css ? "CSS, previewed as written" : "The agent names it when you send", insert: "", words };
+  return { id: "create", name: "Create modifier", syntax: "", description: css ? "CSS, previewed as written" : "Use natural language to describe when", insert: "", words };
 }
 
 /**

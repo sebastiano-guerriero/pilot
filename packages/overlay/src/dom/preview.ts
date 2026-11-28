@@ -80,7 +80,10 @@ export const stylesheetPreview: Preview = {
 let last: PreviewRule[] = [];
 
 /** A value shown in the page's own CSS (dom/anchored.ts): all but removals (dom/excluded.ts) and `revert-layer` (only meaningful in Pilot's layer). */
-const isPlaced = (rule: PreviewRule) => !rule.removal && rule.value !== "revert-layer" && !rule.condition;
+/** A condition with CSS of its own (forced ones have none: they stay in the layer, over the project's rules). */
+const hasConditionCss = (rule: PreviewRule) => !!(rule.condition?.selector || rule.condition?.media || rule.condition?.container);
+/** Under a condition, beside the project's rule for it when it has one (dom/anchored.ts conditionSpot), else the layer. */
+const isPlaced = (rule: PreviewRule) => !rule.removal && rule.value !== "revert-layer" && (!rule.condition || hasConditionCss(rule));
 
 function draw(rules: PreviewRule[], check: boolean) {
     const byRoot = new Map<Document | ShadowRoot, string[]>();
@@ -94,12 +97,29 @@ function draw(rules: PreviewRule[], check: boolean) {
       if (rules.slice(0, i).some((r) => afterShorthand(rule, r))) continue;
       const text = plainDeclaration(rule.property, rule.value);
       if (text)
-        requests.push({ element: rule.element, property: rule.property, text, id: idOf(rule.element), widths: rule.widths, states: rule.states, rule });
+        requests.push({
+          element: rule.element,
+          property: rule.property,
+          text,
+          id: idOf(rule.element),
+          widths: rule.widths,
+          states: rule.states,
+          ...(rule.condition ? { condition: rule.condition } : {}),
+          rule,
+        });
     }
     // Cleared fields the page's CSS declares: its rule skips the element, a copy keeps the rest (dom/excluded.ts).
     const removals: Array<ExclusionRequest & { rule: PreviewRule }> = rules
-      .filter((r) => r.removal && !r.condition && r.element.isConnected)
-      .map((rule) => ({ element: rule.element, property: rule.property, id: idOf(rule.element), widths: rule.widths, states: rule.states, rule }));
+      .filter((r) => r.removal && (!r.condition || hasConditionCss(r)) && r.element.isConnected)
+      .map((rule) => ({
+        element: rule.element,
+        property: rule.property,
+        id: idOf(rule.element),
+        widths: rule.widths,
+        states: rule.states,
+        ...(rule.condition ? { condition: rule.condition } : {}),
+        rule,
+      }));
     const excluded = renderExclusions(removals, check);
     const notExcluded = new Set(excluded.left);
     for (const r of removals) if (!notExcluded.has(r)) used.add(r.element);

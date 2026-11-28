@@ -246,11 +246,12 @@ export function applyChange(
   const { chip, states, width, condition, again } = options;
   // One undo step, even when it writes several (All widths, a shorthand's sides).
   gesture ??= {};
-  // Under a condition: Pilot's own rule for it, for the chip's widths or the base. Cleared, Pilot's value goes (the
-  // page's own rules for a condition aren't read yet, so there's nothing of its to remove).
+  // Under a condition: for the chip's widths or the base. Cleared: the project's own rule for it removed when it has
+  // one (clearProperty), else Pilot's value goes.
   if (condition) {
     const widths = widthsOf(keyFor(element, property, chip === ALL_WIDTHS ? null : chip, states, width, history, condition));
-    history.apply(element, property, value, gesture, { widths, states: states ? [...states] : undefined, condition, again });
+    if (value === "") clearProperty(history, element, property, gesture, widths, states, condition);
+    else history.apply(element, property, value, gesture, { widths, states: states ? [...states] : undefined, condition, again });
     return;
   }
   const set = (p: string, v: string, key: WidthKey) => {

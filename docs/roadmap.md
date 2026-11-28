@@ -93,7 +93,8 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [x] Conditions in words: Create modifier in the `/` menu; the agent names each when it writes it (a label and its CSS), remembered with its element; force state shows its changes meanwhile. [property-dialog.md](property-dialog.md), *Conditions*.
 - [x] Words Pilot can't read are set as they are: no live preview, force state shows them, the agent works from the words.
 - [x] The project's own conditions: listed in the `/` menu by their Tailwind name or CSS, fields showing their values, edits sent as changes to their rule. [property-dialog.md](property-dialog.md), *Conditions*.
-- [ ] Conditions, next: Pilot's edits under the project's condition placed beside its rule; clearing removing it; the owner's design of the pill; comments under a condition; several selected elements; container queries (`@container`)
+- [x] Edits under the project's condition beside its rule; clearing removing its value; conditions with the element's own states listed.
+- [ ] Conditions, next: the owner's design of the pill; comments under a condition; several selected elements; container queries (`@container`)
 - [x] Changes for widths and states in the page's CSS too: beside the project's rule for them, else placed among its breakpoints or after the base (a state); no state forced on the element while its pill is set ([edits.md](edits.md), *The preview*)
   - [x] DOM / Components switch: the page's component instances as a tree (React, Server Components, Vue 3)
 - [x] Preview from a stylesheet Pilot adds (`@layer` + `!important`, `@media` per width range)

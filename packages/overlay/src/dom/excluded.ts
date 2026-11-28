@@ -1,5 +1,5 @@
 import type { ElementState, WidthRange } from "@pilot/protocol";
-import { baseValue, rangeValue, splitTopLevel } from "./declared.ts";
+import { baseValue, conditionValue, rangeValue, splitTopLevel } from "./declared.ts";
 
 /**
  * A cleared field, in the page's CSS: "this element doesn't declare the
@@ -35,6 +35,8 @@ export interface ExclusionRequest {
   id: number;
   widths?: WidthRange;
   states?: ElementState[];
+  /** A condition's CSS: the project's rule for it is the one skipped (dom/declared.ts conditionValue). */
+  condition?: { selector?: string; media?: string; container?: string };
 }
 
 /** One element skipping one of the project's rules, and its copy. */
@@ -126,7 +128,9 @@ export function copyFor(declarations: CSSStyleDeclaration, element: Element): CS
 
 /** The project's declaration for exactly the request's pills: the rule holding it, when Pilot can skip it. */
 function ruleFor(request: ExclusionRequest): CSSStyleRule | null {
-  const declared = request.widths
+  const declared = request.condition
+    ? conditionValue(request.element, request.property, { words: "", ...request.condition }, request.states ?? [])
+    : request.widths
     ? rangeValue(request.element, request.property, request.widths, request.states)
     : baseValue(request.element, request.property, request.states);
   if (!declared?.rule || declared.source === "inline") return null;

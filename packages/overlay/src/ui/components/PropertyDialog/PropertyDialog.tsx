@@ -882,7 +882,7 @@ function pageValues(
     properties.map((p) => {
       const key = keyFor(element, p, widths, states, width, history, condition);
       // Under a condition: the project's own value for it (its rules for that condition), else none.
-      return [p, { declared: condition ? conditionValue(element, p, condition) : pageValueAt(element, p, key, states), at: key }];
+      return [p, { declared: condition ? conditionValue(element, p, condition, states ?? []) : pageValueAt(element, p, key, states), at: key }];
     }),
   );
 }

@@ -565,6 +565,8 @@ interface Walk {
 /** A condition the project's CSS puts on the element (see conditionalRules), with its rules. */
 export interface FoundCondition {
   condition: Condition;
+  /** The element's own states with it (`group-hover:hover:`): its pills, beside the condition's. */
+  states: ElementState[];
   rules: MatchedRule[];
 }
 
@@ -577,8 +579,8 @@ const conditionalCache = new WeakMap<Element, { signature: string; found: FoundC
  * - an ancestor's or a sibling's state, an attribute, what it contains (`.card:hover .title`, Tailwind's
  *   `group-hover:`, `peer-*`, `data-*`, `has-*`), read relative to the element (dom/conditionSelectors.ts);
  * - a media query that isn't a width or a capability true now (print, reduced motion), a container query.
- * One per condition (its CSS), with every rule under it; named the way Tailwind writes it when the element's
- * class says so (`group-hover/hero`), else by its CSS. A rule under the element's own state too isn't listed.
+ * One per condition (its CSS) and the element's own states with it (`group-hover:hover:`), with every rule under
+ * them; named the way Tailwind writes it when the element's class says so (`group-hover/hero`), else by its CSS.
  */
 export function conditionalRules(element: Element): FoundCondition[] {
   const signature = signatureOf(element);
@@ -601,10 +603,15 @@ export function conditionalRules(element: Element): FoundCondition[] {
   return found;
 }
 
-/** The project's value of `property` on `element` under `condition` (its own rules for it, see conditionalRules), or null. */
-export function conditionValue(element: Element, property: string, condition: Condition): Declared | null {
+/** The project's rules for `condition` with exactly `states` on `element` (see conditionalRules), or null. */
+export function conditionFound(element: Element, condition: Condition, states: readonly ElementState[] = []): FoundCondition | null {
   const key = conditionKey(condition);
-  const found = conditionalRules(element).find((f) => conditionKey(f.condition) === key);
+  return conditionalRules(element).find((f) => conditionKey(f.condition) === key && sameStateSet(f.states, states)) ?? null;
+}
+
+/** The project's value of `property` on `element` under `condition` (and `states`): its own rules for them, or null. */
+export function conditionValue(element: Element, property: string, condition: Condition, states: readonly ElementState[] = []): Declared | null {
+  const found = conditionFound(element, condition, states);
   return found ? resolve(property, undefined, found.rules) : null;
 }
 
@@ -616,7 +623,6 @@ function addConditional(walk: Walk, style: CSSStyleDeclaration, selectors: strin
   if (walk.scheme) return;
   for (const selector of selectors) {
     const subject = subjectStates(selector);
-    if (subject.states.length) continue;
     const relative = conditionOfSelector(subject.stripped);
     if (!relative && !c.media.length && !c.container.length) continue;
     const relaxed = relaxSelector(subject.stripped);
@@ -634,11 +640,12 @@ function addConditional(walk: Walk, style: CSSStyleDeclaration, selectors: strin
       ...(c.media.length ? { media: c.media.join(" and ") } : {}),
       ...(c.container.length ? { container: c.container.join(" and ") } : {}),
     };
-    const key = conditionKey({ words: "", ...css });
-    const name = variantName(subject.stripped) ?? conditionCss({ words: "", ...css });
-    const entry: FoundCondition = c.found.get(key) ?? { condition: { words: name, label: name, ...css, project: true }, rules: [] };
+    const key = `${subject.states.join(",")}|${conditionKey({ words: "", ...css })}`;
+    // Named by the class (its variants, the element's own states among them: `group-hover:hover`), else by its CSS.
+    const name = variantName(selector) ?? conditionCss({ words: "", ...css });
+    const entry: FoundCondition = c.found.get(key) ?? { condition: { words: name, label: name, ...css, project: true }, states: subject.states, rules: [] };
     c.found.set(key, entry);
-    entry.rules.push({ style, selector, specificity: specificity(selector), layer: layerPath(walk, layer), order, states: [] });
+    entry.rules.push({ style, selector, specificity: specificity(selector), layer: layerPath(walk, layer), order, states: subject.states });
     return;
   }
 }

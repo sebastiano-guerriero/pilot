@@ -1,5 +1,6 @@
 import type { ElementState, StyleSource, WidthRange } from "@pilot/protocol";
-import { type Declared, baseValue, declaredWithout, isFromReset, mediaOf, rangeValue } from "../dom/declared.ts";
+import { type Declared, baseValue, conditionValue, declaredWithout, isFromReset, mediaOf, rangeValue } from "../dom/declared.ts";
+import type { Condition } from "./condition.ts";
 import type { EditableElement } from "../dom/target.ts";
 import type { EditHistory } from "./history.ts";
 
@@ -41,7 +42,15 @@ export function clearProperty(
   widths?: WidthRange,
   /** The element states it's for (the search's state pills). None: the element as it is. */
   states?: readonly ElementState[],
+  /** A condition it's for (edits/condition.ts): the project's own rule for it is what's removed, when it has one. */
+  condition?: Condition | null,
 ): void {
+  // Under a condition: its rule skips the element in the preview (dom/excluded.ts), the agent removes the declaration.
+  if (condition) {
+    const own = conditionValue(element, property, condition, states ?? []);
+    if (!own) return history.apply(element, property, "", gesture, { widths, states, condition });
+    return history.apply(element, property, "revert-layer", gesture, { removal: { from: own.value, source: sourceOf(element, own) }, widths, states, condition });
+  }
   // No width chip and no state: the base value is what's removed (the project's breakpoint and state rules stay).
   // What the field shows, read like CSS: with widths, the project's rule for exactly that breakpoint;
   // without, its rule outside any media query (the base, or those states'). None: nothing of the page's to remove.
