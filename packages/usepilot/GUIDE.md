@@ -1,6 +1,6 @@
 # Pilot guide
 
-How to use Pilot, task by task. This guide is for **usepilot 0.17.0**: it ships with Pilot, so the copy in your project (`node_modules/usepilot/GUIDE.md`, or `npx usepilot guide`) always matches the version you have.
+How to use Pilot, task by task. This guide is for **usepilot 0.18.0**: it ships with Pilot, so the copy in your project (`node_modules/usepilot/GUIDE.md`, or `npx usepilot guide`) always matches the version you have.
 
 **Agents:** when someone asks how to do something with Pilot, answer from this file. If it isn't here, Pilot doesn't do it yet: say so rather than guessing.
 
@@ -81,7 +81,7 @@ Drag the toolbar by the strip along its top edge; it stays where you put it.
 
 Select an element and its **property dialog** opens beside it.
 
-- **With nothing typed**, it lists every property the element sets, grouped (Content, for a `::before` or `::after`; Layout, Position, Appearance, Effects, Transform, Typography, Interactivity, SVG, Visibility).
+- **With nothing typed**, it lists every property the element sets, grouped (Content, for a `::before` or `::after`; Layout, Position, Appearance, Effects, Transform, Transition, Typography, Interactivity, SVG, Visibility).
 - **Search** by CSS name or Tailwind class: `p`, `pt`, `px`, `w`, `min-w`, `gap`, `display`, `items`, `aspect`, `bg`, `font`, `text`, `rounded`, `shadow`… Abbreviations work too (`mxw` is max-width). The search finds properties only: type values in the editor (`pt-4` in the search isn't a value).
 - **Tab** or **Enter** goes into the editor, **Enter** applies and goes back to the search for the next property: `pt` Tab `24` Enter.
 - **Values:** type a number (`12` is 12px), any CSS unit, a keyword (`auto`), math (`100% - 20px`), or a [variable](#variables-and-tokens). **↑/↓** step by 1, **Shift** by 10; the scroll wheel does the same on a field being edited. Some fields have a **drag handle** to scrub the value.
@@ -91,6 +91,7 @@ Select an element and its **property dialog** opens beside it.
 - **Rich properties** (box shadow, filter, backdrop filter, mask image) show their values as chips: click one to edit it in a panel beside the dialog, **+** to add one.
 - **Transform:** one row for everything that moves, turns, sizes or slants the element, its chip saying what's set (× takes it all off). Click it and pick its **type**: **default** has translate, rotate, scale and skew (each one value, or each axis on its own with the button at the right of its row; scale takes a factor, `1.5`, or a percentage), **custom** takes it all as CSS functions in one value (`translate(-50%, -50%) rotate(5deg)`), **none** turns them all off.
 - **3D:** turning an element around X or Y, or moving it along Z, only looks 3D with a perspective on its parent; without one, the footer says "Add perspective to the parent". Select the parent and set its perspective.
+- **Transition:** each transition is a chip (`opacity 300ms`); click it to pick what animates (or **custom** for any property, **none** for no transition) and its own duration, easing and delay. **+** adds one. The **duration**, **easing** and **delay** rows under the chips apply to every transition at once, over the chips' own (like Tailwind's `duration-300 ease-out`); a chip's footer says when they do. A bare number is milliseconds. **Easing** shows its curve: drag its two handles to make your own (**Shift** snaps a handle to the top or bottom line), or pick **spring** and set its bounce (the duration is how long it feels; the footer says when it really settles), or **custom** for anything else, your project's easing variables included.
 - **Copy and paste:** right-click a property's name for **Copy CSS**, **Copy properties** and **Paste properties** (onto the selected elements).
 - **Fields show what your CSS declares**, not computed values; hover a field to see what math or a variable comes to.
 - The dialog stays where it opened while you edit; drag it by the strip along its top edge.

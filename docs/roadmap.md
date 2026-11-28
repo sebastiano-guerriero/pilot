@@ -90,7 +90,7 @@ One line per item. Tick it when it ships; the details go in the doc for its area
 - [x] The `/` menu lists the modifiers (and combinations) used on the element first, marked, each with what it sets. [property-dialog.md](property-dialog.md), *The `/` menu*.
 - [x] Dark and light modifiers (the project's media query or root class), and pseudo-elements: before, after, placeholder. [property-dialog.md](property-dialog.md), *States*.
 - [x] A content field for `::before` / `::after`, and `content: ""` added with a pseudo-element's first change. [editors.md](editors.md), [property-dialog.md](property-dialog.md), *States*.
-- [x] Conditions in words: Create modifier in the `/` menu; the agent names each when it writes it (a label and its CSS), remembered with its element; force state shows its changes meanwhile. [property-dialog.md](property-dialog.md), *Conditions*.
+- [x] Conditions in words: Create modifier in the `/` menu; the agent names each when it writes it (a label and its CSS), and from then on the code holds it; force state shows its changes meanwhile. [property-dialog.md](property-dialog.md), *Conditions*.
 - [x] Words Pilot can't read are set as they are: no live preview, force state shows them, the agent works from the words.
 - [x] The project's own conditions: listed in the `/` menu by their Tailwind name or CSS, fields showing their values, edits sent as changes to their rule. [property-dialog.md](property-dialog.md), *Conditions*.
 - [x] Edits under the project's condition beside its rule; clearing removing its value; conditions with the element's own states listed.

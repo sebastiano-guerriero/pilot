@@ -10,8 +10,8 @@
  */
 import type { AgentSession, ChangeSet, PropSpec, PropValue } from "./types.ts";
 
-/** Bumped when the hub's HTTP API changes incompatibly. 2: width checks (`/agents/check`, `/checks/:id`). 3: comment images (`/attachments`). 4: the agent's questions (`question` on `/agents/done`, `/jobs/:id/answer`). 5: the project's components (`/components`, the agent's `folder`) and `/props` (`props` on `/agents/done`). 6: the project's token files (`/tokens`, and what they stand for in the prompt: `fileTokens`). 7: Pilot runs the agent (`npx usepilot`): a job's agent `session` and `error`, `/agents/job`, and quit closes pages only. 8: pages say their project (`/events?project=`), `/agents/pages` lists them with it. 9: Pilot runs before its agent is ready (an agent's `setup`), and signing in from the page (`/setup/sign-in`, `/agents/setup`). */
-export const BRIDGE_VERSION = 9;
+/** Bumped when the hub's HTTP API changes incompatibly. 2: width checks (`/agents/check`, `/checks/:id`). 3: comment images (`/attachments`). 4: the agent's questions (`question` on `/agents/done`, `/jobs/:id/answer`). 5: the project's components (`/components`, the agent's `folder`) and `/props` (`props` on `/agents/done`). 6: the project's token files (`/tokens`, and what they stand for in the prompt: `fileTokens`). 7: Pilot runs the agent (`npx usepilot`): a job's agent `session` and `error`, `/agents/job`, and quit closes pages only. 8: pages say their project (`/events?project=`), `/agents/pages` lists them with it. 9: Pilot runs before its agent is ready (an agent's `setup`), and signing in from the page (`/setup/sign-in`, `/agents/setup`). 10: conditions the agent names (`conditions` on `/agents/done`), and a job's follow-up asking only for their names (`unnamed`). */
+export const BRIDGE_VERSION = 10;
 
 /**
  * The hub's port: one per bridge version (4747 + the version, so 4750 for

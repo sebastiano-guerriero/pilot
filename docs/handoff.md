@@ -3,7 +3,7 @@
 The handoff is **jobs**. Edits, tasks (Make responsive) and comments each go to the agent as a job; the agent applies it; Pilot checks the result on the page. The page is the source of truth for its jobs.
 
 ```
-page (your app in dev, the overlay)          one hub per machine and version, 127.0.0.1:4756
+page (your app in dev, the overlay)          one hub per machine and version, 127.0.0.1:4757
   Send ──POST /jobs──────────────────────▶  ┌───────────────────────────────────┐
   job updates, launch ◀──SSE /events───────  │ jobs and runners, by page origin  │
   follow-up ──POST /jobs/:id/retry───────▶  └───────────────────────────────────┘
